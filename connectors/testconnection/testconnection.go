@@ -3,6 +3,7 @@ package testconnection
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
@@ -39,6 +40,10 @@ type Tester interface {
 
 var registry = map[string]Tester{}
 
+// Leave time for persistence and a structured response before the UI proxy's
+// 120-second deadline. Provider SDK retries must not leave onboarding unbounded.
+const VerificationTimeout = 90 * time.Second
+
 // Register adds a provider Tester to the dispatch registry. Called from each provider file's init().
 func Register(t Tester) { registry[t.Provider()] = t }
 
@@ -54,5 +59,22 @@ func Run(ctx context.Context, in Input) (*Result, error) {
 		return nil, err
 	}
 	in.BootstrapRegion = region
-	return t.Test(ctx, in)
+	ctx, cancel := context.WithTimeout(ctx, VerificationTimeout)
+	defer cancel()
+	res, err := t.Test(ctx, in)
+	if err != nil {
+		return nil, fmt.Errorf("%s verification failed: %s", in.Provider, SafeMessage(in.Provider, in.Credentials, err.Error()))
+	}
+	if res == nil {
+		return nil, fmt.Errorf("%s verification returned no result", in.Provider)
+	}
+	if ctx.Err() != nil {
+		res.add(CheckResult{Name: "verification_timeout", DisplayName: "Verification deadline", Message: "Provider verification did not complete: " + ctx.Err().Error(), Remediation: "check connectivity from Central to the provider APIs and retry"})
+	}
+	for i := range res.Checks {
+		res.Checks[i].Message = SafeMessage(in.Provider, in.Credentials, res.Checks[i].Message)
+		res.Checks[i].Remediation = SafeMessage(in.Provider, in.Credentials, res.Checks[i].Remediation)
+	}
+	res.finalize()
+	return res, nil
 }

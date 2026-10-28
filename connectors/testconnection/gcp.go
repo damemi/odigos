@@ -89,7 +89,7 @@ func (gcpTester) Test(ctx context.Context, in Input) (*Result, error) {
 	if err != nil {
 		res.add(CheckResult{
 			Name: CheckGCPAuthIdentity, DisplayName: "Authentication", Passed: false,
-			Message:     "failed to initialize GCP credentials",
+			Message:     "failed to initialize GCP credentials: " + summarizeGCPErr(err),
 			Remediation: "verify the provided service account key JSON",
 		})
 		res.finalize()
@@ -137,24 +137,18 @@ func (gcpTester) Test(ctx context.Context, in Input) (*Result, error) {
 
 	if active[typeCloudRun] {
 		err := probeCloudRun(ctx, projectID, opts)
-		res.add(boolCheck(CheckGCPDiscoveryCloudRun, "Cloud Run discovery permissions", !isGCPAuthErr(err),
-			"run.services.list allowed",
-			"access denied listing Cloud Run services: "+summarizeGCPErr(err),
-			"grant "+permissionsFor(gcpSpec, in.Capabilities, "run.")))
+		res.add(discoveryCheck(CheckResult{Name: CheckGCPDiscoveryCloudRun, DisplayName: "Cloud Run discovery permissions",
+			Message: "run.services.list allowed", Remediation: "grant " + permissionsFor(gcpSpec, in.Capabilities, "run.")}, err, summarizeGCPErr, isGCPAuthErr))
 	}
 	if active[typeGKE] {
 		err := probeGKE(ctx, projectID, opts)
-		res.add(boolCheck(CheckGCPDiscoveryGKE, "GKE discovery permissions", !isGCPAuthErr(err),
-			"container.clusters.list allowed",
-			"access denied listing GKE clusters: "+summarizeGCPErr(err),
-			"grant "+permissionsFor(gcpSpec, in.Capabilities, "container.")))
+		res.add(discoveryCheck(CheckResult{Name: CheckGCPDiscoveryGKE, DisplayName: "GKE discovery permissions",
+			Message: "container.clusters.list allowed", Remediation: "grant " + permissionsFor(gcpSpec, in.Capabilities, "container.")}, err, summarizeGCPErr, isGCPAuthErr))
 	}
 	if active[typeGCE] {
 		err := probeGCE(ctx, projectID, opts)
-		res.add(boolCheck(CheckGCPDiscoveryGCE, "Compute Engine discovery permissions", !isGCPAuthErr(err),
-			"compute.instances.list allowed",
-			"access denied listing Compute Engine instances: "+summarizeGCPErr(err),
-			"grant "+permissionsFor(gcpSpec, in.Capabilities, "compute.")))
+		res.add(discoveryCheck(CheckResult{Name: CheckGCPDiscoveryGCE, DisplayName: "Compute Engine discovery permissions",
+			Message: "compute.instances.list allowed", Remediation: "grant " + permissionsFor(gcpSpec, in.Capabilities, "compute.")}, err, summarizeGCPErr, isGCPAuthErr))
 	}
 
 	res.finalize()

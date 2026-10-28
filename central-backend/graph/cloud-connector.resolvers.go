@@ -8,6 +8,7 @@ package graph
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/services"
@@ -22,7 +23,10 @@ import (
 // returns an error only for an unknown provider or an unexpected internal failure;
 // expected outcomes (bad credentials, missing permissions) are per-check results.
 // Visible to any signed-in user.
-func (r *mutationResolver) TestCloudConnectorConnection(ctx context.Context, input model.TestCloudConnectorConnectionInput) (*model.CloudConnectorTestResult, error) {
+func (r *mutationResolver) TestCloudConnectorConnection(ctx context.Context, input model.TestCloudConnectorConnectionInput) (_ *model.CloudConnectorTestResult, err error) {
+	defer func() {
+		err = cloudConnectorOperationError(ctx, "testCloudConnectorConnection", input.Provider, credentialsFromMap(input.Credentials), err)
+	}()
 	if err := utils.RequireAuth(ctx); err != nil {
 		return nil, err
 	}
@@ -32,7 +36,7 @@ func (r *mutationResolver) TestCloudConnectorConnection(ctx context.Context, inp
 	if err := capabilities.Validate(); err != nil {
 		return nil, err
 	}
-	res, err := testconnection.Run(ctx, testconnection.Input{
+	res, err := verifyCloudConnector(ctx, "testCloudConnectorConnection", testconnection.Input{
 		Provider:          input.Provider,
 		Credentials:       credentialsFromMap(input.Credentials),
 		ExpectedAccountID: input.ExpectedAccountID,
@@ -50,7 +54,10 @@ func (r *mutationResolver) TestCloudConnectorConnection(ctx context.Context, inp
 // OdigosCloudConnector CR in the central cluster. On verification failure nothing
 // is persisted and the checks are returned so the UI can render the failure state.
 // Restricted to an admin because it persists credentials and capabilities.
-func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model.CreateCloudConnectorInput) (*model.CreateCloudConnectorResult, error) {
+func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model.CreateCloudConnectorInput) (_ *model.CreateCloudConnectorResult, err error) {
+	defer func() {
+		err = cloudConnectorOperationError(ctx, "createCloudConnector", input.Provider, credentialsFromMap(input.Credentials), err)
+	}()
 	if err := utils.RequireAdmin(ctx); err != nil {
 		return nil, err
 	}
@@ -61,7 +68,7 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 	if err := capabilities.Validate(); err != nil {
 		return nil, err
 	}
-	res, err := testconnection.Run(ctx, testconnection.Input{
+	res, err := verifyCloudConnector(ctx, "createCloudConnector", testconnection.Input{
 		Provider:          input.Provider,
 		Credentials:       creds,
 		ExpectedAccountID: input.ExpectedAccountID,
@@ -95,7 +102,9 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 		return nil, err
 	}
 	workloads, computePlatforms := crdCapabilitiesFromInput(input.Provider, input.Capabilities)
-	connectorID, err := r.CloudConnectorService.CreateConnector(ctx, services.CreateConnectorParams{
+	persistCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	connectorID, err := r.CloudConnectorService.CreateConnector(persistCtx, services.CreateConnectorParams{
 		Provider:           input.Provider,
 		DisplayName:        input.DisplayName,
 		AccountID:          accountID,
@@ -107,8 +116,9 @@ func (r *mutationResolver) CreateCloudConnector(ctx context.Context, input model
 		SecretData:         secretDataForProvider(input.Provider, creds),
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to save connector in Central: %w", err)
 	}
+	connectorLogger(ctx, "createCloudConnector", input.Provider).Info("Cloud connector saved", "connectorId", connectorID)
 
 	return &model.CreateCloudConnectorResult{
 		Created:     true,

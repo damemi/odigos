@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	"github.com/aws/aws-sdk-go-v2/service/ecs"
-	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/smithy-go"
 
@@ -46,6 +47,12 @@ const (
 	CheckDiscoveryECS    CheckName = "discovery_ecs"
 )
 
+var externalIDCharacters = regexp.MustCompile(`^[A-Za-z0-9+=,.@:/-]+$`)
+
+func validExternalID(value string) bool {
+	return value == "" || (len(value) >= 2 && len(value) <= 1224 && externalIDCharacters.MatchString(value))
+}
+
 func init() { Register(awsTester{}) }
 
 // awsTester validates AWS connector credentials with read-only probes (identity, account match, region
@@ -60,6 +67,11 @@ func (awsTester) Provider() string { return "aws" }
 func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 	res := &Result{}
 	awsSpec := spec.MustGet("aws")
+	if externalID := in.Credentials[credExternalID]; !validExternalID(externalID) {
+		res.add(CheckResult{Name: CheckAuthIdentity, DisplayName: "Authentication", Passed: false, Message: "External ID must contain 2–1224 valid characters without whitespace", Remediation: "use the same valid External ID in the connector and the role trust policy"})
+		res.finalize()
+		return res, nil
+	}
 
 	// Resolve which auth method the provided credentials select, validated against the spec's auth
 	// definition (required fields, composition). This rejects incomplete/ambiguous credential sets
@@ -83,7 +95,7 @@ func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 	if err != nil {
 		res.add(CheckResult{
 			Name: CheckAuthIdentity, DisplayName: "Authentication", Passed: false,
-			Message:     "failed to initialize AWS credentials",
+			Message:     "failed to initialize AWS credentials: " + summarizeErr(err),
 			Remediation: "verify the provided access keys or role ARN",
 		})
 		res.finalize()
@@ -121,6 +133,9 @@ func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 		res.add(c)
 	}
 
+	res.add(CheckResult{Name: "deployment_permissions", DisplayName: "Read-only verification scope", Passed: true,
+		Message: "Read-only connection checks do not verify instrumentation writes, iam:PassRole, Collector deployment, task execution roles, or workload-to-endpoint connectivity. Apply the complete selected policy and verify the first workload/Collector deployment."})
+
 	// Only probe discovery if the customer enabled at least one discovery capability.
 	active := map[string]bool{}
 	for _, t := range awsSpec.ActiveDiscoveryTypes(in.Capabilities) {
@@ -137,7 +152,7 @@ func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 		fail := "could not enumerate enabled regions: " + summarizeErr(err)
 		remediation := "verify connectivity to the AWS API"
 		if isAuthErr(err) {
-			fail = "access denied enumerating enabled regions"
+			fail = "could not enumerate enabled regions: " + summarizeErr(err)
 			remediation = "grant ec2:DescribeRegions"
 		}
 		res.add(boolCheck(CheckRegionAccess, "Region access", false, "", fail, remediation))
@@ -151,28 +166,12 @@ func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 	// ecs:ListClusters probe (AWS has no launch-type-filtered list API), so probe ECS once when any is
 	// enabled and report a single ECS discovery check.
 	ecsActive := active[typeFargateTask] || active[typeFargateCluster] || active[typeECSCluster]
-	var lambdaDenied, ecsDenied []string
-	for _, region := range regions {
-		rcfg, err := buildConfig(ctx, region, in.Credentials, chain)
-		if err != nil {
-			continue
-		}
-		if active[typeLambda] {
-			if _, err := lambda.NewFromConfig(rcfg).ListFunctions(ctx, &lambda.ListFunctionsInput{MaxItems: aws.Int32(1)}); err != nil && isAuthErr(err) {
-				lambdaDenied = append(lambdaDenied, region)
-			}
-		}
-		if ecsActive {
-			if _, err := ecs.NewFromConfig(rcfg).ListClusters(ctx, &ecs.ListClustersInput{MaxResults: aws.Int32(1)}); err != nil && isAuthErr(err) {
-				ecsDenied = append(ecsDenied, region)
-			}
-		}
-	}
+	lambdaDenied, ecsDenied := probeAWSRegions(ctx, base, regions, active[typeLambda], ecsActive, active[typeFargateTask], active[typeFargateCluster] || active[typeECSCluster])
 
 	if active[typeLambda] {
 		res.add(boolCheck(CheckDiscoveryLambda, "Lambda discovery permissions", len(lambdaDenied) == 0,
-			"lambda:ListFunctions allowed",
-			"access denied in region(s): "+strings.Join(lambdaDenied, ", "),
+			"Lambda list probe and available tag, alias and configuration resource probes succeeded; empty inventories cannot verify resource-scoped permissions",
+			"probe failed in region(s): "+strings.Join(lambdaDenied, ", "),
 			"grant "+permissionsFor(awsSpec, in.Capabilities, "lambda:")))
 	}
 	if ecsActive {
@@ -186,8 +185,8 @@ func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 				" on the task/execution roles (scope with iam:PassedToService=ecs-tasks.amazonaws.com)"
 		}
 		res.add(boolCheck(CheckDiscoveryECS, "ECS discovery permissions", len(ecsDenied) == 0,
-			"ecs:ListClusters allowed",
-			"access denied in region(s): "+strings.Join(ecsDenied, ", "),
+			"ECS list probe and available cluster, service, task and task-definition reads succeeded; empty inventories cannot verify resource-scoped permissions",
+			"probe failed in region(s): "+strings.Join(ecsDenied, ", "),
 			ecsGrant))
 	}
 
@@ -224,7 +223,7 @@ const (
 // provider on top, workload-identity uses the ambient/default chain. The chain is produced by
 // spec AuthConfig.Resolve, so the SDK wiring stays in lockstep with the connector spec's auth methods.
 func buildConfig(ctx context.Context, region string, creds map[string]string, chain []spec.AuthMethod) (aws.Config, error) {
-	opts := []func(*config.LoadOptions) error{config.WithRegion(region)}
+	opts := []func(*config.LoadOptions) error{config.WithRegion(region), config.WithHTTPClient(awshttp.NewBuildableClient().WithTimeout(15 * time.Second))}
 	assumeRole := false
 	for _, m := range chain {
 		switch m.ID {
@@ -290,6 +289,9 @@ func permissionsFor(s spec.CloudConnectorSpec, caps spec.Capabilities, prefix st
 // isAuthErr reports whether an AWS error is an authorization/permission failure (as opposed to a
 // connectivity/config error).
 func isAuthErr(err error) bool {
+	if err == nil {
+		return false
+	}
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) {
 		code := apiErr.ErrorCode()
@@ -305,9 +307,21 @@ func isAuthErr(err error) bool {
 
 // summarizeErr returns a concise, secret-free description of an AWS error.
 func summarizeErr(err error) string {
+	if err == nil {
+		return ""
+	}
 	var apiErr smithy.APIError
 	if errors.As(err, &apiErr) {
-		return fmt.Sprintf("%s: %s", apiErr.ErrorCode(), apiErr.ErrorMessage())
+		message := fmt.Sprintf("%s: %s", apiErr.ErrorCode(), apiErr.ErrorMessage())
+		var operation *smithy.OperationError
+		if errors.As(err, &operation) {
+			message = operation.ServiceID + " " + operation.OperationName + ": " + message
+		}
+		var request interface{ ServiceRequestID() string }
+		if errors.As(err, &request) && request.ServiceRequestID() != "" {
+			message += " (request ID: " + request.ServiceRequestID() + ")"
+		}
+		return message
 	}
 	return err.Error()
 }

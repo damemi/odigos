@@ -147,6 +147,8 @@ workloads:
         description: List Lambda functions in each configured region.
         permissions:
           - lambda:ListFunctions
+          - lambda:ListAliases
+          - lambda:GetFunctionConfiguration
           # Read ownership/attribution tags and optional discovery selectors for every function.
           - lambda:ListTags
       # Fargate discovery runs ONE region scan (clusters + Fargate services + Fargate tasks). EC2-backed

@@ -37,7 +37,6 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
-      { source: '/graphql', destination: `${CENTRAL_BACKEND_URL}/graphql` },
       { source: '/diagnose/download', destination: `${CENTRAL_BACKEND_URL}/diagnose/download` },
       { source: '/sse/:path*', destination: `${CENTRAL_BACKEND_URL}/sse/:path*` },
       { source: '/api/signin', destination: `${CENTRAL_BACKEND_URL}/api/signin` },

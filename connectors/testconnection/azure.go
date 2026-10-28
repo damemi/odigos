@@ -2,12 +2,14 @@ package testconnection
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/appcontainers/armappcontainers/v3"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v6"
@@ -33,11 +35,11 @@ const (
 
 // Azure connection check names.
 const (
-	CheckAzureAuthIdentity            CheckName = "auth_identity"
-	CheckAzureSubscriptionMatch       CheckName = "subscription_match"
-	CheckAzureDiscoveryContainerApps  CheckName = "discovery_container_apps"
-	CheckAzureDiscoveryAKS            CheckName = "discovery_aks"
-	CheckAzureDiscoveryVM             CheckName = "discovery_vm"
+	CheckAzureAuthIdentity           CheckName = "auth_identity"
+	CheckAzureSubscriptionMatch      CheckName = "subscription_match"
+	CheckAzureDiscoveryContainerApps CheckName = "discovery_container_apps"
+	CheckAzureDiscoveryAKS           CheckName = "discovery_aks"
+	CheckAzureDiscoveryVM            CheckName = "discovery_vm"
 )
 
 func init() { Register(azureTester{}) }
@@ -72,7 +74,7 @@ func (azureTester) Test(ctx context.Context, in Input) (*Result, error) {
 	if err != nil {
 		res.add(CheckResult{
 			Name: CheckAzureAuthIdentity, DisplayName: "Authentication", Passed: false,
-			Message:     "failed to initialize Azure credentials",
+			Message:     "failed to initialize Azure credentials: " + summarizeAzureErr(err),
 			Remediation: "verify the provided service principal tenant/client/secret, or configure workload identity",
 		})
 		res.finalize()
@@ -94,7 +96,7 @@ func (azureTester) Test(ctx context.Context, in Input) (*Result, error) {
 	if err != nil {
 		res.add(CheckResult{
 			Name: CheckAzureAuthIdentity, DisplayName: "Authentication", Passed: false,
-			Message:     "failed to initialize Azure subscriptions client",
+			Message:     "failed to initialize Azure subscriptions client: " + summarizeAzureErr(err),
 			Remediation: "verify the provided credentials",
 		})
 		res.finalize()
@@ -145,24 +147,18 @@ func (azureTester) Test(ctx context.Context, in Input) (*Result, error) {
 
 	if active[typeContainerApps] {
 		err := probeContainerApps(ctx, subscriptionID, cred)
-		res.add(boolCheck(CheckAzureDiscoveryContainerApps, "Container Apps discovery permissions", !isAzureAuthErr(err),
-			"Microsoft.App/containerApps/read allowed",
-			"access denied listing Container Apps: "+summarizeAzureErr(err),
-			"grant "+permissionsFor(azureSpec, in.Capabilities, "Microsoft.App/")))
+		res.add(discoveryCheck(CheckResult{Name: CheckAzureDiscoveryContainerApps, DisplayName: "Container Apps discovery permissions",
+			Message: "Microsoft.App/containerApps/read allowed", Remediation: "grant " + permissionsFor(azureSpec, in.Capabilities, "Microsoft.App/")}, err, summarizeAzureErr, isAzureAuthErr))
 	}
 	if active[typeAKS] {
 		err := probeAKS(ctx, subscriptionID, cred)
-		res.add(boolCheck(CheckAzureDiscoveryAKS, "AKS discovery permissions", !isAzureAuthErr(err),
-			"Microsoft.ContainerService/managedClusters/read allowed",
-			"access denied listing AKS clusters: "+summarizeAzureErr(err),
-			"grant "+permissionsFor(azureSpec, in.Capabilities, "Microsoft.ContainerService/")))
+		res.add(discoveryCheck(CheckResult{Name: CheckAzureDiscoveryAKS, DisplayName: "AKS discovery permissions",
+			Message: "Microsoft.ContainerService/managedClusters/read allowed", Remediation: "grant " + permissionsFor(azureSpec, in.Capabilities, "Microsoft.ContainerService/")}, err, summarizeAzureErr, isAzureAuthErr))
 	}
 	if active[typeVM] {
 		err := probeVM(ctx, subscriptionID, cred)
-		res.add(boolCheck(CheckAzureDiscoveryVM, "Virtual Machine discovery permissions", !isAzureAuthErr(err),
-			"Microsoft.Compute/virtualMachines/read allowed",
-			"access denied listing Virtual Machines: "+summarizeAzureErr(err),
-			"grant "+permissionsFor(azureSpec, in.Capabilities, "Microsoft.Compute/")))
+		res.add(discoveryCheck(CheckResult{Name: CheckAzureDiscoveryVM, DisplayName: "Virtual Machine discovery permissions",
+			Message: "Microsoft.Compute/virtualMachines/read allowed", Remediation: "grant " + permissionsFor(azureSpec, in.Capabilities, "Microsoft.Compute/")}, err, summarizeAzureErr, isAzureAuthErr))
 	}
 
 	res.finalize()
@@ -252,7 +248,24 @@ func summarizeAzureErr(err error) string {
 		if code == "" {
 			code = http.StatusText(respErr.StatusCode)
 		}
-		return fmt.Sprintf("%d: %s", respErr.StatusCode, code)
+		message := fmt.Sprintf("%d: %s", respErr.StatusCode, code)
+		if respErr.RawResponse != nil {
+			// Azure stores its diagnostic message in the response JSON. Keep that
+			// field and request ID rather than exposing headers or the raw body.
+			payload, readErr := runtime.Payload(respErr.RawResponse)
+			var body struct {
+				Error struct {
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if readErr == nil && json.Unmarshal(payload, &body) == nil && body.Error.Message != "" {
+				message += ": " + body.Error.Message
+			}
+			if id := respErr.RawResponse.Header.Get("x-ms-request-id"); id != "" {
+				message += " (request ID: " + id + ")"
+			}
+		}
+		return message
 	}
 	return err.Error()
 }
