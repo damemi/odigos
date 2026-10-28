@@ -45,6 +45,88 @@ export const GET_INSTRUMENTATION_RULE_TYPES: VersionedRemoteFetch = {
 
 export const GET_INSTRUMENTATION_RULES: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    // `kernelTraces` (Kernel Traces rule) introduced in odigos v1.40.0.
+    'v1.40': `
+  query GetInstrumentationRules {
+    computePlatform {
+      instrumentationRules {
+        type
+        ruleId
+        ruleName
+        notes
+        disabled
+        mutable
+        profileName
+        managedBy
+        sourcesScopes { ${SOURCES_SCOPE_FIELDS} }
+        conditions {
+          status
+          type
+          reason
+          message
+
+        }
+        payloadCollection {
+          httpRequest {
+            mimeTypes
+            maxPayloadLength
+            dropPartialPayloads
+          }
+          httpResponse {
+            mimeTypes
+            maxPayloadLength
+            dropPartialPayloads
+          }
+          dbQuery {
+            maxPayloadLength
+            dropPartialPayloads
+          }
+          messaging {
+            maxPayloadLength
+            dropPartialPayloads
+          }
+        }
+        codeAttributes {
+          column
+          filePath
+          function
+          lineNumber
+          namespace
+          stacktrace
+        }
+        headersCollection {
+          headerKeys
+        }
+        customInstrumentations {
+          golang {
+            packageName
+            functionName
+            receiverName
+            receiverMethodName
+          }
+          java {
+            methodName
+            className
+          }
+          php {
+            className
+            functionName
+          }
+        }
+        kernelTraces {
+          filesystem {
+            enabled
+          }
+          subprocesses {
+            recordCommandArgs
+          }
+          cpuDelay {
+            enabled
+          }
+        }
+      }
+    }
+  }`,
     // `managedBy` (odigos.io/managed-by owner) introduced in odigos v1.38.0-pre5.
     'v1.38': `
   query GetInstrumentationRules {

@@ -508,6 +508,9 @@ const STRIP_INPUT_FIELDS: { name: string; minVersion: number }[] = [
   // stripped a SUPPORTED field on v1.32.x: the Network Metrics rule was accepted and
   // then silently did nothing, behind a success toast.
   { name: 'networkMetrics', minVersion: trimVersion('v1.32') },
+  // InstrumentationRuleInput.kernelTraces — absent in every v1.39.x (the release
+  // branch was cut before it merged), present from v1.40.0.
+  { name: 'kernelTraces', minVersion: trimVersion('v1.40') },
   // CustomInstrumentationsInput.php — genuinely unreleased: still absent at v1.32.1,
   // the newest GA release. Bump when it ships.
   { name: 'php', minVersion: trimVersion('v1.33') },

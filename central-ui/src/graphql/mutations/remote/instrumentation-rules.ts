@@ -13,6 +13,79 @@ const SOURCES_SCOPE_FIELDS = `
 
 export const CREATE_INSTRUMENTATION_RULE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    // `kernelTraces` (Kernel Traces rule) introduced in odigos v1.40.0.
+    'v1.40': `
+  mutation CreateInstrumentationRule($instrumentationRule: InstrumentationRuleInput!) {
+    createInstrumentationRule(instrumentationRule: $instrumentationRule) {
+      type
+      ruleId
+      ruleName
+      notes
+      disabled
+      mutable
+      profileName
+      managedBy
+      sourcesScopes { ${SOURCES_SCOPE_FIELDS} }
+      payloadCollection {
+        httpRequest {
+          mimeTypes
+          maxPayloadLength
+          dropPartialPayloads
+        }
+        httpResponse {
+          mimeTypes
+          maxPayloadLength
+          dropPartialPayloads
+        }
+        dbQuery {
+          maxPayloadLength
+          dropPartialPayloads
+        }
+        messaging {
+          maxPayloadLength
+          dropPartialPayloads
+        }
+      }
+      codeAttributes {
+        column
+        filePath
+        function
+        lineNumber
+        namespace
+        stacktrace
+      }
+      headersCollection {
+        headerKeys
+      }
+      customInstrumentations {
+        golang {
+          packageName
+          functionName
+          receiverName
+          receiverMethodName
+        }
+        java {
+          methodName
+          className
+        }
+        php {
+          className
+          functionName
+        }
+      }
+      kernelTraces {
+        filesystem {
+          enabled
+        }
+        subprocesses {
+          recordCommandArgs
+        }
+        cpuDelay {
+          enabled
+        }
+      }
+    }
+  }`,
     // `managedBy` (odigos.io/managed-by owner) introduced in odigos v1.38.0-pre5.
     'v1.38': `
   mutation CreateInstrumentationRule($instrumentationRule: InstrumentationRuleInput!) {
@@ -258,6 +331,79 @@ export const CREATE_INSTRUMENTATION_RULE: VersionedRemoteFetch = {
 
 export const UPDATE_INSTURMENTATION_RULE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
+    // `kernelTraces` (Kernel Traces rule) introduced in odigos v1.40.0.
+    'v1.40': `
+  mutation UpdateInstrumentationRule($ruleId: ID!, $instrumentationRule: InstrumentationRuleInput!) {
+    updateInstrumentationRule(ruleId: $ruleId, instrumentationRule: $instrumentationRule) {
+      type
+      ruleId
+      ruleName
+      notes
+      disabled
+      mutable
+      profileName
+      managedBy
+      sourcesScopes { ${SOURCES_SCOPE_FIELDS} }
+      payloadCollection {
+        httpRequest {
+          mimeTypes
+          maxPayloadLength
+          dropPartialPayloads
+        }
+        httpResponse {
+          mimeTypes
+          maxPayloadLength
+          dropPartialPayloads
+        }
+        dbQuery {
+          maxPayloadLength
+          dropPartialPayloads
+        }
+        messaging {
+          maxPayloadLength
+          dropPartialPayloads
+        }
+      }
+      codeAttributes {
+        column
+        filePath
+        function
+        lineNumber
+        namespace
+        stacktrace
+      }
+      headersCollection {
+        headerKeys
+      }
+      customInstrumentations {
+        golang {
+          packageName
+          functionName
+          receiverName
+          receiverMethodName
+        }
+        java {
+          methodName
+          className
+        }
+        php {
+          className
+          functionName
+        }
+      }
+      kernelTraces {
+        filesystem {
+          enabled
+        }
+        subprocesses {
+          recordCommandArgs
+        }
+        cpuDelay {
+          enabled
+        }
+      }
+    }
+  }`,
     // `managedBy` (odigos.io/managed-by owner) introduced in odigos v1.38.0-pre5.
     'v1.38': `
   mutation UpdateInstrumentationRule($ruleId: ID!, $instrumentationRule: InstrumentationRuleInput!) {

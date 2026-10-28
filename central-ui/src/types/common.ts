@@ -2,6 +2,8 @@ import { PlatformType } from '@odigos/ui-kit/types';
 
 export interface VersionedRemoteFetch {
   [PlatformType.K8s]?: {
+    'v1.40'?: string;
+    'v1.39'?: string;
     'v1.38'?: string;
     'v1.37'?: string;
     'v1.36'?: string;
