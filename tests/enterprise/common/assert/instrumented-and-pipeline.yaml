@@ -249,9 +249,9 @@ spec:
       (env[?name == 'OTEL_TRACES_EXPORTER']):
         - value: otlp
       (env[?name == 'RUBYOPT']):
-        - value: "-r/var/odigos/ruby/3.4/index.rb"
+        - value: "-r/var/odigos/ruby/4.0/index.rb"
       (env[?name == 'ODIGOS_GEM_PATH']):
-        - value: "/var/odigos/ruby/3.4/bundle"
+        - value: "/var/odigos/ruby/4.0/bundle"
 status:
   containerStatuses:
     - name: geolocation
