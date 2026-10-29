@@ -13,6 +13,9 @@ interface UserStoreState {
   status: SignInStatus | null;
 
   lastAuthEmail: string | null;
+  // The temporary password from a PASSWORD_UPDATE_REQUIRED sign-in, kept in memory
+  // only (never persisted) so /update-password can prove it to setInitialPassword.
+  pendingOneTimePassword: string | null;
   isAdmin: boolean;
   canEdit: boolean;
 }
@@ -23,6 +26,7 @@ interface UserStoreActions {
   clearAuth: () => void;
   updateUser: (payload: Partial<User>) => void;
   setLastAuthEmail: (email: string | null) => void;
+  setPendingOneTimePassword: (oneTimePassword: string | null) => void;
 }
 
 export const useUserStore = create<UserStoreState & UserStoreActions>()(
@@ -36,6 +40,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
       isAdmin: false,
       canEdit: false,
       lastAuthEmail: null,
+      pendingOneTimePassword: null,
 
       setAuthProviderId: (providerId) =>
         set({
@@ -62,6 +67,7 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
           isAdmin: false,
           canEdit: false,
           lastAuthEmail: null,
+          pendingOneTimePassword: null,
         }),
 
       updateUser: (updates) => {
@@ -80,6 +86,11 @@ export const useUserStore = create<UserStoreState & UserStoreActions>()(
       setLastAuthEmail: (email) =>
         set({
           lastAuthEmail: email,
+        }),
+
+      setPendingOneTimePassword: (oneTimePassword) =>
+        set({
+          pendingOneTimePassword: oneTimePassword,
         }),
     }),
     {

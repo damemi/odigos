@@ -65,6 +65,18 @@ func TestGetUserRoleReturnsNoAccessRole(t *testing.T) {
 	}
 }
 
+func TestGetUserRoleServerErrorReturnsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	kc := &KeycloakUserService{host: server.URL, realm: "odigos"}
+	if role, err := kc.GetUserRole("token", "user-1"); err == nil {
+		t.Fatalf("GetUserRole() = %q, nil; want an error", role)
+	}
+}
+
 func TestGetUserRoleNonOKStatusReturnsEmpty(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

@@ -121,8 +121,20 @@ func (svc *AdminService) GetAdminUsername() string {
 }
 
 // DetermineSystemInitialized checks if the system has been initialized by querying Keycloak
-// for non-admin, non-service-account users.
+// for non-admin, non-service-account users. It reports false when Keycloak cannot be
+// queried, so use it only for display; authorization decisions must use IsSystemInitialized.
 func (svc *AdminService) DetermineSystemInitialized() bool {
+	initialized, err := svc.IsSystemInitialized()
+	if err != nil {
+		logger.Log.Error("Failed to determine initialization state", "error", err)
+		return false
+	}
+	return initialized
+}
+
+// IsSystemInitialized reports whether any real (non-admin, non-service-account) user
+// exists. Callers that unlock first-run setup must treat an error as initialized.
+func (svc *AdminService) IsSystemInitialized() (bool, error) {
 	userService := keycloak.NewKeycloakUserService()
 	initialized := false
 	err := svc.WithAdminToken(func(adminToken string) error {
@@ -140,10 +152,9 @@ func (svc *AdminService) DetermineSystemInitialized() bool {
 		return nil
 	})
 	if err != nil {
-		logger.Log.Error("Failed to determine initialization state", "error", err)
-		return false
+		return false, err
 	}
-	return initialized
+	return initialized, nil
 }
 
 func (svc *AdminService) ValidateAdminPermissions(userToken string) (string, error) {
@@ -191,8 +202,11 @@ func oidcTenantIDRequired(providerID model.AuthProviderID, discoveryURL string) 
 	return providerID == model.AuthProviderIDAzure
 }
 
+// EnsureOidcIdentityProvider creates or updates an OIDC identity provider. On update
+// an empty client secret keeps the stored one while the provider still points at the
+// same identity provider application (see canKeepClientSecret).
 func (svc *AdminService) EnsureOidcIdentityProvider(config *model.OidcIdentityProviderInput) error {
-	if config.ProviderID == "" || config.ClientID == "" || config.ClientSecret == "" || config.DiscoveryURL == "" {
+	if config.ProviderID == "" || config.ClientID == "" || config.DiscoveryURL == "" {
 		return fmt.Errorf("invalid OIDC identity provider configuration, missing required fields")
 	}
 	if oidcTenantIDRequired(config.ProviderID, config.DiscoveryURL) && config.TenantID == "" {
@@ -203,14 +217,51 @@ func (svc *AdminService) EnsureOidcIdentityProvider(config *model.OidcIdentityPr
 	if err != nil {
 		return fmt.Errorf("failed to get identity provider: %w", err)
 	}
+	if err := checkSameProtocol(identityProvider, keycloak.IdentityProviderTypeOIDC); err != nil {
+		return err
+	}
+
+	kcConfig := convertOidcIdentityProviderInputToKeycloakConfig(config)
 
 	// If provider does not exist, create it
 	if identityProvider == nil {
-		return svc.kcAdmin.ConfigureOidcIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertOidcIdentityProviderInputToKeycloakConfig(config))
+		if config.ClientSecret == "" || config.ClientSecret == keycloak.SecretMask {
+			return fmt.Errorf("invalid OIDC identity provider configuration, client secret is required")
+		}
+		return svc.kcAdmin.ConfigureOidcIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, kcConfig)
 	}
 
-	// If provider exists, update it
-	return svc.kcAdmin.UpdateOidcIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, convertOidcIdentityProviderInputToKeycloakConfig(config))
+	// If provider exists, update it. Keycloak keeps the stored secret when it receives the mask.
+	if kcConfig.ClientSecret == "" || kcConfig.ClientSecret == keycloak.SecretMask {
+		if !canKeepClientSecret(identityProvider, config) {
+			return fmt.Errorf("invalid OIDC identity provider configuration, client secret is required when the client ID, discovery URL or tenant ID changes")
+		}
+		kcConfig.ClientSecret = keycloak.SecretMask
+	}
+	kcConfig.Disabled = !identityProvider.Enabled
+	return svc.kcAdmin.UpdateOidcIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, kcConfig)
+}
+
+// canKeepClientSecret reports whether an update may keep the stored client secret.
+// Keycloak sends the secret to the token endpoint found through the discovery URL, so
+// keeping it while the client ID, discovery URL or tenant changes would hand the stored
+// secret to whatever server the new values point at.
+func canKeepClientSecret(existing *keycloak.IdentityProviderRepresentation, config *model.OidcIdentityProviderInput) bool {
+	stored := existing.Config
+	return stored[keycloak.ConfigKeyClientSecret] != "" &&
+		stored[keycloak.ConfigKeyClientID] == config.ClientID &&
+		stored[keycloak.ConfigKeyMetadataDescriptorURL] == keycloak.ResolveDiscoveryURL(config.DiscoveryURL, config.TenantID) &&
+		stored[keycloak.ConfigKeyOdigosTenantID] == config.TenantID
+}
+
+// checkSameProtocol rejects changing an existing provider between OIDC and SAML:
+// Keycloak keeps the original type on update, which would leave the provider broken,
+// and recreating it would drop its group role mappings.
+func checkSameProtocol(existing *keycloak.IdentityProviderRepresentation, providerType string) error {
+	if existing == nil || existing.ProviderID == providerType {
+		return nil
+	}
+	return fmt.Errorf("identity provider %q is set up with %s; changing its protocol is not supported", existing.Alias, strings.ToUpper(existing.ProviderID))
 }
 
 func convertOidcIdentityProviderInputToKeycloakConfig(input *model.OidcIdentityProviderInput) *keycloak.OidcIdentityProviderConfig {
@@ -223,16 +274,27 @@ func convertOidcIdentityProviderInputToKeycloakConfig(input *model.OidcIdentityP
 	}
 }
 
+// EnsureSamlIdentityProvider creates or updates a SAML identity provider. On update
+// an empty signing certificate keeps the stored one.
 func (svc *AdminService) EnsureSamlIdentityProvider(config *model.SamlIdentityProviderInput) error {
-	if config.ProviderID == "" || config.IdpEntityID == "" || config.SingleSignOnServiceURL == "" || config.SigningCertificate == "" {
+	if config.ProviderID == "" || config.IdpEntityID == "" || config.SingleSignOnServiceURL == "" {
 		return fmt.Errorf("invalid SAML identity provider configuration, missing required fields")
 	}
 	identityProvider, err := svc.kcAdmin.GetIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, strings.ToLower(string(config.ProviderID)))
 	if err != nil {
 		return fmt.Errorf("failed to get identity provider: %w", err)
 	}
+	if err := checkSameProtocol(identityProvider, keycloak.IdentityProviderTypeSAML); err != nil {
+		return err
+	}
 
 	samlConfig := convertSamlIdentityProviderInputToKeycloakConfig(config)
+	if samlConfig.SigningCertificateBase64 == "" && identityProvider != nil {
+		samlConfig.SigningCertificateBase64 = identityProvider.Config[keycloak.ConfigKeySigningCertificate]
+	}
+	if samlConfig.SigningCertificateBase64 == "" {
+		return fmt.Errorf("invalid SAML identity provider configuration, signing certificate is required")
+	}
 
 	// If provider does not exist, create it
 	if identityProvider == nil {
@@ -240,6 +302,7 @@ func (svc *AdminService) EnsureSamlIdentityProvider(config *model.SamlIdentityPr
 	}
 
 	// If provider exists, update it
+	samlConfig.Disabled = !identityProvider.Enabled
 	return svc.kcAdmin.UpdateSamlIdentityProvider(svc.adminCredentials.Username, svc.adminCredentials.Password, samlConfig)
 }
 
@@ -275,15 +338,13 @@ func (svc *AdminService) NeedToSetAdminUser() bool {
 
 			role, err := userService.GetUserRole(adminToken, userID)
 			if err != nil {
-				if isKeycloakUnauthorized(err) {
-					return err
-				}
-				logger.Log.Error("Failed to get user role while determining if admin user is needed", "error", err, "userID", userID)
-				continue
+				// Fail closed (WithAdminToken retries a 401 once): an unknown role
+				// may belong to an existing admin.
+				return err
 			}
 
-			// If there is already a real user with admin role, we do NOT need to set an admin user.
-			if role == keycloak.RoleAdmin {
+			// If there is already a real user with admin or owner role, we do NOT need to set an admin user.
+			if role == keycloak.RoleAdmin || role == keycloak.RoleOwner {
 				need = false
 				return nil
 			}

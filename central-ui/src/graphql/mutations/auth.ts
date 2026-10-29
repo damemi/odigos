@@ -58,8 +58,8 @@ export const SIGN_IN = gql`
 `;
 
 export const SET_INITIAL_PASSWORD = gql`
-  mutation SetInitialPassword($email: String!, $password: String!) {
-    setInitialPassword(email: $email, password: $password) {
+  mutation SetInitialPassword($email: String!, $oneTimePassword: String!, $password: String!) {
+    setInitialPassword(email: $email, oneTimePassword: $oneTimePassword, password: $password) {
       idToken
       accessToken
       status

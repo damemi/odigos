@@ -2,7 +2,9 @@ package consts
 
 import (
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -55,6 +57,23 @@ const (
 	KeycloakRealm = "master"
 	ClientID      = "odigos-central"
 )
+
+// GetTokenSigningAlgorithms returns the JWT algorithms accepted on Keycloak
+// access tokens: KEYCLOAK_TOKEN_SIGNING_ALGORITHMS (comma-separated RSA
+// algorithms) or Keycloak's realm default, RS256. Unsupported values are dropped.
+func GetTokenSigningAlgorithms() []string {
+	supported := []string{"RS256", "RS384", "RS512", "PS256", "PS384", "PS512"}
+	var algs []string
+	for _, alg := range strings.Split(os.Getenv("KEYCLOAK_TOKEN_SIGNING_ALGORITHMS"), ",") {
+		if alg = strings.TrimSpace(alg); slices.Contains(supported, alg) && !slices.Contains(algs, alg) {
+			algs = append(algs, alg)
+		}
+	}
+	if len(algs) == 0 {
+		return []string{"RS256"}
+	}
+	return algs
+}
 
 // Default: 43200 seconds (12 hours)
 func GetAccessTokenLifespanSeconds() int {

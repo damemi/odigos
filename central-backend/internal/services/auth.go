@@ -4,11 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/keycloak"
 	"github.com/odigos-io/central-backend/internal/logger"
 	"github.com/odigos-io/central-backend/internal/types"
@@ -23,6 +26,8 @@ type AuthService struct {
 	kcUser             *keycloak.KeycloakUserService
 	kcAuth             *keycloak.KeycloakAuthService
 	kcTeam             *keycloak.KeycloakTeamService
+
+	initialPasswordAttempts *attemptLimiter
 }
 
 func NewAuthService(adminService *AdminService, userService *UserService, roleMappingService *RoleMappingService) *AuthService {
@@ -33,6 +38,8 @@ func NewAuthService(adminService *AdminService, userService *UserService, roleMa
 		kcAuth:             keycloak.NewKeycloakAuthService(),
 		kcUser:             keycloak.NewKeycloakUserService(),
 		kcTeam:             keycloak.NewKeycloakTeamService(),
+
+		initialPasswordAttempts: newAttemptLimiter(initialPasswordWindow),
 	}
 }
 
@@ -83,9 +90,14 @@ func (svc *AuthService) GetRedirectUrlForSignOut(ctx context.Context, idToken st
 	return svc.kcAuth.GetRedirectUrlForSignOut(idToken)
 }
 
-func (svc *AuthService) isFirstTimeSetup(ctx context.Context) bool {
-	isInitialized := svc.adminService.DetermineSystemInitialized()
-	return !isInitialized
+// isFirstTimeSetup fails closed: if Keycloak cannot be queried, the caller must not
+// treat the sign-in as first-run setup (which would create an admin user).
+func (svc *AuthService) isFirstTimeSetup(ctx context.Context) (bool, error) {
+	isInitialized, err := svc.adminService.IsSystemInitialized()
+	if err != nil {
+		return false, fmt.Errorf("failed to determine initialization state: %w", err)
+	}
+	return !isInitialized, nil
 }
 
 func (svc *AuthService) VerifyToken(ctx context.Context, token string) (*model.GeneralResult, error) {
@@ -191,7 +203,10 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 	// Resolve initialization first. A cached admin token that Keycloak has rejected
 	// (session idle, or Keycloak restarted) is dropped and replaced there, so the
 	// token captured below is one the admin API will accept.
-	isFirstTimeSetup := svc.isFirstTimeSetup(ctx)
+	isFirstTimeSetup, err := svc.isFirstTimeSetup(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {
@@ -373,27 +388,109 @@ func (svc *AuthService) SignIn(ctx context.Context, email string, password strin
 	}, nil
 }
 
-func (svc *AuthService) SetInitialPassword(ctx context.Context, email, password string) (*model.SignInResult, error) {
-	if err := svc.validateUserExists(email); err != nil {
-		return nil, err
+// ErrInvalidOneTimePassword is the only error SetInitialPassword returns for an
+// unknown email, a wrong one-time password or a user with no pending password
+// change, so a caller cannot tell which emails belong to invited users.
+var ErrInvalidOneTimePassword = errors.New("Invalid email or temporary password")
+
+// ErrTooManyPasswordAttempts is returned once an email or client address has
+// used up its setInitialPassword attempts for the current window.
+var ErrTooManyPasswordAttempts = errors.New("Too many attempts. Try again in a few minutes")
+
+var errSetInitialPasswordFailed = errors.New("Could not set your password. Try again later")
+
+const (
+	initialPasswordWindow = 15 * time.Minute
+	// Failed attempts allowed per window. Only failures count, so a stranger
+	// cannot lock an invitee out by sending requests for their email.
+	initialPasswordEmailLimit  = 5
+	initialPasswordClientLimit = 50
+	maxEmailLength             = 254
+	maxPasswordLength          = 1024
+)
+
+// SetInitialPassword replaces the one-time password of a user created by an
+// admin (pending UPDATE_PASSWORD) with newPassword and signs them in. The caller
+// proves they hold the one-time password; Keycloak checks it.
+func (svc *AuthService) SetInitialPassword(ctx context.Context, email, oneTimePassword, newPassword, clientIP string) (*model.SignInResult, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" || len(email) > maxEmailLength || oneTimePassword == "" || len(oneTimePassword) > maxPasswordLength {
+		return nil, ErrInvalidOneTimePassword
+	}
+	if newPassword == "" || len(newPassword) > maxPasswordLength {
+		return nil, fmt.Errorf("new password must be between 1 and %d characters", maxPasswordLength)
 	}
 
-	if err := svc.validatePasswordChangeRequired(email); err != nil {
-		return nil, err
+	emailKey := "email:" + email
+	keys := []attemptKey{{key: emailKey, limit: initialPasswordEmailLimit}}
+	// clientIP is empty unless a reverse proxy forwarded it; keying on the
+	// connection address would put every Central UI user in one bucket.
+	if clientIP != "" {
+		keys = append(keys, attemptKey{key: "ip:" + clientIP, limit: initialPasswordClientLimit})
+	}
+	if svc.initialPasswordAttempts.blocked(keys...) {
+		logger.Log.Warn("setInitialPassword rate limited", "clientIP", clientIP)
+		return nil, ErrTooManyPasswordAttempts
+	}
+	reject := func() (*model.SignInResult, error) {
+		svc.initialPasswordAttempts.fail(keys...)
+		return nil, ErrInvalidOneTimePassword
 	}
 
-	if err := svc.updateUserPassword(email, password); err != nil {
-		return nil, err
+	// Check the one-time password before looking the user up, so known and
+	// unknown emails take the same Keycloak round trip.
+	valid, err := svc.kcAuth.VerifyPassword(email, oneTimePassword)
+	if err != nil {
+		logger.Log.Error("setInitialPassword: one-time password check failed", "error", err)
+		return nil, errSetInitialPasswordFailed
+	}
+	if !valid {
+		return reject()
 	}
 
-	if err := svc.clearPasswordRequirement(email); err != nil {
-		return nil, err
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		logger.Log.Error("setInitialPassword: failed to get admin token", "error", err)
+		return nil, errSetInitialPasswordFailed
+	}
+	kcUser, err := svc.kcUser.FindUserByExactEmail(adminToken, email)
+	if err != nil {
+		logger.Log.Error("setInitialPassword: failed to look up user", "error", err)
+		return nil, errSetInitialPasswordFailed
+	}
+	// Only users an admin created (username is their email) with a pending
+	// password change qualify: the password grant above signed in by username,
+	// so this ties the verified credential to the user changed below.
+	if kcUser == nil || !strings.EqualFold(getString(kcUser, "username"), email) || !keycloak.HasRequiredAction(kcUser, consts.UpdatePasswordAction) {
+		return reject()
+	}
+	userID := getString(kcUser, "id")
+	if userID == "" {
+		return nil, errSetInitialPasswordFailed
 	}
 
-	idToken, accessToken, user, err := svc.authenticateUserWithNewPassword(ctx, email, password)
+	if err := svc.kcUser.UpdateUserPasswordByID(adminToken, userID, newPassword); err != nil {
+		// Keycloak password policy errors are safe to show: the caller proved the one-time password.
+		return nil, fmt.Errorf("failed to update password: %w", err)
+	}
+	if err := svc.kcUser.SetUserPasswordRequirementByID(adminToken, userID, false); err != nil {
+		return nil, fmt.Errorf("failed to clear password requirement: %w", err)
+	}
+	svc.initialPasswordAttempts.reset(emailKey)
+
+	accessToken, err := svc.kcAuth.SignInWithPassword(email, newPassword)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign in with new password: %w", err)
+	}
+	user, err := svc.buildUserModel(adminToken, types.UserSummary{ID: userID, Email: getString(kcUser, "email")}, false)
 	if err != nil {
 		return nil, err
 	}
+
+	logger.Log.Info("Initial password set", "userID", userID)
+
+	// Password sign-in has no ID token, as in SignIn.
+	idToken := ""
 
 	return &model.SignInResult{
 		IDToken:     &idToken,
@@ -403,75 +500,11 @@ func (svc *AuthService) SetInitialPassword(ctx context.Context, email, password 
 	}, nil
 }
 
-func (svc *AuthService) validateUserExists(email string) error {
-	exists, err := svc.userService.CheckUserExists(email)
-	if err != nil {
-		return err
+func getString(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
 	}
-	if !exists {
-		return fmt.Errorf("user not found: %w", err)
-	}
-	return nil
-}
-
-func (svc *AuthService) validatePasswordChangeRequired(email string) error {
-	adminToken, err := svc.adminService.GetAdminToken()
-	if err != nil {
-		return fmt.Errorf("failed to get admin token: %w", err)
-	}
-	needsChange, err := svc.kcUser.CheckUserNeedsPasswordChange(adminToken, email)
-	if err != nil {
-		return fmt.Errorf("failed to check password change requirement: %w", err)
-	}
-	if !needsChange {
-		return fmt.Errorf("password change not required for this user")
-	}
-	return nil
-}
-
-func (svc *AuthService) updateUserPassword(email, password string) error {
-	adminToken, err := svc.adminService.GetAdminToken()
-	if err != nil {
-		return fmt.Errorf("failed to get admin token: %w", err)
-	}
-
-	err = svc.kcUser.UpdateUserPassword(adminToken, email, password)
-	if err != nil {
-		return fmt.Errorf("failed to update password: %w", err)
-	}
-	return nil
-}
-
-func (svc *AuthService) clearPasswordRequirement(email string) error {
-	adminToken, err := svc.adminService.GetAdminToken()
-	if err != nil {
-		return fmt.Errorf("failed to get admin token: %w", err)
-	}
-
-	err = svc.kcUser.SetUserPasswordRequirement(adminToken, email, false)
-	if err != nil {
-		return fmt.Errorf("failed to clear password requirement: %w", err)
-	}
-	return nil
-}
-
-func (svc *AuthService) authenticateUserWithNewPassword(ctx context.Context, email string, password string) (string, string, *model.User, error) {
-	token, err := svc.adminService.GetAdminToken()
-	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to get admin token: %w", err)
-	}
-
-	authResult, err := svc.kcAuth.AuthenticateUser(token, email, password, "")
-	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to sign in with new password: %w", err)
-	}
-
-	user, err := svc.userService.GetUserByEmail(ctx, email)
-	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to find user by email: %w", err)
-	}
-
-	return authResult.IDToken, authResult.AccessToken, user, nil
+	return ""
 }
 
 func (svc *AuthService) buildUserModel(adminToken string, userData types.UserSummary, needsPasswordChange bool) (*model.User, error) {

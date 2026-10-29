@@ -166,6 +166,30 @@ input WriteGroupRoleMappingInput {
   displayName: String
 }
 
+enum IdentityProviderProtocol {
+  OIDC
+  SAML
+}
+
+# Settings of a configured external identity provider, for the Admin screen.
+# Secrets never leave the backend: only whether one is stored.
+type IdentityProvider {
+  providerId: AuthProviderId!
+  protocol: IdentityProviderProtocol!
+  enabled: Boolean!
+  # Redirect URI to register in the identity provider.
+  callbackUrl: String!
+  # OIDC
+  clientId: String
+  discoveryUrl: String
+  tenantId: String
+  hasClientSecret: Boolean!
+  # SAML
+  idpEntityId: String
+  singleSignOnServiceUrl: String
+  hasSigningCertificate: Boolean!
+}
+
 type IdentityProviderResult {
   success: Boolean!
   error: String
@@ -219,6 +243,8 @@ type Query {
   # Public (unauthenticated): aliases of configured external IdPs for the login chooser.
   # Returns only AuthProviderId values — never IdP secrets or full Keycloak config.
   configuredIdentityProviders: [AuthProviderId!]!
+  # ADMIN/OWNER only: settings of configured identity providers, without secrets.
+  identityProviders: [IdentityProvider!]!
   signInUrl(providerId: AuthProviderId!): String
   signOutUrl(idToken: String): String
   computePlatforms: [ComputePlatform!]!
@@ -239,7 +265,11 @@ type Mutation {
   ): IdentityProviderResult!
 
   signIn(email: String, password: String, code: String): SignInResult!
-  setInitialPassword(email: String!, password: String!): SignInResult!
+  setInitialPassword(
+    email: String!
+    oneTimePassword: String!
+    password: String!
+  ): SignInResult!
   verifyToken(token: String!): GeneralResult!
 
   updateComputePlatform(

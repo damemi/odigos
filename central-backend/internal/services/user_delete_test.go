@@ -2,7 +2,6 @@ package services
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/odigos-io/central-backend/internal/logger"
 	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/central-backend/internal/utils/tokentest"
 )
 
 // fakeKeycloak serves the handful of admin endpoints DeleteUser walks through.
@@ -55,26 +55,11 @@ func fakeKeycloak(t *testing.T, userID, role string, deleted *bool) *httptest.Se
 
 func jwtFor(t *testing.T, userID string, issuedAt time.Time, roles ...string) string {
 	t.Helper()
-	claims := map[string]any{
-		"sub":          userID,
-		"iat":          float64(issuedAt.Unix()),
-		"exp":          float64(issuedAt.Add(12 * time.Hour).Unix()),
-		"realm_access": map[string]any{"roles": toAny(roles)},
-	}
-	payload, err := json.Marshal(claims)
-	if err != nil {
-		t.Fatalf("marshal claims: %v", err)
-	}
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
-	return header + "." + base64.RawURLEncoding.EncodeToString(payload) + ".sig"
-}
-
-func toAny(in []string) []any {
-	out := make([]any, 0, len(in))
-	for _, s := range in {
-		out = append(out, s)
-	}
-	return out
+	realm := tokentest.Install(t)
+	claims := realm.Claims(userID, roles...)
+	claims["iat"] = issuedAt.Unix()
+	claims["exp"] = issuedAt.Add(12 * time.Hour).Unix()
+	return realm.Sign(t, claims)
 }
 
 // Deleting a user must also revoke their outstanding access tokens. Authorization

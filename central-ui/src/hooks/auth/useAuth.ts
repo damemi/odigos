@@ -6,7 +6,7 @@ import { useLazyQuery, useMutation, useQuery } from '@apollo/client/react';
 import { SIGN_IN, SET_INITIAL_PASSWORD, GET_SYSTEM_CONFIG, GET_SIGN_OUT_URL } from '@/graphql';
 
 export type HandleSignIn = (credentials: { email?: string; password?: string; code?: string }) => void;
-export type HandleSetInitialPassword = (email: string, password: string) => void;
+export type HandleSetInitialPassword = (email: string, oneTimePassword: string, password: string) => void;
 export type HandleSignOut = () => Promise<void>;
 export type GetCurrentUser = () => User | null;
 /** Returns true if the browser is navigating away for IdP logout. */
@@ -24,7 +24,7 @@ const stripAuthCodeFromUrl = () => {
 
 export const useAuth = () => {
   const [error, setError] = useState<string | null>(null);
-  const { setAuth, clearAuth, setLastAuthEmail } = useUserStore();
+  const { setAuth, clearAuth, setLastAuthEmail, setPendingOneTimePassword } = useUserStore();
 
   const { data: systemConfigData, loading: systemConfigLoading } = useQuery<{ systemConfig: SystemConfig }>(GET_SYSTEM_CONFIG);
 
@@ -60,7 +60,9 @@ export const useAuth = () => {
       sessionStorage.removeItem(STRINGS.AUTO_SSO_PROVIDER_KEY);
 
       // PASSWORD_UPDATE_REQUIRED intentionally has no user accessToken (null).
-      // Keep lastAuthEmail so /update-password can call setInitialPassword.
+      // Keep lastAuthEmail and the temporary password (in memory only) so
+      // /update-password can call setInitialPassword.
+      setPendingOneTimePassword(status === SignInStatus.PASSWORD_UPDATE_REQUIRED ? credentials.password || null : null);
       setAuth({
         idToken: idToken || null,
         accessToken: accessToken || null,
@@ -135,14 +137,15 @@ export const useAuth = () => {
     return user;
   }, []);
 
-  const handleSetInitialPassword: HandleSetInitialPassword = async (email, password) => {
+  const handleSetInitialPassword: HandleSetInitialPassword = async (email, oneTimePassword, password) => {
     setError(null);
     try {
-      const { data } = await setInitialPassword({ variables: { email, password } });
+      const { data } = await setInitialPassword({ variables: { email, oneTimePassword, password } });
       if (!data?.setInitialPassword) return;
 
       const { idToken, accessToken, user } = data.setInitialPassword;
       setLastAuthEmail(null);
+      setPendingOneTimePassword(null);
       setAuth({
         idToken: idToken || '',
         accessToken: accessToken || '',

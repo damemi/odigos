@@ -210,9 +210,22 @@ spec:
               # lowercase string "success" (see central-backend
               # consts.StatusConnected). The Central UI maps this to the
               # `Connection live` badge via StatusType.Success === 'success'.
+              # computePlatforms requires a session, so sign in as the Keycloak
+              # bootstrap admin through central-backend's Keycloak proxy. Its
+              # built-in master-realm `admin` role is what Central reads as ADMIN.
+              KC_USER=$(kubectl get secret keycloak-admin-credentials -n odigos-central -o jsonpath='{.data.admin-username}' | base64 -d)
+              KC_PASS=$(kubectl get secret keycloak-admin-credentials -n odigos-central -o jsonpath='{.data.admin-password}' | base64 -d)
+
               for i in $(seq 1 48); do
+                TOKEN=$(curl -s -X POST "http://localhost:8083/realms/master/protocol/openid-connect/token" \
+                  -H "Content-Type: application/x-www-form-urlencoded" \
+                  --data-urlencode "grant_type=password" \
+                  --data-urlencode "client_id=odigos-central" \
+                  --data-urlencode "username=$KC_USER" \
+                  --data-urlencode "password=$KC_PASS" | jq -r '.access_token // ""' 2>/dev/null || echo "")
                 RES=$(curl -s -X POST "http://localhost:8083/graphql" \
                   -H "Content-Type: application/json" \
+                  -H "Authorization: Bearer $TOKEN" \
                   -d '{"query": "{ computePlatforms { name status } }"}' || true)
                 NAME=$(echo "$RES" | jq -r '.data.computePlatforms[0].name // ""' 2>/dev/null || echo "")
                 STATUS=$(echo "$RES" | jq -r '.data.computePlatforms[0].status // ""' 2>/dev/null || echo "")

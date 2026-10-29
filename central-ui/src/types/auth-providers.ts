@@ -39,3 +39,23 @@ export interface AuthProviderOption {
   discoveryUrl?: string;
   defaultLoginType?: LoginType;
 }
+
+export enum IdentityProviderProtocol {
+  OIDC = 'OIDC',
+  SAML = 'SAML',
+}
+
+// Settings of a configured identity provider. Secrets are never returned, only whether one is stored.
+export interface IdentityProvider {
+  providerId: AuthProviderId;
+  protocol: IdentityProviderProtocol;
+  enabled: boolean;
+  callbackUrl: string;
+  clientId?: string | null;
+  discoveryUrl?: string | null;
+  tenantId?: string | null;
+  hasClientSecret: boolean;
+  idpEntityId?: string | null;
+  singleSignOnServiceUrl?: string | null;
+  hasSigningCertificate: boolean;
+}

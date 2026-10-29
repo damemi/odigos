@@ -81,6 +81,9 @@ export const PASSWORD_INVALID = 'Password must be at least 8 characters long';
 export const CONFIRM_PASSWORD = 'Confirm Password';
 export const PASSWORDS_DO_NOT_MATCH = 'Passwords do not match';
 export const NEW_PASSWORD = 'New Password';
+export const TEMPORARY_PASSWORD = 'Temporary Password';
+export const TEMPORARY_PASSWORD_REQUIRED = 'Temporary password is required';
+export const TEMPORARY_PASSWORD_NOTE = 'Enter the temporary password your admin shared with you.';
 export const UPDATE_PASSWORD = 'Update Password';
 export const UPDATE_YOUR_PASSWORD = 'Update Your Password';
 export const UPDATE_PASSWORD_SUBTITLE = 'Set a new password to continue.';
@@ -157,6 +160,30 @@ export const DELETE_ROLE_MAPPING_CONFIRM = (name: string) => `Are you sure you w
 export const CREATE_ROLE_MAPPING_ERROR = 'Failed to create role mapping. Please try again.';
 export const CREATE_ROLE_MAPPING_FORM_DESCRIPTION_1 = 'Map an identity provider group to an Odigos role.';
 export const CREATE_ROLE_MAPPING_FORM_DESCRIPTION_2 = 'Users in this group are granted the selected role on sign-in. Highest privilege wins across groups.';
+
+// Identity provider strings (Access management)
+export const IDENTITY_PROVIDERS = 'Identity Providers';
+export const PROVIDER = 'Provider';
+export const PROTOCOL = 'Protocol';
+export const IDENTIFIER = 'Identifier';
+export const IDP_SET_UP = 'Set up';
+export const IDP_DISABLED = 'Disabled';
+export const IDP_NOT_SET_UP = 'Not set up';
+export const IDP_NONE_CONNECTED = 'No identity provider is connected yet. Users sign in with email and password until you connect one.';
+export const IDP_LOAD_ERROR_TITLE = "Couldn't load identity providers";
+export const IDP_LOAD_ERROR_SUBTITLE = 'Check that Keycloak is reachable, then try again.';
+export const RETRY = 'Try again';
+export const EDIT_IDENTITY_PROVIDER = (displayName: string) => `Edit ${displayName}`;
+export const CONNECT_IDENTITY_PROVIDER = (displayName: string) => `Connect ${displayName}`;
+export const IDP_PROTOCOL_LOCKED = (protocol: string) => `Set up with ${protocol}. Changing protocol isn't supported because it would remove this provider's role mappings.`;
+export const SECRET_STORED_PLACEHOLDER = 'Stored. Leave blank to keep it.';
+export const CLIENT_SECRET_REQUIRED_ON_CHANGE = 'Enter the client secret again when the discovery URL, tenant ID or client ID changes';
+export const CERTIFICATE_STORED_PLACEHOLDER = 'Stored. Leave blank to keep it, or paste a new certificate.';
+export const SIGNING_CERTIFICATE_PLACEHOLDER = 'Base64 certificate body, without BEGIN/END lines';
+export const IDP_CALLBACK_URL_PENDING = (displayName: string) => `Save to get the callback URL to register in ${displayName}.`;
+export const IDP_SAVED = (displayName: string) => `${displayName} saved. Register the callback URL below in ${displayName} if you haven't yet.`;
+export const IDP_SAVE_ERROR = (displayName: string) => `Couldn't save ${displayName}. Check the values and that Keycloak is reachable, then try again.`;
+export const IDP_NOT_SET_UP_SIGN_IN = (displayName: string) => `${displayName} sign-in isn't set up. Sign in with email, or ask an Admin to connect ${displayName} in Access management.`;
 
 // App info strings
 export const VERSION_LABEL = (version: string) => `Version: ${version}`;

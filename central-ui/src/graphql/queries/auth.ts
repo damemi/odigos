@@ -17,3 +17,21 @@ export const GET_SIGN_OUT_URL = gql`
     signOutUrl(idToken: $idToken)
   }
 `;
+
+export const GET_IDENTITY_PROVIDERS = gql`
+  query IdentityProviders {
+    identityProviders {
+      providerId
+      protocol
+      enabled
+      callbackUrl
+      clientId
+      discoveryUrl
+      tenantId
+      hasClientSecret
+      idpEntityId
+      singleSignOnServiceUrl
+      hasSigningCertificate
+    }
+  }
+`;

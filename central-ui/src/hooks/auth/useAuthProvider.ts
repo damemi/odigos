@@ -38,9 +38,13 @@ export const useAuthProvider = () => {
   } = useQuery<ConfiguredIdentityProvidersResult>(GET_CONFIGURED_IDENTITY_PROVIDERS);
 
   const [signInUrl, { loading: getUrlLoading, error: getUrlError }] = useLazyQuery<SignInUrlResult, GetAuthSignInUrlRequest>(SIGN_IN_URL);
-  const [ensureOidcIdp, { loading: ensureIdpLoading, error: ensureIdpError }] = useMutation<EnsureOidcIdentityProviderResponse, EnsureOidcIdentityProviderRequest>(ENSURE_OIDC_IDENTITY_PROVIDER);
+  // The input carries the client secret; don't keep it in the Apollo cache.
+  const [ensureOidcIdp, { loading: ensureIdpLoading, error: ensureIdpError }] = useMutation<EnsureOidcIdentityProviderResponse, EnsureOidcIdentityProviderRequest>(ENSURE_OIDC_IDENTITY_PROVIDER, {
+    fetchPolicy: 'no-cache',
+  });
   const [ensureSamlIdp, { loading: ensureSamlIdpLoading, error: ensureSamlIdpError }] = useMutation<EnsureSamlIdentityProviderResponse, EnsureSamlIdentityProviderRequest>(
     ENSURE_SAML_IDENTITY_PROVIDER,
+    { fetchPolicy: 'no-cache' },
   );
 
   const getSignInUrl: GetAuthSignInUrl = useCallback(

@@ -45,7 +45,8 @@ func TestCreateConnectorProviderErrorsReachGraphQLAndLogs(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/graphql", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("X-Request-ID", "central-request-123")
-			req = req.WithContext(utils.SetLiveRoleInContext(context.Background(), "ADMIN"))
+			adminCtx := utils.SetTokenInContext(context.Background(), testJWT(t, "admin"))
+			req = req.WithContext(utils.SetLiveRoleInContext(adminCtx, "ADMIN"))
 			rec := httptest.NewRecorder()
 			handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{}})).ServeHTTP(rec, req)
 			var response struct {

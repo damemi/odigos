@@ -131,6 +131,12 @@ func main() {
 		logger.Fatal("Failed to initialize Keycloak state", err)
 	}
 
+	tokenVerifier := newKeycloakTokenVerifier()
+	if err := tokenVerifier.Warm(); err != nil {
+		logger.Log.Warn("Failed to prefetch Keycloak signing keys; retrying on first request", "error", err)
+	}
+	utils.SetTokenVerifier(tokenVerifier)
+
 	redisClient, err := redisclient.NewRedisClient(ctx)
 	if err != nil {
 		logger.Fatal("Failed to connect to Redis", err)
@@ -218,8 +224,12 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 	router.GET("/healthz", func(c *gin.Context) { c.Status(200) })
 	router.GET("/readyz", func(c *gin.Context) { c.Status(200) })
 	router.GET("/ws/proxy", func(c *gin.Context) { wsServer.HandleConnection(c.Writer, c.Request) })
+	// /sse/events is unauthenticated (PLAT-1918). To protect it, add
+	// authContextMiddleware and utils.RequireAuth like /diagnose/download; an
+	// EventSource can't set headers, so a query-parameter token must also go
+	// through utils.AuthenticateToken, which verifies it.
 	router.GET("/sse/events", func(c *gin.Context) { sseHub.SSEHandler(c.Writer, c.Request) })
-	router.POST("/graphql", authContextMiddleware(adminService), func(c *gin.Context) { gqlHandler.ServeHTTP(c.Writer, c.Request) })
+	router.POST("/graphql", utils.ClientIPMiddleware(), authContextMiddleware(adminService), func(c *gin.Context) { gqlHandler.ServeHTTP(c.Writer, c.Request) })
 	// Diagnose download — paired with GraphQL `diagnose` (OSS frontend pattern).
 	router.GET("/diagnose/download", authContextMiddleware(adminService), func(c *gin.Context) {
 		if err := utils.RequireAuth(c.Request.Context()); err != nil {
@@ -238,22 +248,42 @@ func newRouter(gqlHandler *handler.Server, wsServer *websocketserver.WebSocketSe
 	return router
 }
 
+// authContextMiddleware verifies the bearer token and, only when it is a valid
+// access token for this realm, puts its claims and the user's live role in the
+// request context. Invalid tokens leave the request anonymous, so protected
+// operations fail with an auth error while public ones (sign-in) still work.
 func authContextMiddleware(adminService *services.AdminService) gin.HandlerFunc {
 	kcUser := keycloak.NewKeycloakUserService()
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
-		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			ctx := utils.SetTokenInContext(c.Request.Context(), token)
-
-			if sub, err := utils.ExtractSubjectFromToken(token); err == nil {
-				ctx = enrichAuthContext(adminService, kcUser, sub, ctx)
+		if token, ok := strings.CutPrefix(authHeader, "Bearer "); ok && token != "" {
+			ctx, err := utils.AuthenticateToken(c.Request.Context(), token)
+			if err != nil {
+				logger.Log.Debug("Ignoring unverified bearer token", "error", err)
+			} else if sub, ok := utils.GetSubjectFromContext(ctx); ok {
+				c.Request = c.Request.WithContext(enrichAuthContext(adminService, kcUser, sub, ctx))
 			}
-
-			c.Request = c.Request.WithContext(ctx)
 		}
 		c.Next()
 	}
+}
+
+// newKeycloakTokenVerifier trusts tokens that the realm's keys signed for the
+// odigos-central client. Accepted issuers are the one Keycloak advertises in its
+// discovery document (its configured hostname) plus the realm URL on the
+// in-cluster and browser-facing hosts, which Keycloak uses when no hostname is set.
+func newKeycloakTokenVerifier() *utils.TokenVerifier {
+	realmURL := func(host string) string {
+		return fmt.Sprintf("%s/realms/%s", strings.TrimRight(host, "/"), consts.KeycloakRealm)
+	}
+	internalRealm := realmURL(consts.GetKeycloakHost())
+	return utils.NewTokenVerifier(utils.TokenVerifierConfig{
+		JWKSURL:      internalRealm + "/protocol/openid-connect/certs",
+		DiscoveryURL: internalRealm + "/.well-known/openid-configuration",
+		Issuers:      []string{internalRealm, realmURL(consts.GetCentralBackendHost())},
+		ClientID:     consts.ClientID,
+		Algorithms:   consts.GetTokenSigningAlgorithms(),
+	})
 }
 
 // authLookups collapses concurrent Keycloak lookups for the same user. A page

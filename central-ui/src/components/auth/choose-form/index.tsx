@@ -10,7 +10,7 @@ import { ConstrainedWidth, FormContainer, FormSubtitle, FormTitle, ErrorText } f
 interface ChooseFormProps {
   isFirstTime: boolean;
   loading: boolean;
-  /** When empty/undefined, show all IdP options (first-time setup). When non-empty, email + matching providers only. */
+  /** Email plus these providers. When empty, first-time setup shows every IdP option and later sign-ins show email only. */
   configuredProviders?: AuthProviderId[];
   error?: string | null;
   onClick: (providerId: AuthProviderId, defaultLoginType?: LoginType) => void;
@@ -21,8 +21,9 @@ const ChooseForm: FC<ChooseFormProps> = ({ isFirstTime, loading, configuredProvi
     if (configuredProviders && configuredProviders.length > 0) {
       return AUTH_PROVIDERS.filter((provider) => configuredProviders.includes(provider.providerId));
     }
-    return AUTH_PROVIDERS;
-  }, [configuredProviders]);
+    // After setup only Admins add identity providers, from Access management.
+    return isFirstTime ? AUTH_PROVIDERS : [];
+  }, [configuredProviders, isFirstTime]);
 
   const authProvidersBtnsToRender = useMemo(
     () =>

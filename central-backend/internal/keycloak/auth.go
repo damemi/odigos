@@ -1,18 +1,17 @@
 package keycloak
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/odigos-io/central-backend/internal/consts"
 	"github.com/odigos-io/central-backend/internal/logger"
 	"github.com/odigos-io/central-backend/internal/types"
+	"github.com/odigos-io/central-backend/internal/utils"
 )
 
 type KeycloakAuthService struct {
@@ -90,38 +89,15 @@ func (kc *KeycloakAuthService) GetRedirectUrlForSignOut(idToken string) string {
 	return fmt.Sprintf("%s?%s", logoutURL, queryParams.Encode())
 }
 
+// VerifyToken reports whether token is a valid, unexpired access token signed
+// by the realm for this client.
 func (kc *KeycloakAuthService) VerifyToken(token string) (bool, error) {
 	if token == "" {
 		return false, fmt.Errorf("token is empty")
 	}
-
-	// Parse JWT token to extract claims
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return false, fmt.Errorf("invalid JWT token format")
+	if _, err := utils.VerifyAccessToken(token); err != nil {
+		return false, err
 	}
-
-	// Decode the payload (second part)
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return false, fmt.Errorf("failed to decode JWT payload: %w", err)
-	}
-
-	var claims map[string]any
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return false, fmt.Errorf("failed to parse JWT payload: %w", err)
-	}
-
-	// Verify token is not expired
-	exp, ok := claims["exp"].(float64)
-	if !ok {
-		return false, fmt.Errorf("expiration claim not found in token")
-	}
-
-	if time.Now().Unix() >= int64(exp) {
-		return false, fmt.Errorf("token is expired")
-	}
-
 	return true, nil
 }
 
@@ -161,6 +137,93 @@ func UserSignIn(keycloakHost, realm, clientID, username, password string) (strin
 	}
 
 	return result.AccessToken, nil
+}
+
+// accountNotFullySetUp is Keycloak's password-grant error description for a user
+// with a pending required action. Keycloak checks the password before required
+// actions, so this error also means the password was correct.
+const accountNotFullySetUp = "Account is not fully set up"
+
+// VerifyPassword reports whether password is the current Keycloak password of
+// username, using a password grant. A session the grant opens is ended at once.
+// It returns false for wrong, disabled or unknown credentials and an error only
+// when Keycloak could not answer.
+func (kc *KeycloakAuthService) VerifyPassword(username, password string) (bool, error) {
+	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", kc.host, kc.realm)
+
+	formData := make(url.Values)
+	formData.Set("grant_type", "password")
+	formData.Set("client_id", kc.client)
+	formData.Set("username", username)
+	formData.Set("password", password)
+
+	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var tokens TokenResponse
+		if err := json.NewDecoder(resp.Body).Decode(&tokens); err == nil && tokens.RefreshToken != "" {
+			if err := kc.endSession(tokens.RefreshToken); err != nil {
+				logger.Log.Warn("Failed to end session opened by password check", "error", err)
+			}
+		}
+		return true, nil
+	case http.StatusBadRequest, http.StatusUnauthorized:
+		var oauthErr struct {
+			Error       string `json:"error"`
+			Description string `json:"error_description"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&oauthErr); err != nil {
+			return false, fmt.Errorf("failed to decode password check response with status %d: %w", resp.StatusCode, err)
+		}
+		if oauthErr.Error != "invalid_grant" {
+			return false, fmt.Errorf("password check failed with status %d: %s", resp.StatusCode, oauthErr.Error)
+		}
+		return oauthErr.Description == accountNotFullySetUp, nil
+	default:
+		return false, fmt.Errorf("password check failed with status %d", resp.StatusCode)
+	}
+}
+
+// SignInWithPassword returns an access token for username from a password grant.
+func (kc *KeycloakAuthService) SignInWithPassword(username, password string) (string, error) {
+	return UserSignIn(kc.host, kc.realm, kc.client, username, password)
+}
+
+// endSession ends the Keycloak session that refreshToken belongs to.
+func (kc *KeycloakAuthService) endSession(refreshToken string) error {
+	logoutURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/logout", kc.host, kc.realm)
+
+	formData := make(url.Values)
+	formData.Set("client_id", kc.client)
+	formData.Set("refresh_token", refreshToken)
+
+	req, err := http.NewRequest("POST", logoutURL, strings.NewReader(formData.Encode()))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != StatusNoContent && resp.StatusCode != StatusOK {
+		return fmt.Errorf("logout failed with status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func (kc *KeycloakAuthService) AuthenticateUser(adminToken string, email string, password string, code string) (*UserAuthResult, error) {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strings"
 
 	"github.com/odigos-io/central-backend/internal/consts"
@@ -73,8 +74,13 @@ func (kc *KeycloakUserService) GetUserRole(token string, userID string) (string,
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != StatusOK {
+	// A missing user has no role. Any other failure is an error so callers that
+	// grant privileges (first-admin promotion) cannot mistake it for "no role".
+	if resp.StatusCode == http.StatusNotFound {
 		return "", nil
+	}
+	if resp.StatusCode != StatusOK {
+		return "", fmt.Errorf("failed to get roles: status %d", resp.StatusCode)
 	}
 
 	var roles RoleList
@@ -392,6 +398,59 @@ func (kc *KeycloakUserService) FindUsersByEmail(token string, email string) (Use
 	return users, nil
 }
 
+// FindUserByExactEmail returns the user whose email is email, ignoring case, or
+// nil when there is none. Unlike FindUsersByEmail it never matches a user whose
+// email merely contains email.
+func (kc *KeycloakUserService) FindUserByExactEmail(token string, email string) (map[string]any, error) {
+	query := make(neturl.Values)
+	query.Set("email", email)
+	query.Set("exact", "true")
+	searchURL := fmt.Sprintf("%s/admin/realms/%s/users?%s", kc.host, kc.realm, query.Encode())
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != StatusOK {
+		return nil, fmt.Errorf("failed to search user: status %d", resp.StatusCode)
+	}
+
+	var users UserList
+	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
+		return nil, err
+	}
+
+	var match map[string]any
+	for _, u := range users {
+		if !strings.EqualFold(getString(u, "email"), email) {
+			continue
+		}
+		if match != nil {
+			return nil, fmt.Errorf("more than one user has this email")
+		}
+		match = u
+	}
+	return match, nil
+}
+
+// HasRequiredAction reports whether a user representation lists action.
+func HasRequiredAction(user map[string]any, action string) bool {
+	requiredActions, _ := user["requiredActions"].([]any)
+	for _, a := range requiredActions {
+		if s, ok := a.(string); ok && s == action {
+			return true
+		}
+	}
+	return false
+}
+
 func (kc *KeycloakUserService) UpdateUserPassword(token string, email, newPassword string) error {
 	users, err := kc.FindUsersByEmail(token, email)
 	if err != nil || len(users) == 0 {
@@ -399,7 +458,11 @@ func (kc *KeycloakUserService) UpdateUserPassword(token string, email, newPasswo
 	}
 	userData := users[0]
 	userID := userData["id"].(string)
+	return kc.UpdateUserPasswordByID(token, userID, newPassword)
+}
 
+// UpdateUserPasswordByID sets a permanent password for the user with userID.
+func (kc *KeycloakUserService) UpdateUserPasswordByID(token string, userID, newPassword string) error {
 	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/reset-password", kc.host, kc.realm, userID)
 
 	updateData := PasswordUpdatePayload{
@@ -475,7 +538,12 @@ func (kc *KeycloakUserService) SetUserPasswordRequirement(token string, email st
 	}
 	userData := users[0]
 	userID := userData["id"].(string)
+	return kc.SetUserPasswordRequirementByID(token, userID, required)
+}
 
+// SetUserPasswordRequirementByID sets or clears the pending password change of
+// the user with userID. It replaces the user's other required actions.
+func (kc *KeycloakUserService) SetUserPasswordRequirementByID(token string, userID string, required bool) error {
 	url := fmt.Sprintf("%s/admin/realms/%s/users/%s", kc.host, kc.realm, userID)
 
 	var requiredActions []string

@@ -104,13 +104,16 @@ if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
 fi
 
 # graphql_query METHOD: POST a query and require valid JSON with .data present.
+# An optional third argument is a bearer token for operations that need a session.
 # Prints the raw body on failure so CI logs are actionable.
 graphql_query() {
   local label="$1"
   local query="$2"
+  local token="${3:-}"
   local body
   body=$(curl -s -X POST "http://localhost:$LOCAL_PORT/graphql" \
     -H "Content-Type: application/json" \
+    ${token:+-H "Authorization: Bearer $token"} \
     -d "{\"query\": \"$query\"}") || {
     echo "FAILED: $label — curl failed"
     exit 1
@@ -277,7 +280,33 @@ echo "PASSED: GraphQL systemConfig working (version: $VERSION)"
 # TEST 9: ComputePlatforms Query
 #===========================================
 echo "Test 9: GraphQL computePlatforms query..."
-PLATFORMS=$(graphql_query "computePlatforms" "{ computePlatforms { id name status } }")
+# computePlatforms requires a session. Sign in as the Keycloak bootstrap admin
+# through central-backend's Keycloak proxy; its built-in master-realm `admin`
+# role is what Central reads as ADMIN.
+KC_USER=$(kubectl get secret keycloak-admin-credentials -n odigos-central -o jsonpath='{.data.admin-username}' | base64 -d)
+KC_PASS=$(kubectl get secret keycloak-admin-credentials -n odigos-central -o jsonpath='{.data.admin-password}' | base64 -d)
+TOKEN=$(curl -s -X POST "http://localhost:$LOCAL_PORT/realms/master/protocol/openid-connect/token" \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "grant_type=password" \
+  --data-urlencode "client_id=odigos-central" \
+  --data-urlencode "username=$KC_USER" \
+  --data-urlencode "password=$KC_PASS" | jq -r '.access_token // ""')
+if [ -z "$TOKEN" ]; then
+  echo "FAILED: could not get an access token from Keycloak"
+  exit 1
+fi
+
+ANON_PLATFORMS=$(curl -s -X POST "http://localhost:$LOCAL_PORT/graphql" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ computePlatforms { id } }"}')
+if ! echo "$ANON_PLATFORMS" | jq -e '.errors[0].message | test("unauthenticated")' >/dev/null 2>&1; then
+  echo "FAILED: anonymous computePlatforms query was not rejected"
+  echo "Response: $ANON_PLATFORMS"
+  exit 1
+fi
+echo "PASSED: anonymous computePlatforms query rejected"
+
+PLATFORMS=$(graphql_query "computePlatforms" "{ computePlatforms { id name status } }" "$TOKEN")
 
 # Just verify the query works, even if there are no platforms
 if echo "$PLATFORMS" | jq -e '.data.computePlatforms' >/dev/null 2>&1; then

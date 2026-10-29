@@ -1,193 +1,195 @@
-package utils
+package utils_test
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/central-backend/internal/utils/tokentest"
 )
 
-func makeTestJWT(t *testing.T, claims map[string]any) string {
-	t.Helper()
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
-	payload, err := json.Marshal(claims)
-	if err != nil {
-		t.Fatalf("marshal claims: %v", err)
-	}
-	return header + "." + base64.RawURLEncoding.EncodeToString(payload) + ".sig"
-}
-
 func TestRequireAuthRequiresOdigosRole(t *testing.T) {
-	exp := float64(time.Now().Add(time.Hour).Unix())
+	realm := tokentest.Install(t)
 
 	t.Run("rejects missing token", func(t *testing.T) {
-		if err := RequireAuth(context.Background()); err != ErrUnauthenticated {
-			t.Fatalf("RequireAuth() = %v, want ErrUnauthenticated", err)
+		if err := utils.RequireAuth(context.Background()); err != utils.ErrUnauthenticated {
+			t.Fatalf("utils.RequireAuth() = %v, want ErrUnauthenticated", err)
 		}
 	})
 
 	t.Run("rejects token without odigos role", func(t *testing.T) {
-		token := makeTestJWT(t, map[string]any{
-			"exp": exp,
-			"realm_access": map[string]any{
-				"roles": []any{"offline_access", "uma_authorization"},
-			},
-		})
-		ctx := SetTokenInContext(context.Background(), token)
-		if err := RequireAuth(ctx); err != ErrUnauthenticated {
-			t.Fatalf("RequireAuth() = %v, want ErrUnauthenticated", err)
+		ctx := utils.SetTokenInContext(context.Background(), realm.Token(t, "u", "offline_access", "uma_authorization"))
+		if err := utils.RequireAuth(ctx); err != utils.ErrUnauthenticated {
+			t.Fatalf("utils.RequireAuth() = %v, want ErrUnauthenticated", err)
 		}
 	})
 
 	t.Run("accepts viewer role", func(t *testing.T) {
-		token := makeTestJWT(t, map[string]any{
-			"exp": exp,
-			"realm_access": map[string]any{
-				"roles": []any{"viewer"},
-			},
-		})
-		ctx := SetTokenInContext(context.Background(), token)
-		if err := RequireAuth(ctx); err != nil {
-			t.Fatalf("RequireAuth() = %v, want nil", err)
+		ctx := utils.SetTokenInContext(context.Background(), realm.Token(t, "u", "viewer"))
+		if err := utils.RequireAuth(ctx); err != nil {
+			t.Fatalf("utils.RequireAuth() = %v, want nil", err)
 		}
 	})
 
 	t.Run("accepts admin role case-insensitive", func(t *testing.T) {
-		token := makeTestJWT(t, map[string]any{
-			"exp": exp,
-			"realm_access": map[string]any{
-				"roles": []any{"ADMIN"},
-			},
-		})
-		ctx := SetTokenInContext(context.Background(), token)
-		if err := RequireAuth(ctx); err != nil {
-			t.Fatalf("RequireAuth() = %v, want nil", err)
+		ctx := utils.SetTokenInContext(context.Background(), realm.Token(t, "u", "ADMIN"))
+		if err := utils.RequireAuth(ctx); err != nil {
+			t.Fatalf("utils.RequireAuth() = %v, want nil", err)
 		}
 	})
 }
 
 func TestHasOdigosRole(t *testing.T) {
-	exp := float64(time.Now().Add(time.Hour).Unix())
+	realm := tokentest.Install(t)
 
 	cases := []struct {
 		name  string
-		roles []any
+		roles []string
 		want  bool
 	}{
-		{"owner", []any{"owner"}, true},
-		{"maintainer", []any{"maintainer"}, true},
-		{"viewer", []any{"viewer"}, true},
-		{"unrelated", []any{"offline_access"}, false},
-		{"empty", []any{}, false},
+		{"owner", []string{"owner"}, true},
+		{"maintainer", []string{"maintainer"}, true},
+		{"viewer", []string{"viewer"}, true},
+		{"unrelated", []string{"offline_access"}, false},
+		{"empty", nil, false},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			token := makeTestJWT(t, map[string]any{
-				"exp": exp,
-				"realm_access": map[string]any{
-					"roles": c.roles,
-				},
-			})
-			ctx := SetTokenInContext(context.Background(), token)
-			if got := HasOdigosRole(ctx); got != c.want {
-				t.Fatalf("HasOdigosRole() = %v, want %v", got, c.want)
+			ctx := utils.SetTokenInContext(context.Background(), realm.Token(t, "u", c.roles...))
+			if got := utils.HasOdigosRole(ctx); got != c.want {
+				t.Fatalf("utils.HasOdigosRole() = %v, want %v", got, c.want)
 			}
 		})
 	}
 }
 
-func roleToken(t *testing.T, role string) string {
-	t.Helper()
-	return makeTestJWT(t, map[string]any{
-		"sub": "role-user",
-		"iat": float64(time.Now().Unix()),
-		"exp": float64(time.Now().Add(time.Hour).Unix()),
-		"realm_access": map[string]any{
-			"roles": []any{role},
-		},
-	})
-}
-
 func TestRequireAdminAndEditorRoles(t *testing.T) {
+	realm := tokentest.Install(t)
+
 	cases := []struct {
-		role     string
-		admin    bool
-		editor   bool
-		require  error
+		role    string
+		admin   bool
+		editor  bool
+		require error
 	}{
 		{"owner", true, true, nil},
 		{"ADMIN", true, true, nil},
-		{"maintainer", false, true, ErrForbidden},
-		{"viewer", false, false, ErrForbidden},
-		{"offline_access", false, false, ErrForbidden},
+		{"maintainer", false, true, utils.ErrForbidden},
+		{"viewer", false, false, utils.ErrForbidden},
+		{"offline_access", false, false, utils.ErrUnauthenticated},
 	}
 	for _, tc := range cases {
 		t.Run(tc.role, func(t *testing.T) {
-			ctx := SetTokenInContext(context.Background(), roleToken(t, tc.role))
-			if got := IsUserAdmin(ctx); got != tc.admin {
-				t.Fatalf("IsUserAdmin() = %v, want %v", got, tc.admin)
+			ctx := utils.SetTokenInContext(context.Background(), realm.Token(t, "role-user", tc.role))
+			if got := utils.IsUserAdmin(ctx); got != tc.admin {
+				t.Fatalf("utils.IsUserAdmin() = %v, want %v", got, tc.admin)
 			}
-			if got := IsUserEditor(ctx); got != tc.editor {
-				t.Fatalf("IsUserEditor() = %v, want %v", got, tc.editor)
+			if got := utils.IsUserEditor(ctx); got != tc.editor {
+				t.Fatalf("utils.IsUserEditor() = %v, want %v", got, tc.editor)
 			}
-			if err := RequireAdmin(ctx); err != tc.require {
-				t.Fatalf("RequireAdmin() = %v, want %v", err, tc.require)
+			if err := utils.RequireAdmin(ctx); err != tc.require {
+				t.Fatalf("utils.RequireAdmin() = %v, want %v", err, tc.require)
 			}
 		})
 	}
 }
 
 func TestRequireAuthRejectsExpiredToken(t *testing.T) {
-	token := makeTestJWT(t, map[string]any{
-		"sub": "expired-user",
-		"iat": float64(time.Now().Add(-2 * time.Hour).Unix()),
-		"exp": float64(time.Now().Add(-time.Hour).Unix()),
-		"realm_access": map[string]any{
-			"roles": []any{"admin"},
-		},
-	})
-	ctx := SetTokenInContext(context.Background(), token)
-	if expired, err := IsTokenExpired(token); err != nil || !expired {
-		t.Fatalf("IsTokenExpired() = %v, %v, want true", expired, err)
+	realm := tokentest.Install(t)
+	claims := realm.Claims("expired-user", "admin")
+	claims["iat"] = time.Now().Add(-2 * time.Hour).Unix()
+	claims["exp"] = time.Now().Add(-time.Hour).Unix()
+
+	ctx := utils.SetTokenInContext(context.Background(), realm.Sign(t, claims))
+	if err := utils.RequireAuth(ctx); err != utils.ErrUnauthenticated {
+		t.Fatalf("utils.RequireAuth() = %v, want ErrUnauthenticated", err)
 	}
-	if err := RequireAuth(ctx); err != ErrUnauthenticated {
-		t.Fatalf("RequireAuth() = %v, want ErrUnauthenticated", err)
+	// An expired admin session must not pass the admin check, even with a live role.
+	if err := utils.RequireAdmin(utils.SetLiveRoleInContext(ctx, "admin")); err != utils.ErrUnauthenticated {
+		t.Fatalf("utils.RequireAdmin() = %v, want ErrUnauthenticated", err)
+	}
+}
+
+func TestRequireAdminRejectsAnonymous(t *testing.T) {
+	if err := utils.RequireAdmin(context.Background()); err != utils.ErrUnauthenticated {
+		t.Fatalf("utils.RequireAdmin() = %v, want ErrUnauthenticated", err)
+	}
+}
+
+// A live role is only applied on top of a verified token; on its own it grants nothing.
+func TestLiveRoleWithoutVerifiedTokenGrantsNothing(t *testing.T) {
+	ctx := utils.SetLiveRoleInContext(context.Background(), "admin")
+	if utils.IsUserAdmin(ctx) || utils.IsUserEditor(ctx) || utils.HasOdigosRole(ctx) {
+		t.Fatal("live role without a verified token must not grant privileges")
+	}
+	if err := utils.RequireAdmin(ctx); err != utils.ErrUnauthenticated {
+		t.Fatalf("utils.RequireAdmin() = %v, want ErrUnauthenticated", err)
 	}
 }
 
 func TestRevokedTokenIgnoresLiveRole(t *testing.T) {
+	realm := tokentest.Install(t)
 	const userID = "revoked-live-role"
-	t.Cleanup(func() {
-		GlobalTokenRevocations.Clear(userID)
-	})
+	t.Cleanup(func() { utils.GlobalTokenRevocations.Clear(userID) })
+	utils.GlobalTokenRevocations.Revoke(userID, time.Now().Unix()+60)
 
-	now := time.Now().Unix()
-	GlobalTokenRevocations.Revoke(userID, now+60)
-	token := makeTestJWT(t, map[string]any{
-		"sub": userID,
-		"iat": float64(now),
-		"exp": float64(now + 3600),
-		"realm_access": map[string]any{
-			"roles": []any{"admin"},
-		},
-	})
-	ctx := SetLiveRoleInContext(SetTokenInContext(context.Background(), token), "admin")
-	if IsUserAdmin(ctx) || IsUserEditor(ctx) || HasOdigosRole(ctx) {
+	ctx := utils.SetLiveRoleInContext(utils.SetTokenInContext(context.Background(), realm.Token(t, userID, "admin")), "admin")
+	if utils.IsUserAdmin(ctx) || utils.IsUserEditor(ctx) || utils.HasOdigosRole(ctx) {
 		t.Fatal("revoked token must not grant privileges via a live role")
 	}
-	if err := RequireAdmin(ctx); err != ErrForbidden {
-		t.Fatalf("RequireAdmin() = %v, want ErrForbidden", err)
+	if err := utils.RequireAdmin(ctx); err != utils.ErrUnauthenticated {
+		t.Fatalf("utils.RequireAdmin() = %v, want ErrUnauthenticated", err)
 	}
 }
 
-func TestIsTokenRevokedMissingClaims(t *testing.T) {
-	if IsTokenRevoked("not-a-jwt") {
-		t.Fatal("malformed token must not report revoked")
+func TestRequireAuthRejectsRevokedToken(t *testing.T) {
+	realm := tokentest.Install(t)
+	const userID = "revoked-user"
+	t.Cleanup(func() { utils.GlobalTokenRevocations.Clear(userID) })
+	utils.GlobalTokenRevocations.Revoke(userID, time.Now().Unix()+60)
+
+	ctx := utils.SetTokenInContext(context.Background(), realm.Token(t, userID, "maintainer"))
+	if err := utils.RequireAuth(ctx); err != utils.ErrUnauthenticated {
+		t.Fatalf("utils.RequireAuth() = %v, want utils.ErrUnauthenticated for revoked token", err)
 	}
-	token := makeTestJWT(t, map[string]any{"sub": "user-no-iat"})
-	if IsTokenRevoked(token) {
-		t.Fatal("token without iat must not report revoked")
+}
+
+func TestLiveRoleOverridesJWTClaims(t *testing.T) {
+	realm := tokentest.Install(t)
+
+	ctx := utils.SetTokenInContext(context.Background(), realm.Token(t, "user-live", "maintainer"))
+	if !utils.IsUserEditor(ctx) {
+		t.Fatal("expected JWT maintainer to be an editor")
+	}
+
+	ctx = utils.SetLiveRoleInContext(ctx, "viewer")
+	if utils.IsUserEditor(ctx) {
+		t.Fatal("expected live viewer role to revoke editor privileges")
+	}
+	if !utils.HasOdigosRole(ctx) {
+		t.Fatal("expected live viewer role to still count as an Odigos role")
+	}
+
+	ctx = utils.SetLiveRoleInContext(ctx, "no-access")
+	if utils.HasOdigosRole(ctx) {
+		t.Fatal("expected live no-access role to fail HasOdigosRole")
+	}
+}
+
+// Keycloak always sets iat, but a signed token without it must be rejected
+// before revocation checks dereference it.
+func TestRequireAuthRejectsTokenWithoutIssuedAt(t *testing.T) {
+	realm := tokentest.Install(t)
+	claims := realm.Claims("no-iat", "admin")
+	delete(claims, "iat")
+
+	ctx, err := utils.AuthenticateToken(context.Background(), realm.Sign(t, claims))
+	if err == nil {
+		t.Fatal("AuthenticateToken() accepted a token without iat")
+	}
+	if err := utils.RequireAdmin(ctx); err != utils.ErrUnauthenticated {
+		t.Fatalf("RequireAdmin() = %v, want ErrUnauthenticated", err)
 	}
 }

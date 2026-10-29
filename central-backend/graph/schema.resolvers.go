@@ -8,7 +8,6 @@ package graph
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/logger"
 	"github.com/odigos-io/central-backend/internal/metrics"
 	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/central-backend/internal/services"
 	"github.com/odigos-io/central-backend/internal/types"
 	"github.com/odigos-io/central-backend/internal/utils"
 	"golang.org/x/sync/errgroup"
@@ -24,6 +24,9 @@ import (
 
 // EnsureOidcIdentityProvider is the resolver for the ensureOidcIdentityProvider field.
 func (r *mutationResolver) EnsureOidcIdentityProvider(ctx context.Context, input model.OidcIdentityProviderInput) (*model.IdentityProviderResult, error) {
+	if err := r.requireIdentityProviderAccess(ctx); err != nil {
+		return nil, err
+	}
 	err := r.AdminService.EnsureOidcIdentityProvider(&input)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Failed to ensure IDP: %s", err.Error())
@@ -33,7 +36,7 @@ func (r *mutationResolver) EnsureOidcIdentityProvider(ctx context.Context, input
 		}, err
 	}
 
-	callbackURL := fmt.Sprintf("%s/realms/%s/broker/%s/endpoint", consts.GetCentralBackendHost(), consts.KeycloakRealm, strings.ToLower(string(input.ProviderID)))
+	callbackURL := services.IdentityProviderCallbackURL(input.ProviderID)
 
 	return &model.IdentityProviderResult{
 		Success:     true,
@@ -43,12 +46,15 @@ func (r *mutationResolver) EnsureOidcIdentityProvider(ctx context.Context, input
 
 // EnsureSamlIdentityProvider is the resolver for the ensureSamlIdentityProvider field.
 func (r *mutationResolver) EnsureSamlIdentityProvider(ctx context.Context, input model.SamlIdentityProviderInput) (*model.IdentityProviderResult, error) {
+	if err := r.requireIdentityProviderAccess(ctx); err != nil {
+		return nil, err
+	}
 	err := r.AdminService.EnsureSamlIdentityProvider(&input)
 	if err != nil {
 		return nil, err
 	}
 
-	callbackURL := fmt.Sprintf("%s/realms/%s/broker/%s/endpoint", consts.GetCentralBackendHost(), consts.KeycloakRealm, strings.ToLower(string(input.ProviderID)))
+	callbackURL := services.IdentityProviderCallbackURL(input.ProviderID)
 
 	return &model.IdentityProviderResult{
 		Success:     true,
@@ -58,6 +64,8 @@ func (r *mutationResolver) EnsureSamlIdentityProvider(ctx context.Context, input
 
 // SignIn is the resolver for the signIn field.
 func (r *mutationResolver) SignIn(ctx context.Context, email *string, password *string, code *string) (*model.SignInResult, error) {
+	// Public: this is how a session is obtained. First-run admin creation inside
+	// AuthService.SignIn only happens while no user exists.
 	// Handle OAuth code flow
 	if code != nil && *code != "" {
 		return r.AuthService.SignIn(ctx, "", "", *code)
@@ -71,17 +79,25 @@ func (r *mutationResolver) SignIn(ctx context.Context, email *string, password *
 }
 
 // SetInitialPassword is the resolver for the setInitialPassword field.
-func (r *mutationResolver) SetInitialPassword(ctx context.Context, email string, password string) (*model.SignInResult, error) {
-	return r.AuthService.SetInitialPassword(ctx, email, password)
+func (r *mutationResolver) SetInitialPassword(ctx context.Context, email string, oneTimePassword string, password string) (*model.SignInResult, error) {
+	// Public: a user signing in with a one-time password has no session yet.
+	// AuthService checks the one-time password with Keycloak and rate-limits attempts.
+	return r.AuthService.SetInitialPassword(ctx, email, oneTimePassword, password, utils.GetClientIPFromContext(ctx))
 }
 
 // VerifyToken is the resolver for the verifyToken field.
 func (r *mutationResolver) VerifyToken(ctx context.Context, token string) (*model.GeneralResult, error) {
+	// Public: checks the token passed as an argument and returns only success or failure.
 	return r.AuthService.VerifyToken(ctx, token)
 }
 
 // UpdateComputePlatform is the resolver for the updateComputePlatform field.
 func (r *mutationResolver) UpdateComputePlatform(ctx context.Context, id string, input model.WriteComputePlatformInput) (*model.GeneralResult, error) {
+	// Assigning users and teams to a compute platform is access management,
+	// restricted to ADMIN/OWNER like the user and team mutations.
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	for _, userID := range input.AddUserIds {
 		err := r.UserService.AssignComputePlatformsToUser(ctx, *userID, []string{id})
 		if err != nil {
@@ -343,6 +359,7 @@ func (r *queryResolver) RemoteMultiFetch(ctx context.Context, proxyIDs []string,
 
 // SystemConfig is the resolver for the systemConfig field.
 func (r *queryResolver) SystemConfig(ctx context.Context) (*model.SystemConfig, error) {
+	// Public: the sign-in page reads isInitialized and the version before any session exists.
 	isInitialized := r.AdminService.DetermineSystemInitialized()
 	versionStr := r.ConfigService.GetOdigosCentralVersion(ctx)
 
@@ -354,6 +371,10 @@ func (r *queryResolver) SystemConfig(ctx context.Context) (*model.SystemConfig, 
 
 // APITokens is the resolver for the apiTokens field.
 func (r *queryResolver) APITokens(ctx context.Context) ([]*model.APIToken, error) {
+	// Returns the on-prem license token itself, so it is restricted to ADMIN/OWNER.
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
 	return r.AuthService.APITokens(ctx)
 }
 
@@ -363,13 +384,24 @@ func (r *queryResolver) ConfiguredIdentityProviders(ctx context.Context) ([]mode
 	return r.AuthService.ConfiguredIdentityProviders()
 }
 
+// IdentityProviders is the resolver for the identityProviders field.
+func (r *queryResolver) IdentityProviders(ctx context.Context) ([]*model.IdentityProvider, error) {
+	// Only ADMIN/OWNER manage identity providers. Secrets are never returned.
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return r.AdminService.IdentityProviders()
+}
+
 // SignInURL is the resolver for the signInUrl field.
 func (r *queryResolver) SignInURL(ctx context.Context, providerID model.AuthProviderID) (*string, error) {
+	// Public: the sign-in page needs the provider's redirect URL before any session exists.
 	return r.AuthService.GetRedirectUrlForSignInByProviderID(providerID)
 }
 
 // SignOut is the resolver for the signOut field.
 func (r *queryResolver) SignOutURL(ctx context.Context, idToken *string) (*string, error) {
+	// Public: the sign-in page clears a denied SSO session, which has no Odigos role.
 	if idToken == nil || *idToken == "" {
 		return nil, nil
 	}
@@ -379,16 +411,26 @@ func (r *queryResolver) SignOutURL(ctx context.Context, idToken *string) (*strin
 
 // ComputePlatforms is the resolver for the computePlatforms field.
 func (r *queryResolver) ComputePlatforms(ctx context.Context) ([]*model.ComputePlatform, error) {
+	if err := utils.RequireAuth(ctx); err != nil {
+		return nil, err
+	}
 	return r.ComputePlatformService.ComputePlatforms(ctx, r.UserService, r.TeamService, r.WebSocketServer, r.CloudConnectorService)
 }
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
+	// Any role may list users: VIEWER sees the Users table read-only.
+	if err := utils.RequireAuth(ctx); err != nil {
+		return nil, err
+	}
 	return r.UserService.GetUsers(ctx)
 }
 
 // Teams is the resolver for the teams field.
 func (r *queryResolver) Teams(ctx context.Context) ([]*model.Team, error) {
+	if err := utils.RequireAuth(ctx); err != nil {
+		return nil, err
+	}
 	return r.TeamService.GetTeams(ctx)
 }
 
@@ -406,6 +448,7 @@ func (r *queryResolver) GroupRoleMappings(ctx context.Context, providerID model.
 
 // Health is the resolver for the health field.
 func (r *queryResolver) Health(ctx context.Context) (*model.HealthQuery, error) {
+	// Public: reports only dependency status, and infrastructure checks call it without a session.
 	backendHealth, err := r.HealthService.GetBackendHealthStatus(ctx)
 	if err != nil {
 		return nil, err

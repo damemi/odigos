@@ -9,6 +9,7 @@ import { AuthProviderId, LoginType } from '@/types';
 import { FormContainer } from '@/components/auth/styled';
 import { VisualOdigosLogo } from '@odigos/ui-kit/visuals';
 import { useRouter, useSearchParams } from 'next/navigation';
+import * as STRINGS from '@/utils/constants/strings';
 import { AUTH_PROVIDERS } from '@/utils/constants/auth-providers';
 import { CenterThis, FlexRow, Loader } from '@odigos/ui-kit/components';
 import { AuthForm, ChooseForm, OidcForm, SamlForm } from '@/components';
@@ -29,6 +30,7 @@ export default function Page() {
 
   const [needToSetAuthProvider, setNeedToSetAuthProvider] = useState<LoginType | null>(null);
   const [authSetupSuccess, setAuthSetupSuccess] = useState<boolean>(false);
+  const [providerNotSetUpError, setProviderNotSetUpError] = useState<string | null>(null);
   const autoSsoStarted = useRef(false);
 
   const searchParams = useSearchParams();
@@ -41,8 +43,11 @@ export default function Page() {
     }
   }, [authCode]);
 
+  const isFirstTime = !!systemConfig && !systemConfig.isInitialized;
+
   const handleCleanup = () => {
     clearError();
+    setProviderNotSetUpError(null);
     setAuthProviderId(null);
     setNeedToSetAuthProvider(null);
     setAuthSetupSuccess(false);
@@ -65,8 +70,13 @@ export default function Page() {
       const url = await getSignInUrl(providerId);
       if (url) {
         router.replace(url);
-      } else {
+      } else if (isFirstTime) {
         setNeedToSetAuthProvider(loginType);
+      } else {
+        // After setup the anonymous setup form can't save; Admins add providers in Access management.
+        const displayName = AUTH_PROVIDERS.find((p) => p.providerId === providerId)?.displayName ?? providerId;
+        setAuthProviderId(null);
+        setProviderNotSetUpError(STRINGS.IDP_NOT_SET_UP_SIGN_IN(displayName));
       }
     } catch (_err) {
       console.error(_err);
@@ -75,6 +85,7 @@ export default function Page() {
 
   const handleProviderClick = async (providerId: AuthProviderId, loginType?: LoginType) => {
     clearError();
+    setProviderNotSetUpError(null);
     setAuthProviderId(providerId);
     if (!loginType) return;
     await handleSignIn(providerId, loginType);
@@ -103,8 +114,6 @@ export default function Page() {
     );
   }
 
-  const isFirstTime = systemConfig && !systemConfig.isInitialized;
-
   let content = (
     <FormContainer>
       <CenterThis $height='100%'>
@@ -115,16 +124,16 @@ export default function Page() {
   if (authProviderId === null) {
     content = (
       <ChooseForm
-        isFirstTime={!!isFirstTime}
+        isFirstTime={isFirstTime}
         loading={authLoading || authProviderLoading || configuredIdentityProvidersLoading}
         configuredProviders={configuredIdentityProviders}
-        error={authError}
+        error={authError || providerNotSetUpError}
         onClick={handleProviderClick}
       />
     );
   } else if (authProviderId === AuthProviderId.EMAIL) {
-    content = <AuthForm isFirstTime={!!isFirstTime} loading={authLoading || authProviderLoading} error={authError} onSubmit={signIn} />;
-  } else if (needToSetAuthProvider === LoginType.OIDC) {
+    content = <AuthForm isFirstTime={isFirstTime} loading={authLoading || authProviderLoading} error={authError} onSubmit={signIn} />;
+  } else if (isFirstTime && needToSetAuthProvider === LoginType.OIDC) {
     content = (
       <OidcForm
         providerId={authProviderId}
@@ -137,7 +146,7 @@ export default function Page() {
         onLoginTypeChange={handleLoginTypeChange}
       />
     );
-  } else if (needToSetAuthProvider === LoginType.SAML) {
+  } else if (isFirstTime && needToSetAuthProvider === LoginType.SAML) {
     content = (
       <SamlForm
         providerId={authProviderId}

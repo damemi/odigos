@@ -17,6 +17,7 @@ export * from './auth';
 export * from './common';
 export * from './compute-platforms';
 export * from './config';
+export * from './identity-providers';
 export * from './proxy';
 export * from './role-mappings';
 export * from './teams';

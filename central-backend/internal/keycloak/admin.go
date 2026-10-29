@@ -27,6 +27,8 @@ type OidcIdentityProviderConfig struct {
 	ClientSecret  string
 	DiscoveryURL  string
 	TenantID      string
+	// Disabled keeps a provider an Owner disabled in Keycloak disabled across updates.
+	Disabled bool
 }
 
 type SamlProviderConfig struct {
@@ -46,6 +48,8 @@ type SamlIdentityProviderConfig struct {
 	ValidateSignature        bool
 	PostBindingAuthnRequest  bool
 	PostBindingResponse      bool
+	// Disabled keeps a provider an Owner disabled in Keycloak disabled across updates.
+	Disabled bool
 }
 
 type AuthProtocol string
@@ -53,6 +57,28 @@ type AuthProtocol string
 const (
 	AuthProtocolSAML AuthProtocol = "SAML"
 	AuthProtocolOIDC AuthProtocol = "OIDC"
+)
+
+// Keycloak identity provider types (IdentityProviderRepresentation.ProviderID).
+const (
+	IdentityProviderTypeOIDC = "oidc"
+	IdentityProviderTypeSAML = "saml"
+)
+
+// SecretMask is what the admin API returns in place of a stored client secret.
+// Sending it back in an update keeps the stored secret.
+const SecretMask = "**********"
+
+// Identity provider config keys read back for the Admin screen.
+const (
+	ConfigKeyClientID               = "clientId"
+	ConfigKeyClientSecret           = "clientSecret"
+	ConfigKeyMetadataDescriptorURL  = "metadataDescriptorUrl"
+	ConfigKeyOdigosDiscoveryURL     = "odigosDiscoveryUrl"
+	ConfigKeyOdigosTenantID         = "odigosTenantId"
+	ConfigKeyEntityID               = "entityId"
+	ConfigKeySingleSignOnServiceURL = "singleSignOnServiceUrl"
+	ConfigKeySigningCertificate     = "signingCertificate"
 )
 
 type IdentityProviderRepresentation struct {
@@ -115,6 +141,11 @@ type oidcIdentityProviderConfig struct {
 	ValidateSignature     string `json:"validateSignature"`
 	UseJwksURL            string `json:"useJwksUrl"`
 	DefaultScope          string `json:"defaultScope,omitempty"`
+
+	// The discovery URL and tenant ID as entered, so the Admin screen can show them.
+	// MetadataDescriptorURL holds the discovery URL with {tenantid} resolved.
+	OdigosDiscoveryURL string `json:"odigosDiscoveryUrl,omitempty"`
+	OdigosTenantID     string `json:"odigosTenantId,omitempty"`
 
 	AuthorizationURL string `json:"authorizationUrl,omitempty"`
 	TokenURL         string `json:"tokenUrl,omitempty"`
@@ -526,9 +557,9 @@ func (kc *KeycloakAdminService) ensureSamlAttributeMappers(adminToken string, pr
 		}
 
 		payload := map[string]any{
-			"name":                     mapper.Name,
-			"identityProviderAlias":    providerAlias,
-			"identityProviderMapper":   "saml-user-attribute-idp-mapper",
+			"name":                   mapper.Name,
+			"identityProviderAlias":  providerAlias,
+			"identityProviderMapper": "saml-user-attribute-idp-mapper",
 			"config": map[string]string{
 				"syncMode":       "FORCE",
 				"user.attribute": mapper.UserAttribute,
@@ -714,6 +745,11 @@ func GetKeycloakAdminTokenWithRetry(ctx context.Context, shutdownCh <-chan struc
 	}
 }
 
+// ResolveDiscoveryURL is the discovery URL stored in Keycloak (metadataDescriptorUrl).
+func ResolveDiscoveryURL(discoveryURL, tenantID string) string {
+	return resolveDiscoveryURL(discoveryURL, tenantID)
+}
+
 // resolveDiscoveryURL replaces {tenantid} placeholders in the discovery URL.
 func resolveDiscoveryURL(discoveryURL, tenantID string) string {
 	return strings.ReplaceAll(discoveryURL, "{tenantid}", tenantID)
@@ -736,6 +772,8 @@ func getIDPConfig(config *OidcIdentityProviderConfig) (IdentityProviderUpsertPay
 		ValidateSignature:     "true",
 		UseJwksURL:            "true",
 		DefaultScope:          "openid email profile",
+		OdigosDiscoveryURL:    config.DiscoveryURL,
+		OdigosTenantID:        config.TenantID,
 	}
 
 	// Proactively populate endpoints from discovery so they are present even if KC doesn't import automatically
@@ -749,10 +787,10 @@ func getIDPConfig(config *OidcIdentityProviderConfig) (IdentityProviderUpsertPay
 	}
 
 	return IdentityProviderUpsertPayload{
-		ProviderID:                  "oidc",
+		ProviderID:                  IdentityProviderTypeOIDC,
 		Alias:                       config.ProviderAlias,
 		DisplayName:                 config.ProviderAlias,
-		Enabled:                     true,
+		Enabled:                     !config.Disabled,
 		TrustEmail:                  true,  // trusts the email from the IDP without verification, avoiding additional prompts
 		UpdateProfileFirstLoginMode: "off", // prevents the account update prompt after first login
 		FirstBrokerLoginFlowAlias:   "first broker login",
@@ -776,10 +814,10 @@ func getSamlIDPConfig(config *SamlIdentityProviderConfig) (IdentityProviderUpser
 	}
 
 	return IdentityProviderUpsertPayload{
-		ProviderID:                  "saml",
+		ProviderID:                  IdentityProviderTypeSAML,
 		Alias:                       config.ProviderAlias,
 		DisplayName:                 config.ProviderAlias,
-		Enabled:                     true,
+		Enabled:                     !config.Disabled,
 		TrustEmail:                  true,
 		UpdateProfileFirstLoginMode: "off",
 		FirstBrokerLoginFlowAlias:   "first broker login",

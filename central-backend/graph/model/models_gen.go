@@ -230,6 +230,20 @@ type HealthQuery struct {
 	Backend *BackendHealthStatus `json:"backend"`
 }
 
+type IdentityProvider struct {
+	ProviderID             AuthProviderID           `json:"providerId"`
+	Protocol               IdentityProviderProtocol `json:"protocol"`
+	Enabled                bool                     `json:"enabled"`
+	CallbackURL            string                   `json:"callbackUrl"`
+	ClientID               *string                  `json:"clientId,omitempty"`
+	DiscoveryURL           *string                  `json:"discoveryUrl,omitempty"`
+	TenantID               *string                  `json:"tenantId,omitempty"`
+	HasClientSecret        bool                     `json:"hasClientSecret"`
+	IdpEntityID            *string                  `json:"idpEntityId,omitempty"`
+	SingleSignOnServiceURL *string                  `json:"singleSignOnServiceUrl,omitempty"`
+	HasSigningCertificate  bool                     `json:"hasSigningCertificate"`
+}
+
 type IdentityProviderResult struct {
 	Success     bool    `json:"success"`
 	Error       *string `json:"error,omitempty"`
@@ -478,6 +492,61 @@ func (e *HealthStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e HealthStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+type IdentityProviderProtocol string
+
+const (
+	IdentityProviderProtocolOidc IdentityProviderProtocol = "OIDC"
+	IdentityProviderProtocolSaml IdentityProviderProtocol = "SAML"
+)
+
+var AllIdentityProviderProtocol = []IdentityProviderProtocol{
+	IdentityProviderProtocolOidc,
+	IdentityProviderProtocolSaml,
+}
+
+func (e IdentityProviderProtocol) IsValid() bool {
+	switch e {
+	case IdentityProviderProtocolOidc, IdentityProviderProtocolSaml:
+		return true
+	}
+	return false
+}
+
+func (e IdentityProviderProtocol) String() string {
+	return string(e)
+}
+
+func (e *IdentityProviderProtocol) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = IdentityProviderProtocol(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid IdentityProviderProtocol", str)
+	}
+	return nil
+}
+
+func (e IdentityProviderProtocol) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *IdentityProviderProtocol) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e IdentityProviderProtocol) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
