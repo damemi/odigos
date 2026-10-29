@@ -86,7 +86,8 @@ type Server struct {
 // startup. Traces feed the anomaly-detection path; metrics carry the
 // servicegraph connector's edges for the blast-radius topology.
 func NewServer(addr string, eng *engine.Engine, logger *commonlogger.OdigosLogger) *Server {
-	gs := grpc.NewServer()
+	// Allow 64MiB requests: gateway batches can exceed gRPC's 4MiB default.
+	gs := grpc.NewServer(grpc.MaxRecvMsgSize(64 * 1024 * 1024))
 	coltracepb.RegisterTraceServiceServer(gs, &Receiver{Engine: eng, Logger: logger})
 	colmetricspb.RegisterMetricsServiceServer(gs, &MetricsReceiver{Engine: eng, Logger: logger})
 

@@ -8,6 +8,8 @@ OPENAPI := api/openapi.yaml
 OAPI_CONFIG := api/oapi-codegen.yaml
 GO_MODELS := internal/api/http/apitypes/models.gen.go
 TS_CLIENT := api/client/api.d.ts
+# Pinned so api-verify doesn't fail when a new release changes the generated header.
+OAPI_CODEGEN_VERSION ?= v2.8.0
 
 .PHONY: api-gen api-gen-go api-gen-ts api-lint api-mock api-verify port-forward port-forward-stop \
 	loadtest-start loadtest-stop loadtest-restart
@@ -17,7 +19,7 @@ api-gen: api-gen-go api-gen-ts
 
 ## api-gen-go: generate the Go wire-type models (package apitypes) from the spec.
 api-gen-go:
-	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest \
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION) \
 		--config $(OAPI_CONFIG) $(OPENAPI)
 
 ## api-gen-ts: generate the frontend TypeScript types from the spec.

@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"bytes"
 	"encoding/hex"
 	"strconv"
 	"strings"
@@ -131,9 +130,13 @@ func marshalOTLP(td *tracepb.TracesData) []byte {
 // decodeTraceTrees, which skips this step entirely.
 func DecodeRequest(req *tracepb.TracesData) []*Trace {
 	traces := decodeTraceTrees(req)
+	byTrace := splitByTrace(req)
 	out := traces[:0] // reuse backing array; we only ever drop, never add
 	for _, t := range traces {
-		spans := extractTraceSpans(req, t.TraceID)
+		var spans *tracepb.TracesData
+		if raw, err := hex.DecodeString(t.TraceID); err == nil {
+			spans = byTrace[string(raw)]
+		}
 		if spans == nil {
 			// Defensive: re-selecting spans we just walked shouldn't fail, but
 			// if it does (corrupt input, future proto incompat) drop the trace
@@ -214,52 +217,40 @@ func decodeTraceTrees(req *tracepb.TracesData) []*Trace {
 	return out
 }
 
-// extractTraceSpans picks one trace out of a batch: a TracesData holding only
-// the spans belonging to traceIDHex, preserving the original Resource/Scope
-// hierarchy. Once encoded this is what trace_observations.raw_otlp stores, so
-// the UI keeps Jaeger-grade fidelity (events, links, status, typed attributes)
-// without mirroring every OTLP field into our domain types. Returns nil if no
-// spans match. Used by DecodeRequest.
-//
-// The result shares its spans with req rather than copying them, so treat it as
-// read-only (see reRootedOTLP, which clones the one span it re-parents).
-func extractTraceSpans(req *tracepb.TracesData, traceIDHex string) *tracepb.TracesData {
-	target, err := hex.DecodeString(traceIDHex)
-	if err != nil {
-		return nil
-	}
-	var rsOut []*tracepb.ResourceSpans
+// splitByTrace groups a batch's spans by raw trace_id in one pass, keeping each
+// span under its original resource and scope (what trace_observations.raw_otlp
+// stores). The results share spans with req, so treat them as read-only (see
+// reRootedOTLP).
+func splitByTrace(req *tracepb.TracesData) map[string]*tracepb.TracesData {
+	byTrace := map[string]*tracepb.TracesData{}
 	for _, rs := range req.GetResourceSpans() {
-		var ssOut []*tracepb.ScopeSpans
+		rsByTrace := map[string]*tracepb.ResourceSpans{}
 		for _, ss := range rs.GetScopeSpans() {
-			var spansOut []*tracepb.Span
+			ssByTrace := map[string]*tracepb.ScopeSpans{}
 			for _, sp := range ss.GetSpans() {
-				if bytes.Equal(sp.GetTraceId(), target) {
-					spansOut = append(spansOut, sp)
+				id := string(sp.GetTraceId())
+				ssOut := ssByTrace[id]
+				if ssOut == nil {
+					rsOut := rsByTrace[id]
+					if rsOut == nil {
+						rsOut = &tracepb.ResourceSpans{Resource: rs.GetResource(), SchemaUrl: rs.GetSchemaUrl()}
+						rsByTrace[id] = rsOut
+						td := byTrace[id]
+						if td == nil {
+							td = &tracepb.TracesData{}
+							byTrace[id] = td
+						}
+						td.ResourceSpans = append(td.ResourceSpans, rsOut)
+					}
+					ssOut = &tracepb.ScopeSpans{Scope: ss.GetScope(), SchemaUrl: ss.GetSchemaUrl()}
+					ssByTrace[id] = ssOut
+					rsOut.ScopeSpans = append(rsOut.ScopeSpans, ssOut)
 				}
+				ssOut.Spans = append(ssOut.Spans, sp)
 			}
-			if len(spansOut) == 0 {
-				continue
-			}
-			ssOut = append(ssOut, &tracepb.ScopeSpans{
-				Scope:     ss.GetScope(),
-				Spans:     spansOut,
-				SchemaUrl: ss.GetSchemaUrl(),
-			})
 		}
-		if len(ssOut) == 0 {
-			continue
-		}
-		rsOut = append(rsOut, &tracepb.ResourceSpans{
-			Resource:   rs.GetResource(),
-			ScopeSpans: ssOut,
-			SchemaUrl:  rs.GetSchemaUrl(),
-		})
 	}
-	if len(rsOut) == 0 {
-		return nil
-	}
-	return &tracepb.TracesData{ResourceSpans: rsOut}
+	return byTrace
 }
 
 // zeroSpanID is what hex.EncodeToString returns for a fresh 8-byte zero array.
