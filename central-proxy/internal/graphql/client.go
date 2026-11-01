@@ -7,18 +7,56 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/odigos-io/central-proxy/internal/config"
+	"github.com/odigos-io/central-proxy/internal/logger"
+	"github.com/odigos-io/odigos/api/k8sconsts"
 )
 
+const tokenPathEnvVar = "ODIGOS_UI_TOKEN_PATH"
+
 type GraphQLClient struct {
-	httpClient *http.Client
+	httpClient   *http.Client
+	tokenMissing atomic.Bool
+}
+
+func tokenPath() string {
+	if p := os.Getenv(tokenPathEnvVar); p != "" {
+		return p
+	}
+	return k8sconsts.CentralProxyUITokenPath
+}
+
+// proxyToken reads the projected ServiceAccount token (audience odigos-ui). It is
+// re-read on every call because the kubelet rotates it. It returns "" when the
+// token is unavailable or malformed (e.g. a chart that does not mount it yet),
+// warning once per outage. The token value is never logged.
+func (g *GraphQLClient) proxyToken() string {
+	path := tokenPath()
+	raw, err := os.ReadFile(path)
+	token := strings.TrimSpace(string(raw))
+	if err == nil && token != "" && !strings.ContainsAny(token, "\r\n") {
+		g.tokenMissing.Store(false)
+		return token
+	}
+	if g.tokenMissing.CompareAndSwap(false, true) && logger.Log != nil {
+		logger.Log.Warn("ServiceAccount token for the in-cluster UI is unavailable; admin requests are sent without it", "path", path, "error", err)
+	}
+	return ""
 }
 
 func NewGraphQLClient() *GraphQLClient {
 	return &GraphQLClient{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+			// Never follow redirects: Go would replay the custom admin and token
+			// headers to the redirect target.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 	}
 }
 
@@ -58,7 +96,10 @@ func (g *GraphQLClient) ForwardGraphQLRequest(ctx context.Context, requestId str
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if isAdmin {
-		httpReq.Header.Set("X-Odigos-Admin-Allow", "true")
+		httpReq.Header.Set(k8sconsts.CentralProxyAdminOverrideHeader, "true")
+		if token := g.proxyToken(); token != "" {
+			httpReq.Header.Set(k8sconsts.CentralProxyUITokenHeader, token)
+		}
 	}
 
 	resp, err := g.httpClient.Do(httpReq)

@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/odigos-io/odigos/api v1.39.0-pre3.0.20261028115437-24b2dbbc28c5
+	github.com/odigos-io/odigos/api v1.39.0-pre3.0.20261101100117-c759db902afa
 	github.com/odigos-io/odigos/frontend v1.39.0-pre3.0.20261028115437-24b2dbbc28c5
 	github.com/odigos-io/odigos/k8sutils v1.39.0-pre3.0.20261028115437-24b2dbbc28c5
 	k8s.io/apimachinery v0.35.4
