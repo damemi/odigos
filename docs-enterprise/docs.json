@@ -311,7 +311,6 @@
                       "enterprise/backends/kafka",
                       "enterprise/backends/kloudmate",
                       "enterprise/backends/last9",
-                      "enterprise/backends/lightstep",
                       "enterprise/backends/logzio",
                       "enterprise/backends/loki",
                       "enterprise/backends/lumigo",
