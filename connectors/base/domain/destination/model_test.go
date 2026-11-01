@@ -27,3 +27,39 @@ func TestDestinationModelRoundTripPreservesRegion(t *testing.T) {
 		t.Fatalf("updated domain region = %q, want %q", dest.Region, updated)
 	}
 }
+
+func TestDestinationModelRoundTripPreservesDisabled(t *testing.T) {
+	disabled := true
+	in := model.CreateDestinationInput{
+		Name: "paused", Type: "otlp", Disabled: &disabled,
+		Signals: []model.TelemetrySignal{model.TelemetrySignalTraces}, Config: map[string]any{},
+	}
+	dest := DestinationFromCreateInput(in)
+	if !dest.Disabled {
+		t.Fatal("create input Disabled=true was dropped")
+	}
+	out := dest.ToDestinationModel()
+	if !out.Disabled {
+		t.Fatal("GraphQL Disabled=true was dropped")
+	}
+
+	enabled := false
+	dest.ApplyUpdateInput(model.UpdateDestinationInput{Disabled: &enabled})
+	if dest.Disabled {
+		t.Fatal("update input Disabled=false was ignored")
+	}
+
+	// A create/update that omits Disabled must not flip an existing destination on.
+	paused := Destination{Name: "kept", Type: "otlp", Disabled: true, Signals: []string{SignalTraces}}
+	paused.ApplyUpdateInput(model.UpdateDestinationInput{})
+	if !paused.Disabled {
+		t.Fatal("omitted Disabled must leave the stored flag alone")
+	}
+	plain := DestinationFromCreateInput(model.CreateDestinationInput{
+		Name: "plain", Type: "otlp",
+		Signals: []model.TelemetrySignal{model.TelemetrySignalTraces}, Config: map[string]any{},
+	})
+	if plain.Disabled {
+		t.Fatal("omitted create Disabled must default to enabled")
+	}
+}

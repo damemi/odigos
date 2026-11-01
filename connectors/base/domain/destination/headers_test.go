@@ -88,3 +88,31 @@ func TestResolveOTLPHeadersTracksTargetSelection(t *testing.T) {
 		t.Errorf("headers came from a different destination than the export target: got %v, want %v", got, want)
 	}
 }
+
+// TestResolveOTLPHeadersSkipDisabledAndManagedCollector is the Disabled /
+// managed-collector counterpart of TestResolveOTLPHeadersTracksTargetSelection.
+// Both resolvers must skip the same entries so a paused destination's credential
+// is never sent to the next vendor, and a routing marker never supplies headers.
+func TestResolveOTLPHeadersSkipDisabledAndManagedCollector(t *testing.T) {
+	dests := []Destination{
+		{Name: "paused", Type: "otlp", Disabled: true, Signals: []string{SignalTraces}, Config: map[string]any{
+			"OTLP_GRPC_ENDPOINT": "paused:4317",
+			"OTLP_GRPC_HEADERS":  `[{"key":"authorization","value":"WRONG-disabled"}]`,
+		}},
+		{Name: "marker", Type: CatalogTypeManagedCollector, Region: "us-east-1", Signals: []string{SignalTraces}, Config: map[string]any{
+			"OTLP_GRPC_HEADERS": `[{"key":"authorization","value":"WRONG-marker"}]`,
+		}},
+		{Name: "on", Type: "otlp", Signals: []string{SignalTraces}, Config: map[string]any{
+			"OTLP_GRPC_ENDPOINT": "right:4317",
+			"OTLP_GRPC_HEADERS":  `[{"key":"authorization","value":"RIGHT"}]`,
+		}},
+	}
+	target, found := ResolveOTLPTarget(dests)
+	if !found || target.Endpoint != "right:4317" {
+		t.Fatalf("ResolveOTLPTarget picked %+v found=%v", target, found)
+	}
+	got := ResolveOTLPHeaders(dests)
+	if want := map[string]string{"authorization": "RIGHT"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("headers came from a skipped destination: got %v, want %v", got, want)
+	}
+}

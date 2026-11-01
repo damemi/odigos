@@ -50,6 +50,18 @@ func TestResolveOTLPTarget(t *testing.T) {
 	if _, ok := ResolveOTLPTarget([]Destination{disabled}); ok {
 		t.Error("disabled destination must not resolve")
 	}
+
+	// Skip-next: a disabled or managed-collector entry is routing/retention
+	// state, not an exporter. The next usable OTLP destination must win.
+	skipNext := []Destination{
+		disabled,
+		{Type: CatalogTypeManagedCollector, Region: "us-east-1", Signals: []string{SignalTraces}},
+		{Type: "otlp", Signals: []string{SignalTraces}, Config: map[string]any{configOTLPGRPCEndpoint: "right:4317"}},
+	}
+	got, ok = ResolveOTLPTarget(skipNext)
+	if !ok || got.Endpoint != "right:4317" {
+		t.Fatalf("skip-next: got %+v ok=%v", got, ok)
+	}
 }
 
 func TestResolveOTLPTargetHTTP(t *testing.T) {

@@ -154,6 +154,40 @@ func TestWithAdminTokenRetriesOnceOnUnauthorized(t *testing.T) {
 	}
 }
 
+func TestWithAdminTokenRetriesOnStatus401(t *testing.T) {
+	var grants atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /realms/master/protocol/openid-connect/token", func(w http.ResponseWriter, r *http.Request) {
+		n := grants.Add(1)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token": fmt.Sprintf("token-%d", n),
+			"expires_in":   60,
+		})
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	t.Setenv("KEYCLOAK_HOST", server.URL)
+	svc := NewAdminService(&AdminCredentials{Username: "admin", Password: "admin"})
+
+	var attempts atomic.Int32
+	err := svc.WithAdminToken(func(token string) error {
+		n := attempts.Add(1)
+		if n == 1 {
+			return fmt.Errorf("authentication failed with status 401: token expired")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("WithAdminToken() error: %v", err)
+	}
+	if got := attempts.Load(); got != 2 {
+		t.Fatalf("attempts = %d, want 2", got)
+	}
+	if got := grants.Load(); got != 2 {
+		t.Fatalf("password grants = %d, want 2", got)
+	}
+}
+
 func TestWithAdminTokenDoesNotRetryOtherErrors(t *testing.T) {
 	var grants atomic.Int32
 	t.Setenv("KEYCLOAK_HOST", fakeTokenEndpoint(t, 60, &grants).URL)

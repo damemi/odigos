@@ -1,10 +1,14 @@
 package services
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"testing"
 
 	"github.com/odigos-io/central-backend/graph/model"
 	"github.com/odigos-io/central-backend/internal/keycloak"
+	"github.com/odigos-io/odigos/api/k8sconsts"
 )
 
 func TestAuthProviderIDsFromIdentityProviders(t *testing.T) {
@@ -105,5 +109,48 @@ func TestPasswordUpdateRequiredResultOmitsAccessToken(t *testing.T) {
 	}
 	if result.User.Teams == nil || result.User.ComputePlatforms == nil {
 		t.Fatal("expected non-nil teams/computePlatforms slices for GraphQL non-null lists")
+	}
+}
+
+func licenseJWT(t *testing.T, payload map[string]any) string {
+	t.Helper()
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return "eyJhbGciOiJub25lIn0." + base64.RawURLEncoding.EncodeToString(body) + ".sig"
+}
+
+func TestExtractJWTPayloadRejectsMalformedTokens(t *testing.T) {
+	for _, token := range []string{"", "only-one-part", "a.b", "a.b.c.d", "a.@@@.c"} {
+		if _, err := extractJWTPayload(token); err == nil {
+			t.Errorf("extractJWTPayload(%q) succeeded", token)
+		}
+	}
+}
+
+func TestAPITokensReadsIssuedAndExpirySeconds(t *testing.T) {
+	token := licenseJWT(t, map[string]any{"aud": "acme", "iat": 1_700_000_000.0, "exp": 1_700_086_400.0})
+	t.Setenv(k8sconsts.OdigosOnpremTokenEnvName, token)
+
+	got, err := (&AuthService{}).APITokens(context.Background())
+	if err != nil {
+		t.Fatalf("APITokens() error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d tokens, want 1", len(got))
+	}
+	if got[0].Name != "acme" || got[0].IssuedAt != 1_700_000_000_000 || got[0].ExpiresAt != 1_700_086_400_000 {
+		t.Fatalf("token = %+v", got[0])
+	}
+	if got[0].Token != token {
+		t.Fatal("returned token must be the configured license JWT")
+	}
+}
+
+func TestAPITokensFailsOnInvalidLicense(t *testing.T) {
+	t.Setenv(k8sconsts.OdigosOnpremTokenEnvName, "not-a-jwt")
+	if _, err := (&AuthService{}).APITokens(context.Background()); err == nil {
+		t.Fatal("APITokens() succeeded on a malformed license")
 	}
 }

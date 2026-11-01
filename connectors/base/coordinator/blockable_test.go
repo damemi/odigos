@@ -52,6 +52,19 @@ func TestRegionalCollectorMarkerSatisfiesDestinationPrerequisite(t *testing.T) {
 	}
 }
 
+func TestDisabledRegionalCollectorMarkerDoesNotSatisfyDestinationPrerequisite(t *testing.T) {
+	workloads := []api.DiscoveredWorkload{
+		{Kind: "aws.fargate-task", Region: "us-east-1", SourceMatched: true, SourceEnabled: true, InstrumentationAvailable: true, InstrumentationImplemented: true},
+	}
+	markWaitingForDestination(workloads, []store.DestinationRecord{
+		{Type: "otlp", Region: ""},
+		{Type: "odigos-managed-collector", Region: "us-east-1", Disabled: true},
+	})
+	if workloads[0].WaitingFor != api.WaitingForDestination {
+		t.Errorf("Fargate next to a disabled Collector marker is waiting for %q, want destination", workloads[0].WaitingFor)
+	}
+}
+
 // TestUnverifiableWithoutDestination is the counterpart predicate, covering the case blockableForInstrumentation
 // above deliberately excludes: a workload that IS instrumented.
 //
