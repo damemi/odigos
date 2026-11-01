@@ -139,7 +139,6 @@ const DESTINATION_CATEGORY: Record<string, string> = {
   kafka: SELF_HOSTED,
   kloudmate: MANAGED,
   last9: MANAGED,
-  lightstep: MANAGED,
   logzio: MANAGED,
   loki: SELF_HOSTED,
   lumigo: MANAGED,
