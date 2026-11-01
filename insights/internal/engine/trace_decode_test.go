@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"testing"
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
@@ -93,6 +94,88 @@ func batchedRequest(traces, servicesPerTrace, spansPerService int) *tracepb.Trac
 		}
 	}
 	return req
+}
+
+func TestDecodeRequest_StripsNULFromNamesAndAttributes(t *testing.T) {
+	tid := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	req := &tracepb.TracesData{ResourceSpans: []*tracepb.ResourceSpans{{
+		Resource: &resourcepb.Resource{Attributes: []*commonpb.KeyValue{
+			kvStr("service.name", "php"),
+			kvStr("process.command", "php\x00-f\x00index.php"),
+		}},
+		ScopeSpans: []*tracepb.ScopeSpans{{Spans: []*tracepb.Span{{
+			TraceId: tid,
+			SpanId:  []byte{1, 1, 1, 1, 1, 1, 1, 1},
+			Name:    "App\\Foo\x00anonymous",
+			Attributes: []*commonpb.KeyValue{
+				kvStr("http.route", "/users/\x00{id}"),
+				{Key: "empty", Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: ""}}},
+				nil,
+			},
+		}}}},
+	}}}
+
+	traces := DecodeRequest(req)
+	if len(traces) != 1 {
+		t.Fatalf("expected 1 trace, got %d", len(traces))
+	}
+	sp := traces[0].Root
+	if strings.ContainsRune(sp.Name, 0) || sp.Name != "App\\Fooanonymous" {
+		t.Fatalf("span name kept NUL: %q", sp.Name)
+	}
+	if got := sp.Attr("http.route"); strings.ContainsRune(got, 0) || got != "/users/{id}" {
+		t.Fatalf("span attr kept NUL: %q", got)
+	}
+	if got := sp.Attr("process.command"); strings.ContainsRune(got, 0) || got != "php-findex.php" {
+		t.Fatalf("resource attr kept NUL: %q", got)
+	}
+	if got := sp.Attr("empty"); got != "" {
+		t.Fatalf("empty string attr should be treated as absent, got %q", got)
+	}
+}
+
+func TestSpanAttrPrefersSpanOverResource(t *testing.T) {
+	tid := []byte{2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2}
+	req := &tracepb.TracesData{ResourceSpans: []*tracepb.ResourceSpans{{
+		Resource: &resourcepb.Resource{Attributes: []*commonpb.KeyValue{
+			kvStr("service.name", "frontend"),
+			kvStr("http.route", "/from-resource"),
+			{Key: "retry", Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: 3}}},
+		}},
+		ScopeSpans: []*tracepb.ScopeSpans{{Spans: []*tracepb.Span{{
+			TraceId: tid,
+			SpanId:  []byte{2, 2, 2, 2, 2, 2, 2, 2},
+			Name:    "GET",
+			Attributes: []*commonpb.KeyValue{
+				kvStr("http.route", "/from-span"),
+				{Key: "ok", Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_BoolValue{BoolValue: true}}},
+				{Key: "sizes", Value: &commonpb.AnyValue{Value: &commonpb.AnyValue_ArrayValue{ArrayValue: &commonpb.ArrayValue{
+					Values: []*commonpb.AnyValue{{Value: &commonpb.AnyValue_StringValue{StringValue: "first"}}, {Value: &commonpb.AnyValue_StringValue{StringValue: "second"}}},
+				}}}},
+			},
+		}}}},
+	}}}
+
+	traces := DecodeRequest(req)
+	if len(traces) != 1 {
+		t.Fatalf("expected 1 trace, got %d", len(traces))
+	}
+	sp := traces[0].Root
+	if got := sp.Attr("http.route"); got != "/from-span" {
+		t.Fatalf("span attr should win, got %q", got)
+	}
+	if got := sp.Attr("retry"); got != "3" {
+		t.Fatalf("resource int attr = %q, want 3", got)
+	}
+	if got := sp.Attr("ok"); got != "true" {
+		t.Fatalf("bool attr = %q, want true", got)
+	}
+	if got := sp.Attr("sizes"); got != "first" {
+		t.Fatalf("array attr should take the first element, got %q", got)
+	}
+	if got := sp.Attr("missing"); got != "" {
+		t.Fatalf("absent attr = %q, want empty", got)
+	}
 }
 
 // BenchmarkDecodeRequest reports the per-trace cost of decoding as the number
