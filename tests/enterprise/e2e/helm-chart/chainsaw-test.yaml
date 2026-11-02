@@ -29,7 +29,8 @@ spec:
                 --set image.tag=$IMAGE_TAG \
                 --set onPremToken=$ODIGOS_API_KEY \
                 --set goAutoOffsetsCron="0 0 * * *" \
-                --set goAutoOffsetsMode="direct"
+                --set goAutoOffsetsMode="direct" \
+                $ODIGOS_INSTALL_FLAGS
               kubectl label namespace odigos-test odigos.io/system-object="true"
               # if WASP is enabled in the test, we need to force the instrumentations supporting it to use it since
               # the underlying kernel where the test runs might not require WASP, but we want to force its usage for testing purposes.
@@ -179,6 +180,12 @@ spec:
             content: |
               java_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^frontend)
               kubectl logs $java_pod_name -n default
+      finally:
+        - script:
+            timeout: 1m
+            # a failing finally operation fails the step, the report should never fail a passing test
+            content: |
+              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_report.sh | bash || true
 
     - name: Verify Trace - Context Propagation
       try:

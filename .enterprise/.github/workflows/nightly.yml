@@ -1,0 +1,192 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Nightly run at midnight
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'Cloud provider to test against'
+        required: true
+        type: choice
+        options:
+          - all
+          - aks
+          - eks
+      test_scenario:
+        description: 'Test suite to run'
+        required: true
+        type: choice
+        options:
+          - all
+          - helm-chart
+          - multi-apps
+      platform:
+        description: 'CPU architecture'
+        required: true
+        type: choice
+        options:
+          - all
+          - amd
+          - arm
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  IMAGE_REGISTRY: 061717858829.dkr.ecr.us-east-1.amazonaws.com
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # The cloud clusters pull these images from private ECR, so they are pushed for both
+  # architectures instead of being loaded into kind like in the PR workflow.
+  build-images:
+    runs-on: ${{ matrix.runner || 'depot-ubuntu-24.04-4' }}
+    strategy:
+      matrix:
+        service: [odiglet, instrumentor, ui, collector, agents]
+        include:
+          - service: collector
+            runner: depot-ubuntu-24.04-16
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c #v4.2.0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
+
+      - name: Configure AWS credentials from OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          role-to-assume: arn:aws:iam::061717858829:role/ecr-pull-push-role
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$IMAGE_REGISTRY"
+          REPOSITORY="odigos-enterprise-${{ matrix.service }}"
+          aws ecr describe-repositories --region us-east-1 --repository-names "$REPOSITORY" >/dev/null 2>&1 \
+            || aws ecr create-repository --region us-east-1 --repository-name "$REPOSITORY"
+
+      - name: Build and Push Enterprise Image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a #v7.3.0
+        with:
+          file: >-
+            ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile'
+            || matrix.service == 'ui' && 'ui/Dockerfile'
+            || matrix.service == 'agents' && 'odiglet/Dockerfile'
+            || matrix.service == 'collector' && 'collector/Dockerfile'
+            || 'Dockerfile' }}
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/odigos-enterprise-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
+          build-args: |
+            SERVICE_NAME=${{ matrix.service }}
+            RHEL=false
+            EXTENDED=false
+            ODIGOS_VERSION=${{ env.IMAGE_TAG }}
+            VERSION=${{ env.IMAGE_TAG }}
+            RELEASE=${{ env.IMAGE_TAG }}
+          target: ${{ matrix.service == 'agents' && 'agents' || '' }}
+
+  # The instrumentor runs the OSS cli image for the go offsets job, under the same image prefix and tag.
+  build-cli-image:
+    runs-on: depot-ubuntu-24.04-4
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          repository: odigos-io/odigos
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c #v4.2.0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
+
+      - name: Configure AWS credentials from OIDC
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+        with:
+          role-to-assume: arn:aws:iam::061717858829:role/ecr-pull-push-role
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$IMAGE_REGISTRY"
+          aws ecr describe-repositories --region us-east-1 --repository-names odigos-cli >/dev/null 2>&1 \
+            || aws ecr create-repository --region us-east-1 --repository-name odigos-cli
+
+      - name: Build and Push CLI Image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a #v7.3.0
+        with:
+          file: cli/Dockerfile
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/odigos-cli:${{ env.IMAGE_TAG }}
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          build-args: |
+            VERSION=${{ env.IMAGE_TAG }}
+            CHART_VERSION=${{ env.IMAGE_TAG }}
+            RELEASE=${{ env.IMAGE_TAG }}
+
+  cross-cloud-tests:
+    runs-on: depot-ubuntu-24.04-8
+    needs: [build-images, build-cli-image]
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: ${{ fromJSON(github.event_name == 'schedule' && '["aks","eks"]' || github.event.inputs.provider == 'all' && '["aks","eks"]' || format('["{0}"]', github.event.inputs.provider)) }}
+        test_scenario: ${{ fromJSON(github.event_name == 'schedule' && '["multi-apps","helm-chart"]' || github.event.inputs.test_scenario == 'all' && '["multi-apps","helm-chart"]' || format('["{0}"]', github.event.inputs.test_scenario)) }}
+        platform: ${{ fromJSON(github.event_name == 'schedule' && '["amd","arm"]' || github.event.inputs.platform == 'all' && '["amd","arm"]' || format('["{0}"]', github.event.inputs.platform)) }}
+
+    steps:
+      # The enterprise tests reach the OSS chart and CLI through a sibling odigos directory.
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          path: odigos-enterprise
+          persist-credentials: false
+
+      - name: Checkout Odigos OSS
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          repository: odigos-io/odigos
+          ref: main
+          path: odigos
+          persist-credentials: false
+
+      - name: Run Cross-Cloud Tests
+        if: ${{ !(matrix.provider == 'aks' && matrix.platform == 'arm') }}
+        uses: ./odigos-enterprise/.github/actions/cross-cloud-tests
+        with:
+          provider: ${{ matrix.provider }}
+          test_scenario: ${{ matrix.test_scenario }}
+          platform: ${{ matrix.platform }}
+          image_registry: ${{ env.IMAGE_REGISTRY }}
+          image_tag: ${{ env.IMAGE_TAG }}
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Report Test Outcome
+        if: always() && !(matrix.provider == 'aks' && matrix.platform == 'arm')
+        uses: ./odigos-enterprise/.github/actions/nightly/report
+        with:
+          status: ${{ job.status }}
+          suite_name: cross-cloud-tests
+          suite_parameters: '{"provider": "${{ matrix.provider }}", "test_scenario": "${{ matrix.test_scenario }}", "platform": "${{ matrix.platform }}"}'
+          slack_webhook_url: ${{ secrets.CLOUD_PROVIDERS_TESTS_WEBHOOK_URL }}
