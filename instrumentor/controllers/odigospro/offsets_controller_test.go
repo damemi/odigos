@@ -2,6 +2,7 @@ package odigospro
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -138,6 +139,47 @@ func TestOffsetsControllerRemovesCronJobWhenDisabledInEffectiveConfig(t *testing
 
 	if _, found := getCronJob(t, r.Client, ns); found {
 		t.Fatal("expected the go offsets CronJob to be deleted after the mode was set to off via the UI overlay, but it still exists")
+	}
+}
+
+// The cli image is pulled from the same registry as the other Odigos images, so a private
+// registry needs the same pull secrets.
+func TestOffsetsControllerSetsImagePullSecrets(t *testing.T) {
+	ns := env.GetCurrentNamespace()
+
+	config := &common.OdigosConfiguration{
+		ImagePrefix:       "my.registry.io",
+		ImagePullSecrets:  []string{"registry-creds"},
+		GoAutoOffsetsCron: "0 2 * * *",
+		GoAutoOffsetsMode: string(k8sconsts.OffsetCronJobModeDirect),
+	}
+
+	r := newReconciler(
+		configMap(ns, consts.OdigosConfigurationName, config),
+		configMap(ns, consts.OdigosEffectiveConfigName, config),
+		onPremSecret(ns),
+	)
+
+	if _, err := r.Reconcile(context.Background(), ctrl.Request{}); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+
+	expected := []corev1.LocalObjectReference{{Name: "registry-creds"}}
+
+	cronJob, found := getCronJob(t, r.Client, ns)
+	if !found {
+		t.Fatal("expected the go offsets CronJob to be created")
+	}
+	if got := cronJob.Spec.JobTemplate.Spec.Template.Spec.ImagePullSecrets; !reflect.DeepEqual(got, expected) {
+		t.Errorf("expected CronJob image pull secrets %v, got %v", expected, got)
+	}
+
+	job := &batchv1.Job{}
+	if err := r.Client.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: k8sconsts.OffsetInitialJobName}, job); err != nil {
+		t.Fatalf("failed to get the initial offsets job: %v", err)
+	}
+	if got := job.Spec.Template.Spec.ImagePullSecrets; !reflect.DeepEqual(got, expected) {
+		t.Errorf("expected initial job image pull secrets %v, got %v", expected, got)
 	}
 }
 

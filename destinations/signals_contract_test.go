@@ -69,7 +69,12 @@ var dsEndpointDialects = []string{
 // Values for the handful of fields whose format cannot be guessed from the catalog entry. A new
 // destination only needs an entry here if none of the dialects above gets it past validation.
 var dsFieldOverrides = map[string]map[string]string{
-	"dynamic": {"DYNAMIC_CONFIGURATION_DATA": "endpoint: odigos-probe.example.com:4317\n"},
+	"azuredataexplorer":       {"AZURE_DATA_EXPLORER_CLUSTER_URI": "https://odigos-probe.eastus.kusto.windows.net"},
+	"dynamic":                 {"DYNAMIC_CONFIGURATION_DATA": "endpoint: odigos-probe.example.com:4317\n"},
+	"googlemanagedprometheus": {"GCP_TIMEOUT": "5s"},
+	"localfilearchive":        {"FILE_ARCHIVE_PATH": "/var/odigos/archive"},
+	"microsoftsentinel":       {"MICROSOFT_SENTINEL_ENDPOINT": "https://odigos-probe.eastus-1.ingest.monitor.azure.com", "MICROSOFT_SENTINEL_RULE_ID": "dcr-00000000000000000000000000000000", "MICROSOFT_SENTINEL_STREAM_NAME": "Custom-OdigosProbe"},
+	"syslog":                  {"SYSLOG_ENDPOINT": "odigos-probe.example.com", "SYSLOG_MAX_MESSAGE_BYTES": "8192"},
 }
 
 // Destinations whose catalog entry declares a signal that the configurer never renders a pipeline
@@ -222,8 +227,8 @@ func TestEveryCatalogEntryHasAConfiger(t *testing.T) {
 }
 
 // The reverse: a configurer with no catalog entry cannot be reached from the UI at all. debug,
-// mock and nop are internal destinations with no catalog entry by design; gcs and sentry are
-// complete configurers for real backends that no catalog file offers.
+// mock and nop are internal destinations with no catalog entry by design; sentry is a complete
+// configurer for a real backend that no catalog file offers.
 func TestEveryConfigerWithoutACatalogEntryIsOneOfTheKnownOnes(t *testing.T) {
 	dests, configers := dsCatalogWithConfigers(t)
 	inCatalog := map[common.DestinationType]bool{}
@@ -231,7 +236,7 @@ func TestEveryConfigerWithoutACatalogEntryIsOneOfTheKnownOnes(t *testing.T) {
 		inCatalog[d.Metadata.Type] = true
 	}
 
-	known := map[common.DestinationType]bool{"debug": true, "mock": true, "nop": true, "gcs": true, "sentry": true}
+	known := map[common.DestinationType]bool{"debug": true, "mock": true, "nop": true, "sentry": true}
 	var unreachable []string
 	for destType := range configers {
 		if !inCatalog[destType] {

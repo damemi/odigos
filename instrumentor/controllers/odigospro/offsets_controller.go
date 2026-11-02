@@ -88,6 +88,9 @@ func (r *odigosproOffsetsController) Reconcile(ctx context.Context, _ ctrl.Reque
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
+	for _, secret := range odigosConfiguration.ImagePullSecrets {
+		template.Spec.ImagePullSecrets = append(template.Spec.ImagePullSecrets, corev1.LocalObjectReference{Name: secret})
+	}
 
 	cronJob := &batchv1.CronJob{
 		TypeMeta: metav1.TypeMeta{

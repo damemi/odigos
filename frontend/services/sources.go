@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -449,31 +450,57 @@ func stringToWorkloadKind(workloadKind string) (model.K8sResourceKind, bool) {
 	return "", false
 }
 
-func EnsureSourceCRD(ctx context.Context, nsName string, workloadName string, workloadKind model.K8sResourceKind, currentStreamName string) (*v1alpha1.Source, error) {
-	streamLabel := ""
-	if currentStreamName != "" {
-		streamLabel = k8sconsts.SourceDataStreamLabelPrefix + currentStreamName
-	}
-
+func validateSourceKind(ctx context.Context, workloadKind model.K8sResourceKind) error {
 	switch workloadKind {
 	// Namespace is not a workload, but we need it to "select future apps" by creating a Source CRD for it
 	case WorkloadKindNamespace, WorkloadKindDeployment, WorkloadKindStatefulSet, WorkloadKindDaemonSet, WorkloadKindCronJob, WorkloadKindDeploymentConfig, WorkloadKindArgoRollout, WorkloadKindStaticPod:
 		break
 	default:
-		return nil, errors.New("unsupported workload kind: " + string(workloadKind))
+		return errors.New("unsupported workload kind: " + string(workloadKind))
 	}
 
 	if workloadKind == WorkloadKindStaticPod {
 		config := GetConfig(ctx)
 		if config.Tier != model.TierOnprem {
-			return nil, fmt.Errorf("StaticPod instrumentation is an enterprise (on-prem) feature")
+			return fmt.Errorf("StaticPod instrumentation is an enterprise (on-prem) feature")
 		}
+	}
+
+	return nil
+}
+
+func dataStreamLabelKey(currentStreamName string) string {
+	if currentStreamName == "" {
+		return ""
+	}
+	return k8sconsts.SourceDataStreamLabelPrefix + currentStreamName
+}
+
+func EnsureSourceCRD(ctx context.Context, nsName string, workloadName string, workloadKind model.K8sResourceKind, currentStreamName string) (*v1alpha1.Source, error) {
+	streamLabel := dataStreamLabelKey(currentStreamName)
+
+	if err := validateSourceKind(ctx, workloadKind); err != nil {
+		return nil, err
 	}
 
 	source, err := GetSourceCRD(ctx, nsName, workloadName, workloadKind)
 	if err != nil && !apierrors.IsNotFound(err) {
 		// unexpected error occurred while trying to get the source
 		return nil, err
+	}
+
+	if source != nil && source.Spec.DisableInstrumentation && streamLabel != "" {
+		// a disabled source rejoins only the current stream, not the streams it was in before it was disabled
+		labels := map[string]any{streamLabel: "true"}
+		for labelKey, labelValue := range source.Labels {
+			if labelKey != streamLabel && strings.HasPrefix(labelKey, k8sconsts.SourceDataStreamLabelPrefix) && labelValue == "true" {
+				labels[labelKey] = nil
+			}
+		}
+		return mergePatchSourceCRD(ctx, nsName, source.Name, map[string]any{
+			"metadata": map[string]any{"labels": labels},
+			"spec":     map[string]any{common.DisableInstrumentationJsonKey: false},
+		})
 	}
 
 	if source != nil {
@@ -491,9 +518,21 @@ func EnsureSourceCRD(ctx context.Context, nsName string, workloadName string, wo
 		return source, nil
 	}
 
+	return createSourceCRD(ctx, nsName, workloadName, workloadKind, streamLabels(streamLabel, "true"), false)
+}
+
+func streamLabels(streamLabel string, value string) map[string]string {
+	if streamLabel == "" {
+		return nil
+	}
+	return map[string]string{streamLabel: value}
+}
+
+func createSourceCRD(ctx context.Context, nsName string, workloadName string, workloadKind model.K8sResourceKind, labels map[string]string, disableInstrumentation bool) (*v1alpha1.Source, error) {
 	newSource := &v1alpha1.Source{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "source-",
+			Labels:       labels,
 		},
 		Spec: v1alpha1.SourceSpec{
 			Workload: k8sconsts.PodWorkload{
@@ -501,12 +540,8 @@ func EnsureSourceCRD(ctx context.Context, nsName string, workloadName string, wo
 				Name:      workloadName,
 				Kind:      k8sconsts.WorkloadKind(workloadKind),
 			},
+			DisableInstrumentation: disableInstrumentation,
 		},
-	}
-	if currentStreamName != "" {
-		newSource.ObjectMeta.Labels = map[string]string{
-			streamLabel: "true",
-		}
 	}
 
 	return CreateResourceWithGenerateName(ctx, func() (*v1alpha1.Source, error) {
@@ -514,56 +549,169 @@ func EnsureSourceCRD(ctx context.Context, nsName string, workloadName string, wo
 	})
 }
 
-func deleteSourceCRD(ctx context.Context, nsName string, workloadName string, workloadKind model.K8sResourceKind, currentStreamName string) error {
-	source, err := EnsureSourceCRD(ctx, nsName, workloadName, workloadKind, currentStreamName)
-	if err != nil {
+// createDisabledSourceCRD keeps the current stream label "true": the instrumentor webhook requires one "true"
+// data-stream label and would otherwise add the default stream. The workload is excluded by disableInstrumentation.
+func createDisabledSourceCRD(ctx context.Context, nsName string, workloadName string, workloadKind model.K8sResourceKind, currentStreamName string) error {
+	if err := validateSourceKind(ctx, workloadKind); err != nil {
 		return err
+	}
+	_, err := createSourceCRD(ctx, nsName, workloadName, workloadKind, streamLabels(dataStreamLabelKey(currentStreamName), "true"), true)
+	return err
+}
+
+// excludeFromStreamLabels excludes the workload from the current stream while other streams still select it.
+// The instrumentor webhook requires one "true" data-stream label and would otherwise add the default stream,
+// so one of the other streams is set when the source has none of its own.
+func excludeFromStreamLabels(source *v1alpha1.Source, streamLabel string, otherStreams []string) map[string]string {
+	labels := map[string]string{streamLabel: "false"}
+	if source != nil {
+		for labelKey, labelValue := range source.Labels {
+			if labelKey != streamLabel && strings.HasPrefix(labelKey, k8sconsts.SourceDataStreamLabelPrefix) && labelValue == "true" {
+				return labels
+			}
+		}
+	}
+	labels[dataStreamLabelKey(slices.Min(otherStreams))] = "true"
+	return labels
+}
+
+// deleteSourceCRD removes the current data-stream from a source. A workload whose namespace is
+// selected keeps a source that excludes it, anything else is deleted unless other streams still use it.
+// namespaceSelected overrides the namespace source lookup for a namespace changed in the same request.
+func deleteSourceCRD(ctx context.Context, nsName string, workloadName string, workloadKind model.K8sResourceKind, currentStreamName string, namespaceSelected *bool) error {
+	source, err := GetSourceCRD(ctx, nsName, workloadName, workloadKind)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	// deselecting a disabled workload keeps it disabled, only disableInstrumentation: false removes its source
+	if source != nil && source.Spec.DisableInstrumentation && workloadKind != WorkloadKindNamespace {
+		return nil
 	}
 
 	// check for namespace source first
 	var nsSource *v1alpha1.Source
+	hasNamespace := false
 	if workloadKind != WorkloadKindNamespace {
-		nsSource, err = GetSourceCRD(ctx, nsName, nsName, WorkloadKindNamespace)
-		if err != nil && !apierrors.IsNotFound(err) {
-			return err
+		var nsErr error
+		nsSource, nsErr = GetSourceCRD(ctx, nsName, nsName, WorkloadKindNamespace)
+		if nsErr != nil && !apierrors.IsNotFound(nsErr) {
+			return nsErr
+		}
+		hasNamespace = nsSource != nil
+		if namespaceSelected != nil {
+			hasNamespace = *namespaceSelected
+			if !hasNamespace {
+				// the namespace is leaving the current stream, so its streams no longer apply to this workload
+				nsSource = nil
+			}
 		}
 	}
 
-	dataStreamNames := ExtractDataStreamsFromSource(source, nsSource)
-	isWorkloadWithNamespace := workloadKind != WorkloadKindNamespace && nsSource != nil
+	streamLabel := dataStreamLabelKey(currentStreamName)
 
-	// we remove the current data-stream
-	if currentStreamName != "" {
-		dataStreamLabelKey := k8sconsts.SourceDataStreamLabelPrefix + currentStreamName
-
-		if isWorkloadWithNamespace {
-			_, err = UpdateSourceCRDLabel(ctx, nsName, source.Name, dataStreamLabelKey, "false")
-		} else {
-			_, err = UpdateSourceCRDLabel(ctx, nsName, source.Name, dataStreamLabelKey, "")
+	// the data-streams that still select the workload once the current one is removed
+	otherStreams := []string{}
+	if streamLabel != "" {
+		withCurrentStream := &v1alpha1.Source{}
+		if source != nil {
+			withCurrentStream = source.DeepCopy()
 		}
-
-		// if there are more labels for data-streams, we exit and don't delete the source
-		if len(dataStreamNames) > 1 && currentStreamName != "" {
-			return err
+		if withCurrentStream.Labels == nil {
+			withCurrentStream.Labels = map[string]string{}
+		}
+		withCurrentStream.Labels[streamLabel] = "true"
+		for _, name := range ExtractDataStreamsFromSource(withCurrentStream, nsSource) {
+			if *name != currentStreamName {
+				otherStreams = append(otherStreams, *name)
+			}
 		}
 	}
+	inOtherStreams := len(otherStreams) > 0
 
-	if isWorkloadWithNamespace {
-		// we add "DisableInstrumentation" label to the source
-		_, err = UpdateSourceCRDSpec(ctx, nsName, source.Name, common.DisableInstrumentationJsonKey, true)
+	if source == nil {
+		if !hasNamespace {
+			return nil
+		}
+		// create the excluding source directly, so the workload is never selected in between
+		if !inOtherStreams {
+			return createDisabledSourceCRD(ctx, nsName, workloadName, workloadKind, currentStreamName)
+		}
+		if err := validateSourceKind(ctx, workloadKind); err != nil {
+			return err
+		}
+		_, err := createSourceCRD(ctx, nsName, workloadName, workloadKind, excludeFromStreamLabels(nil, streamLabel, otherStreams), false)
 		return err
-	} else {
-		// namespace source does not exist.
-		// we need to delete the workload source,
-		// or remove the relevant data-stream label (if source is in multiple streams)
-		if len(dataStreamNames) > 1 && currentStreamName != "" {
-			_, err = UpdateSourceCRDLabel(ctx, nsName, source.Name, k8sconsts.SourceDataStreamLabelPrefix+currentStreamName, "")
+	}
+
+	if hasNamespace {
+		if !inOtherStreams {
+			// we add "DisableInstrumentation" to the source
+			_, err := UpdateSourceCRDSpec(ctx, nsName, source.Name, common.DisableInstrumentationJsonKey, true)
 			return err
 		}
-
-		err = kube.DefaultClient.OdigosClient.Sources(nsName).Delete(ctx, source.Name, metav1.DeleteOptions{})
+		labels := map[string]any{}
+		for labelKey, labelValue := range excludeFromStreamLabels(source, streamLabel, otherStreams) {
+			labels[labelKey] = labelValue
+		}
+		_, err := mergePatchSourceCRD(ctx, nsName, source.Name, map[string]any{"metadata": map[string]any{"labels": labels}})
 		return err
 	}
+
+	// namespace source does not exist.
+	// we need to delete the workload source,
+	// or remove the relevant data-stream label (if source is in multiple streams)
+	if inOtherStreams {
+		if _, ok := source.Labels[streamLabel]; !ok {
+			return nil
+		}
+		_, err := UpdateSourceCRDLabel(ctx, nsName, source.Name, streamLabel, "")
+		return err
+	}
+
+	return kube.DefaultClient.OdigosClient.Sources(nsName).Delete(ctx, source.Name, metav1.DeleteOptions{})
+}
+
+// disableSourceCRD creates the workload source already disabled, or disables the existing one.
+func disableSourceCRD(ctx context.Context, nsName string, workloadName string, workloadKind model.K8sResourceKind, currentStreamName string) error {
+	source, err := GetSourceCRD(ctx, nsName, workloadName, workloadKind)
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+
+	if source == nil {
+		return createDisabledSourceCRD(ctx, nsName, workloadName, workloadKind, currentStreamName)
+	}
+	if source.Spec.DisableInstrumentation {
+		return nil
+	}
+	_, err = UpdateSourceCRDSpec(ctx, nsName, source.Name, common.DisableInstrumentationJsonKey, true)
+	return err
+}
+
+// removeWorkloadSourceCRD removes the workload's own source, so it follows its namespace source again.
+// An enabled source that other data-streams still select only loses the current stream.
+func removeWorkloadSourceCRD(ctx context.Context, nsName string, workloadName string, workloadKind model.K8sResourceKind, currentStreamName string) error {
+	source, err := GetSourceCRD(ctx, nsName, workloadName, workloadKind)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	streamLabel := dataStreamLabelKey(currentStreamName)
+	if !source.Spec.DisableInstrumentation && streamLabel != "" {
+		for labelKey, labelValue := range source.Labels {
+			if labelKey != streamLabel && strings.HasPrefix(labelKey, k8sconsts.SourceDataStreamLabelPrefix) && labelValue == "true" {
+				if _, ok := source.Labels[streamLabel]; ok {
+					_, err = UpdateSourceCRDLabel(ctx, nsName, source.Name, streamLabel, "")
+				}
+				return err
+			}
+		}
+	}
+
+	return kube.DefaultClient.OdigosClient.Sources(nsName).Delete(ctx, source.Name, metav1.DeleteOptions{})
 }
 
 func UpdateSourceCRDSpec(ctx context.Context, nsName string, crdName string, specField string, newValue any) (*v1alpha1.Source, error) {
@@ -585,6 +733,15 @@ func UpdateSourceCRDSpec(ctx context.Context, nsName string, crdName string, spe
 	)
 
 	return source, err
+}
+
+// mergePatchSourceCRD applies labels and spec fields in one update, so the webhooks only see the final state.
+func mergePatchSourceCRD(ctx context.Context, nsName string, crdName string, patch map[string]any) (*v1alpha1.Source, error) {
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		return nil, err
+	}
+	return kube.DefaultClient.OdigosClient.Sources(nsName).Patch(ctx, crdName, types.MergePatchType, patchBytes, metav1.PatchOptions{})
 }
 
 func UpdateSourceCRDLabel(ctx context.Context, nsName string, crdName string, labelKey string, newValue string) (*v1alpha1.Source, error) {
@@ -625,7 +782,21 @@ func ToggleSourceCRD(ctx context.Context, nsName string, workloadName string, wo
 		_, err := EnsureSourceCRD(ctx, nsName, workloadName, workloadKind, currentStreamName)
 		return err
 	} else {
-		return deleteSourceCRD(ctx, nsName, workloadName, workloadKind, currentStreamName)
+		return deleteSourceCRD(ctx, nsName, workloadName, workloadKind, currentStreamName, nil)
+	}
+}
+
+func persistWorkloadSourceCRD(ctx context.Context, workload *model.PersistNamespaceSourceInput, namespaceSelected *bool) error {
+	switch {
+	case workload.Selected:
+		_, err := EnsureSourceCRD(ctx, workload.Namespace, workload.Name, workload.Kind, workload.CurrentStreamName)
+		return err
+	case workload.DisableInstrumentation == nil:
+		return deleteSourceCRD(ctx, workload.Namespace, workload.Name, workload.Kind, workload.CurrentStreamName, namespaceSelected)
+	case *workload.DisableInstrumentation:
+		return disableSourceCRD(ctx, workload.Namespace, workload.Name, workload.Kind, workload.CurrentStreamName)
+	default:
+		return removeWorkloadSourceCRD(ctx, workload.Namespace, workload.Name, workload.Kind, workload.CurrentStreamName)
 	}
 }
 

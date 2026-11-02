@@ -1,8 +1,12 @@
 package middlewares
 
-import "context"
+import (
+	"context"
 
-const AdminOverrideHeader = "X-Odigos-Admin-Allow"
+	"github.com/odigos-io/odigos/api/k8sconsts"
+)
+
+const AdminOverrideHeader = k8sconsts.CentralProxyAdminOverrideHeader
 
 type ctxKey string
 
@@ -16,5 +20,3 @@ func AdminOverrideFromContext(ctx context.Context) bool {
 	v, ok := ctx.Value(ctxKeyAdminOverride).(bool)
 	return ok && v
 }
-
-

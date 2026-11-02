@@ -2823,11 +2823,12 @@ type PersistNamespaceItemInput struct {
 }
 
 type PersistNamespaceSourceInput struct {
-	Namespace         string          `json:"namespace"`
-	Name              string          `json:"name"`
-	Kind              K8sResourceKind `json:"kind"`
-	Selected          bool            `json:"selected"`
-	CurrentStreamName string          `json:"currentStreamName"`
+	Namespace              string          `json:"namespace"`
+	Name                   string          `json:"name"`
+	Kind                   K8sResourceKind `json:"kind"`
+	Selected               bool            `json:"selected"`
+	CurrentStreamName      string          `json:"currentStreamName"`
+	DisableInstrumentation *bool           `json:"disableInstrumentation,omitempty"`
 }
 
 type PhpCustomProbe struct {

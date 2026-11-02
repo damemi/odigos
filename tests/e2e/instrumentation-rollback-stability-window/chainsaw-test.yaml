@@ -18,11 +18,7 @@ spec:
             content: |
               # The pwd is the directory of this file, so we have to walk up to the project root to find the helm chart
               P="../../.."
-              if [ "$MODE" = "cross-cloud-tests" ]; then
-                helm upgrade --install odigos $P/helm/odigos --create-namespace --namespace odigos-test --set image.tag="$COMMIT_HASH" --set imagePrefix=public.ecr.aws/y2v0v6s7 --set nodeSelector."kubernetes\.io/os"=linux --set autoRollback.graceTime=3m --set autoRollback.stabilityWindowTime=2m
-              else
-                helm upgrade --install odigos $P/helm/odigos --create-namespace --namespace odigos-test --set image.tag=e2e-test  --set nodeSelector."kubernetes\.io/os"=linux --set autoRollback.graceTime=3m --set autoRollback.stabilityWindowTime=2m
-              fi
+              helm upgrade --install odigos $P/helm/odigos --create-namespace --namespace odigos-test --set image.tag=e2e-test  --set nodeSelector."kubernetes\.io/os"=linux --set autoRollback.graceTime=3m --set autoRollback.stabilityWindowTime=2m
               kubectl label namespace odigos-test odigos.io/system-object="true"
 
     - name: Verify Odigos Installation
@@ -33,19 +29,10 @@ spec:
               echo "Starting Odigos version check..."
               export ACTUAL_VERSION=$(../../../cli/odigos version --cluster)
               echo "Actual Version: $ACTUAL_VERSION"
-              echo "Commit Hash: $COMMIT_HASH"
 
-              if [ "$MODE" = "cross-cloud-tests" ]; then
-                if [ "$ACTUAL_VERSION" != "$COMMIT_HASH" ]; then
-                  echo "❌ Odigos version is not the expected commit hash, got $ACTUAL_VERSION"
-                  exit 1
-                fi
-
-              else
-                if [ "$ACTUAL_VERSION" != "e2e-test" ]; then
-                  echo "❌ Odigos version is not e2e-test, got $ACTUAL_VERSION"
-                  exit 1
-                fi
+              if [ "$ACTUAL_VERSION" != "e2e-test" ]; then
+                echo "❌ Odigos version is not e2e-test, got $ACTUAL_VERSION"
+                exit 1
               fi
 
               ../../common/verify_odigos_installation.sh odigos-test
