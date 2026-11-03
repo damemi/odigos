@@ -300,28 +300,57 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 		if cs.value.Settled() {
 			continue // frozen: promoted, or saturated and never going to promote
 		}
-		updated, err := sc.Merge(t, cs.value.Data)
-		if err != nil {
-			e.warn(fmt.Sprintf("merge %s", sc.Class()), err)
-			continue
+		lb := cs.learningFor(sc)
+		var updated json.RawMessage
+		var changed, learnedGrew bool
+		if lb != nil {
+			changed, learnedGrew = lb.merge(t)
+			updated = cs.value.Data
+			if changed {
+				var err error
+				if updated, err = lb.encode(); err != nil {
+					// lb already holds this trace; re-parse value.Data next time.
+					cs.learning = nil
+					e.warn(fmt.Sprintf("merge %s", sc.Class()), err)
+					continue
+				}
+			}
+		} else {
+			var err error
+			if updated, err = sc.Merge(t, cs.value.Data); err != nil {
+				e.warn(fmt.Sprintf("merge %s", sc.Class()), err)
+				continue
+			}
 		}
 		// A set that outgrows the cap is not a baseline, it is an identity leak
 		// (ids in span names, per-request hosts). Freeze it as saturated: keep
 		// the capped subset so the store never receives the overflow, and stop
 		// counting it as learning so it can neither promote nor block the
 		// transaction's other classes from finishing.
-		if capped, didCap := capClassData(sc.Class(), updated, e.store.perSetCap); didCap {
-			cs.saturate(capped)
-			settledThisTrace = true
-			metrics.IncBaselineClassesSaturated(string(sc.Class()))
-			e.warn(fmt.Sprintf("baseline %s saturated at per-set cap %d", sc.Class(), e.store.perSetCap), errPerSetCap)
-			continue
+		if lb == nil || lb.members() > e.store.perSetCap {
+			if capped, didCap := capClassData(sc.Class(), updated, e.store.perSetCap); didCap {
+				cs.saturate(capped)
+				settledThisTrace = true
+				metrics.IncBaselineClassesSaturated(string(sc.Class()))
+				e.warn(fmt.Sprintf("baseline %s saturated at per-set cap %d", sc.Class(), e.store.perSetCap), errPerSetCap)
+				continue
+			}
 		}
 		// Track convergence for the stability conditions: did this trace add
 		// something new (a new edge/peer/bucket) or just reinforce what we
 		// already knew? Compared before we overwrite the value.
-		grew := baselineGrew(sc, cs.value.Data, updated)
-		cs.setData(updated)
+		var grew bool
+		switch {
+		case lb == nil:
+			grew = baselineGrew(sc, cs.value.Data, updated)
+			cs.setData(updated)
+		case isStabilityComparator(sc):
+			grew = learnedGrew
+			cs.setLearned(updated)
+		default:
+			grew = changed && !bytes.Equal(cs.value.Data, updated)
+			cs.setLearned(updated)
+		}
 		cs.value.ObservationCount++
 		cs.countDelta++
 		if grew {
@@ -329,13 +358,13 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 			cs.value.ObservationCountAtLastChange = cs.value.ObservationCount
 		}
 		if cs.additive {
-			delta, err := sc.Merge(t, emptyOr(cs.dataDelta))
-			if err == nil {
-				cs.dataDelta = delta
-			}
+			e.mergeDelta(cs, sc, t)
 		}
 		if promoteClassIfReady(cs, e.learning.Resolve(sc.Class(), tx.ID, serviceKey), e.clock()) {
 			settledThisTrace = true
+			// A promoted class is frozen, so its parsed learning copies are done.
+			cs.learning = nil
+			cs.learningDelta = nil
 		}
 		cs.dirty = true
 	}
@@ -608,6 +637,34 @@ var errPerSetCap = errors.New("per-set cap reached; class frozen as saturated an
 
 // emptyOr returns d, or an empty JSON object when d is empty, so a scorer's
 // Merge always receives valid bytes when seeding the additive delta.
+// mergeDelta folds t into an additive class's unflushed delta, the same
+// Merge(t, emptyOr(dataDelta)) the class itself gets. Caller holds entry.mu.
+func (e *Engine) mergeDelta(cs *classState, sc Scorer, t *Trace) {
+	dl := cs.learningDeltaFor(sc)
+	if dl == nil {
+		if delta, err := sc.Merge(t, emptyOr(cs.dataDelta)); err == nil {
+			cs.dataDelta = delta
+		}
+		return
+	}
+	if changed, _ := dl.merge(t); !changed {
+		// Merge returns its input when the trace carries nothing for the class.
+		cs.dataDelta = emptyOr(cs.dataDelta)
+		return
+	}
+	delta, err := dl.encode()
+	if err != nil {
+		cs.learningDelta = nil
+		return
+	}
+	cs.dataDelta = delta
+}
+
+func isStabilityComparator(sc Scorer) bool {
+	_, ok := sc.(stabilityComparator)
+	return ok
+}
+
 func emptyOr(d json.RawMessage) json.RawMessage {
 	if len(d) == 0 {
 		return json.RawMessage(`{}`)

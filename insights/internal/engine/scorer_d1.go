@@ -123,6 +123,11 @@ func (d1CallEdges) Merge(t *Trace, current json.RawMessage) (json.RawMessage, er
 	return json.Marshal(d1Data{Edges: merged})
 }
 
+func (d1CallEdges) decodeLearning(raw json.RawMessage) learningBaseline {
+	d, _ := decodeD1(raw)
+	return newSetLearning(d.Edges, edgesFromTrace, lessD1Edge, func(e []d1Edge) any { return d1Data{Edges: e} })
+}
+
 // lessD1Edge orders edges by (from.svc, from.op, to.svc, to.op) so the
 // persisted JSON is deterministic.
 func lessD1Edge(a, b d1Edge) bool {

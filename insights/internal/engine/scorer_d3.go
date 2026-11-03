@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/histogram"
@@ -72,6 +73,27 @@ func (baseline d3Data) scoreWithLayout(t *Trace, layout histogram.Layout) (bool,
 func (d3Latency) Merge(t *Trace, current json.RawMessage) (json.RawMessage, error) {
 	return d3Latency{}.mergeWithLayout(t, current, histogram.DefaultLayout())
 }
+
+type d3Learning struct{ data d3Data }
+
+func (d3Latency) decodeLearning(raw json.RawMessage) learningBaseline {
+	d, _ := decodeD3(raw)
+	return &d3Learning{data: d}
+}
+
+func (l *d3Learning) merge(t *Trace) (bool, bool) {
+	us, ok := entryLatencyMicros(t)
+	if !ok {
+		return false, false
+	}
+	before := histogram.Histogram{Buckets: slices.Clone(l.data.Latency.Buckets)}
+	l.data.Latency.Observe(us, histogram.DefaultLayout())
+	return true, histGrew(before, l.data.Latency)
+}
+
+func (l *d3Learning) encode() (json.RawMessage, error) { return json.Marshal(l.data) }
+
+func (l *d3Learning) members() int { return 0 }
 
 func (d3Latency) mergeWithLayout(t *Trace, current json.RawMessage, layout histogram.Layout) (json.RawMessage, error) {
 	baseline, _ := decodeD3(current)

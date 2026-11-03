@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -193,6 +194,40 @@ func (d2Egress) Merge(t *Trace, current json.RawMessage) (json.RawMessage, error
 	peers = append(peers, peersFromTrace(t)...)
 	return json.Marshal(d2Data{Peers: coalesceD2Peers(peers)})
 }
+
+// d2Learning holds D2's peers. Unlike D1/D5 a merge can rewrite an existing
+// peer (coalesceD2Peers folds Owner/External), so change is a slice compare.
+type d2Learning struct {
+	peers  []peer
+	synced bool
+}
+
+func (d2Egress) decodeLearning(raw json.RawMessage) learningBaseline {
+	d, _ := decodeD2(raw)
+	return &d2Learning{peers: d.Peers}
+}
+
+func (l *d2Learning) merge(t *Trace) (bool, bool) {
+	traced := peersFromTrace(t)
+	if l.synced && len(traced) == 0 {
+		return false, false
+	}
+	// Same input order as d2Egress.Merge: coalescing Owner depends on it.
+	merged := coalesceD2Peers(append(slices.Clone(l.peers), traced...))
+	changed := !l.synced || !slices.Equal(merged, l.peers)
+	l.peers = merged
+	return changed, false
+}
+
+func (l *d2Learning) encode() (json.RawMessage, error) {
+	out, err := json.Marshal(d2Data{Peers: l.peers})
+	if err == nil {
+		l.synced = true
+	}
+	return out, err
+}
+
+func (l *d2Learning) members() int { return len(l.peers) }
 
 // coalesceD2Peers collapses peers to Score identity ({host,port}). Owner and
 // External are annotations for guardrail profiles - they must not create extra

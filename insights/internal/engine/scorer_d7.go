@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -120,6 +121,37 @@ func (d7PayloadSize) EnrichRisk(evidence json.RawMessage, _ enrichConfig) []risk
 func (d7PayloadSize) Merge(t *Trace, current json.RawMessage) (json.RawMessage, error) {
 	return d7PayloadSize{}.mergeWithLayout(t, current, histogram.DefaultLayout())
 }
+
+type d7Learning struct{ data d7Data }
+
+func (d7PayloadSize) decodeLearning(raw json.RawMessage) learningBaseline {
+	d, _ := decodeD7(raw)
+	return &d7Learning{data: d}
+}
+
+func (l *d7Learning) merge(t *Trace) (bool, bool) {
+	reqSize, respSize, ok := httpPayloadSizesFromTrace(t)
+	if !ok {
+		return false, false
+	}
+	layout := histogram.DefaultLayout()
+	grew := false
+	if reqSize >= 0 {
+		before := histogram.Histogram{Buckets: slices.Clone(l.data.Request.Buckets)}
+		l.data.Request.Observe(reqSize, layout)
+		grew = histGrew(before, l.data.Request)
+	}
+	if respSize >= 0 {
+		before := histogram.Histogram{Buckets: slices.Clone(l.data.Response.Buckets)}
+		l.data.Response.Observe(respSize, layout)
+		grew = histGrew(before, l.data.Response) || grew
+	}
+	return true, grew
+}
+
+func (l *d7Learning) encode() (json.RawMessage, error) { return json.Marshal(l.data) }
+
+func (l *d7Learning) members() int { return 0 }
 
 func (d7PayloadSize) mergeWithLayout(t *Trace, current json.RawMessage, layout histogram.Layout) (json.RawMessage, error) {
 	baseline, _ := decodeD7(current)

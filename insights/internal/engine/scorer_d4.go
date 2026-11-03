@@ -265,6 +265,26 @@ func (d4ArgsReturns) Merge(t *Trace, current json.RawMessage) (json.RawMessage, 
 	return json.Marshal(merged)
 }
 
+// d4Learning holds D4's sites. mergeD4Data builds a fresh value without
+// touching its inputs, so it can run on the held one; every merge re-encodes
+// (Seen and enum folding make a cheap change check error-prone), which still
+// drops the per-trace decodes.
+type d4Learning struct{ data d4Data }
+
+func (d4ArgsReturns) decodeLearning(raw json.RawMessage) learningBaseline {
+	return &d4Learning{data: mustDecodeD4(raw)}
+}
+
+func (l *d4Learning) merge(t *Trace) (bool, bool) {
+	l.data = mergeD4Data(l.data, d4DataFromTrace(t))
+	l.data.Seen = true
+	return true, false
+}
+
+func (l *d4Learning) encode() (json.RawMessage, error) { return json.Marshal(l.data) }
+
+func (l *d4Learning) members() int { return len(l.data.Sites) }
+
 // d4DataFromTrace folds one trace's captured values into a fresh baseline.
 func d4DataFromTrace(t *Trace) d4Data {
 	out := d4Data{Sites: map[string]d4Site{}}

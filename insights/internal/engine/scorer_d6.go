@@ -137,14 +137,48 @@ func (d6DBAccess) Merge(t *Trace, current json.RawMessage) (json.RawMessage, err
 	for s := range shapeSet {
 		mergedShapes = append(mergedShapes, s)
 	}
-	sort.Slice(mergedShapes, func(i, j int) bool {
-		if mergedShapes[i].Op != mergedShapes[j].Op {
-			return mergedShapes[i].Op < mergedShapes[j].Op
-		}
-		return mergedShapes[i].Tables < mergedShapes[j].Tables
-	})
+	sort.Slice(mergedShapes, func(i, j int) bool { return lessQueryShape(mergedShapes[i], mergedShapes[j]) })
 
 	return json.Marshal(d6Data{Accesses: mergedAcc, QueryShapes: mergedShapes})
+}
+
+// d6Learning holds D6's two sets; each is capped separately, so members
+// reports the larger.
+type d6Learning struct {
+	accesses *setLearning[dbAccess]
+	shapes   *setLearning[queryShape]
+}
+
+func (d6DBAccess) decodeLearning(raw json.RawMessage) learningBaseline {
+	d, _ := decodeD6(raw)
+	return &d6Learning{
+		accesses: newSetLearning(d.Accesses, nil, lessDBAccess, nil),
+		shapes:   newSetLearning(d.QueryShapes, nil, lessQueryShape, nil),
+	}
+}
+
+func (l *d6Learning) merge(t *Trace) (bool, bool) {
+	accesses, shapes := dbFactsFromTrace(t)
+	accChanged := l.accesses.add(accesses)
+	shapesChanged := l.shapes.add(shapes)
+	return accChanged || shapesChanged, false
+}
+
+func (l *d6Learning) encode() (json.RawMessage, error) {
+	out, err := json.Marshal(d6Data{Accesses: l.accesses.sorted(), QueryShapes: l.shapes.sorted()})
+	if err == nil {
+		l.accesses.synced, l.shapes.synced = true, true
+	}
+	return out, err
+}
+
+func (l *d6Learning) members() int { return max(l.accesses.members(), l.shapes.members()) }
+
+func lessQueryShape(a, b queryShape) bool {
+	if a.Op != b.Op {
+		return a.Op < b.Op
+	}
+	return a.Tables < b.Tables
 }
 
 // Explain implements Explainer: it re-derives each span's db facts with the

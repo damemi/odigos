@@ -97,6 +97,12 @@ type classState struct {
 	// so it cannot outlive the bytes it came from. Read-only once built: one
 	// value serves every trace of this transaction.
 	decoded decodedBaseline
+	// learning is value.Data parsed for merging while the class learns (see
+	// learner), so a trace merges in place instead of decoding the JSON.
+	// learning.encode() equals value.Data after every merge; setData drops it.
+	learning learningBaseline
+	// learningDelta is the same for dataDelta; setDelta drops it.
+	learningDelta learningBaseline
 
 	// Unflushed delta accumulators, drained by flush():
 	countDelta    int64           // observations merged since last flush
@@ -114,7 +120,7 @@ type classState struct {
 // data replaced. Caller holds entry.mu.
 func (cs *classState) saturate(capped json.RawMessage) {
 	cs.setData(capped)
-	cs.dataDelta = nil
+	cs.setDelta(nil)
 	if cs.value.Saturated {
 		return
 	}
@@ -155,6 +161,47 @@ func (s *baselineStore) absorbSetData(cs *classState, class repo.DeviationClass,
 func (cs *classState) setData(data json.RawMessage) {
 	cs.value.Data = data
 	cs.decoded = nil
+	cs.learning = nil
+}
+
+// setLearned stores the bytes a merge into cs.learning produced, keeping that
+// parsed value since it matches them. Caller holds entry.mu.
+func (cs *classState) setLearned(data json.RawMessage) {
+	cs.value.Data = data
+	cs.decoded = nil
+}
+
+// setDelta replaces the additive delta; like setData, every write to dataDelta
+// outside the learning merge MUST go through here. Caller holds entry.mu.
+func (cs *classState) setDelta(delta json.RawMessage) {
+	cs.dataDelta = delta
+	cs.learningDelta = nil
+}
+
+// learningFor returns value.Data parsed for merging, or nil when sc merges
+// JSON directly. Caller holds entry.mu.
+func (cs *classState) learningFor(sc Scorer) learningBaseline {
+	l, ok := sc.(learner)
+	if !ok {
+		return nil
+	}
+	if cs.learning == nil {
+		cs.learning = l.decodeLearning(cs.value.Data)
+	}
+	return cs.learning
+}
+
+// learningDeltaFor is learningFor for the additive delta, which Merge folds
+// into emptyOr(dataDelta). Caller holds entry.mu.
+func (cs *classState) learningDeltaFor(sc Scorer) learningBaseline {
+	l, ok := sc.(learner)
+	if !ok {
+		return nil
+	}
+	if cs.learningDelta == nil {
+		cs.learningDelta = l.decodeLearning(emptyOr(cs.dataDelta))
+	}
+	return cs.learningDelta
 }
 
 // decodedFor returns d's view of this class's baseline, decoding on first use
@@ -443,7 +490,7 @@ func (s *baselineStore) flush(ctx context.Context) error {
 				countDelta: cs.countDelta, promote: cs.promoteDelta, saturate: cs.saturateDelta, additive: cs.additive,
 			})
 			cs.countDelta = 0
-			cs.dataDelta = nil
+			cs.setDelta(nil)
 			cs.promoteDelta = false
 			cs.saturateDelta = false
 			cs.dirty = false
@@ -539,7 +586,7 @@ func (s *baselineStore) rollback(snaps []flushSnap) {
 					base = json.RawMessage(`{}`)
 				}
 				if m, mErr := s.merger.MergeData(sn.class, base, sn.contribution); mErr == nil {
-					cs.dataDelta = m
+					cs.setDelta(m)
 				}
 			}
 			cs.dirty = true

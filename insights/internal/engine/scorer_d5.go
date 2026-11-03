@@ -74,13 +74,20 @@ func (d5Libraries) Merge(t *Trace, current json.RawMessage) (json.RawMessage, er
 	for l := range set {
 		merged = append(merged, l)
 	}
-	sort.Slice(merged, func(i, j int) bool {
-		if merged[i].Ns != merged[j].Ns {
-			return merged[i].Ns < merged[j].Ns
-		}
-		return merged[i].Ver < merged[j].Ver
-	})
+	sort.Slice(merged, func(i, j int) bool { return lessLib(merged[i], merged[j]) })
 	return json.Marshal(d5Data{Libs: merged})
+}
+
+func (d5Libraries) decodeLearning(raw json.RawMessage) learningBaseline {
+	d, _ := decodeD5(raw)
+	return newSetLearning(d.Libs, libsFromTrace, lessLib, func(l []lib) any { return d5Data{Libs: l} })
+}
+
+func lessLib(a, b lib) bool {
+	if a.Ns != b.Ns {
+		return a.Ns < b.Ns
+	}
+	return a.Ver < b.Ver
 }
 
 func decodeD5(raw json.RawMessage) (d5Data, error) {
