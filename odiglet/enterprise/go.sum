@@ -163,8 +163,6 @@ github.com/go-task/slim-sprig/v3 v3.0.0 h1:sUs3vkvUymDpBKi3qH1YSqBQk9+9D/8M2mN1v
 github.com/go-task/slim-sprig/v3 v3.0.0/go.mod h1:W848ghGpv3Qj3dhTPRyJypKRiqCdHZiAzKg9hl15HA8=
 github.com/go-viper/mapstructure/v2 v2.5.0 h1:vM5IJoUAy3d7zRSVtIwQgBj7BiWtMPfmPEgAXnvj1Ro=
 github.com/go-viper/mapstructure/v2 v2.5.0/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
-github.com/goburrow/cache v0.1.4 h1:As4KzO3hgmzPlnaMniZU9+VmoNYseUhuELbxy9mRBfw=
-github.com/goburrow/cache v0.1.4/go.mod h1:cDFesZDnIlrHoNlMYqqMpCRawuXulgx+y7mXU8HZ+/c=
 github.com/gobwas/glob v0.2.3 h1:A4xDbljILXROh+kObIiy5kIaPYD8e96x1tgBhUI5J+Y=
 github.com/gobwas/glob v0.2.3/go.mod h1:d3Ez4x06l9bZtSvzIay5+Yzi0fmZzPgnTbPcKjJAkT8=
 github.com/gocql/gocql v1.7.0 h1:O+7U7/1gSN7QTEAaMEsJc1Oq2QHXvCWoF3DFK9HDHus=
@@ -273,8 +271,8 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
-github.com/odigos-io/ebpf-core v0.37.0 h1:lF2nSUFNrMkOg5982ODY4doChvIS2Ca7pW/AavBlpWw=
-github.com/odigos-io/ebpf-core v0.37.0/go.mod h1:6THrjBAsdBVHU/j3lEW9L+/AvjWvVnBFWIj/JUy9h+Y=
+github.com/odigos-io/ebpf-core v0.39.0 h1:+nI3neAugbRTA/sLPs3JGWfW2wUt9qBd0XcnC6nO3hw=
+github.com/odigos-io/ebpf-core v0.39.0/go.mod h1:6THrjBAsdBVHU/j3lEW9L+/AvjWvVnBFWIj/JUy9h+Y=
 github.com/odigos-io/ebpf-generic-instrumentation v0.0.14 h1:PttoQoEXWnBR6R4qMO5MjIfqFrtafW7OLKc6c78Ff4Q=
 github.com/odigos-io/ebpf-generic-instrumentation v0.0.14/go.mod h1:rieG2n9qdJLLsgDh1gaC/0XaYJrnxtnPx79zOW3ujqE=
 github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.59.0 h1:GrYpJ+dA7zaDaEFWuy+xu+YKX5zLw4GXyM07cAUj8B8=
@@ -283,8 +281,8 @@ github.com/odigos-io/ebpf-java-instrumentation/v2 v2.59.0 h1:M+2ihIvc8UWAsj6ikHV
 github.com/odigos-io/ebpf-java-instrumentation/v2 v2.59.0/go.mod h1:cvrZGsgu1CogOIvrVfXRsOdpkx5FVlwxDeZtT00Dp6k=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.17.1 h1:fQIbm37adCgld2qimleMfp/ifeQ1s/YXd3asH7hORfc=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.17.1/go.mod h1:pXCGQ5GpWuu6Rhvyye1qLpXS+loKe5aO4djbr3h7VM0=
-github.com/odigos-io/enterprise-go-instrumentation v1.33.0 h1:jJZ9SI2fAaT4a0O4JsaFTfSfeSze/GlVr8RmD4EyEcw=
-github.com/odigos-io/enterprise-go-instrumentation v1.33.0/go.mod h1:DIVuB+6OZh/0apsL2kIfpBgmaukcM/3g0KdKe9nynYg=
+github.com/odigos-io/enterprise-go-instrumentation v1.34.0 h1:ik1PnpY+iIjOQfPanxr2Y/4uwTJjB2Ecunjt5dXbrL8=
+github.com/odigos-io/enterprise-go-instrumentation v1.34.0/go.mod h1:lgtE7phrHgzm/KcmXRZh+COOlGyfWuFUolU9qN0CmGc=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752 h1:Fv18bWsleIZzGy+SWOuwva3IYlcoEOclDxRy/WnypB8=
 github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752/go.mod h1:J5jQgrjFpdwSS2N924u5suppg1rSDkm536Fb3ZHDFwU=
 github.com/odigos-io/odigos-device-plugin v1.19.8 h1:YsNALk+mZeMVvgvn7FYGUKEPuZizODyJnP17a0ZMgaY=
@@ -329,8 +327,6 @@ github.com/openshift/api v3.9.0+incompatible h1:fJ/KsefYuZAjmrr3+5U9yZIZbTOpVkDD
 github.com/openshift/api v3.9.0+incompatible/go.mod h1:dh9o4Fs58gpFXGSYfnVxGR9PnV53I8TW84pQaJDdGiY=
 github.com/oschwald/maxminddb-golang/v2 v2.2.0 h1:/2khmIiNvFxgfwGxitper3XBJBs5qTCPQ/H1iR9MgBw=
 github.com/oschwald/maxminddb-golang/v2 v2.2.0/go.mod h1:n/ctYVTFYQypkn5uO1CZnTmj8jdQKIVh/LX7gSaIl0w=
-github.com/parca-dev/parca-agent v0.9.1 h1:s5o47uqr0AuZdciqSN8tMNlnuJ3RKXs8ec9onIqO654=
-github.com/parca-dev/parca-agent v0.9.1/go.mod h1:C2xHxXkwdCbs4ahLEiPa1tK8UJZKR2AiaP9ULRrgWzc=
 github.com/pierrec/lz4/v4 v4.1.29 h1:CDQY6qZOLI4DW0Nx6R1vRrifrCeQHnNXkMb0hZWXFjg=
 github.com/pierrec/lz4/v4 v4.1.29/go.mod h1:EoQMVJgeeEOMsCqCzqFm2O0cJvljX2nGZjcRIPL34O4=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=

@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/cilium/ebpf v0.22.0
 	github.com/container-storage-interface/spec v1.10.0
-	github.com/odigos-io/ebpf-core v0.37.0
+	github.com/odigos-io/ebpf-core v0.39.0
 	github.com/odigos-io/ebpf-generic-instrumentation v0.0.14
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.59.0
 	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.59.0
@@ -114,7 +114,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.3 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/goburrow/cache v0.1.4 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gocql/gocql v1.7.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -160,7 +159,6 @@ require (
 	github.com/ohler55/ojg v1.28.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
-	github.com/parca-dev/parca-agent v0.9.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.29 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -290,7 +288,7 @@ require (
 // it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
 // but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
 // for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.33.0
+replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.34.0
 
 replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.39.0-pre3.0.20261103103244-989c24ca083f
 
