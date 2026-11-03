@@ -1,10 +1,11 @@
 name: On-Prem Token Reminders
 
 # Daily sweep over the onprem-token tracker issues: hands Slack the reminders
-# due within the next two days, posts the ones a missed sweep left behind,
-# closes trackers of expired tokens, cancels reminders of trackers closed by
-# hand, and moves tokens within 30 days of expiry to Status "Expires soon" on the
-# "On-prem tokens" org project. See onprem-token-reminders/README.md.
+# due within the next two days, backfills reminders added since a token was
+# registered, posts the ones a missed sweep left behind, closes trackers of
+# expired tokens, cancels reminders of trackers closed by hand, and moves
+# tokens within 30 days of expiry to Status "Expires soon" on the "On-prem
+# tokens" org project. See onprem-token-reminders/README.md.
 
 on:
   schedule:
