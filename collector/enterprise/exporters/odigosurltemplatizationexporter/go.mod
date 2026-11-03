@@ -4,7 +4,7 @@ go 1.26.2
 
 require (
 	github.com/alicebob/miniredis/v2 v2.37.0
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261102082107-a0c14efb74d1
+	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261103103244-989c24ca083f
 	github.com/redis/go-redis/v9 v9.8.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.65.0
