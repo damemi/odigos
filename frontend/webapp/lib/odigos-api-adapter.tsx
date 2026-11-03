@@ -39,6 +39,7 @@ import type {
   Destination,
   EffectiveConfig,
   EnableProfilingResult,
+  DisableProfilingResult,
   ExtendedPodInfo,
   FetchedConfig,
   GatewayInfo,
@@ -102,6 +103,7 @@ import {
   GET_METRICS,
   GET_NAMESPACES_WITH_WORKLOADS,
   GET_PEER_SOURCES,
+  GET_LIVE_TRAFFIC_LEARNING,
   GET_GO_OFFSETS,
   CHECK_GO_OFFSETS_UPDATES,
   UPDATE_GO_OFFSETS,
@@ -175,6 +177,8 @@ import {
   DELETE_INSTRUMENTATION_RULE,
   DELETE_NOISY_OPERATION_RULE,
   ENABLE_SOURCE_PROFILING,
+  DISABLE_SOURCE_PROFILING,
+  CONFIGURE_PROFILING_CACHE,
   PERSIST_NAMESPACES,
   PERSIST_SOURCES,
   PERSIST_SOURCES_AND_NAMESPACES,
@@ -270,6 +274,10 @@ const operations: OdigosApiOperations & { PERSIST_SOURCES_AND_NAMESPACES: { docu
   GET_SOURCE: { document: GET_SOURCE },
   GET_SOURCE_LIBRARIES: { document: GET_SOURCE_LIBRARIES },
   GET_PEER_SOURCES: { document: GET_PEER_SOURCES },
+  GET_LIVE_TRAFFIC_LEARNING: {
+    document: GET_LIVE_TRAFFIC_LEARNING,
+    transformVariables: (vars) => ({ filter: vars }),
+  },
   PERSIST_SOURCES: { document: PERSIST_SOURCES },
   PERSIST_SOURCES_AND_NAMESPACES: { document: PERSIST_SOURCES_AND_NAMESPACES },
   UPDATE_SOURCE: { document: UPDATE_K8S_ACTUAL_SOURCE },
@@ -436,6 +444,16 @@ const operations: OdigosApiOperations & { PERSIST_SOURCES_AND_NAMESPACES: { docu
   ENABLE_SOURCE_PROFILING: {
     document: ENABLE_SOURCE_PROFILING,
     transformResult: (raw: unknown) => (raw as { enableSourceProfiling?: EnableProfilingResult } | null | undefined)?.enableSourceProfiling,
+  },
+
+  CONFIGURE_PROFILING_CACHE: {
+    document: CONFIGURE_PROFILING_CACHE,
+    transformResult: (raw: unknown) => (raw as { configureProfilingCache?: ProfilingSlots } | null | undefined)?.configureProfilingCache,
+  },
+
+  DISABLE_SOURCE_PROFILING: {
+    document: DISABLE_SOURCE_PROFILING,
+    transformResult: (raw: unknown) => (raw as { disableSourceProfiling?: DisableProfilingResult } | null | undefined)?.disableSourceProfiling,
   },
 
   // instrumentation agents — bare-shape slots; flatten the per-field envelope.

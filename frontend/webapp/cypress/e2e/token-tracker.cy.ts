@@ -42,7 +42,7 @@ describe('Token Tracker', () => {
     visitPage(ROUTES.OVERVIEW, () => {
       cy.get('[data-id=token-status]').should('not.exist');
       cy.get(DATA_IDS.MODAL).should('not.exist');
-      cy.get('[data-id=system-drawer]').children().first().click(); // testing that the UI does not crash
+      cy.get('[data-id=system-drawer]').click(); // testing that the UI does not crash
     });
   });
 
@@ -55,7 +55,7 @@ describe('Token Tracker', () => {
         awaitToast({ message: 'The token is about to expire in 1 day.' });
         dismissTokenModal('Token about to expire', 'The token is about to expire in 1 day.');
         cy.get('[data-id=token-status]').should('contain.text', 'The token is about to expire in 1 day.');
-        cy.get('[data-id=system-drawer]').children().first().click(); // testing that the UI does not crash
+        cy.get('[data-id=system-drawer]').click(); // testing that the UI does not crash
       });
     });
   });
@@ -70,7 +70,7 @@ describe('Token Tracker', () => {
         awaitToast({ message: expiredMessage });
         dismissTokenModal('Token expired', expiredMessage);
         cy.get('[data-id=token-status]').should('contain.text', expiredMessage);
-        cy.get('[data-id=system-drawer]').children().first().click(); // testing that the UI does not crash
+        cy.get('[data-id=system-drawer]').click(); // testing that the UI does not crash
       });
     });
   });

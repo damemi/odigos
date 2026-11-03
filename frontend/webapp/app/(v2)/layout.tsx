@@ -4,8 +4,8 @@ import React, { type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { OverviewHeader } from '@/components';
-import { Navbar } from '@odigos/ui-kit/components';
-import { ToastList } from '@odigos/ui-kit/containers';
+import { NavbarNext } from '@odigos/ui-kit/components';
+import { ToastListNext } from '@odigos/ui-kit/containers';
 import OdigosApiAdapter from '@/lib/odigos-api-adapter';
 import { OdigosProvider } from '@odigos/ui-kit/contexts';
 import { getNavbarIcons, INITIAL_CONTEXT, toPlatformType } from '@/utils';
@@ -35,12 +35,12 @@ function InnerLayout({ children }: PropsWithChildren) {
       <ViewportColumn $gap={0}>
         <OverviewHeader />
         <ContentRow $gap={0}>
-          <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, config?.insightsEnabled)} />
+          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname)} />
           {children}
         </ContentRow>
       </ViewportColumn>
 
-      <ToastList />
+      <ToastListNext />
     </OdigosProvider>
   );
 }

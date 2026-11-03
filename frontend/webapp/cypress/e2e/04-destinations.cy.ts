@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES, SELECTED_ENTITIES, TEXTS } from '../constants';
-import { awaitToast, deleteV2Entity, getCrdById, getCrdIds, handleExceptions, updateV2Entity, visitPage, waitForGraphqlOperation } from '../functions';
+import { aliasMutation, awaitToast, deleteV2Entity, getCrdById, getCrdIds, handleExceptions, updateV2Entity, visitPage, waitForGraphqlOperation } from '../functions';
 
 // The number of CRDs that exist in the cluster before running any tests should be 0.
 // Tests will fail if you have existing CRDs in the cluster.
@@ -12,7 +12,11 @@ const destinationIds: string[] = [];
 
 describe('Destinations CRUD', () => {
   beforeEach(() => {
-    cy.intercept('/graphql').as('gql');
+    // The redesigned overview sends many queries, so wait for these mutations by their own alias rather than skipping through '@gql'.
+    cy.intercept('/graphql', (req) => {
+      aliasMutation(req, 'UpdateDestination');
+      aliasMutation(req, 'DeleteDestination');
+    }).as('gql');
     handleExceptions();
   });
 
@@ -63,7 +67,7 @@ describe('Destinations CRUD', () => {
         },
         () => {
           // Wait for the destination to update
-          waitForGraphqlOperation('UpdateDestination').then(() => {
+          cy.wait('@gqlUpdateDestinationMutation', { timeout: 120000 }).then(() => {
             awaitToast({ message: TEXTS.NOTIF_DESTINATION_UPDATED(SELECTED_ENTITIES.DESTINATION.TYPE) });
           });
         },
@@ -94,7 +98,7 @@ describe('Destinations CRUD', () => {
         },
         () => {
           // Wait for the destination to delete
-          waitForGraphqlOperation('DeleteDestination').then(() => {
+          cy.wait('@gqlDeleteDestinationMutation', { timeout: 120000 }).then(() => {
             awaitToast({ message: TEXTS.NOTIF_DESTINATION_DELETED(SELECTED_ENTITIES.DESTINATION.TYPE) }, () => {
               getCrdIds({ namespace, crdName, expectedError: TEXTS.NO_RESOURCES(namespace), expectedLength: 0 });
             });

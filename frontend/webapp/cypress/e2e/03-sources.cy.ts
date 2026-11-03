@@ -1,5 +1,5 @@
 import { CRD_NAMES, DATA_IDS, NAMESPACES, ROUTES, SELECTED_ENTITIES, TEXTS } from '../constants';
-import { awaitToast, clickRetryable, cyExec, findCrdId, getCrdById, getCrdIds, handleExceptions, updateV2Entity, visitPage, waitForCrdCount, waitForGraphqlOperation } from '../functions';
+import { aliasMutation, awaitToast, clickRetryable, cyExec, findCrdId, getCrdById, getCrdIds, handleExceptions, updateV2Entity, visitPage, waitForCrdCount } from '../functions';
 
 // The number of CRDs that exist in the cluster before running any tests should be 0.
 // Tests will fail if you have existing CRDs in the cluster.
@@ -15,7 +15,8 @@ const firstSourceName = SELECTED_ENTITIES.NAMESPACE_SOURCES[0].name;
 
 describe('Sources CRUD', () => {
   beforeEach(() => {
-    cy.intercept('/graphql').as('gql');
+    // The redesigned overview sends many queries, so wait for this mutation by its own alias rather than skipping through '@gql'.
+    cy.intercept('/graphql', (req) => aliasMutation(req, 'UpdateK8sActualSource')).as('gql');
     handleExceptions();
   });
 
@@ -73,7 +74,7 @@ describe('Sources CRUD', () => {
           () => {
             awaitToast({ message: TEXTS.NOTIF_SOURCE_UPDATING });
             // Wait for the source to update
-            waitForGraphqlOperation('UpdateK8sActualSource').then(() => {
+            cy.wait('@gqlUpdateK8sActualSourceMutation', { timeout: 120000 }).then(() => {
               awaitToast({ message: TEXTS.NOTIF_UPDATED });
             });
           },

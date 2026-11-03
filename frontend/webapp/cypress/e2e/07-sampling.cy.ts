@@ -73,7 +73,7 @@ describe('Sampling Rules CRUD', () => {
 
   // ── CREATE: Highly Relevant Operation Rule ───────────────────────────────
 
-  it('Should create a Highly Relevant Operation rule (Error type)', () => {
+  it('Should create a Highly Relevant Operation rule (Duration type)', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
         // Switch to Highly Relevant Operations tab
@@ -86,8 +86,9 @@ describe('Sampling Rules CRUD', () => {
         cy.get('input[name=sampling-input-rule-name]').type(HIGHLY_RELEVANT_RULE_NAME);
         cy.get('input[name=sampling-input-note]').type('Created by Cypress');
 
-        // Select rule type: Error (scrollIntoView needed because the preview section above can overlap)
-        cy.contains('button', 'Error').scrollIntoView().click({ force: true });
+        // Select rule type: Duration. An Error rule on the whole cluster would read as the "Keep All Error Traces" preset,
+        // which isn't listed. (scrollIntoView needed because the preview section above can overlap)
+        cy.get('[data-id=sampling-segment-rule-type-Duration]').scrollIntoView().click({ force: true });
 
         // Keep percentage mode as "keep all" (default for highly relevant)
 
