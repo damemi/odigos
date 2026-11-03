@@ -3,8 +3,9 @@
 //	register  run by the Generate On-Prem Token workflow: records the token in a
 //	          tracker issue and schedules the reminders Slack can already hold.
 //	sweep     run daily: arms reminders that have come inside Slack's scheduling
-//	          two-day window, posts the ones a missed sweep left behind, closes trackers
-//	          of expired tokens and cancels reminders of trackers closed by hand.
+//	          two-day window, backfills reminders added since a token was registered,
+//	          posts the ones a missed sweep left behind, closes trackers of expired
+//	          tokens and cancels reminders of trackers closed by hand.
 //
 // The tracker is one GitHub issue per token, labelled onprem-token, whose body
 // carries the machine state inside an HTML comment. Slack's chat.scheduleMessage
@@ -25,6 +26,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,10 +49,17 @@ const (
 	stateClose = "\n-->"
 )
 
-var reminderOffsets = []struct {
+// offset is one reminder slot, counted back from the token's expiry.
+type offset struct {
 	seconds int64
 	label   string
-}{
+}
+
+// reminderOffsets lists the reminders every token gets, longest lead first.
+// Adding one here is enough: register issues it for new tokens and the daily
+// sweep backfills it into every open tracker.
+var reminderOffsets = []offset{
+	{7 * 86400, "7 days"},
 	{86400, "24 hours"},
 	{3600, "1 hour"},
 }
@@ -235,14 +244,7 @@ func register(cfg config, d deps, slack *slackClient, gh *githubClient, board *b
 		IssuedBy: cfg.issuedBy, RunURL: cfg.runURL, Channel: cfg.slackChannel,
 	}
 	for _, o := range reminderOffsets {
-		r := reminder{OffsetSeconds: o.seconds, Label: o.label, PostAt: exp - o.seconds, Status: statusPending}
-		switch {
-		case !cfg.notify:
-			r.Status = statusMuted
-		case time.Unix(r.PostAt, 0).Before(now.Add(minLead)):
-			r.Status = statusSkipped
-		}
-		t.Reminders = append(t.Reminders, r)
+		t.Reminders = append(t.Reminders, newReminder(o, exp, now, !cfg.notify))
 	}
 
 	if err := gh.ensureLabel(cfg.label); err != nil {
@@ -267,6 +269,44 @@ func register(cfg config, d deps, slack *slackClient, gh *githubClient, board *b
 	}
 	summary := fmt.Sprintf("\n### Slack reminders\nTracker: [#%d](%s) · channel `%s`\n%s\n", issue.Number, issue.HTMLURL, cfg.slackChannel, strings.Join(lines, "\n"))
 	return summary, errors.Join(errs...)
+}
+
+// newReminder builds the reminder for one offset: muted when the token was
+// issued with notify off, skipped when its moment has already passed.
+func newReminder(o offset, exp int64, now time.Time, muted bool) reminder {
+	r := reminder{OffsetSeconds: o.seconds, Label: o.label, PostAt: exp - o.seconds, Status: statusPending}
+	switch {
+	case muted:
+		r.Status = statusMuted
+	case time.Unix(r.PostAt, 0).Before(now.Add(minLead)):
+		r.Status = statusSkipped
+	}
+	return r
+}
+
+// backfill adds the reminders of offsets introduced after a tracker was
+// registered, so tokens already tracked get them too, and returns their labels.
+// A new reminder is muted when the tracker's existing ones are (the token was
+// issued with notify off) and skipped when its moment has already passed,
+// exactly as register would have done: a reminder that did not exist yet is
+// never posted as overdue.
+func backfill(t *tracker, now time.Time) (added []string) {
+	have := map[int64]bool{}
+	muted := len(t.Reminders) > 0
+	for _, r := range t.Reminders {
+		have[r.OffsetSeconds] = true
+		muted = muted && r.Status == statusMuted
+	}
+	for _, o := range reminderOffsets {
+		if !have[o.seconds] {
+			t.Reminders = append(t.Reminders, newReminder(o, t.Exp, now, muted))
+			added = append(added, o.label)
+		}
+	}
+	if len(added) > 0 {
+		sort.SliceStable(t.Reminders, func(i, j int) bool { return t.Reminders[i].OffsetSeconds > t.Reminders[j].OffsetSeconds })
+	}
+	return added
 }
 
 // armReminders schedules every pending reminder due within armWindow,
@@ -372,8 +412,13 @@ func sweep(cfg config, d deps, slack *slackClient, gh *githubClient, board *boar
 			lines = append(lines, fmt.Sprintf("- #%d: %v, left alone", is.Number, err))
 			continue
 		}
+		added := backfill(t, now)
 		changed, rl, newIDs, rerrs := armReminders(t, is, now, slack)
 		errs = append(errs, rerrs...)
+		if len(added) > 0 {
+			changed = true
+			rl = append([]string{fmt.Sprintf("- backfilled the %s reminder(s) added since the token was registered", strings.Join(added, ", "))}, rl...)
+		}
 		if synced, line, err := syncBoard(board, is, t, now); err != nil {
 			errs = append(errs, err)
 		} else if synced {

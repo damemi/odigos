@@ -17,7 +17,8 @@ var t0 = time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 
 const day = 24 * time.Hour
 
-// soon is an expiry whose two reminders both fall inside the 48h arm window.
+// soon is an expiry whose 24-hour and 1-hour reminders both fall inside the 48h
+// arm window; its 7-day reminder is already in the past.
 var soon = t0.Add(30 * time.Hour)
 
 // ---------------------------------------------------------------- fakes
@@ -275,6 +276,20 @@ func statuses(tr *tracker) string {
 	return strings.Join(s, ",")
 }
 
+// rems builds a tracker's reminders for exp in offset order (7 days, 24 hours,
+// 1 hour) with the given statuses; the rest are pending.
+func rems(exp time.Time, st ...string) []reminder {
+	var rs []reminder
+	for i, o := range reminderOffsets {
+		r := reminder{OffsetSeconds: o.seconds, Label: o.label, PostAt: exp.Unix() - o.seconds, Status: statusPending}
+		if i < len(st) {
+			r.Status = st[i]
+		}
+		rs = append(rs, r)
+	}
+	return rs
+}
+
 func seed(h *harness, exp time.Time, state string, rs ...reminder) *fakeIssue {
 	tr := tracker{Audience: "Seeded", Exp: exp.Unix(), IssuedBy: "x", RunURL: "u", Channel: "C123", Reminders: rs}
 	return h.gh.add(&fakeIssue{Title: issueTitle(tr), Body: renderBody(tr), State: state, Labels: []string{"onprem-token"}})
@@ -309,7 +324,7 @@ func TestRegisterSchedulesWhenDueSoon(t *testing.T) {
 		t.Fatalf("issue = %+v", is)
 	}
 	tr := h.state(t, 1)
-	if statuses(tr) != "scheduled,scheduled" || tr.Reminders[0].ScheduledMessageID != "Q1" || tr.Reminders[1].ScheduledMessageID != "Q2" {
+	if statuses(tr) != "skipped,scheduled,scheduled" || tr.Reminders[1].ScheduledMessageID != "Q1" || tr.Reminders[2].ScheduledMessageID != "Q2" {
 		t.Fatalf("state = %+v", tr.Reminders)
 	}
 	if tr.IssuedAt != t0.Add(-time.Hour).Unix() || !strings.Contains(is.Body, "| Issued | 2026-10-25 11:00 UTC") {
@@ -332,7 +347,7 @@ func TestRegisterNotDueSoonStaysPending(t *testing.T) {
 	if len(h.slack.calls) != 0 {
 		t.Fatalf("expected no slack calls, got %v", h.slack.methods())
 	}
-	if statuses(h.state(t, 1)) != "pending,pending" {
+	if statuses(h.state(t, 1)) != "pending,pending,pending" {
 		t.Fatalf("state = %s", statuses(h.state(t, 1)))
 	}
 	if !strings.Contains(summary, "daily sweep hands it to Slack") {
@@ -342,12 +357,13 @@ func TestRegisterNotDueSoonStaysPending(t *testing.T) {
 
 func TestRegisterWindowBoundary(t *testing.T) {
 	h := newHarness(t)
-	// 24h reminder lands inside the 48h window (+36h), the 1h reminder outside it (+59h).
+	// 24h reminder lands inside the 48h window (+36h), the 1h reminder outside it
+	// (+59h); the 7-day one is already past.
 	exp := t0.Add(60 * time.Hour)
 	if _, err := h.register(t, exp, ""); err != nil {
 		t.Fatal(err)
 	}
-	if statuses(h.state(t, 1)) != "scheduled,pending" {
+	if statuses(h.state(t, 1)) != "skipped,scheduled,pending" {
 		t.Fatalf("state = %s", statuses(h.state(t, 1)))
 	}
 }
@@ -358,7 +374,7 @@ func TestRegisterPastRemindersSkipped(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(h.slack.calls) != 0 || statuses(h.state(t, 1)) != "skipped,skipped" {
+	if len(h.slack.calls) != 0 || statuses(h.state(t, 1)) != "skipped,skipped,skipped" {
 		t.Fatalf("calls=%v state=%s", h.slack.methods(), statuses(h.state(t, 1)))
 	}
 	if !strings.Contains(summary, "already in the past") {
@@ -408,7 +424,7 @@ func TestRegisterSurfacesSlackFailureButKeepsTracker(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "channel_not_found") {
 		t.Fatalf("err = %v", err)
 	}
-	if statuses(h.state(t, 1)) != "pending,pending" {
+	if statuses(h.state(t, 1)) != "skipped,pending,pending" {
 		t.Fatalf("tracker should keep the reminders pending for the sweep, got %s", statuses(h.state(t, 1)))
 	}
 }
@@ -417,14 +433,10 @@ func TestRegisterSurfacesSlackFailureButKeepsTracker(t *testing.T) {
 
 func TestSweepArmsPendingDueSoon(t *testing.T) {
 	h := newHarness(t)
-	exp := t0.Add(40 * time.Hour) // 24h reminder at +16h, 1h reminder at +39h
-	seed(h, exp, "open",
-		reminder{OffsetSeconds: 86400, Label: "24 hours", PostAt: exp.Add(-day).Unix(), Status: statusPending},
-		reminder{OffsetSeconds: 3600, Label: "1 hour", PostAt: exp.Add(-time.Hour).Unix(), Status: statusPending})
+	exp := t0.Add(40 * time.Hour) // 24h reminder at +16h, 1h reminder at +39h; the 7-day one was skipped at registration
+	seed(h, exp, "open", rems(exp, statusSkipped)...)
 	far := t0.Add(10 * day) // not due for days: must stay pending
-	seed(h, far, "open",
-		reminder{OffsetSeconds: 86400, Label: "24 hours", PostAt: far.Add(-day).Unix(), Status: statusPending},
-		reminder{OffsetSeconds: 3600, Label: "1 hour", PostAt: far.Add(-time.Hour).Unix(), Status: statusPending})
+	seed(h, far, "open", rems(far)...)
 	summary, err := h.run(h.cfg("sweep"))
 	if err != nil {
 		t.Fatal(err)
@@ -432,7 +444,7 @@ func TestSweepArmsPendingDueSoon(t *testing.T) {
 	if got := h.slack.methods(); strings.Join(got, ",") != "chat.scheduleMessage,chat.scheduleMessage" {
 		t.Fatalf("slack calls = %v", got)
 	}
-	if statuses(h.state(t, 1)) != "scheduled,scheduled" || statuses(h.state(t, 2)) != "pending,pending" {
+	if statuses(h.state(t, 1)) != "skipped,scheduled,scheduled" || statuses(h.state(t, 2)) != "pending,pending,pending" {
 		t.Fatalf("states = %s / %s", statuses(h.state(t, 1)), statuses(h.state(t, 2)))
 	}
 	if !strings.Contains(summary, "#1 Seeded") || strings.Contains(summary, "#2 Seeded") {
@@ -443,9 +455,7 @@ func TestSweepArmsPendingDueSoon(t *testing.T) {
 func TestSweepPostsOverduePending(t *testing.T) {
 	h := newHarness(t)
 	exp := t0.Add(5 * time.Hour) // 24h reminder is overdue, 1h reminder still ahead
-	seed(h, exp, "open",
-		reminder{OffsetSeconds: 86400, Label: "24 hours", PostAt: exp.Add(-day).Unix(), Status: statusPending},
-		reminder{OffsetSeconds: 3600, Label: "1 hour", PostAt: exp.Add(-time.Hour).Unix(), Status: statusPending})
+	seed(h, exp, "open", rems(exp, statusSkipped)...)
 	if _, err := h.run(h.cfg("sweep")); err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +465,7 @@ func TestSweepPostsOverduePending(t *testing.T) {
 	if text := h.slack.calls[0].Body["text"].(string); !strings.Contains(text, "expires in about *5 hours*") {
 		t.Fatalf("late text = %s", text)
 	}
-	if statuses(h.state(t, 1)) != "sent,scheduled" {
+	if statuses(h.state(t, 1)) != "skipped,sent,scheduled" {
 		t.Fatalf("state = %s", statuses(h.state(t, 1)))
 	}
 }
@@ -463,9 +473,9 @@ func TestSweepPostsOverduePending(t *testing.T) {
 func TestSweepClosesExpired(t *testing.T) {
 	h := newHarness(t)
 	exp := t0.Add(-2 * time.Hour)
-	seed(h, exp, "open",
-		reminder{OffsetSeconds: 86400, Label: "24 hours", PostAt: exp.Add(-day).Unix(), Status: statusScheduled, ScheduledMessageID: "Q9"},
-		reminder{OffsetSeconds: 3600, Label: "1 hour", PostAt: exp.Add(-time.Hour).Unix(), Status: statusPending})
+	rs := rems(exp, statusSent, statusScheduled)
+	rs[1].ScheduledMessageID = "Q9"
+	seed(h, exp, "open", rs...)
 	summary, err := h.run(h.cfg("sweep"))
 	if err != nil {
 		t.Fatal(err)
@@ -477,7 +487,7 @@ func TestSweepClosesExpired(t *testing.T) {
 	if is.State != "closed" || len(is.Comments) != 1 || !strings.Contains(is.Comments[0], "Token expired on") {
 		t.Fatalf("issue = %+v", is)
 	}
-	if statuses(h.state(t, 1)) != "scheduled,skipped" || !strings.Contains(summary, "tracker closed") {
+	if statuses(h.state(t, 1)) != "sent,scheduled,skipped" || !strings.Contains(summary, "tracker closed") {
 		t.Fatalf("state=%s summary=%s", statuses(h.state(t, 1)), summary)
 	}
 }
@@ -485,20 +495,20 @@ func TestSweepClosesExpired(t *testing.T) {
 func TestSweepCancelsTrackerClosedByHand(t *testing.T) {
 	h := newHarness(t)
 	exp := t0.Add(10 * day)
-	seed(h, exp, "closed",
-		reminder{OffsetSeconds: 86400, Label: "24 hours", PostAt: exp.Add(-day).Unix(), Status: statusScheduled, ScheduledMessageID: "Q7"},
-		reminder{OffsetSeconds: 3600, Label: "1 hour", PostAt: exp.Add(-time.Hour).Unix(), Status: statusScheduled, ScheduledMessageID: "Q8"})
+	rs := rems(exp, statusScheduled, statusScheduled, statusScheduled)
+	rs[0].ScheduledMessageID, rs[1].ScheduledMessageID, rs[2].ScheduledMessageID = "Q6", "Q7", "Q8"
+	seed(h, exp, "closed", rs...)
 	summary, err := h.run(h.cfg("sweep"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := h.slack.methods(); strings.Join(got, ",") != "chat.deleteScheduledMessage,chat.deleteScheduledMessage" {
+	if got := h.slack.methods(); strings.Join(got, ",") != "chat.deleteScheduledMessage,chat.deleteScheduledMessage,chat.deleteScheduledMessage" {
 		t.Fatalf("slack calls = %v", got)
 	}
-	if id := h.slack.calls[0].Body["scheduled_message_id"]; id != "Q7" {
-		t.Fatalf("deleted %v, want Q7", id)
+	if id := h.slack.calls[0].Body["scheduled_message_id"]; id != "Q6" {
+		t.Fatalf("deleted %v, want Q6", id)
 	}
-	if statuses(h.state(t, 1)) != "cancelled,cancelled" || !strings.Contains(summary, "closed by hand") {
+	if statuses(h.state(t, 1)) != "cancelled,cancelled,cancelled" || !strings.Contains(summary, "closed by hand") {
 		t.Fatalf("state=%s summary=%s", statuses(h.state(t, 1)), summary)
 	}
 }
@@ -524,13 +534,15 @@ func TestSweepContinuesPastOneFailure(t *testing.T) {
 	exp := soon
 	h.slack.failError, h.slack.failN = "channel_not_found", 1
 	for i := 0; i < 2; i++ {
-		seed(h, exp, "open", reminder{OffsetSeconds: 86400, Label: "24 hours", PostAt: exp.Add(-day).Unix(), Status: statusPending})
+		rs := rems(exp, statusSkipped, statusPending, statusScheduled) // only the 24h reminder is left to arm
+		rs[2].ScheduledMessageID = "Q0"
+		seed(h, exp, "open", rs...)
 	}
 	_, err := h.run(h.cfg("sweep"))
 	if err == nil || !strings.Contains(err.Error(), "channel_not_found") {
 		t.Fatalf("err = %v", err)
 	}
-	if statuses(h.state(t, 1)) != "pending" || statuses(h.state(t, 2)) != "scheduled" {
+	if statuses(h.state(t, 1)) != "skipped,pending,scheduled" || statuses(h.state(t, 2)) != "skipped,scheduled,scheduled" {
 		t.Fatalf("states = %s / %s", statuses(h.state(t, 1)), statuses(h.state(t, 2)))
 	}
 }
@@ -549,7 +561,7 @@ func TestRegisterRollsBackWhenTrackerUpdateFails(t *testing.T) {
 	if ids := []any{h.slack.calls[2].Body["scheduled_message_id"], h.slack.calls[3].Body["scheduled_message_id"]}; ids[0] != "Q1" || ids[1] != "Q2" {
 		t.Fatalf("rolled back %v", ids)
 	}
-	if statuses(h.state(t, 1)) != "pending,pending" {
+	if statuses(h.state(t, 1)) != "skipped,pending,pending" {
 		t.Fatalf("tracker should still read pending, got %s", statuses(h.state(t, 1)))
 	}
 }
@@ -563,7 +575,7 @@ func TestRegisterNotifyOffTracksButMutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(h.slack.calls) != 0 || statuses(h.state(t, 1)) != "muted,muted" {
+	if len(h.slack.calls) != 0 || statuses(h.state(t, 1)) != "muted,muted,muted" {
 		t.Fatalf("calls=%v state=%s", h.slack.methods(), statuses(h.state(t, 1)))
 	}
 	if !strings.Contains(summary, "muted") {
@@ -573,7 +585,7 @@ func TestRegisterNotifyOffTracksButMutes(t *testing.T) {
 	if _, err := h.run(h.cfg("sweep")); err != nil {
 		t.Fatal(err)
 	}
-	if len(h.slack.calls) != 0 || statuses(h.state(t, 1)) != "muted,muted" {
+	if len(h.slack.calls) != 0 || statuses(h.state(t, 1)) != "muted,muted,muted" {
 		t.Fatalf("sweep touched muted reminders: calls=%v state=%s", h.slack.methods(), statuses(h.state(t, 1)))
 	}
 }
@@ -605,7 +617,9 @@ func TestRegisterTwiceReusesExistingLabel(t *testing.T) {
 func TestSweepRollsBackWhenTrackerUpdateFails(t *testing.T) {
 	h := newHarness(t)
 	exp := soon
-	seed(h, exp, "open", reminder{OffsetSeconds: 86400, Label: "24 hours", PostAt: exp.Add(-day).Unix(), Status: statusPending})
+	rs := rems(exp, statusSkipped, statusPending, statusScheduled) // only the 24h reminder is left to arm
+	rs[2].ScheduledMessageID = "Q0"
+	seed(h, exp, "open", rs...)
 	h.gh.failPatch = true
 	_, err := h.run(h.cfg("sweep"))
 	if err == nil || !strings.Contains(err.Error(), "HTTP 502") {
@@ -639,7 +653,7 @@ func TestSlackDoesNotRetryRestrictedTooMany(t *testing.T) {
 	if len(h.slack.calls) != 2 || len(h.slept) != 0 {
 		t.Fatalf("calls=%d slept=%d; must fail fast", len(h.slack.calls), len(h.slept))
 	}
-	if statuses(h.state(t, 1)) != "pending,pending" {
+	if statuses(h.state(t, 1)) != "skipped,pending,pending" {
 		t.Fatalf("state = %s", statuses(h.state(t, 1)))
 	}
 }
@@ -666,6 +680,68 @@ func TestParseBodyToleratesCRLF(t *testing.T) {
 	}
 	if got.Audience != "Acme" || statuses(got) != "pending" {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestRegisterSevenDaysAhead(t *testing.T) {
+	h := newHarness(t)
+	exp := t0.Add(7*day + 10*time.Hour) // the 7-day reminder lands inside the window (+10h); the others wait for the sweep
+	if _, err := h.register(t, exp, ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.slack.methods(); strings.Join(got, ",") != "chat.scheduleMessage" {
+		t.Fatalf("slack calls = %v", got)
+	}
+	if got := h.slack.calls[0].Body["post_at"].(float64); int64(got) != exp.Add(-7*day).Unix() {
+		t.Fatalf("7d post_at = %v, want %d", got, exp.Add(-7*day).Unix())
+	}
+	if text := h.slack.calls[0].Body["text"].(string); !strings.Contains(text, "expires in *7 days*") {
+		t.Fatalf("text = %s", text)
+	}
+	if statuses(h.state(t, 1)) != "scheduled,pending,pending" {
+		t.Fatalf("state = %s", statuses(h.state(t, 1)))
+	}
+}
+
+func TestSweepBackfillsRemindersAddedSinceRegistration(t *testing.T) {
+	h := newHarness(t)
+	// What trackers looked like before the 7-day reminder existed.
+	old := func(exp time.Time, st string) []reminder {
+		return []reminder{
+			{OffsetSeconds: 86400, Label: "24 hours", PostAt: exp.Add(-day).Unix(), Status: st},
+			{OffsetSeconds: 3600, Label: "1 hour", PostAt: exp.Add(-time.Hour).Unix(), Status: st},
+		}
+	}
+	far, near := t0.Add(10*day), t0.Add(40*time.Hour)
+	seed(h, far, "open", old(far, statusPending)...)     // #1: the 7-day reminder is 3 days out, pending
+	seed(h, near, "open", old(near, statusPending)...)   // #2: its moment has passed: skipped, never posted as overdue
+	seed(h, far, "open", old(far, statusMuted)...)       // #3: issued with notify off: muted
+	seed(h, far, "closed", old(far, statusCancelled)...) // #4: closed trackers are left alone
+	summary, err := h.run(h.cfg("sweep"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := h.slack.methods(); strings.Join(got, ",") != "chat.scheduleMessage,chat.scheduleMessage" { // #2's 24h and 1h only
+		t.Fatalf("slack calls = %v", got)
+	}
+	for n, want := range map[int]string{1: "pending,pending,pending", 2: "skipped,scheduled,scheduled", 3: "muted,muted,muted", 4: "cancelled,cancelled"} {
+		if got := statuses(h.state(t, n)); got != want {
+			t.Errorf("#%d = %s, want %s", n, got, want)
+		}
+	}
+	if r := h.state(t, 1).Reminders[0]; r.Label != "7 days" || r.PostAt != far.Add(-7*day).Unix() {
+		t.Fatalf("backfilled reminder = %+v", r)
+	}
+	if !strings.Contains(summary, "#1 Seeded") || !strings.Contains(summary, "backfilled the 7 days reminder") {
+		t.Fatalf("summary = %s", summary)
+	}
+	// The next sweep has nothing left to add.
+	before := len(h.slack.calls)
+	if summary, err = h.run(h.cfg("sweep")); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.slack.calls) != before || strings.Contains(summary, "#1 Seeded") {
+		t.Fatalf("second sweep changed something: calls=%v summary=%s", h.slack.methods(), summary)
 	}
 }
 
