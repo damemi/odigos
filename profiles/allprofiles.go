@@ -30,6 +30,7 @@ var AllProfiles = []profile.Profile{
 
 	instrumentation.AllowConcurrentAgents,
 	instrumentation.EbpfLogCaptureProfile,
+	instrumentation.InstrumentationV2Profile,
 	instrumentation.JavaEbpfInstrumentationsProfile,
 	instrumentation.JavaEnterpriseProfile,
 	instrumentation.JavaNativeInstrumentationsProfile,

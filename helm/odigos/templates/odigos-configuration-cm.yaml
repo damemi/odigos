@@ -236,12 +236,19 @@ data:
         {{- end }}
         {{- end }}
     {{- end }}
+    {{- $profiles := list }}
     {{- if .Values.profiles }}
       {{- if not (kindIs "slice" .Values.profiles) }}
         {{- fail "Invalid 'profiles' value: must be a list. Example (YAML): profiles: [PROFILE_NAME]  |  CLI: --set profiles={PROFILE_NAME}" }}
       {{- end }}
+      {{- $profiles = .Values.profiles }}
+    {{- end }}
+    {{- if and (eq (toString .Values.instrumentationVersion) "v2") (not (has "instrumentation-v2" $profiles)) }}
+      {{- $profiles = append $profiles "instrumentation-v2" }}
+    {{- end }}
+    {{- if $profiles }}
     profiles:
-      {{- toYaml .Values.profiles | nindent 6 }}
+      {{- toYaml $profiles | nindent 6 }}
     {{- end }}
     telemetryEnabled: {{ .Values.telemetry.enabled }}
     openshiftEnabled: {{ .Values.openshift.enabled }}
