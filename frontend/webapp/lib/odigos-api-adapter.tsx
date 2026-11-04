@@ -16,6 +16,7 @@
  *   `export default function Page() { return <Overview metrics={…} />; }`
  */
 
+import type { DocumentNode } from '@apollo/client';
 import React, { type FC, type PropsWithChildren, useCallback, useEffect, useMemo, useState } from 'react';
 import { useConfig, useCSRF } from '@/hooks';
 import { CenterThis, Loader } from '@odigos/ui-kit/components';
@@ -38,11 +39,16 @@ import type {
   Destination,
   EffectiveConfig,
   EnableProfilingResult,
+  DisableProfilingResult,
   ExtendedPodInfo,
   FetchedConfig,
   GatewayInfo,
   GoOffsets,
   GoOffsetsUpdateCheck,
+  InsightsIntegration,
+  InsightsIntegrationDescriptor,
+  InsightsDelivery,
+  InsightsDeliveryAttempt,
   InsightsAnomalyIssue,
   InsightsAnomalySummary,
   InsightsBaselineClass,
@@ -97,6 +103,7 @@ import {
   GET_METRICS,
   GET_NAMESPACES_WITH_WORKLOADS,
   GET_PEER_SOURCES,
+  GET_LIVE_TRAFFIC_LEARNING,
   GET_GO_OFFSETS,
   CHECK_GO_OFFSETS_UPDATES,
   UPDATE_GO_OFFSETS,
@@ -120,6 +127,17 @@ import {
   GET_NODE_COLLECTOR_INFO,
   GET_NODE_COLLECTOR_PODS,
   GET_COLLECTOR_POD_INFO,
+  GET_INSIGHTS_INTEGRATION_CATALOG,
+  GET_INSIGHTS_INTEGRATIONS,
+  GET_INSIGHTS_INTEGRATION,
+  GET_INSIGHTS_INTEGRATION_DELIVERIES,
+  GET_INSIGHTS_INTEGRATION_ATTEMPTS,
+  GET_INSIGHTS_FINDING_DELIVERIES,
+  CREATE_INSIGHTS_INTEGRATION,
+  UPDATE_INSIGHTS_INTEGRATION,
+  DELETE_INSIGHTS_INTEGRATION,
+  TEST_INSIGHTS_INTEGRATION,
+  RETRY_INSIGHTS_INTEGRATION_DELIVERIES,
   GET_INSIGHTS_SERVICES,
   GET_INSIGHTS_SERVICE_NAMES,
   GET_INSIGHTS_SERVICE_PROFILE,
@@ -161,8 +179,11 @@ import {
   DELETE_INSTRUMENTATION_RULE,
   DELETE_NOISY_OPERATION_RULE,
   ENABLE_SOURCE_PROFILING,
+  DISABLE_SOURCE_PROFILING,
+  CONFIGURE_PROFILING_CACHE,
   PERSIST_NAMESPACES,
   PERSIST_SOURCES,
+  PERSIST_SOURCES_AND_NAMESPACES,
   RECOVER_FROM_ROLLBACK,
   RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS,
   RESTART_POD,
@@ -246,7 +267,8 @@ const sanitizeDestinationsResult = (raw: GetDestinationsData | null | undefined)
 
 // Stable operations map — referentially constant so the kit's runner doesn't
 // rebuild memoized callbacks on every render.
-const operations: OdigosApiOperations = {
+// PERSIST_SOURCES_AND_NAMESPACES is not in the pinned @odigos/ui-kit types yet; drop the intersection once the kit is bumped.
+const operations: OdigosApiOperations & { PERSIST_SOURCES_AND_NAMESPACES: { document: DocumentNode } } = {
   // sources / workloads
   GET_WORKLOADS: { document: GET_WORKLOADS },
   GET_WORKLOADS_BY_IDS: { document: GET_WORKLOADS_BY_IDS },
@@ -256,7 +278,12 @@ const operations: OdigosApiOperations = {
   GET_SOURCE: { document: GET_SOURCE },
   GET_SOURCE_LIBRARIES: { document: GET_SOURCE_LIBRARIES },
   GET_PEER_SOURCES: { document: GET_PEER_SOURCES },
+  GET_LIVE_TRAFFIC_LEARNING: {
+    document: GET_LIVE_TRAFFIC_LEARNING,
+    transformVariables: (vars) => ({ filter: vars }),
+  },
   PERSIST_SOURCES: { document: PERSIST_SOURCES },
+  PERSIST_SOURCES_AND_NAMESPACES: { document: PERSIST_SOURCES_AND_NAMESPACES },
   UPDATE_SOURCE: { document: UPDATE_K8S_ACTUAL_SOURCE },
   RESTART_WORKLOADS: { document: RESTART_WORKLOADS },
   RESTART_POD: { document: RESTART_POD },
@@ -423,6 +450,16 @@ const operations: OdigosApiOperations = {
     transformResult: (raw: unknown) => (raw as { enableSourceProfiling?: EnableProfilingResult } | null | undefined)?.enableSourceProfiling,
   },
 
+  CONFIGURE_PROFILING_CACHE: {
+    document: CONFIGURE_PROFILING_CACHE,
+    transformResult: (raw: unknown) => (raw as { configureProfilingCache?: ProfilingSlots } | null | undefined)?.configureProfilingCache,
+  },
+
+  DISABLE_SOURCE_PROFILING: {
+    document: DISABLE_SOURCE_PROFILING,
+    transformResult: (raw: unknown) => (raw as { disableSourceProfiling?: DisableProfilingResult } | null | undefined)?.disableSourceProfiling,
+  },
+
   // instrumentation agents — bare-shape slots; flatten the per-field envelope.
   GET_INSTRUMENTATION_AGENTS: {
     document: GET_INSTRUMENTATION_AGENTS,
@@ -510,6 +547,50 @@ const operations: OdigosApiOperations = {
   UPDATE_LOCAL_UI_SAMPLING_CONFIG: { document: UPDATE_LOCAL_UI_SAMPLING_CONFIG },
 
   // insights — wire nests under `insights { … }`; kit slots are bare.
+  GET_INSIGHTS_INTEGRATION_CATALOG: {
+    document: GET_INSIGHTS_INTEGRATION_CATALOG,
+    transformResult: (raw: unknown) => (raw as { insights?: { integrationCatalog?: InsightsIntegrationDescriptor[] } } | null | undefined)?.insights?.integrationCatalog ?? [],
+  },
+  GET_INSIGHTS_INTEGRATIONS: {
+    document: GET_INSIGHTS_INTEGRATIONS,
+    transformResult: (raw: unknown) => (raw as { insights?: { integrations?: InsightsIntegration[] } } | null | undefined)?.insights?.integrations ?? [],
+  },
+  GET_INSIGHTS_INTEGRATION: {
+    document: GET_INSIGHTS_INTEGRATION,
+    transformResult: (raw: unknown) => (raw as { insights?: { integration?: InsightsIntegration } } | null | undefined)?.insights?.integration,
+  },
+  GET_INSIGHTS_INTEGRATION_DELIVERIES: {
+    document: GET_INSIGHTS_INTEGRATION_DELIVERIES,
+    transformResult: (raw: unknown) => (raw as { insights?: { integrationDeliveries?: InsightsDelivery[] } } | null | undefined)?.insights?.integrationDeliveries ?? [],
+  },
+  GET_INSIGHTS_INTEGRATION_ATTEMPTS: {
+    document: GET_INSIGHTS_INTEGRATION_ATTEMPTS,
+    transformResult: (raw: unknown) => (raw as { insights?: { integrationAttempts?: InsightsDeliveryAttempt[] } } | null | undefined)?.insights?.integrationAttempts ?? [],
+  },
+  GET_INSIGHTS_FINDING_DELIVERIES: {
+    document: GET_INSIGHTS_FINDING_DELIVERIES,
+    transformResult: (raw: unknown) => (raw as { insights?: { findingDeliveries?: InsightsDelivery[] } } | null | undefined)?.insights?.findingDeliveries ?? [],
+  },
+  CREATE_INSIGHTS_INTEGRATION: {
+    document: CREATE_INSIGHTS_INTEGRATION,
+    transformResult: (raw: unknown) => (raw as { createInsightsIntegration?: InsightsIntegration } | null | undefined)?.createInsightsIntegration,
+  },
+  UPDATE_INSIGHTS_INTEGRATION: {
+    document: UPDATE_INSIGHTS_INTEGRATION,
+    transformResult: (raw: unknown) => (raw as { updateInsightsIntegration?: InsightsIntegration } | null | undefined)?.updateInsightsIntegration,
+  },
+  DELETE_INSIGHTS_INTEGRATION: {
+    document: DELETE_INSIGHTS_INTEGRATION,
+    transformResult: (raw: unknown) => (raw as { deleteInsightsIntegration?: boolean } | null | undefined)?.deleteInsightsIntegration ?? false,
+  },
+  TEST_INSIGHTS_INTEGRATION: {
+    document: TEST_INSIGHTS_INTEGRATION,
+    transformResult: (raw: unknown) => (raw as { testInsightsIntegration?: boolean } | null | undefined)?.testInsightsIntegration ?? false,
+  },
+  RETRY_INSIGHTS_INTEGRATION_DELIVERIES: {
+    document: RETRY_INSIGHTS_INTEGRATION_DELIVERIES,
+    transformResult: (raw: unknown) => (raw as { retryInsightsIntegrationDeliveries?: boolean } | null | undefined)?.retryInsightsIntegrationDeliveries ?? false,
+  },
   GET_INSIGHTS_SERVICES: {
     document: GET_INSIGHTS_SERVICES,
     transformResult: (raw: unknown) => (raw as { insights?: { services?: InsightsServiceStat[] } } | null | undefined)?.insights?.services ?? [],

@@ -22,7 +22,6 @@ scripts/
 hooks/
 own-observability/
 tests/
-tests-infrastructure/
 
 # Local build / test artifacts
 **/bin/

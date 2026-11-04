@@ -80,6 +80,17 @@ export const CREATE_INSTRUMENTATION_RULE = gql`
         }
       }
       networkMetrics
+      kernelTraces {
+        filesystem {
+          enabled
+        }
+        subprocesses {
+          recordCommandArgs
+        }
+        cpuDelay {
+          enabled
+        }
+      }
     }
   }
 `;
@@ -164,6 +175,17 @@ export const UPDATE_INSTRUMENTATION_RULE = gql`
         }
       }
       networkMetrics
+      kernelTraces {
+        filesystem {
+          enabled
+        }
+        subprocesses {
+          recordCommandArgs
+        }
+        cpuDelay {
+          enabled
+        }
+      }
     }
   }
 `;

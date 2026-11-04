@@ -16,6 +16,17 @@ const (
 	CentralProxyImage                  = "odigos-enterprise-central-proxy"
 )
 
+// Contract between central-proxy and the in-cluster UI for admin writes in
+// read-only mode: the UI honors the admin override header only when the
+// request also carries central-proxy's projected ServiceAccount token, which
+// it verifies with a TokenReview for the UI token audience.
+const (
+	CentralProxyAdminOverrideHeader = "X-Odigos-Admin-Allow"
+	CentralProxyUITokenHeader       = "X-Odigos-Proxy-Token"
+	CentralProxyUITokenPath         = "/var/run/secrets/odigos/ui-token/token"
+	CentralProxyUITokenAudience     = "odigos-ui"
+)
+
 const (
 	// Resource settings for central components
 	CentralCPURequest    = "100m"

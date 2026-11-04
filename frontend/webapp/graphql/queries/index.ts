@@ -11,6 +11,7 @@ export * from './k8s-manifest';
 export * from './metrics';
 export * from './pipeline-collectors';
 export * from './peer-sources';
+export * from './live-traffic-learning';
 export * from './profiling';
 export * from './service-map';
 export * from './source';
@@ -19,3 +20,5 @@ export * from './recommendations';
 export * from './sampling';
 export * from './insights';
 export * from './workload';
+
+export * from './insights-integrations';

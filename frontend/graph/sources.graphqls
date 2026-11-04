@@ -66,6 +66,8 @@ input PersistNamespaceSourceInput {
   kind: K8sResourceKind!
   selected: Boolean!
   currentStreamName: String!
+  # with selected false: true creates or keeps a disabled Source, false removes the workload Source so it follows its namespace
+  disableInstrumentation: Boolean
 }
 
 input PatchSourceRequestInput {
@@ -123,7 +125,7 @@ extend type Query {
 
 extend type Mutation {
   persistK8sNamespaces(namespaces: [PersistNamespaceItemInput!]!): Boolean!
-  persistK8sSources(sources: [PersistNamespaceSourceInput!]!): Boolean!
+  persistK8sSources(sources: [PersistNamespaceSourceInput!]!, namespaces: [PersistNamespaceItemInput!]): Boolean!
   updateK8sActualSource(
     sourceId: K8sSourceId!
     patchSourceRequest: PatchSourceRequestInput!

@@ -158,6 +158,9 @@ true
 {{- if and (include "odigos.interrogationEnabled" .) (not (has "insights" $profiles)) -}}
 {{- $profiles = prepend $profiles "insights" -}}
 {{- end -}}
+{{- if and (eq (toString .Values.instrumentationVersion) "v2") (not (has "instrumentation-v2" $profiles)) -}}
+{{- $profiles = append $profiles "instrumentation-v2" -}}
+{{- end -}}
 {{- if $profiles -}}
 {{- toYaml $profiles -}}
 {{- end -}}

@@ -107,6 +107,17 @@ export const GET_INSTRUMENTATION_RULES = gql`
           }
         }
         networkMetrics
+        kernelTraces {
+          filesystem {
+            enabled
+          }
+          subprocesses {
+            recordCommandArgs
+          }
+          cpuDelay {
+            enabled
+          }
+        }
       }
     }
   }

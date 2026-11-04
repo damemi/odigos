@@ -12,6 +12,8 @@ import (
 	"github.com/odigos-io/odigos/common"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/distros"
+	"github.com/odigos-io/odigos/distros/distro"
+	k8slogger "github.com/odigos-io/odigos/k8sutils/pkg/logger"
 	sourceutils "github.com/odigos-io/odigos/k8sutils/pkg/source"
 	"github.com/odigos-io/odigos/k8sutils/pkg/utils"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
@@ -54,7 +56,7 @@ func Do(ctx context.Context, c client.Client, ic *odigosv1alpha1.Instrumentation
 	if configErr != nil {
 		return RolloutResult{}, configErr
 	}
-	logger := commonlogger.FromContext(ctx)
+	logger := k8slogger.FromContext(ctx)
 	workloadObj := workload.ClientObjectFromWorkloadKind(pw.Kind)
 	getErr := c.Get(ctx, client.ObjectKey{Name: pw.Name, Namespace: pw.Namespace}, workloadObj)
 	if getErr != nil {
@@ -153,11 +155,19 @@ func Do(ctx context.Context, c client.Client, ic *odigosv1alpha1.Instrumentation
 	}
 
 	if ic.Spec.PodManifestInjectionOptional {
-		// all distributions used by this workload do not require a restart
-		// thus, no rollout is needed
-		rolloutConcurrencyLimiter.ReleaseWorkloadRolloutSlot(WorkloadKey(pw))
-		changed := meta.SetStatusCondition(&ic.Status.Conditions, conditionRestartNotRequiredForDistro)
-		return RolloutResult{StatusChanged: changed}, nil
+		// all distributions used by this workload do not require a restart.
+		// pods created for an earlier configuration may still run an agent that did, and only a
+		// restart removes it: those go through the rollout below, once, like any other agents change.
+		replaced, replacedErr := podsRunReplacedAgent(ctx, c, workloadObj, ic, conf, distroProvider)
+		if replacedErr != nil {
+			logger.Error(replacedErr, "failed to check workload pods for replaced agents")
+		}
+		if !replaced {
+			// thus, no rollout is needed
+			rolloutConcurrencyLimiter.ReleaseWorkloadRolloutSlot(WorkloadKey(pw))
+			changed := meta.SetStatusCondition(&ic.Status.Conditions, conditionRestartNotRequiredForDistro)
+			return RolloutResult{StatusChanged: changed}, nil
+		}
 	}
 
 	if isAutomaticRolloutDisabled {
@@ -308,7 +318,7 @@ func Do(ctx context.Context, c client.Client, ic *odigosv1alpha1.Instrumentation
 // https://github.com/kubernetes/kubectl/blob/master/pkg/polymorphichelpers/objectrestarter.go#L32
 func rolloutRestartWorkload(ctx context.Context, workloadObj client.Object, c client.Client, ts time.Time) error {
 
-	logger := commonlogger.FromContext(ctx)
+	logger := k8slogger.FromContext(ctx)
 
 	patch := []byte(fmt.Sprintf(`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"%s"}}}}}`, ts.Format(time.RFC3339)))
 	switch obj := workloadObj.(type) {
@@ -457,6 +467,55 @@ func instrumentedPodsSelector(obj client.Object) (labels.Selector, error) {
 	}
 
 	return sel, nil
+}
+
+// podsRunReplacedAgent reports whether a pod of the workload runs an agent that the instrumentation
+// config no longer uses for its container (another distribution, or none) and that only a restart
+// removes, as the pod was created for a distribution that required one.
+func podsRunReplacedAgent(ctx context.Context, c client.Client, workloadObj client.Object, ic *odigosv1alpha1.InstrumentationConfig, conf *common.OdigosConfiguration, distroProvider *distros.Provider) (bool, error) {
+	if distroProvider == nil {
+		return false, nil
+	}
+	sel, err := instrumentedPodsSelector(workloadObj)
+	if err != nil {
+		return false, err
+	}
+	var pods corev1.PodList
+	if err := c.List(ctx, &pods, client.InNamespace(workloadObj.GetNamespace()), client.MatchingLabelsSelector{Selector: sel}); err != nil {
+		return false, err
+	}
+
+	currentDistro := make(map[string]string, len(ic.Spec.Containers))
+	for _, containerConfig := range ic.Spec.Containers {
+		if containerConfig.AgentEnabled {
+			currentDistro[containerConfig.ContainerName] = containerConfig.OtelDistroName
+		}
+	}
+	for i := range pods.Items {
+		pod := &pods.Items[i]
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		for _, container := range pod.Spec.Containers {
+			podDistro := containerEnvValue(container, k8sconsts.OdigosEnvVarDistroName)
+			if podDistro == "" || podDistro == currentDistro[container.Name] {
+				continue
+			}
+			if distro.IsRestartRequired(distroProvider.GetDistroByName(podDistro), conf) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func containerEnvValue(container corev1.Container, name string) string {
+	for _, env := range container.Env {
+		if env.Name == name {
+			return env.Value
+		}
+	}
+	return ""
 }
 
 // workloadHasOdigosAgents returns true if the workload still has *any* pod present in the instrumented-pod.

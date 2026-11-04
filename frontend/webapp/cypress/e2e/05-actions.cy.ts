@@ -54,11 +54,11 @@ describe('Actions CRUD', () => {
           }
           case 'PiiMasking': {
             // Credit card is pre-selected; also exercise EMAIL/JWT/UUID so CreateAction
-            // covers every category the Action CRD enum accepts. checkboxList (array mode)
-            // sets data-id from each option id, not the field name.
-            cy.get('[data-id=EMAIL]').click();
-            cy.get('[data-id=JWT]').click();
-            cy.get('[data-id=UUID]').click();
+            // covers every category the Action CRD enum accepts. The options render as chips,
+            // with a data-id of `${field}-${option}`.
+            cy.get('[data-id=piiCategories-EMAIL]').click();
+            cy.get('[data-id=piiCategories-JWT]').click();
+            cy.get('[data-id=piiCategories-UUID]').click();
             break;
           }
           case 'ExtractAttribute': {
@@ -99,9 +99,9 @@ describe('Actions CRUD', () => {
       SELECTED_ENTITIES.ACTIONS.forEach((actionType) => {
         updateV2Entity(
           {
-            // actions are fetched in random order, so we locate the row by the type text it shows
+            // actions are fetched in random order, so we locate the row by the type's label it shows
             nodeId: 'div',
-            nodeContains: actionType,
+            nodeContains: SELECTED_ENTITIES.ACTION_LABELS[actionType],
             prefix: DATA_IDS.ACTION_DRAWER_PREFIX,
             fieldKey: DATA_IDS.ACTION_NAME_INPUT,
             // Embed the action type in the new name. The v2 ListItem renders

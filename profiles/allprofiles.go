@@ -30,6 +30,7 @@ var AllProfiles = []profile.Profile{
 
 	instrumentation.AllowConcurrentAgents,
 	instrumentation.EbpfLogCaptureProfile,
+	instrumentation.InstrumentationV2Profile,
 	instrumentation.JavaEbpfInstrumentationsProfile,
 	instrumentation.JavaEnterpriseProfile,
 	instrumentation.JavaNativeInstrumentationsProfile,
@@ -64,6 +65,7 @@ func init() {
 			OnPremProfiles = append(OnPremProfiles, p)
 		case common.OnPremOdigosTier:
 			OnPremProfiles = append(OnPremProfiles, p)
+		default:
 		}
 	}
 }

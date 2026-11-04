@@ -71,6 +71,15 @@ export const SELECTED_ENTITIES = {
     AUTOFILL_VALUE: `jaeger.${NAMESPACES.DESTINATIONS}:4317`,
   },
   ACTIONS: ['K8sAttributesResolver', 'AddClusterInfo', 'DeleteAttribute', 'RenameAttribute', 'PiiMasking', 'ExtractAttribute'],
+  // What an unnamed action's row shows (the catalog's label).
+  ACTION_LABELS: {
+    K8sAttributesResolver: 'Kubernetes Attributes',
+    AddClusterInfo: 'Add Cluster Info',
+    DeleteAttribute: 'Delete Attribute',
+    RenameAttribute: 'Rename Attribute',
+    PiiMasking: 'PII Masking',
+    ExtractAttribute: 'Extract Attribute',
+  } as Record<string, string>,
 };
 
 export const DATA_IDS = {
@@ -95,25 +104,23 @@ export const DATA_IDS = {
 
   // legacy modals & edit-drawers
   MODAL: '[data-id=modal]',
-  DRAWER: '[data-id=drawer]',
+  DRAWER: '[data-slot=sheet-content]',
   DRAWER_EDIT: '[data-id=drawer-edit]',
   DRAWER_SAVE: '[data-id=drawer-save]',
-  DRAWER_CLOSE: '[data-id=drawer-close]',
+  DRAWER_CLOSE: '[data-slot=sheet-content] [aria-label=Close]',
   DRAWER_DELETE: '[data-id=drawer-delete]',
-  DRAWER_ACTIONS: '[data-id=drawer-actions]',
-  DROPDOWN_OPTION: (id: string) => `[data-id="option-${id}"]`,
   APPROVE: '[data-id=approve]',
   DENY: '[data-id=deny]',
 
-  // v2 edit-action-drawer prefix (used with DROPDOWN_OPTION + `${prefix}-btn-save` etc.)
+  // v2 edit-action-drawer prefix (used with `${prefix}-btn-edit`, `${prefix}-btn-save` etc.)
   ACTION_DRAWER_PREFIX: 'edit-action',
-  ACTION_NAME_INPUT: '[data-id=actionName]',
+  ACTION_NAME_INPUT: '[name=actionName]',
 
-  // v2 edit-destination-drawer prefix (used with DROPDOWN_OPTION + `${prefix}-btn-save` etc.)
+  // v2 edit-destination-drawer prefix (used with `${prefix}-btn-edit`, `${prefix}-btn-save` etc.)
   DESTINATION_DRAWER_PREFIX: 'edit-destination',
-  DESTINATION_NAME_INPUT: '[data-id=destinationName]',
+  DESTINATION_NAME_INPUT: '[name=destinationName]',
 
-  // v2 edit-source-drawer prefix (used with DROPDOWN_OPTION + `${prefix}-btn-save` etc.)
+  // v2 edit-source-drawer prefix (used with `${prefix}-btn-edit`, `${prefix}-btn-save` etc.)
   SOURCE_DRAWER_PREFIX: 'edit-source',
 
   // Toasts in @odigos/ui-kit >=0.0.244 are rendered via the v2 `Note` component,
@@ -129,7 +136,7 @@ export const DATA_IDS = {
   DESTINATION_NODE: (id: string) => `[data-id="${id}"]`,
 
   TITLE: '[data-id=title]',
-  SOURCE_TITLE: '[data-id=sourceName]',
+  SOURCE_TITLE: '[data-id=service-name-input]',
   CHECKBOX: '[data-id=checkbox]',
 
   // v2 wide-drawer buttons

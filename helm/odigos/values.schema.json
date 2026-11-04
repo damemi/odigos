@@ -1145,6 +1145,16 @@
       "required": [],
       "title": "insights"
     },
+    "instrumentationVersion": {
+      "default": "v1",
+      "description": "The instrumentation version to use. Example (CLI): --set instrumentationVersion=v2\nv2 requires Odigos Enterprise.",
+      "enum": [
+        "v1",
+        "v2"
+      ],
+      "required": [],
+      "title": "instrumentationVersion"
+    },
     "instrumentor": {
       "additionalProperties": false,
       "description": "Configuration for the instrumentor component.",

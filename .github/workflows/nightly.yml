@@ -5,31 +5,6 @@ on:
     - cron: '0 0 * * *' # Nightly run at midnight
   workflow_call:
   workflow_dispatch:
-    inputs:
-      provider:
-        description: 'Cloud provider to test against (e.g. eks, aks, gke, all)'
-        required: true
-        type: choice
-        options:
-          - all
-          - aks
-          - eks
-      test_scenario:
-        description: 'Test suite to run'
-        required: true
-        type: choice
-        options:
-          - all
-          - helm-chart
-          - source
-      platform:
-        description: 'CPU architecture'
-        required: true
-        type: choice
-        options:
-          - all
-          - amd
-          - arm
 
 permissions:
   id-token: write
@@ -75,7 +50,7 @@ jobs:
           key: ${{ github.run_id }}-odigos-cli
 
   # Images are built once with the e2e-test tag: the Kubernetes tests load them into kind from
-  # the cache, and the cloud suites pull the same images from ECR under the commit hash tag.
+  # the cache, and the chaos tests pull the same images from ECR under the commit hash tag.
   build-images:
     runs-on: depot-ubuntu-24.04-8
     env:
@@ -248,43 +223,4 @@ jobs:
           status: ${{ job.status }}
           suite_name: chaos-tests
           suite_parameters: ''
-          slack_webhook_url: ${{ secrets.CLOUD_PROVIDERS_TESTS_WEBHOOK_URL }}
-
-
-  cross-cloud-tests:
-    runs-on: depot-ubuntu-24.04-8
-    needs: build-images
-    strategy:
-      fail-fast: false
-      matrix:
-        provider: ${{ fromJSON(github.event_name == 'schedule' && '["aks","eks"]' || github.event.inputs.provider == 'all' && '["aks","eks"]' || format('["{0}"]', github.event.inputs.provider)) }}
-        test_scenario: ${{ fromJSON(github.event_name == 'schedule' && '["source","helm-chart"]' || github.event.inputs.test_scenario == 'all' && '["source","helm-chart"]' || format('["{0}"]', github.event.inputs.test_scenario)) }}
-        platform: ${{ fromJSON(github.event_name == 'schedule' && '["amd","arm"]' || github.event.inputs.platform == 'all' && '["amd","arm"]' || format('["{0}"]', github.event.inputs.platform)) }}
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v5
-
-      - name: Run Cross-Cloud Tests
-        if: ${{ !(matrix.provider == 'aks' && matrix.platform == 'arm') }}
-        uses: ./.github/actions/cross-cloud-tests
-        with:
-          provider: ${{ matrix.provider }}
-          test_scenario: ${{ matrix.test_scenario }}
-          platform: ${{ matrix.platform }}
-        env:
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_SHA: ${{ github.sha }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Report Test Outcome
-        if: always() && !(matrix.provider == 'aks' && matrix.platform == 'arm')
-        uses: ./.github/actions/nightly/report
-        with:
-          status: ${{ job.status }}
-          suite_name: cross-cloud-tests
-          suite_parameters: '{"provider": "${{ matrix.provider }}", "test_scenario": "${{ matrix.test_scenario }}"}, "platform": "${{ matrix.platform }}"}'
           slack_webhook_url: ${{ secrets.CLOUD_PROVIDERS_TESTS_WEBHOOK_URL }}

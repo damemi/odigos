@@ -1820,6 +1820,14 @@ resourceDetectors:
 profiles: []
 
 # @schema
+# enum: [v1, v2]
+# description: |-
+#   The instrumentation version to use. Example (CLI): --set instrumentationVersion=v2
+#   v2 requires Odigos Enterprise.
+# @schema
+instrumentationVersion: v1
+
+# @schema
 # description: |-
 #   Global NodeSelector to apply to all Odigos components by default.
 #   Individual components can override this by uncommenting their specific nodeSelector configuration.

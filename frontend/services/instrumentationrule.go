@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
@@ -42,7 +44,52 @@ func deriveTypeFromRule(rule *model.InstrumentationRule) model.InstrumentationRu
 		return model.InstrumentationRuleTypeNetworkMetrics
 	}
 
+	if rule.KernelTraces != nil {
+		return model.InstrumentationRuleTypeKernelTraces
+	}
+
 	return model.InstrumentationRuleTypeUnknownType
+}
+
+// getKernelTracesInput maps the GraphQL areas to the CRD's presence-based ones. It returns an error when
+// no area is enabled, since the CRD requires at least one.
+func getKernelTracesInput(input model.InstrumentationRuleInput) (*instrumentationrules.KernelTraces, error) {
+	in := input.KernelTraces
+	if in == nil {
+		return nil, nil
+	}
+	out := &instrumentationrules.KernelTraces{}
+	if in.Filesystem != nil && (in.Filesystem.Enabled == nil || *in.Filesystem.Enabled) {
+		out.Filesystem = &instrumentationrules.KernelFilesystemTraces{}
+	}
+	if in.Subprocesses != nil {
+		out.Subprocesses = &instrumentationrules.KernelSubprocessTraces{RecordCommandArgs: cloneBoolPtr(in.Subprocesses.RecordCommandArgs)}
+	}
+	if in.CPUDelay != nil && (in.CPUDelay.Enabled == nil || *in.CPUDelay.Enabled) {
+		out.CPUDelay = &instrumentationrules.KernelCPUDelayTraces{}
+	}
+	if *out == (instrumentationrules.KernelTraces{}) {
+		return nil, errors.New("at least one kernel category must be enabled")
+	}
+	return out, nil
+}
+
+func convertKernelTraces(traces *instrumentationrules.KernelTraces) *model.KernelTraces {
+	if traces == nil {
+		return nil
+	}
+	enabled := true
+	out := &model.KernelTraces{}
+	if traces.Filesystem != nil {
+		out.Filesystem = &model.KernelFilesystemTraces{Enabled: &enabled}
+	}
+	if traces.Subprocesses != nil {
+		out.Subprocesses = &model.KernelSubprocessTraces{RecordCommandArgs: cloneBoolPtr(traces.Subprocesses.RecordCommandArgs)}
+	}
+	if traces.CPUDelay != nil {
+		out.CPUDelay = &model.KernelCPUDelayTraces{Enabled: &enabled}
+	}
+	return out
 }
 
 // getNetworkMetricsInput maps the presence-based GraphQL boolean to the CRD config: `true` becomes an
@@ -96,6 +143,7 @@ func GetInstrumentationRules(ctx context.Context) ([]*model.InstrumentationRule,
 			PayloadCollection:        convertPayloadCollection(r.Spec.PayloadCollection),
 			CustomInstrumentations:   convertCustomInstrumentations(r.Spec.CustomInstrumentations),
 			NetworkMetrics:           networkMetricsEnabledPtr(r.Spec.NetworkMetrics),
+			KernelTraces:             convertKernelTraces(r.Spec.KernelTraces),
 		}
 		rule.Type = deriveTypeFromRule(rule)
 
@@ -131,6 +179,7 @@ func GetInstrumentationRule(ctx context.Context, id string) (*model.Instrumentat
 		PayloadCollection:        convertPayloadCollection(r.Spec.PayloadCollection),
 		CustomInstrumentations:   convertCustomInstrumentations(r.Spec.CustomInstrumentations),
 		NetworkMetrics:           networkMetricsEnabledPtr(r.Spec.NetworkMetrics),
+		KernelTraces:             convertKernelTraces(r.Spec.KernelTraces),
 	}
 	rule.Type = deriveTypeFromRule(rule)
 
@@ -499,6 +548,46 @@ func getCustomInstrumentationsInput(input model.InstrumentationRuleInput) (*inst
 		}
 	}
 
+	if input.CustomInstrumentations.Python != nil {
+		customInstrumentations.Python = make([]instrumentationrules.PythonCustomProbeWithMetadata, 0, len(input.CustomInstrumentations.Python))
+		pythonSeen := make(map[string]struct{})
+		for _, probe := range input.CustomInstrumentations.Python {
+			if probe == nil {
+				continue
+			}
+			apiProbe := instrumentationrules.PythonCustomProbeWithMetadata{}
+			if probe.Module != nil {
+				apiProbe.Module = *probe.Module
+			}
+			if probe.Qualname != nil {
+				apiProbe.Qualname = *probe.Qualname
+			}
+			for _, c := range probe.Captures {
+				if c == nil {
+					continue
+				}
+				capture := instrumentationrules.PythonCapture{}
+				if c.Path != nil {
+					capture.Path = *c.Path
+				}
+				if c.Mode != nil {
+					capture.Mode = instrumentationrules.PythonCaptureMode(*c.Mode)
+				}
+				apiProbe.Captures = append(apiProbe.Captures, capture)
+			}
+			apiProbe.CustomProbeMetadata = customProbeMetadataFromInput(probe.Notes, probe.Category, probe.AddedAt)
+			key, err := json.Marshal(apiProbe)
+			if err != nil {
+				return nil, err
+			}
+			if _, dup := pythonSeen[string(key)]; dup {
+				continue
+			}
+			pythonSeen[string(key)] = struct{}{}
+			customInstrumentations.Python = append(customInstrumentations.Python, apiProbe)
+		}
+	}
+
 	if err := customInstrumentations.Verify(); err != nil {
 		return nil, err
 	}
@@ -554,6 +643,14 @@ func UpdateInstrumentationRule(ctx context.Context, id string, input model.Instr
 	if input.NetworkMetrics != nil {
 		existingRule.Spec.NetworkMetrics = getNetworkMetricsInput(input)
 	}
+
+	if input.KernelTraces != nil {
+		kernelTraces, err := getKernelTracesInput(input)
+		if err != nil {
+			return nil, fmt.Errorf("invalid kernel traces: %w", err)
+		}
+		existingRule.Spec.KernelTraces = kernelTraces
+	}
 	// Update rule in Kubernetes
 	updatedRule, err := kube.DefaultClient.OdigosClient.InstrumentationRules(ns).Update(ctx, existingRule, metav1.UpdateOptions{})
 	if err != nil {
@@ -578,6 +675,7 @@ func UpdateInstrumentationRule(ctx context.Context, id string, input model.Instr
 		PayloadCollection:        convertPayloadCollection(updatedRule.Spec.PayloadCollection),
 		CustomInstrumentations:   convertCustomInstrumentations(updatedRule.Spec.CustomInstrumentations),
 		NetworkMetrics:           networkMetricsEnabledPtr(updatedRule.Spec.NetworkMetrics),
+		KernelTraces:             convertKernelTraces(updatedRule.Spec.KernelTraces),
 	}
 	rule.Type = deriveTypeFromRule(&rule)
 	return &rule, nil
@@ -609,6 +707,11 @@ func CreateInstrumentationRule(ctx context.Context, input model.InstrumentationR
 		return nil, fmt.Errorf("invalid custom instrumentations: %w", err)
 	}
 
+	kernelTraces, err := getKernelTracesInput(input)
+	if err != nil {
+		return nil, fmt.Errorf("invalid kernel traces: %w", err)
+	}
+
 	// Define the new rule spec based on the input
 	newRule := &v1alpha1.InstrumentationRule{
 		ObjectMeta: metav1.ObjectMeta{
@@ -628,6 +731,7 @@ func CreateInstrumentationRule(ctx context.Context, input model.InstrumentationR
 			PayloadCollection:        getPayloadCollectionInput(input),
 			CustomInstrumentations:   customInstrumentations,
 			NetworkMetrics:           getNetworkMetricsInput(input),
+			KernelTraces:             kernelTraces,
 		},
 	}
 	// Create the rule in Kubernetes
@@ -654,6 +758,7 @@ func CreateInstrumentationRule(ctx context.Context, input model.InstrumentationR
 		PayloadCollection:        convertPayloadCollection(createdRule.Spec.PayloadCollection),
 		CustomInstrumentations:   convertCustomInstrumentations(createdRule.Spec.CustomInstrumentations),
 		NetworkMetrics:           networkMetricsEnabledPtr(createdRule.Spec.NetworkMetrics),
+		KernelTraces:             convertKernelTraces(createdRule.Spec.KernelTraces),
 	}
 	rule.Type = deriveTypeFromRule(&rule)
 
@@ -895,6 +1000,24 @@ func convertCustomInstrumentations(customInstruAsInstruRule *instrumentationrule
 				Notes:     notes,
 				Category:  category,
 				AddedAt:   addedAt,
+			})
+		}
+	}
+	if customInstruAsInstruRule.Python != nil {
+		for _, pythonProbe := range customInstruAsInstruRule.Python {
+			notes, category, addedAt := customProbeMetadataModel(pythonProbe.CustomProbeMetadata)
+			var captures []*model.PythonCapture
+			for _, c := range pythonProbe.Captures {
+				path, mode := c.Path, string(c.Mode)
+				captures = append(captures, &model.PythonCapture{Path: &path, Mode: &mode})
+			}
+			customInstruAsGqlModel.Python = append(customInstruAsGqlModel.Python, &model.PythonCustomProbe{
+				Module:   &pythonProbe.Module,
+				Qualname: &pythonProbe.Qualname,
+				Captures: captures,
+				Notes:    notes,
+				Category: category,
+				AddedAt:  addedAt,
 			})
 		}
 	}

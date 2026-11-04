@@ -21,11 +21,7 @@ spec:
         - script:
             timeout: 5m
             content: |
-              if [ "$MODE" = "cross-cloud-tests" ]; then
-                ../../../cli/odigos install --ns odigos-test --set image.tag="$COMMIT_HASH" --set imagePrefix=public.ecr.aws/y2v0v6s7 --set instrumentor.mountMethod=k8s-init-container
-              else
-                ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test --set instrumentor.mountMethod=k8s-init-container
-              fi
+              ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test --set instrumentor.mountMethod=k8s-init-container
               kubectl label namespace odigos-test odigos.io/system-object="true"
               ../../common/verify_odigos_installation.sh odigos-test
         - assert:
@@ -107,7 +103,7 @@ spec:
         - script:
             timeout: 1m10s
             content: |
-              kubectl wait --for=condition=complete job/$(kubectl get -f ../../common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+              kubectl wait --for=condition=complete --timeout=1m job/$(kubectl get -f ../../common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
             file: ../../common/apply/generate-traffic-job.yaml
 
@@ -202,7 +198,7 @@ spec:
         - script:
             timeout: 1m10s
             content: |
-              kubectl wait --for=condition=complete job/$(kubectl get -f ../../common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+              kubectl wait --for=condition=complete --timeout=1m job/$(kubectl get -f ../../common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
             file: ../../common/apply/generate-traffic-job.yaml
 

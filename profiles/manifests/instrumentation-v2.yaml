@@ -1,0 +1,10 @@
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationRule
+metadata:
+  name: instrumentation-v2
+spec:
+  ruleName: "instrumentation v2"
+  notes: "Auto generated rule from instrumentation-v2 profile. Do not edit."
+  otelDistros:
+    otelDistroNames:
+    - "python-ebpf"

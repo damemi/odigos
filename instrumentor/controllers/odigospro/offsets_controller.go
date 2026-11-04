@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/odigos-io/odigos/common"
-	commonlogger "github.com/odigos-io/odigos/common/logger"
+	k8slogger "github.com/odigos-io/odigos/k8sutils/pkg/logger"
 )
 
 type odigosproOffsetsController struct {
@@ -26,7 +26,7 @@ type odigosproOffsetsController struct {
 }
 
 func (r *odigosproOffsetsController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	logger := commonlogger.FromContext(ctx)
+	logger := k8slogger.FromContext(ctx)
 	odigosNs := env.GetCurrentNamespace()
 
 	// the effective config is the only document that carries the UI (odigos-local-ui-config) and
@@ -88,6 +88,9 @@ func (r *odigosproOffsetsController) Reconcile(ctx context.Context, _ ctrl.Reque
 			RestartPolicy: corev1.RestartPolicyNever,
 		},
 	}
+	for _, secret := range odigosConfiguration.ImagePullSecrets {
+		template.Spec.ImagePullSecrets = append(template.Spec.ImagePullSecrets, corev1.LocalObjectReference{Name: secret})
+	}
 
 	cronJob := &batchv1.CronJob{
 		TypeMeta: metav1.TypeMeta{
@@ -134,7 +137,7 @@ func deleteCronJob(ctx context.Context, kubeClient client.Client, ns string) err
 
 func applyCronJob(ctx context.Context, kubeClient client.Client, ns string, cronJob *batchv1.CronJob, config *common.OdigosConfiguration) error {
 
-	logger := commonlogger.FromContext(ctx)
+	logger := k8slogger.FromContext(ctx)
 
 	// Apply the CronJob
 	objApplyBytes, err := yaml.Marshal(cronJob)

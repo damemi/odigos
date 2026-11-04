@@ -2,11 +2,12 @@
 
 import React from 'react';
 import { PlatformType } from '@odigos/ui-kit/types';
-import { PipelineCollectors } from '@odigos/ui-kit/containers';
+import { PipelineCollectorsNext } from '@odigos/ui-kit/containers';
 
 export default function Page() {
+  // PLAT-1666: shadcn version of the collectors page (swap back to `PipelineCollectors` to compare).
   return (
-    <PipelineCollectors
+    <PipelineCollectorsNext
       minSupportedVersion={{
         [PlatformType.K8s]: 1.12,
       }}

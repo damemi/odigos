@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/odigos-io/odigos/common"
@@ -9,12 +10,16 @@ import (
 
 var availableConfigers = []Configer{
 	&AlibabaCloud{},
+	&AlibabaCloudSLS{},
 	&AppDynamics{},
 	&AWSCloudWatch{},
+	&AWSFirehose{},
 	&AWSS3{},
 	&AWSXRay{},
 	&Axiom{},
 	&AzureBlobStorage{},
+	&AzureDataExplorer{},
+	&AzureEventHubs{},
 	&AzureMonitor{},
 	&BetterStack{},
 	&Bonree{},
@@ -22,6 +27,7 @@ var availableConfigers = []Configer{
 	&Checkly{},
 	&Chronosphere{},
 	&Clickhouse{},
+	&Cassandra{},
 	&Coralogix{},
 	&Dash0{},
 	&Datadog{},
@@ -33,6 +39,7 @@ var availableConfigers = []Configer{
 	&GenericOTLP{},
 	&GoogleCloud{},
 	&GoogleCloudOTLP{},
+	&GoogleManagedPrometheus{},
 	&GoogleCloudStorage{},
 	&GrafanaCloudLoki{},
 	&GrafanaCloudPrometheus{},
@@ -46,19 +53,23 @@ var availableConfigers = []Configer{
 	&Kafka{},
 	&KloudMate{},
 	&Last9{},
-	&Lightstep{},
+	&LaunchDarkly{},
 	&Logzio{},
+	&LocalFileArchive{},
 	&Loki{},
 	&Lumigo{},
 	&Middleware{},
+	&MicrosoftSentinel{},
 	&Mock{},
 	&NewRelic{},
 	&Nop{},
 	&Observe{},
 	&OneUptime{},
 	&OpenObserve{},
+	&OpenStackSwift{},
 	&Oracle{},
 	&OTLPHttp{},
+	&PostHog{},
 	&Prometheus{},
 	&Qryn{},
 	&QrynOSS{},
@@ -67,15 +78,19 @@ var availableConfigers = []Configer{
 	&Seq{},
 	&SignalFx{},
 	&Signoz{},
+	&SkyWalking{},
 	&Splunk{},
 	&SplunkOTLP{},
 	&SumoLogic{},
+	&Syslog{},
 	&TelemetryHub{},
 	&Tempo{},
 	&Tingyun{},
 	&Traceloop{},
 	&Uptrace{},
+	&VictoriaLogs{},
 	&VictoriaMetricsCloud{},
+	&VictoriaTraces{},
 	&Pyroscope{},
 }
 
@@ -102,13 +117,7 @@ func LoadConfigers() (map[common.DestinationType]Configer, error) {
 }
 
 func isSignalExists(dest SignalSpecific, signal common.ObservabilitySignal) bool {
-	for _, s := range dest.GetSignals() {
-		if s == signal {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(dest.GetSignals(), signal)
 }
 
 func isTracingEnabled(dest SignalSpecific) bool {

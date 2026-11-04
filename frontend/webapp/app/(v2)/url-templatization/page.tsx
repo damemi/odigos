@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { UrlTemplatization } from '@odigos/ui-kit/containers';
+import { UrlTemplatizationNext } from '@odigos/ui-kit/containers';
 
+// PLAT-1634 spike: shadcn version of the page (swap back to `UrlTemplatization` to compare).
 export default function Page() {
-  return <UrlTemplatization />;
+  return <UrlTemplatizationNext />;
 }

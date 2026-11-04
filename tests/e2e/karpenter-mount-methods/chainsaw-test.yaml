@@ -37,13 +37,7 @@ spec:
         - script:
             timeout: 5m
             content: |
-              if [ "$MODE" = "cross-cloud-tests" ]; then
-                ../../../cli/odigos install --ns odigos-test \
-                  --set image.tag="$COMMIT_HASH" \
-                  --set imagePrefix=public.ecr.aws/y2v0v6s7
-              else
-                ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test
-              fi
+              ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test
               kubectl label namespace odigos-test odigos.io/system-object="true"
               ../../common/verify_odigos_installation.sh odigos-test
         - assert:
@@ -86,16 +80,9 @@ spec:
         - script:
             timeout: 2m
             content: |
-              if [ "$MODE" = "cross-cloud-tests" ]; then
-                ../../../cli/odigos install --ns odigos-test \
-                  --set image.tag="$COMMIT_HASH" \
-                  --set imagePrefix=public.ecr.aws/y2v0v6s7 \
-                  --set instrumentor.mountMethod=k8s-init-container
-              else
-                ../../../cli/odigos install --ns odigos-test \
-                  --set image.tag=e2e-test \
-                  --set instrumentor.mountMethod=k8s-init-container
-              fi
+              ../../../cli/odigos install --ns odigos-test \
+                --set image.tag=e2e-test \
+                --set instrumentor.mountMethod=k8s-init-container
         - script:
             timeout: 1m
             content: ../../common/assert_config_value.sh -k mountMethod -v k8s-init-container
@@ -117,18 +104,10 @@ spec:
         - script:
             timeout: 2m
             content: |
-              if [ "$MODE" = "cross-cloud-tests" ]; then
-                ../../../cli/odigos install --ns odigos-test \
-                  --set image.tag="$COMMIT_HASH" \
-                  --set imagePrefix=public.ecr.aws/y2v0v6s7 \
-                  --set instrumentor.mountMethod=k8s-csi-driver \
-                  --set karpenter.enabled=true
-              else
-                ../../../cli/odigos install --ns odigos-test \
-                  --set image.tag=e2e-test \
-                  --set instrumentor.mountMethod=k8s-csi-driver \
-                  --set karpenter.enabled=true
-              fi
+              ../../../cli/odigos install --ns odigos-test \
+                --set image.tag=e2e-test \
+                --set instrumentor.mountMethod=k8s-csi-driver \
+                --set karpenter.enabled=true
         - script:
             timeout: 1m
             content: |
