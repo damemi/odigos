@@ -1,0 +1,38 @@
+# inventory (Python 3.11) is instrumented by python-ebpf, attached by the odiglet to the running
+# process: its InstrumentationConfig names python-ebpf and needs no pod manifest change, and the
+# odiglet reports the instance healthy.
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationConfig
+metadata:
+  name: deployment-inventory
+  namespace: default
+spec:
+  containers:
+    - containerName: inventory
+      agentEnabled: true
+      otelDistroName: python-ebpf
+      podManifestInjectionOptional: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-inventory
+status:
+  healthy: true
+---
+# The pod is never restarted: the same container keeps running, with no restarts.
+apiVersion: v1
+kind: Pod
+metadata:
+  namespace: default
+  labels:
+    app: inventory
+status:
+  containerStatuses:
+    - name: inventory
+      ready: true
+      restartCount: 0
+      started: true
+  phase: Running

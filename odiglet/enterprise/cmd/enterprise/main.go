@@ -301,6 +301,12 @@ func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogge
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MySql instrumentation factory: %w", err)
 	}
+	// python-ebpf: out-of-process pure-eBPF CPython tracer (github.com/odigos-io/python-ebpf), wired in
+	// the SAME in-process Factory shape as the Go/Java eBPF instrumentors.
+	pythonOOPEbpfFactory, err := sdks.NewPythonEbpfInstrumentationFactoryEnterprise(tracesConsumer, metricsConsumer, waspDisabled)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create python-ebpf instrumentation factory: %w", err)
+	}
 
 	return map[string]commonInstrumentation.Factory{
 		sdks.GoEnterpriseDistroName:  goFactory,
@@ -311,6 +317,7 @@ func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogge
 		"nodejs-enterprise":          nodejsEbpfFactory,
 		"nodejs-enterprise-14":       nodejsEbpfFactory,
 		"mysql-enterprise":           mysqlFactory,
+		"python-ebpf":                pythonOOPEbpfFactory,
 		// OBI (the "opentelemetry-ebpf-instrumentation" traces distro factory and the
 		// network-metrics generic factory) is wired centrally in odiglet.New, identically for
 		// OSS and enterprise, so it is intentionally not registered here.

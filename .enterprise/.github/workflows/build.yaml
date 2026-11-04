@@ -551,6 +551,17 @@ jobs:
           - kube-version: "1.32"
             kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
             test-scenario: "instrumentation-rules"
+          # python-ebpf: chosen by an instrumentation rule, attached with no restart. Like
+          # instrumentation-rules it depends on the kernel rather than the kubernetes version; the
+          # with_wasp job covers the write path lockdown kernels take.
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "python-ebpf"
+            wasp-enabled: false
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "python-ebpf"
+            wasp-enabled: true
           # important-customers: one entry per customer, only runs on release PRs (release-bot-* → releases/*).
           # To add a customer: duplicate an entry below and set customer to the slug defined in
           # tests/e2e/important-customers/customers.sh (e.g. greatwall).

@@ -21,8 +21,8 @@ func registerCustomInstrumentationTools(s *server.MCPServer, deps Deps) {
 	s.AddTool(
 		mcp.NewTool("add_custom_instrumentation",
 			writeAnno(),
-			mcp.WithDescription("Add a custom probe to instrument a specific function/method without changing application code. Typically called after get_source_hot_functions identifies where time is spent, or when telemetry from a specific symbol is missing. Languages: 'java' (class + method), 'go' (package + function, or package + receiver + receiver method), 'cpp' (signature), 'php' (optional class + function). Optionally scope to a single workload."),
-			mcp.WithString("language", mcp.Required(), mcp.Description("One of: java, go, cpp, php.")),
+			mcp.WithDescription("Add a custom probe to instrument a specific function/method without changing application code. Typically called after get_source_hot_functions identifies where time is spent, or when telemetry from a specific symbol is missing. Languages: 'java' (class + method), 'go' (package + function, or package + receiver + receiver method), 'cpp' (signature), 'php' (optional class + function), 'python' (module + qualname, optionally with captures: values of each call recorded on its span). Optionally scope to a single workload."),
+			mcp.WithString("language", mcp.Required(), mcp.Description("One of: java, go, cpp, php, python.")),
 			mcp.WithString("rule_name", mcp.Description("Optional human-readable name for the rule.")),
 			mcp.WithString("class_name", mcp.Description("java/php: fully-qualified class name. For php, omit for a global function.")),
 			mcp.WithString("method_name", mcp.Description("java: method name to instrument.")),
@@ -31,6 +31,12 @@ func registerCustomInstrumentationTools(s *server.MCPServer, deps Deps) {
 			mcp.WithString("receiver_name", mcp.Description("go: receiver struct name. Requires receiver_method_name.")),
 			mcp.WithString("receiver_method_name", mcp.Description("go: method name on the receiver.")),
 			mcp.WithString("signature", mcp.Description("cpp: function signature, e.g. std::vector::push_back or SSL_write.")),
+			mcp.WithString("module", mcp.Description("python: the function's module, its __module__, e.g. app.billing, or __main__ for a script run directly.")),
+			mcp.WithString("qualname", mcp.Description("python: the function's qualified name, its __qualname__, e.g. Invoice.calculate for a method.")),
+			mcp.WithArray("captures",
+				mcp.Description("python: optional values of each call to record as span attributes code.<path>, as {path, mode}. path: arg.<name>, arg<N>, local.<name> or return, then up to 15 of .<attr>, [\"<key>\"] or [<index>], e.g. arg.order.total, return[0]. mode: empty (numbers, bools, enums and None as values, other objects as their class name, strings left out), value, presence, type or len. Values are recorded as they are, secrets too. At most 6 arg and 5 local/return captures."),
+				mcp.Items(map[string]any{"type": "object"}),
+			),
 			mcp.WithString("workload_namespace", mcp.Description("Optional: scope to a workload in this namespace (requires workload_kind and workload_name).")),
 			mcp.WithString("workload_kind", mcp.Description("Optional: Deployment, DaemonSet, or StatefulSet.")),
 			mcp.WithString("workload_name", mcp.Description("Optional: workload name to scope to.")),
@@ -103,8 +109,25 @@ func addCustomInstrumentationHandler(deps Deps) server.ToolHandlerFunc {
 			}
 			ci.Php = []instrumentationrules.PhpCustomProbeWithMetadata{probe}
 			probeSummary = probe.String()
+		case "python":
+			var captures []instrumentationrules.PythonCapture
+			if _, err := decodeArg(req, "captures", &captures); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid python captures: %v", err)), nil
+			}
+			probe := instrumentationrules.PythonCustomProbeWithMetadata{
+				PythonCustomProbe: instrumentationrules.PythonCustomProbe{
+					Module:   stringArg(req, "module", ""),
+					Qualname: stringArg(req, "qualname", ""),
+					Captures: captures,
+				},
+			}
+			if err := probe.Verify(); err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("invalid python probe: %v", err)), nil
+			}
+			ci.Python = []instrumentationrules.PythonCustomProbeWithMetadata{probe}
+			probeSummary = probe.String()
 		default:
-			return errorWithOptions(fmt.Sprintf("unknown language %q", language), []string{"java", "go", "cpp", "php"})
+			return errorWithOptions(fmt.Sprintf("unknown language %q", language), []string{"java", "go", "cpp", "php", "python"})
 		}
 
 		scope, err := parseOptionalWorkloadScope(req)
