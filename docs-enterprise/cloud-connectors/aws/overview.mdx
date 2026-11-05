@@ -5,7 +5,7 @@ sidebarTitle: 'Overview'
 ---
 
 The AWS Connector is one running instance that owns **one AWS account**. It scans every region enabled in
-that account, discovers Lambda functions and ECS/Fargate resources, and — for the types you allow — either
+that account, discovers Lambda functions, ECS/Fargate resources and Bedrock AgentCore runtimes, and — for the types you allow — either
 instruments them for you or reports on instrumentation you applied yourself.
 
 This page is the map. For hands-on tasks, see:
@@ -31,6 +31,10 @@ This page is the map. For hands-on tasks, see:
     Self-managed Fargate instrumentation with CloudFormation for every supported language.
   </Card>
 
+  <Card title="Instrument Bedrock AgentCore" icon="bolt" href="/cloud-connectors/aws/workloads/agentcore/instrument">
+    Python and CommonJS Node.js, selectable ADOT/OpenLLMetry, automatic or manual, with global OTLP/HTTP export.
+  </Card>
+
   <Card title="CDK reference: Lambda" icon="code" href="/cloud-connectors/aws/cdk/lambda">
     Every option on the Lambda CDK construct, in depth.
   </Card>
@@ -49,6 +53,7 @@ The connector splits AWS resources into two domains — **workloads**, which it 
 | --------------------- | ---------------- | --------- | ------------------------------------ |
 | `aws.lambda`          | Workload         | Yes       | Yes — Odigos-managed or self-managed |
 | `aws.fargate-task`    | Workload         | Yes       | Yes — Odigos-managed or self-managed |
+| `aws.bedrock-agentcore-runtime` | Workload | Yes | Python 3.12/CommonJS Node.js 22 — automatic or manual |
 | `aws.ecs-cluster`     | Compute platform | Yes       | Coming soon (agent install)          |
 | `aws.fargate-cluster` | Compute platform | Yes       | n/a (coverage only)                  |
 
@@ -70,7 +75,7 @@ today `aws.ecs-cluster` gives you discovery and coverage only.
 
 ## Odigos-managed vs. self-managed
 
-Both workload types support two independent modes, chosen per type when you add or edit the connector. This
+All three workload types support two independent modes, chosen per type when you add or edit the connector. This
 is a connector-wide concept — see
 [Odigos-managed vs. self-managed instrumentation](/cloud-connectors/overview#odigos-managed-vs-self-managed-instrumentation)
 for the general rules (the marker system, why you should pick one mode per workload, and so on). On AWS
@@ -89,6 +94,12 @@ extra to configure. See [Instrument Lambda](/cloud-connectors/aws/workloads/lamb
 account first if your organization requires that.
 
 ## Supported languages
+
+AgentCore's recipes start the SDK that existing Python 3.12 and CommonJS Node.js 22 artifacts carry (including TypeScript
+compiled to CommonJS), with ADOT defaults and OpenLLMetry alternatives. They require a global OTLP/HTTP
+destination; managed collector routing is deferred. See the [AgentCore guide](/cloud-connectors/aws/workloads/agentcore/instrument)
+for automatic instrumentation, mode ownership, version/session boundaries and language gaps. The following tables cover
+the existing Lambda and Fargate agents.
 
 | Workload                     | Languages                              | Notes                                                                                                                                                                         |
 | ---------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -552,6 +552,13 @@
                       "cloud-connectors/aws/workloads/fargate/preload",
                       "cloud-connectors/aws/workloads/fargate/instrument"
                     ]
+                  },
+                  {
+                    "group": "AgentCore",
+                    "pages": [
+                      "cloud-connectors/aws/workloads/agentcore/prepare",
+                      "cloud-connectors/aws/workloads/agentcore/instrument"
+                    ]
                   }
                 ]
               },
@@ -561,7 +568,8 @@
                   "cloud-connectors/aws/cdk/overview",
                   "cloud-connectors/aws/cdk/destinations",
                   "cloud-connectors/aws/cdk/lambda",
-                  "cloud-connectors/aws/cdk/fargate"
+                  "cloud-connectors/aws/cdk/fargate",
+                  "cloud-connectors/aws/cdk/agentcore"
                 ]
               }
             ]

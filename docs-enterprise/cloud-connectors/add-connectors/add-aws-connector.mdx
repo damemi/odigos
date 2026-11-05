@@ -64,6 +64,7 @@ For the self-managed path, artifact preloading, and per-language CDK/CloudFormat
         | Region enumeration | `ec2:DescribeRegions` |
         | Lambda discovery | `lambda:ListFunctions`, `lambda:ListTags` |
         | ECS / Fargate discovery | `ecs:ListClusters`, `ecs:DescribeClusters`, `ecs:ListServices`, `ecs:DescribeServices`, `ecs:ListTasks`, `ecs:DescribeTasks`, `ecs:DescribeTaskDefinition` |
+        | Bedrock AgentCore discovery | `bedrock-agentcore:ListAgentRuntimes`, `bedrock-agentcore:GetAgentRuntime`, `bedrock-agentcore:ListAgentRuntimeEndpoints`, `bedrock-agentcore:GetAgentRuntimeEndpoint`, `bedrock-agentcore:ListTagsForResource` |
 
         <Info>
           `ecs:DescribeTaskDefinition` is a discovery permission, not only an
@@ -75,7 +76,7 @@ For the self-managed path, artifact preloading, and per-language CDK/CloudFormat
       <Tab title="Discovery + instrumentation">
         The connector can discover resources and instrument supported workloads. Prefer this for a full setup in one step.
 
-        Includes all discovery actions, plus Odigos-managed instrumentation for Lambda and Fargate:
+        Includes all discovery actions, plus Odigos-managed instrumentation for Lambda, Fargate and existing AgentCore runtimes:
 
         | Purpose | Actions |
         | --- | --- |
@@ -83,6 +84,14 @@ For the self-managed path, artifact preloading, and per-language CDK/CloudFormat
         | Manage OTel layers | `lambda:GetLayerVersion`, `lambda:ListLayers`, `lambda:PublishLayerVersion`, `lambda:DeleteLayerVersion` |
         | Manage Fargate task definitions | `ecs:RegisterTaskDefinition`, `ecs:UpdateService` |
         | Pass task/execution roles when registering a task definition | `iam:PassRole` (scope with condition `iam:PassedToService=ecs-tasks.amazonaws.com`) |
+        | Update AgentCore runtime configuration | `bedrock-agentcore:UpdateAgentRuntime`, `iam:PassRole` on its existing execution role with `iam:PassedToService=bedrock-agentcore.amazonaws.com` |
+
+        Automatic AgentCore instrumentation also needs read access to the source artifact (S3 read and
+        version-read, or ECR image and layer reads). It never writes to your bucket or repository. The connector does not modify execution-role policies.
+
+        AgentCore initially supports existing Python 3.12/CommonJS Node.js 22 artifacts and requires a global
+        `otlphttp` destination. Include its existing execution role in the setup's supplied role-ARN list.
+        See [AgentCore instrumentation](/cloud-connectors/aws/workloads/agentcore/instrument).
 
         Odigos-managed instrumentation also requires an [OTLP destination](/cloud-connectors/instrument-workloads#add-an-otlp-destination) after the connector is online.
       </Tab>

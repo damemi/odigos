@@ -1,0 +1,411 @@
+---
+title: 'Instrument Bedrock AgentCore Runtime'
+description: 'Discover and instrument existing Python and CommonJS Node.js AgentCore runtimes using the SDK their artifact already carries, Odigos-managed or from your own infrastructure code.'
+sidebarTitle: 'Instrument'
+---
+
+The AWS connector discovers Bedrock AgentCore runtimes and supports Odigos-managed or self-managed
+instrumentation of **Python 3.12 and CommonJS Node.js 22 applications**. TypeScript must compile to CommonJS.
+Container images and direct-code ZIP deployments use the source kind `aws.bedrock-agentcore-runtime`.
+
+## Supported distributions
+
+| Language | Default | Selectable alternative |
+| --- | --- | --- |
+| Python | `python-agentcore-adot` | `python-agentcore-openllmetry` |
+| Node.js / compiled TypeScript | `nodejs-agentcore-adot` | `nodejs-agentcore-openllmetry` |
+
+Set the source's `config.distroOverride.otelDistroName` to select a distribution. The qualified environment is
+Linux arm64 microVMs with Python 3.12 or Node.js 22. What a selection can change depends on what the artifact
+carries:
+
+- The Node.js package `@odigos/agentcore` carries both distributions, so switching is an environment change.
+- The Python package carries the distribution of the extra it was installed with (`odigos-agentcore[adot]` or
+  `[openllmetry]`). Switching to the other one needs a new deployment with the other extra.
+- When Odigos starts ADOT on its own, the distribution is always that ADOT SDK.
+
+The Odigos package also adjusts the telemetry for AgentCore:
+
+- **Traces start at your agent.** AgentCore inserts a span of its own between the caller and your agent and
+  exports it only to X-Ray. Your agent's request span becomes the trace root instead, keeps the trace ID (so an
+  instrumented caller's trace still groups with it) and links to AgentCore's span. The AgentCore session ID is
+  recorded as `session.id`.
+- **No prompt or response content.** Message, instruction and tool payload content is removed from spans even
+  where a framework records it regardless of settings. Model, token usage and error metadata stay.
+
+ADOT started on its own runs none of Odigos's code and gets neither adjustment; see [ADOT](#adot).
+
+## Odigos-managed instrumentation
+
+Enable discovery and Odigos-managed instrumentation for `aws.bedrock-agentcore-runtime`, configure a
+**global `otlphttp` destination**, and enable a discovered runtime.
+
+Odigos does not install an SDK for you. It configures the OpenTelemetry SDK your artifact **already carries**,
+through the runtime's environment. It never rewrites or republishes the artifact and never writes to your S3 bucket or ECR repository. Your
+own build, scanning and signing stay authoritative for what runs. For each runtime the connector reads the
+deployment artifact (the ZIP, or the image's configuration and layers) to find out which SDKs it carries, and
+adopts one of them:
+
+| SDK the artifact carries | What Odigos starts | What Odigos changes |
+| --- | --- | --- |
+| The Odigos package (`odigos-agentcore` or `@odigos/agentcore`), or a bundle prepared from the carrier image | The package's bootstrap, with the selected distribution | The runtime's environment. For a direct-code ZIP it also makes the package's start wrapper the entry point |
+| AWS Distro for OpenTelemetry (ADOT) | ADOT itself | The runtime's environment. For a direct-code ZIP it also sets the entry point to AWS's `opentelemetry-instrument` form when it is a single script |
+| Neither | Nothing | Nothing; see [When the artifact has no SDK](#when-the-artifact-has-no-sdk) |
+
+When the artifact carries both, Odigos picks in this order:
+
+1. **The selected distribution.** With `config.distroOverride.otelDistroName` set, Odigos starts whichever
+   carried SDK can run it, the Odigos package first. When none can, the runtime waits with a hint.
+2. **The Odigos package.** Without an override, it is the best instrumentation the agent carries.
+3. **ADOT.** Also when the agent carries the Odigos package in a layout the package cannot start in, for
+   example a ZIP without its start wrapper, native ESM, or an image that already starts through a launcher.
+
+Detection only reads names and a few small metadata files (package manifests, the entry point and working
+directory configuration). It never executes the ZIP, the image or anything inside them.
+
+### The Odigos package
+
+Add the package to the agent's dependencies and redeploy: `odigos-agentcore[adot]` or
+`odigos-agentcore[openllmetry]` for Python, `@odigos/agentcore` for Node.js. See
+[Prepare an AgentCore artifact](/cloud-connectors/aws/workloads/agentcore/prepare). The package ships the same
+dormant bootstrap as the carrier image, so the connector activates it with the recipe environment, and you get
+invocation rooting and content redaction.
+
+- **ZIP:** AgentCore accepts a second entry point element only after its own `opentelemetry-instrument` prefix,
+  so the connector makes the package's start wrapper the whole entry point and names your script in
+  `ODIGOS_AGENTCORE_ENTRYPOINT`: `["odigos_agentcore_start.py"]` (Python) or
+  `["node_modules/@odigos/agentcore/odigos_agentcore_start.js"]` (Node.js). The wrapper finds the bootstrap and
+  your script relative to its own file. An entry point that starts through `opentelemetry-instrument` is
+  replaced the same way. Any other two-element entry point is rejected. Wrappers from releases that predate
+  this read the script only from a second element; the runtime then waits, with the hint to upgrade the package.
+  You add only the dependency: you do not change the entry point yourself.
+- **Image:** Python needs nothing more, because the wheel's `.pth` file loads the bootstrap at interpreter
+  start. For Node.js the connector appends `--require` of the package's `register.cjs` to `NODE_OPTIONS`. An
+  image whose `CMD` or `ENTRYPOINT` starts through `opentelemetry-instrument` cannot also start the package, so
+  Odigos starts the ADOT it launches instead; without ADOT the runtime is rejected until the launcher is removed.
+- An existing `AGENT_OBSERVABILITY_ENABLED` or `OTEL_*` setting is overridden by the recipe.
+
+A Python package installed without an extra has no SDK next to it. The runtime then waits, with the hint to
+install `odigos-agentcore[adot]`.
+
+### ADOT
+
+Many agents already run ADOT: AWS's starter toolkit installs `aws-opentelemetry-distro` and starts agents
+through `opentelemetry-instrument` by default. Odigos starts that SDK, `aws-opentelemetry-distro` for
+Python or `@aws/aws-distro-opentelemetry-node-autoinstrumentation` for Node.js, and points it at your
+destination:
+
+- **ZIP:** the entry point must be `["opentelemetry-instrument", "<your entry point>"]`, AWS's documented form.
+  When it is only `["<your entry point>"]`, the connector sets that form. For Node.js, AgentCore then starts the
+  ADOT package in `node_modules` itself. A Node.js runtime whose `NODE_OPTIONS` already requires the ADOT register
+  module keeps its entry point.
+- **Python image:** the `CMD` or `ENTRYPOINT` must already start through `opentelemetry-instrument`; otherwise
+  the runtime waits, with the hint to add the launcher or the package.
+- **Node.js image:** the connector appends a `--require` of the ADOT register module to `NODE_OPTIONS`, unless
+  the image already requires it.
+
+ADOT runs no Odigos code, so it is never refused for a custom `sitecustomize.py` or native ESM. It
+reports the distribution `<language>-agentcore-adot`.
+
+What ADOT on its own **keeps**: your SDK, in the version you pinned, and your build, scanning and signing. What
+it **loses** compared with the Odigos package, because only what environment variables can express is available:
+
+- **No invocation rooting.** Odigos's bootstrap makes the agent's server span a trace root. Odigos approximates
+  this with `OTEL_PROPAGATORS=tracecontext,baggage`, without `xray`. With an uninstrumented caller AgentCore sends
+  only `X-Amzn-Trace-Id`, so the agent's span becomes a root. With an instrumented caller the rewritten
+  `traceparent` still points at AgentCore's span, leaving one gap in the trace. Because `xray` is no longer a
+  propagator, outbound AWS calls stop carrying `X-Amzn-Trace-Id`, which matters if the agent invokes Lambda
+  functions directly.
+- **No content redaction.** Switches such as `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false` and
+  `TRACELOOP_TRACE_CONTENT=false` stay set, but the bootstrap's removal of payload content from spans is not
+  applied, so a framework that records content regardless of settings still does.
+- **No distribution switch** without a deployment: it is your SDK.
+
+An SDK that is not ADOT (`opentelemetry-distro` or `@opentelemetry/auto-instrumentations-node` on its own) cannot
+be adopted. The runtime waits with a hint that says so.
+
+### When the artifact has no SDK
+
+If the artifact carries no SDK, nothing is broken, and nothing
+is changed: the runtime is reported as waiting for the artifact, with a hint naming the one-line fix. It
+clears at the next reconciliation after a deployment brings an SDK. The hint is what the UI shows:
+
+| Artifact | Hint |
+| --- | --- |
+| Python, no SDK | Add `odigos-agentcore[adot]` to the agent's dependencies and redeploy. |
+| Node.js, no SDK | Add `@odigos/agentcore` to the agent's dependencies and redeploy. |
+| Odigos package without an extra | Install `odigos-agentcore[adot]`. |
+| Python image with ADOT, not started through the launcher | Start through `opentelemetry-instrument`, or add `odigos-agentcore[adot]`. |
+| Upstream OpenTelemetry distribution without ADOT | As above for the language, preceded by: the installed OpenTelemetry distribution is not ADOT and cannot be adopted. |
+| Selected distribution not in the artifact (for example OpenLLMetry selected, `[adot]` installed) | Add `odigos-agentcore[openllmetry]` (Python) or `@odigos/agentcore` (Node.js) to the agent's dependencies and redeploy, or select the distribution the artifact carries. |
+| Odigos package in a ZIP without its start wrapper at the root | Install the package at the ZIP root and redeploy. |
+| Odigos package in a ZIP whose start wrapper predates direct-code support | Upgrade `odigos-agentcore` or `@odigos/agentcore` (or the carrier bundle) and redeploy. |
+
+The state text reads: waiting for a change to the agent's artifact: Odigos configures the OpenTelemetry SDK the artifact already carries and never rewrites the artifact. See this workload's note for what to change.
+If the runtime was instrumented before (for example, a redeploy removed the SDK, or the selected distribution
+changed to one the artifact does not carry), Odigos first rolls its managed settings back, so the runtime is
+never left half configured.
+
+### Rollback, versions and sessions
+
+The connector saves a private rollback snapshot and updates the runtime's managed environment (and, for a ZIP,
+the entry point when the SDK needs a different one), preserving other deployment settings. Values the recipe
+overrides, such as a previous `OTEL_*` setting, are recorded and restored. AgentCore creates a new runtime
+version. Wait for the runtime and its **DEFAULT** endpoint to become ready, then invoke a new session.
+Existing sessions continue on their previous version, and owners must update custom endpoints pinned to older
+versions.
+
+A new customer artifact is detected again on the next reconciliation, so a redeploy that adds, changes or
+removes the SDK changes the delivery without any action on your side. Disabling the source restores the
+original environment and entry point, preserving unrelated settings; a newer artifact you deployed keeps its
+own entry point. A redeploy that kept the entry point Odigos set gets your entry point back, because the start
+wrapper alone cannot find your script once its variable is removed. Missing snapshots or externally changed managed settings block a
+conflicting rollback.
+
+Runtimes already instrumented by their owner (`ODIGOS_IAC`) are not taken over. Existing `OTEL_*` configuration
+is no longer a conflict: it is how an ADOT runtime looks, and the recipe overrides it with the previous values
+saved for rollback.
+
+## Self-managed instrumentation
+
+Use this when your infrastructure code should own the runtime. Odigos generates the instructions for each
+runtime and then validates it, but never changes it: in this mode the connector never calls
+`UpdateAgentRuntime`, including for removal. Your build decides which SDK the artifact carries, and the
+instructions cover both SDKs Odigos-managed instrumentation can start:
+
+| Route | The artifact carries | Environment | Odigos-managed counterpart |
+| --- | --- | --- | --- |
+| **A: Odigos package** (recommended) | `odigos-agentcore[adot]` or `[openllmetry]` (Python), `@odigos/agentcore` (Node.js), or a bundle copied from the carrier image | The Odigos recipe: bootstrap switches on, `OTEL_PROPAGATORS=tracecontext,baggage,xray` | [The Odigos package](#the-odigos-package) |
+| **B: ADOT only** | `aws-opentelemetry-distro` (Python) or `@aws/aws-distro-opentelemetry-node-autoinstrumentation` (Node.js), started through its own launcher | The ADOT recipe: no bootstrap switches, `OTEL_PROPAGATORS=tracecontext,baggage` | [ADOT](#adot) |
+
+Route B needs no Odigos package, but it has the limits of ADOT on its own: ADOT cannot root an invocation at the agent,
+so AgentCore's own service span stays missing from the trace, and the bootstrap's content redaction does not run.
+Only the ADOT distribution can be used on route B.
+
+<Steps>
+  <Step title="Choose self-managed for AgentCore and enable the runtime">
+    In the connector settings, keep instrumentation for `aws.bedrock-agentcore-runtime` self-managed and enable
+    the runtime's source. A global `otlphttp` destination is required.
+  </Step>
+
+  <Step title="Prepare the artifact">
+    **Route A:** add the Odigos package to your image or ZIP: `odigos-agentcore[adot]` or
+    `odigos-agentcore[openllmetry]` from PyPI for Python, `@odigos/agentcore` from npm for Node.js. Without
+    registry access you can copy the bundle from the carrier image instead:
+    [Prepare an AgentCore artifact](/cloud-connectors/aws/workloads/agentcore/prepare).
+
+    For a direct-code ZIP on route A, the entry point is the package's start wrapper alone, and the runtime
+    environment variable `ODIGOS_AGENTCORE_ENTRYPOINT` names your script, relative to the ZIP root. AgentCore
+    accepts a second entry point element only after `opentelemetry-instrument`, so never put the wrapper in
+    front of your script. Container images need neither.
+
+    **Route B:** add ADOT and start it through its launcher.
+
+    - **Python:** install `aws-opentelemetry-distro`. A direct-code ZIP's entry point becomes
+      `["opentelemetry-instrument", "<your entry point>"]`; an image's `CMD` starts through
+      `opentelemetry-instrument`, for example `["opentelemetry-instrument", "python", "app.py"]`.
+    - **Node.js (CommonJS):** install `@aws/aws-distro-opentelemetry-node-autoinstrumentation` and append
+      `--require @aws/aws-distro-opentelemetry-node-autoinstrumentation/register` to `NODE_OPTIONS`, on the
+      runtime or in the image, keeping any flags it already has. In an image whose `node_modules` is not in the
+      working directory, require `build/src/register.js` from the package by its absolute path.
+  </Step>
+
+  <Step title="Apply the generated instructions">
+    Open the runtime's instructions in Odigos and pick **AWS CLI**, **AWS CDK**, **CloudFormation** or
+    **Terraform**. Each variant carries both routes: the AWS CLI script takes `ROUTE=odigos` (default) or
+    `ROUTE=adot`, CloudFormation an `OdigosAgentCoreRoute` parameter, Terraform an `odigos_agentcore_route`
+    variable, and the CDK construct an `sdk` option. Values for that runtime (distribution, service name,
+    destination, signals) are already filled in. Destination authentication stays a placeholder,
+    `<OTLP_AUTH_HEADERS>`: supply it through your deployment's secret mechanism, or leave it empty when the
+    destination needs none.
+  </Step>
+
+  <Step title="Roll out">
+    Deploy, wait for the runtime and its **DEFAULT** endpoint to serve the new version, then invoke with a new
+    session.
+  </Step>
+</Steps>
+
+<Check>
+  At the next discovery cycle Odigos reports the runtime as **Instrumented** and its configuration as
+  **Conformant**. A differing or missing setting is reported as partial conformance, naming what differs.
+</Check>
+
+### How a self-managed runtime is validated
+
+The observer reads the runtime's environment and compares it, key by key and byte for byte, with the recipe
+Odigos-managed instrumentation would apply. `ODIGOS_AGENTCORE_PACKAGE` decides which recipe: `"sdk":"adot"`, or
+`"mode":"adopt"` without an `sdk`, is held to the ADOT recipe (route B); `"sdk":"odigos"` or no mode to the
+Odigos recipe (route A). The
+distribution is the source's `config.distroOverride.otelDistroName`, or the default ADOT distribution. For a
+ZIP, the entry point must also start that SDK: the start wrapper alone with `ODIGOS_AGENTCORE_ENTRYPOINT` on
+route A, and the `opentelemetry-instrument` prefix on route B (for Node.js, the ADOT register hook in
+`NODE_OPTIONS` also counts).
+
+- A runtime without `ODIGOS_IAC` is reported as not instrumented.
+- A runtime whose environment matches is **Conformant**. One that differs in any key, for example route B with
+  `OTEL_PROPAGATORS` still including `xray`, or with `ODIGOS_AGENTCORE_ENABLED` left set, is **Partial**.
+- A ZIP whose entry point does not start the SDK, for example route A without `ODIGOS_AGENTCORE_ENTRYPOINT`,
+  is **Partial**, naming the agent loader.
+- A runtime whose `DEFAULT` endpoint does not serve the latest version yet is reported as instrumenting.
+
+The observer never writes: it does not fix a difference, add a missing variable or roll anything back. Every
+change goes through your deployment owner. Conformance proves the configuration, not that the SDK started or
+that telemetry arrived.
+
+### What the instructions apply
+
+The environment is the same recipe Odigos-managed instrumentation applies, so a self-managed runtime is held
+to the same check. A CloudFormation example for a Python runtime, with the route chosen by a parameter:
+
+```yaml
+# Template top level:
+#   Parameters:
+#     OdigosAgentCoreRoute: { Type: String, AllowedValues: [odigos, adot], Default: odigos }
+#   Conditions:
+#     OdigosADOT: !Equals [!Ref OdigosAgentCoreRoute, adot]
+# Merge into Resources.<YourRuntime>.Properties of your AWS::BedrockAgentCore::Runtime.
+AgentRuntimeArtifact:
+  CodeConfiguration:            # direct code; containers point ContainerUri at the prepared image
+    Code: { S3: { Bucket: <prepared-bucket>, Prefix: <prepared-key> } }
+    Runtime: PYTHON_3_12
+    EntryPoint: !If [OdigosADOT, [opentelemetry-instrument, app.py], [odigos_agentcore_start.py]]
+EnvironmentVariables:
+  ODIGOS_IAC: '{"distro":"python-agentcore-adot","recipe":"1","v":1}'
+  ODIGOS_AGENTCORE_PACKAGE: !If [OdigosADOT, '{"v":1,"language":"python","distros":["python-agentcore-adot"],"mode":"adopt"}', '{"v":1,"language":"python","distros":["python-agentcore-adot"]}']
+  ODIGOS_AGENTCORE_ENABLED: !If [OdigosADOT, !Ref 'AWS::NoValue', 'true']
+  ODIGOS_AGENTCORE_DISTRO: !If [OdigosADOT, !Ref 'AWS::NoValue', 'python-agentcore-adot']
+  ODIGOS_AGENTCORE_ENTRYPOINT: !If [OdigosADOT, !Ref 'AWS::NoValue', 'app.py']   # direct code only; delete for a container image
+  OTEL_PROPAGATORS: !If [OdigosADOT, 'tracecontext,baggage', 'tracecontext,baggage,xray']
+  OTEL_SERVICE_NAME: '<runtime-name>'
+  OTEL_EXPORTER_OTLP_ENDPOINT: 'https://otlp.example.com:4318'
+  # ...per-signal endpoints, exporters and the rest of the recipe, as generated
+```
+
+| Variable | Purpose |
+| --- | --- |
+| `ODIGOS_IAC` | Marks the runtime as instrumented by its owner. Never set `ODIGOS_MANAGED`: that marker belongs to Odigos-managed runtimes. |
+| `ODIGOS_AGENTCORE_PACKAGE` | States what the artifact carries: language, distribution, and on route B `"mode":"adopt"` (read as ADOT). Odigos reads the runtime's language and the recipe to check from it. |
+| `ODIGOS_AGENTCORE_ENABLED`, `ODIGOS_AGENTCORE_DISTRO` | Route A only: activate the bootstrap and select the distribution. Route B removes both. |
+| `ODIGOS_AGENTCORE_ENTRYPOINT` | Route A direct-code ZIP only: the script the start wrapper starts, relative to the ZIP root. The ZIP's entry point is the wrapper alone. Route B and container images leave it unset. |
+| `OTEL_PROPAGATORS` | `tracecontext,baggage,xray` on route A, where the bootstrap roots the invocation; `tracecontext,baggage` on route B, so that the agent's span becomes a root when the caller is not instrumented. |
+| `DISABLE_ADOT_OBSERVABILITY`, `AGENT_OBSERVABILITY_ENABLED` | Turn off AgentCore's built-in ADOT defaults, which would otherwise export to CloudWatch and X-Ray. |
+| `OTEL_EXPORTER_OTLP_*`, `OTEL_*_EXPORTER` | Export over OTLP/HTTP to the destination, per signal. The per-signal `*_HEADERS` keys are removed because they would replace the shared authentication. |
+| `OTEL_SERVICE_NAME` | The service name Odigos expects: the source's reported service name, or the runtime name. |
+| `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`, `TRACELOOP_TRACE_CONTENT` | Keep prompt and response capture off. |
+| `OTEL_PYTHON_*` (Python) | Select the distribution's configurator and disable instrumentations it would duplicate. |
+
+On route B the exact package value is
+`{"v":1,"language":"python","distros":["python-agentcore-adot"],"mode":"adopt"}` for Python and
+`{"v":1,"language":"nodejs","distros":["nodejs-agentcore-adot"],"moduleFormat":"commonjs","mode":"adopt"}` for
+Node.js. Odigos-managed instrumentation applies the same ADOT recipe and also records `"sdk":"adot"` in this value.
+
+The full recipe is about 30 variables. AgentCore allows 50 per runtime and, on platform version V2, about
+1.5 KB in total for direct code and 2.5 KB for containers, so long destination settings can exceed the limit.
+
+<AccordionGroup>
+  <Accordion title="Using the AWS CLI">
+    The AWS CLI variant reads the runtime's current configuration, replaces only the Odigos settings and the
+    header keys it removes, and calls `update-agent-runtime` with everything else unchanged. Run it with
+    `ROUTE=adot` for route B; for Node.js it then also appends the ADOT hook to the runtime's `NODE_OPTIONS`.
+    Set `ARTIFACT_JSON` to switch to the prepared artifact in the same update. For a ZIP on route A, point
+    `ARTIFACT_JSON` at the start wrapper alone and set `ENTRY_SCRIPT` to your script, which the script writes to
+    `ODIGOS_AGENTCORE_ENTRYPOINT`. It needs AWS CLI v2 and `jq`.
+  </Accordion>
+
+  <Accordion title="Using Terraform">
+    The Terraform variant needs `hashicorp/aws` 6.17.0 or newer (`aws_bedrockagentcore_agent_runtime`). Merge it
+    into your existing resource rather than replacing it, set `odigos_agentcore_route` to `odigos` or `adot`,
+    and pass the destination authentication as a sensitive variable.
+  </Accordion>
+
+  <Accordion title="Using AWS CDK">
+    `OdigosAgentCoreInstrumentation` from `@odigos/aws-cdk` writes the same environment onto a `CfnRuntime`, a
+    `Runtime`, or a `CfnInclude` resource; `sdk: OdigosAgentCoreSdk.ADOT` selects route B. See
+    [CDK: AgentCore](/cloud-connectors/aws/cdk/agentcore).
+  </Accordion>
+
+  <Accordion title="Versions and sessions">
+    Each update creates a new runtime version. DEFAULT follows it; custom endpoints pinned to an older version
+    keep it until you update them, and existing sessions can keep the previous process. Test with a new session.
+  </Accordion>
+</AccordionGroup>
+
+### Remove self-managed instrumentation
+
+Through the same deployment owner, delete the variables the instructions added (including `ODIGOS_IAC` and
+`ODIGOS_AGENTCORE_PACKAGE`). On route A, point the runtime back at an artifact without the package or bundle,
+or keep the prepared artifact: without `ODIGOS_AGENTCORE_ENABLED=true` its bootstrap stays dormant. On route B,
+ADOT keeps running with its own defaults until you remove it, its launcher and its `NODE_OPTIONS` hook. Odigos
+stops reporting the runtime as instrumented at the next discovery cycle.
+
+## Telemetry and export limits
+
+- Bedrock model-call instrumentation covers Converse, ConverseStream, InvokeModel and
+  InvokeModelWithResponseStream, with model, usage and error metadata where the instrumentation and model
+  response provide it. Stream completion and cancellation can limit usage information.
+- ADOT uses its bundled AWS and framework instrumentation (LangChain/LangGraph, Strands and others). Node
+  OpenLLMetry uses the pinned plugin's SDK hooks with a metadata adapter that adds Converse support and
+  preserves lazy response streaming; its generic AWS SDK instrumentation is disabled to avoid duplicate model
+  spans.
+- Application logs are exported with trace context when the application logs through Python's `logging`
+  module or, on Node.js, through pino, winston or bunyan. `console.log` output is not captured.
+- Export goes directly to the global OTLP/HTTP protobuf destination. The runtime needs network access and
+  destination authentication; VPC runtimes may need NAT for a public endpoint.
+- **Managed collector routing, direct OTLP/gRPC, profiles, dual export and CloudWatch service telemetry
+  ingestion are not supported.** A regional collector alone is insufficient.
+- Configuration conformance proves settings match the recipe; it does not prove SDK startup, network
+  reachability or successful delivery. Collector or backend health never changes instrumentation,
+  distribution, runtime version or export route.
+
+## Unsupported combinations
+
+Native ESM, other languages, AgentCore Instances, and protocols other than HTTP are not supported.
+Odigos-managed instrumentation rejects these before changing the runtime, depending on the SDK it starts:
+
+- The Odigos package, which runs Odigos code, when the agent carries no ADOT to start instead: native ESM; a custom Python `sitecustomize` (except for the
+  package's image route, whose `.pth` file coexists with it); a Python image that already starts through
+  `opentelemetry-instrument`; and a Node.js image or runtime that already requires the ADOT register hook or
+  `@opentelemetry/auto-instrumentations-node/register`, as the AgentCore starter toolkit's Node.js image does.
+- Every direct-code runtime: the ZIP's index is read to detect what it carries, so an index (with the few files
+  detection opens) over 32 MiB is rejected. The archive itself is never downloaded whole.
+- Every runtime: ambiguous runtime versions and unsupported entry points.
+- ADOT runs no Odigos code and has none of the restrictions in the first item, apart from an entry point
+  or `CMD` that it cannot start through the ADOT launcher, which leaves the runtime waiting.
+
+Container runtime detection uses deployment metadata; custom launchers need explicit qualification. See the
+[AWS platform limits](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-how-it-works.html).
+Java and other languages are still discovered. This feature does not instrument Bedrock's model-serving
+process, Agents Classic, or AgentCore's managed Gateway, Memory, Browser or Code Interpreter.
+
+## Permissions
+
+Discovery uses `bedrock-agentcore:ListAgentRuntimes`, `GetAgentRuntime`, `ListAgentRuntimeEndpoints`,
+`GetAgentRuntimeEndpoint`, and `ListTagsForResource`. **Self-managed instrumentation requires only these
+read actions.**
+
+Odigos-managed instrumentation additionally requires `UpdateAgentRuntime` and `iam:PassRole` for the existing
+execution role, plus read access to the artifact so it can detect the SDK. Scope PassRole to that role and
+`iam:PassedToService=bedrock-agentcore.amazonaws.com`.
+
+- **Direct code:** `s3:GetObject` and `s3:GetObjectVersion` on the source ZIP.
+- **Containers:** `ecr:GetAuthorizationToken`, `ecr:BatchGetImage`, `ecr:GetDownloadUrlForLayer` and
+  `ecr:BatchCheckLayerAvailability` in the existing repository.
+
+Nothing else is needed: Odigos never writes to your bucket or repository.
+
+The connector does not edit
+execution-role policies. SSE-KMS artifact buckets also require the relevant KMS key permissions. The runtime's
+model invocation permissions remain with its deployment owner.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Prepare an artifact" icon="box" href="/cloud-connectors/aws/workloads/agentcore/prepare">
+    Add the package, or the bundle, to a container image or direct-code ZIP.
+  </Card>
+
+  <Card title="CDK: AgentCore" icon="code" href="/cloud-connectors/aws/cdk/agentcore">
+    Apply self-managed instrumentation from your CDK app.
+  </Card>
+</CardGroup>
