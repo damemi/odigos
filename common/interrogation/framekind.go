@@ -21,6 +21,14 @@ const (
 var runtimePrefixes = []string{
 	"java.", "javax.", "jakarta.", "sun.", "jdk.", "kotlin.", "scala.", "com.sun.", "org.jcp.",
 	"net.bytebuddy.", "io.opentelemetry.",
+	// The Odigos Java agent: its advice classes, its runtime packages, and the copy of
+	// ByteBuddy relocated into it. These run inside customer methods (advice on entry and
+	// exit, class transformation on first load), so without them here they look like app
+	// code. Listed by package because customer code can also live under dev.keyval.
+	"io.odigos.",
+	"dev.keyval.net.bytebuddy.", "dev.keyval.ebpf.", "dev.keyval.ebpfJava.",
+	"dev.keyval.headsampling.", "dev.keyval.spanmetrics.", "dev.keyval.spanrenamer.",
+	"dev.keyval.urltemplatization.",
 }
 
 var libraryPrefixes = []string{
@@ -31,7 +39,12 @@ var libraryPrefixes = []string{
 	"org.eclipse.jetty.", "io.undertow.", "com.mysql.", "org.mariadb.jdbc.", "oracle.jdbc.",
 	"com.microsoft.sqlserver.jdbc.", "redis.clients.jedis.", "io.lettuce.core.", "com.mongodb.",
 	"io.grpc.", "okhttp3.", "software.amazon.awssdk.", "com.amazonaws.", "org.elasticsearch.client.",
-	"com.rabbitmq.client.", "com.datastax.oss.driver.",
+	"com.rabbitmq.client.", "com.datastax.oss.driver.", "com.datastax.driver.",
+	// Serialization, security, caching, templating and other common libraries.
+	"com.fasterxml.jackson.", "com.google.", "io.jsonwebtoken.", "org.jboss.",
+	"io.reactivex.", "com.github.benmanes.caffeine.", "org.thymeleaf.", "org.yaml.snakeyaml.",
+	"org.aspectj.", "org.glassfish.", "io.github.resilience4j.", "feign.", "com.netflix.",
+	"org.mybatis.", "org.quartz.", "graphql.", "com.alibaba.",
 }
 
 // ClassifyFrame reports which FrameKind a JVM frame label belongs to.
