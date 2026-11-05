@@ -71,6 +71,7 @@ type Config struct {
 	// Fargate instrumentor stages agents from (stamped as ODIGOS_FARGATE_AGENTS_IMAGE on AWS connector
 	// pods). Empty keeps the connector's compiled-in default.
 	FargateAgentsImage    string
+	AgentCoreAgentsImage  string
 	ManagedCollectorImage string
 	// CentralBackendURL is passed to connector pods so they dial Central for the agents-api WebSocket.
 	CentralBackendURL string
@@ -222,6 +223,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		SchemaVersion:         cpg.ExpectedSchemaVersions[schemaName],
 		CentralBackendURL:     r.Config.CentralBackendURL,
 		FargateAgentsImage:    r.Config.FargateAgentsImage,
+		AgentCoreAgentsImage:  r.Config.AgentCoreAgentsImage,
 		ManagedCollectorImage: r.Config.ManagedCollectorImage,
 		OpAMPEndpoint:         opampEndpoint,
 	}

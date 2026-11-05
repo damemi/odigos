@@ -16,12 +16,20 @@ The generated setup scripts embed the selected permissions policy, so no separat
 step is needed. Scripts fail on errors. The role script can update an existing explicitly named role;
 the IAM-user flow uses a customer-managed policy and stops if that policy needs an explicit revision.
 
-PassRole is limited to the supplied task/execution role ARNs and ECS tasks service. Optional Application
+PassRole is limited to the supplied execution role ARNs and the ECS tasks or Bedrock AgentCore services.
+Include AgentCore runtime execution role ARNs in that list for AgentCore automatic instrumentation. Optional Application
 Signals setup permissions are excluded until enabled and are scoped to the supplied Lambda execution roles.
 For IRSA, configure both Central backend and the connector service account; verification and reconciliation
 run in different pods. The chart supports `cloudConnectors.aws.workloadIdentity` for this binding.
 
 ## Automatic and manual instrumentation
+
+Bedrock AgentCore adds `aws.bedrock-agentcore-runtime`: automatic installation into existing Python 3.12 and CommonJS Node.js 22 artifacts,
+ADOT/OpenLLMetry selection, automatic activation/rollback and read-only manual observation. This phase
+requires a global `otlphttp` destination and excludes managed collector routing. See the
+[AgentCore guide](../../../../docs/cloud-connectors/aws/workloads/agentcore/instrument.mdx) and
+`odigos-apps/aws/bedrock-agentcore` for the 16-combination demo suite. Apply migration
+`0024_connector_aws_agentcore.sql` before starting the updated connector (AWS schema version 13).
 
 A workload capability with instrumentation enabled allows automatic mutation. Discovery without
 instrumentation is manual mode: deploy the generated IaC yourself and Odigos observes it. Preserve unrelated

@@ -43,6 +43,25 @@ func TestSanitize(t *testing.T) {
 	}
 }
 
+func TestAgentCoreCarrierOverrideIsAWSOnly(t *testing.T) {
+	for _, provider := range []string{"aws", "gcp"} {
+		dep := BuildDeployment(crFor("prod", provider, nil), DeploymentParams{AgentCoreAgentsImage: "registry.example.com/agentcore:dev"})
+		var got string
+		for _, env := range dep.Spec.Template.Spec.Containers[0].Env {
+			if env.Name == "ODIGOS_AGENTCORE_AGENTS_IMAGE" {
+				got = env.Value
+			}
+		}
+		want := ""
+		if provider == "aws" {
+			want = "registry.example.com/agentcore:dev"
+		}
+		if got != want {
+			t.Fatalf("%s carrier override = %q, want %q", provider, got, want)
+		}
+	}
+}
+
 func TestInstallationCollectorImageIsStampedOnlyForManagedCollectors(t *testing.T) {
 	for _, enabled := range []bool{false, true} {
 		for _, image := range []string{"", "registry.example.com/collector:v2"} {

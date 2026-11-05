@@ -148,6 +148,7 @@ func (p *Provider) SupportedComputePlatformKinds() []string {
 // WorkloadDetectors maps workload discovery type names to detectors.
 func (p *Provider) WorkloadDetectors() map[string]baseapi.Detector {
 	return map[string]baseapi.Detector{
+		types.AgentCore:   workloaddetector.NewAgentCoreDetector(p.workloadStdb, p.cache, p.discoveryTags),
 		types.Lambda:      workloaddetector.NewLambdaDetector(p.workloadStdb, p.cache, p.discoveryTags),
 		types.FargateTask: workloaddetector.NewECSTaskDetector(p.workloadStdb, p.cache, p.discoveryTags),
 	}
@@ -171,6 +172,7 @@ func (p *Provider) ComputePlatformDetectors() map[string]baseapi.Detector {
 func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 	regionalRoutes := regionalRouteResolver{provider: p}
 	return map[string]baseapi.Reconciler{
+		types.AgentCore:   workloadinstrumentor.NewAgentCore(p.workloadStdb, p.cache),
 		types.Lambda:      workloadinstrumentor.NewLambda(p.workloadStdb, p.cache, p.layers, p.debugTelemetry, regionalRoutes),
 		types.FargateTask: workloadinstrumentor.NewECSFargate(p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages, regionalRoutes),
 	}
@@ -181,13 +183,14 @@ func (p *Provider) Reconcilers() map[string]baseapi.Reconciler {
 // counterpart to Reconcilers above and share its comparator, so both modes judge "correctly instrumented"
 // by one definition.
 //
-// Both AWS workload types are covered. Cloud Run and Container Apps still report marker presence but not
+// All three AWS workload types are covered. Cloud Run and Container Apps still report marker presence but not
 // conformance until their own observers land (plan waves 4.2-4.3); the base warns for a manual-mode type with
 // no observer rather than letting an unobserved type look observed.
 func (p *Provider) WorkloadObservers() map[string]baseapi.InstrumentationObserver {
 	regionalRoutes := regionalRouteResolver{provider: p}
 	return map[string]baseapi.InstrumentationObserver{
-		types.Lambda: workloadinstrumentor.NewLambdaObserver(p.workloadStdb, p.cache, p.debugTelemetry, regionalRoutes),
+		types.AgentCore: workloadinstrumentor.NewAgentCoreObserver(p.workloadStdb, p.cache),
+		types.Lambda:    workloadinstrumentor.NewLambdaObserver(p.workloadStdb, p.cache, p.debugTelemetry, regionalRoutes),
 		types.FargateTask: workloadinstrumentor.NewECSFargateObserver(
 			p.workloadStdb, p.cache, p.cfg.FargateAgentsImage, p.debugEcsTelemetry, p.ecrImages, regionalRoutes),
 	}
@@ -196,12 +199,13 @@ func (p *Provider) WorkloadObservers() map[string]baseapi.InstrumentationObserve
 // WorkloadPlanners implements the optional base.WorkloadPlannerRegistry: what a customer has to apply to
 // instrument a workload themselves, served on the read path.
 //
-// Both AWS types are covered, and both planners are built from the same recipes and images the reconcilers and
+// All three AWS types are covered, and the planners are built from the same recipes and images the reconcilers and
 // observers above use — which is the property the whole feature rests on. Nothing converges a manual-mode
 // workload, so a plan that differs from what the observer judges against produces a customer who applied the
 // instructions correctly and is told their deployment has drifted.
 func (p *Provider) WorkloadPlanners() map[string]baseapi.InstrumentationPlanner {
 	return map[string]baseapi.InstrumentationPlanner{
+		types.AgentCore:   workloadinstrumentor.NewAgentCorePlanner(p.workloadStdb),
 		types.Lambda:      workloadinstrumentor.NewLambdaPlanner(p.workloadStdb, p.layers),
 		types.FargateTask: workloadinstrumentor.NewECSFargatePlanner(p.cfg.FargateAgentsImage),
 	}

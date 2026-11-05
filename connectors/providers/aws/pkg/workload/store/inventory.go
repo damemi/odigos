@@ -17,8 +17,9 @@ import (
 // Workload kinds — directly-instrumentable resources. Kind strings match the spec type names so the
 // coordinator resolves a workload's instrumentation availability from the spec.
 const (
-	KindLambda  = types.Lambda
-	KindECSTask = types.FargateTask
+	KindLambda    = types.Lambda
+	KindAgentCore = types.AgentCore
+	KindECSTask   = types.FargateTask
 )
 
 // ECS launch types as reported by the AWS API.
@@ -148,7 +149,7 @@ func (t ECSTask) InstrumentationType() string {
 
 // SupportedKinds returns the workload kinds this connector publishes.
 func SupportedKinds() []string {
-	return []string{KindLambda, KindECSTask}
+	return []string{KindLambda, KindECSTask, KindAgentCore}
 }
 
 // LambdaFunction is a discovered Lambda function inventory record.
@@ -759,7 +760,7 @@ func (s *Store) SetOwnerAccount(ctx context.Context, accountID string) error {
 // used when the connector name is rebound to a different AWS account (the old account's inventory is
 // meaningless for the new one). Sources/destinations are purged separately via the base PurgeIntent.
 func (s *Store) PurgeConnectorInventory(ctx context.Context) error {
-	for _, table := range []string{"lambda_functions", "ecs_tasks", "ecs_services", "discovery_state"} {
+	for _, table := range []string{"lambda_functions", "ecs_tasks", "ecs_services", "discovery_state", "agentcore_runtimes", "agentcore_instrumentation_snapshots"} {
 		if _, err := s.Pool().Exec(ctx, "DELETE FROM connector_aws."+table+" WHERE connector_name = $1", s.ConnectorName()); err != nil {
 			return fmt.Errorf("purge %s: %w", table, err)
 		}
@@ -781,7 +782,8 @@ func (s *Store) UpdateDiscoveryState(ctx context.Context, region, kind string, s
 // standalone Fargate tasks) as raw DiscoveredWorkload objects; the base coordinator enriches them with
 // source intent. Every query returns the same column shape:
 //
-//	name, region, external_id, language, version, last_seen_at, instrumented, error, phase
+//	name, region, external_id, language, version, last_seen_at, instrumented, error, phase, ...,
+//	routing note, origin, waiting_for
 //
 // Lambda encodes language+version in its runtime identifier, split in Go (splitRuntime); the ECS rows
 // carry them as separate metadata keys.
@@ -823,7 +825,7 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'conformance', ''), metadata->'conformance_missing', metadata->>'conformance_since',
 			COALESCE(metadata->>'observation_error', ''),
 			COALESCE(metadata->>'state','') = '` + lambdaStatePending + `' OR COALESCE(metadata->>'last_update_status','') = '` + lambdaUpdateInProgress + `',
-			layers, metadata->'` + metaRoutingNote + `', COALESCE(metadata->>'instrumentation_origin', '')
+			layers, metadata->'` + metaRoutingNote + `', COALESCE(metadata->>'instrumentation_origin', ''), ''
 			FROM connector_aws.lambda_functions WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// Fargate SERVICES: one workload per (cluster, service) from the ecs_services inventory. The
 		// external id — a source's stable identity — is cluster_arn || '/' || service_name (NOT a task ARN,
@@ -836,7 +838,7 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'instrumentation_phase', ''),
 			COALESCE(launch_type, ''), COALESCE(task_definition, ''), COALESCE(deployment_controller, ''),
 			metadata->'containers',
-			` + ecsObservationCols + `, NULL, metadata->'` + metaRoutingNote + `', ''
+			` + ecsObservationCols + `, NULL, metadata->'` + metaRoutingNote + `', '', ''
 			FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// STANDALONE Fargate tasks (no ECS service — RunTask/EventBridge): inherently ephemeral, so the task
 		// ARN is the identity. They stay discoverable/selectable, but instrumentation reports a terminal
@@ -845,9 +847,18 @@ func workloadQueries() []workloadQuery {
 			'', '', last_seen_at, false,
 			COALESCE(metadata->>'instrumentation_error', ''), '',
 			'', '', '', NULL,
-			` + noObservationCols + `, NULL, ''
+			` + noObservationCols + `, NULL, '', ''
 			FROM connector_aws.ecs_tasks
 			WHERE connector_name = $1 AND deleted_at IS NULL AND COALESCE(service_name, '') = ''`},
+		{KindAgentCore, false, `SELECT runtime_name, region, runtime_arn, COALESCE(inventory->>'language',''),
+			COALESCE(inventory->>'runtimeVersion',''), last_seen_at,
+			COALESCE(inventory->>'origin','') != '',
+			COALESCE(metadata->>'instrumentation_error',''), COALESCE(metadata->>'instrumentation_phase',''),
+			'', CASE WHEN inventory->>'status'='READY' THEN COALESCE(inventory->>'version','') ELSE '' END, '', NULL,
+			COALESCE(metadata->>'conformance',''), metadata->'conformance_missing', metadata->>'conformance_since',
+			COALESCE(metadata->>'observation_error',''), (inventory->>'status' IN ('CREATING','UPDATING') OR COALESCE(metadata->>'settling','false')='true'),
+			NULL, metadata->'routing_note', COALESCE(inventory->>'origin',''), COALESCE(metadata->>'waiting_for','')
+			FROM connector_aws.agentcore_runtimes WHERE connector_name=$1 AND deleted_at IS NULL`},
 	}
 }
 
@@ -857,7 +868,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 	defer rows.Close()
 	{
 		for rows.Next() {
-			var name, region, externalID, language, version, instrErr, instrPhase, instrOrigin string
+			var name, region, externalID, language, version, instrErr, instrPhase, instrOrigin, waitingFor string
 			// The next four columns carry the kind-specific facts each query supplies and the others
 			// pad out: architecture/launch type, task definition, deployment controller, and the ECS
 			// container inventory. They feed DiscoveredWorkload.Details, which the report narrows to
@@ -877,7 +888,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 			if err := rows.Scan(&name, &region, &externalID, &language, &version, &lastSeen, &instrumented, &instrErr, &instrPhase,
 				&archOrLaunchType, &taskDefinition, &deploymentController, &containersJSON,
 				&conformanceTarget{&conformance}, &missingJSON, &conformanceSince, &observationErr, &settling, &layersJSON,
-				&routingNoteJSON, &instrOrigin); err != nil {
+				&routingNoteJSON, &instrOrigin, &waitingFor); err != nil {
 				return err
 			}
 			runtime := language
@@ -902,6 +913,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 				Settling:              settling,
 				ObservationError:      observationErr,
 				RoutingNote:           decodeRoutingNote(routingNoteJSON),
+				WaitingFor:            waitingFor,
 				Details: workloadDetails(q.kind, externalID, runtime,
 					archOrLaunchType, taskDefinition, deploymentController, containersJSON,
 					decodeStringSlice(layersJSON, "layers")),
@@ -918,6 +930,8 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 // instrumentation path — gets nothing rather than a block of empty fields.
 func workloadDetails(kind, externalID, lambdaRuntime, archOrLaunchType, taskDefinition, deploymentController string, containersJSON []byte, layers []string) *api.WorkloadDetails {
 	switch kind {
+	case KindAgentCore:
+		return &api.WorkloadDetails{Kind: kind, Service: externalID, LatestReadyRevision: taskDefinition}
 	case KindLambda:
 		return &api.WorkloadDetails{
 			Kind:         kind,
@@ -1008,6 +1022,10 @@ func splitRuntime(runtime string) (language, version string) {
 func (s *Store) LookupDiscoveredWorkload(ctx context.Context, serviceName, kind, region string) (externalID, foundRegion string, found bool, err error) {
 	inventoryLog.Debug("lookup workload", "connector", s.ConnectorName(), "service", serviceName, "kind", kind, "region", region)
 	switch kind {
+	case KindAgentCore:
+		err = s.Pool().QueryRow(ctx, `SELECT runtime_arn,region FROM connector_aws.agentcore_runtimes
+		WHERE connector_name=$1 AND runtime_name=$2 AND deleted_at IS NULL AND ($3='' OR region=$3)
+		ORDER BY region LIMIT 1`, s.ConnectorName(), serviceName, region).Scan(&externalID, &foundRegion)
 	case KindLambda:
 		err = s.Pool().QueryRow(ctx, `
 			SELECT function_arn, region FROM connector_aws.lambda_functions

@@ -4,6 +4,7 @@ package types
 
 const (
 	Lambda         = "aws.lambda"
+	AgentCore      = "aws.bedrock-agentcore-runtime"
 	FargateTask    = "aws.fargate-task"
 	FargateCluster = "aws.fargate-cluster"
 	ECSCluster     = "aws.ecs-cluster"

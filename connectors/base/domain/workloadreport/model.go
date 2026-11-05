@@ -329,7 +329,8 @@ func detailsToModel(w api.DiscoveredWorkload) model.WorkloadDetails {
 			Architecture: strPtrOrNil(d.Architecture),
 			LayerArn:     strPtrOrNil(d.LayerArn),
 		}
-	case strings.HasPrefix(kind, "gcp.cloud-run"), strings.HasPrefix(kind, "azure.container-apps"):
+	case strings.HasPrefix(kind, "gcp.cloud-run"), strings.HasPrefix(kind, "azure.container-apps"), kind == "aws.bedrock-agentcore-runtime":
+		// AgentCore uses the same identity/latest-ready-version shape, with no container inventory.
 		// Cloud Run and Container Apps share ONE wire type, because every fact here means the same thing on
 		// both: the platform resource identity, the revision the platform last reported ready, and the
 		// containers in that revision's template. `kind` still tells a client which platform it is, so two
@@ -512,6 +513,7 @@ var stageLabels = map[string]string{
 	// distinction between "Odigos is working on it" and "nothing happens until you deploy".
 	waitingForLabel(api.WaitingForDestination): "Waiting for destination",
 	waitingForLabel(api.WaitingForCustomer):    "Waiting for you to apply the instrumentation",
+	waitingForLabel(api.WaitingForArtifact):    "Waiting for a change to the agent's artifact",
 
 	// Terminal / in-flight conditions where the generic split is right but the wording is not: these are
 	// read as a status line, so they say what is happening rather than naming a category.
@@ -577,6 +579,8 @@ func waitingForMessage(waitingFor string) string {
 		return "waiting for a destination: this workload is marked for instrumentation, but the connector has no OTLP destination to export telemetry to. Instrumentation starts automatically once a destination is configured."
 	case api.WaitingForCustomer:
 		return "waiting for you to apply the instrumentation: this workload type is configured for manual (infrastructure-as-code) instrumentation, so Odigos does not change the workload itself. Apply the instrumentation to your own deployment definition — this workload reports as instrumented automatically once the change is live."
+	case api.WaitingForArtifact:
+		return "waiting for a change to the agent's artifact: Odigos configures the OpenTelemetry SDK the artifact already carries and never rewrites the artifact. See this workload's note for what to change."
 	default:
 		return "waiting for " + waitingFor
 	}

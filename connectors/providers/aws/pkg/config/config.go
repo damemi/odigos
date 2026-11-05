@@ -61,7 +61,7 @@ type Config struct {
 // build arg, with nothing forcing them to agree — a connector could ship v0.3.0 Lambda layers while
 // staging v0.1.0 Fargate agents, and nobody would notice until a customer's ECS task behaved unlike
 // their Lambdas.
-const DefaultFargateAgentsImage = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+const DefaultFargateAgentsImage = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
 
 // ArtifactsVersion is the odigos-io/aws-connector-artifacts release this connector build is pinned to, as
 // a Go value rather than only as a file the tests read.
@@ -72,7 +72,7 @@ const DefaultFargateAgentsImage = "registry.odigos.io/odigos-fargate-agents:v0.0
 // actually knows the answer to. See CDKPackageVersion.
 //
 // TestArtifactVersions keeps this equal to the ARTIFACTS_VERSION file, alongside the two image pins.
-const ArtifactsVersion = "v0.0.19"
+const ArtifactsVersion = "v0.0.27"
 
 // CDKPackageVersion is the @odigos/aws-cdk (and odigos-aws-cdk) version matching this connector build.
 //

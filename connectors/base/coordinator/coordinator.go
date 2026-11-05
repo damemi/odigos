@@ -156,6 +156,41 @@ func resetTicker(t *time.Ticker, current, want time.Duration) time.Duration {
 // those triggers is itself a full pass. The tick keeps its own reason to exist for the case triggers cannot
 // cover: runDiscovery returns early on a failed cycle WITHOUT firing any trigger, so a connector whose
 // discovery is failing still reconciles, observes and adopts on the timer alone.
+// Source changes arrive in bursts: Central creates a batch of sources one request at a time. A triggered pass
+// starts once the burst goes quiet, so every source in it lands in the same pass instead of the first one
+// starting a pass the rest then wait out. triggerSettleMax bounds the wait under a steady stream of changes.
+var (
+	triggerQuiet     = 1500 * time.Millisecond
+	triggerSettleMax = 10 * time.Second
+)
+
+// settleTriggers waits after a trigger until no further trigger arrives for quiet, or max has passed since the
+// first one. Triggers received meanwhile are absorbed into the pass that follows. It reports false when ctx ends.
+func settleTriggers(ctx context.Context, trigger <-chan struct{}, quiet, max time.Duration) bool {
+	limit := time.NewTimer(max)
+	defer limit.Stop()
+	calm := time.NewTimer(quiet)
+	defer calm.Stop()
+	absorbed := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-trigger:
+			absorbed++
+			calm.Reset(quiet)
+		case <-calm.C:
+			if absorbed > 0 {
+				coordLog.Debug("source changes batched into one pass", "absorbed", absorbed)
+			}
+			return true
+		case <-limit.C:
+			coordLog.Debug("source changes kept arriving; starting the pass", "absorbed", absorbed)
+			return true
+		}
+	}
+}
+
 func deferNextTick(t *time.Ticker, current, want time.Duration) time.Duration {
 	if want > 0 && want != current {
 		coordLog.Info("config interval changed; resetting ticker", "from", current, "to", want)
@@ -486,6 +521,9 @@ func (c *Coordinator) reconcileLoop(ctx context.Context) {
 			c.runReconcile(ctx, recs)
 			interval = resetTicker(ticker, interval, c.cfgMgr.Settings().ReconcileInterval)
 		case <-c.reconcileTrigger:
+			if !settleTriggers(ctx, c.reconcileTrigger, triggerQuiet, triggerSettleMax) {
+				return
+			}
 			coordLog.Info("reconcile triggered by source change")
 			c.runReconcile(ctx, recs)
 			interval = deferNextTick(ticker, interval, c.cfgMgr.Settings().ReconcileInterval)
@@ -539,6 +577,9 @@ func (c *Coordinator) computePlatformReconcileLoop(ctx context.Context) {
 			c.runComputePlatformReconcile(ctx, recs)
 			interval = resetTicker(ticker, interval, c.cfgMgr.Settings().ReconcileInterval)
 		case <-c.computePlatformTrigger:
+			if !settleTriggers(ctx, c.computePlatformTrigger, triggerQuiet, triggerSettleMax) {
+				return
+			}
 			coordLog.Info("compute-platform reconcile triggered by source change")
 			c.runComputePlatformReconcile(ctx, recs)
 			interval = deferNextTick(ticker, interval, c.cfgMgr.Settings().ReconcileInterval)
@@ -633,10 +674,14 @@ func (c *Coordinator) markBlockedOnPrerequisites(ctx context.Context, workloads 
 		coordLog.Warn("list regional destinations for workload reports failed; not reporting a blocked state", "error", err)
 		return
 	}
-	markWaitingForDestination(workloads, destinations)
+	var globalOnly func(string) bool
+	if policy, ok := c.provider.(api.GlobalOTLPDestinationPolicy); ok {
+		globalOnly = policy.RequiresGlobalOTLPDestination
+	}
+	markWaitingForDestination(workloads, destinations, globalOnly)
 }
 
-func markWaitingForDestination(workloads []api.DiscoveredWorkload, destinations []store.DestinationRecord) {
+func markWaitingForDestination(workloads []api.DiscoveredWorkload, destinations []store.DestinationRecord, globalOnly func(string) bool) {
 	markedRegions := make(map[string]bool)
 	for _, dest := range destinations {
 		if !dest.Disabled && domaindest.IsManagedCollectorType(dest.Type) {
@@ -645,7 +690,7 @@ func markWaitingForDestination(workloads []api.DiscoveredWorkload, destinations 
 	}
 	for i := range workloads {
 		if blockableForInstrumentation(workloads[i]) || unverifiableWithoutDestination(workloads[i]) {
-			if !markedRegions[workloads[i].Region] {
+			if (globalOnly != nil && globalOnly(workloads[i].Kind)) || !markedRegions[workloads[i].Region] {
 				workloads[i].WaitingFor = api.WaitingForDestination
 			}
 		}

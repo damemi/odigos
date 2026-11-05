@@ -77,6 +77,13 @@ type ReconcilePassContextProvider interface {
 	ReconcilePassContext(context.Context) context.Context
 }
 
+// GlobalOTLPDestinationPolicy identifies workload kinds whose instrumentation currently exports
+// only to the connector-wide OTLP destination. A regional Collector marker cannot satisfy their
+// destination prerequisite. This is a configuration capability, independent of Collector health.
+type GlobalOTLPDestinationPolicy interface {
+	RequiresGlobalOTLPDestination(kind string) bool
+}
+
 // Detector enumerates, persists and prunes ONE resource type across the provider's scope (e.g. regions)
 // in a single discovery cycle. Keyed by spec discovery type name.
 type Detector interface {

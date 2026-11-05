@@ -577,6 +577,10 @@ func TestInstrumentationArtifactsDeclareTheExpectedVariants(t *testing.T) {
 			"python": "cdk,cloudformation,terraform",
 			"ruby":   "cdk,cloudformation,terraform",
 		},
+		"aws.bedrock-agentcore-runtime": {
+			"nodejs": "aws-cli,cdk,cloudformation,terraform",
+			"python": "aws-cli,cdk,cloudformation,terraform",
+		},
 	} {
 		byLang := map[string][]string{}
 		for _, a := range spec.MustGet("aws").InstrumentationArtifacts(typeName) {
@@ -632,6 +636,14 @@ func TestInstrumentationArtifactsCarryOnlyTheirOwnLanguage(t *testing.T) {
 			"/instrumentations/ruby":   "ruby",
 			"RUBYOPT":                  "ruby",
 		},
+		"aws.bedrock-agentcore-runtime": {
+			"OTEL_PYTHON_CONFIGURATOR":          "python",
+			"odigos_agentcore_start.py":         "python",
+			"/var/odigos/agentcore/python/3.12": "python",
+			"odigos_agentcore_start.js":         "nodejs",
+			"/var/odigos/agentcore/nodejs/22":   "nodejs",
+			`"moduleFormat":"commonjs"`:         "nodejs",
+		},
 	}
 	for typeName, lits := range owned {
 		for _, a := range spec.MustGet("aws").InstrumentationArtifacts(typeName) {
@@ -660,6 +672,8 @@ func TestInstrumentationArtifactsAreServedPerLanguage(t *testing.T) {
 		{"aws.fargate-task", "ruby", "RUBYOPT"},
 		{"aws.fargate-task", "php", "PHP_INI_SCAN_DIR"},
 		{"aws.fargate-task", "dotnet", "CORECLR_PROFILER_PATH"},
+		{"aws.bedrock-agentcore-runtime", "python", "odigos_agentcore_start.py"},
+		{"aws.bedrock-agentcore-runtime", "nodejs", "odigos_agentcore_start.js"},
 	} {
 		arts := s.InstrumentationArtifactsFor(tc.typeName, tc.lang)
 		if len(arts) == 0 {

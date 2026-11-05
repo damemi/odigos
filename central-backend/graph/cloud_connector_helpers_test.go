@@ -8,6 +8,36 @@ import (
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
+func TestAgentCoreDiscoveryAndInstrumentationReachCreationCatalog(t *testing.T) {
+	provider := cloudConnectorProviderFromSpec(spec.MustGet("aws"))
+	const kind = "aws.bedrock-agentcore-runtime"
+	for _, key := range []string{featureDiscovery, featureInstrumentation} {
+		feature := featureByKey(provider.Features, key)
+		if feature == nil || !feature.Enabled {
+			t.Fatalf("AgentCore creation catalog has no enabled %s feature", key)
+		}
+		var runtime *model.CloudConnectorType
+		for _, candidate := range feature.Types {
+			if candidate.Name == kind {
+				runtime = candidate
+				break
+			}
+		}
+		if runtime == nil || !runtime.Implemented || runtime.DisplayName != "Amazon Bedrock AgentCore Runtime" {
+			t.Fatalf("AgentCore is missing or unavailable in the %s creation catalog: %+v", key, runtime)
+		}
+		if key == featureInstrumentation && runtime.Method != spec.MethodService {
+			t.Fatalf("AgentCore instrumentation method = %q", runtime.Method)
+		}
+	}
+	for _, artifact := range provider.Setup.Artifacts {
+		if artifact.Section == spec.InstrumentationSection(kind) {
+			return
+		}
+	}
+	t.Fatal("AgentCore manual instructions are missing from the creation catalog")
+}
+
 // The Collector drawer reads these sections from cloudConnectorProviders. Keep the
 // catalog boundary covered so a spec step cannot disappear or lose its snippet
 // during the backend-to-UI mapping.

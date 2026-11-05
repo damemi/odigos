@@ -407,6 +407,10 @@ func TestToModelRevisionedServiceDetails(t *testing.T) {
 			kind: "azure.container-apps",
 		},
 		{
+			name: "bedrock agentcore",
+			kind: "aws.bedrock-agentcore-runtime",
+		},
+		{
 			// Containers travel when the reporter has them, on either platform.
 			name:       "with a container inventory",
 			kind:       "gcp.cloud-run",
@@ -529,6 +533,42 @@ func TestToModelWaitingForDestination(t *testing.T) {
 	}
 	if iss.Transient == nil || !*iss.Transient {
 		t.Error("the issue must be transient — it clears when a destination is added, with no action on this workload")
+	}
+}
+
+// An AgentCore agent whose artifact carries no SDK is a wait, and the dependency to add travels as the workload's
+// routing note: the report has to carry both, or the customer sees "waiting" with nothing to act on.
+func TestToModelWaitingForArtifactCarriesTheHint(t *testing.T) {
+	w := api.DiscoveredWorkload{
+		ServiceName:                "agent",
+		Kind:                       "aws.bedrock-agentcore-runtime",
+		InstrumentationType:        "aws.bedrock-agentcore-runtime",
+		InstrumentationAvailable:   true,
+		InstrumentationImplemented: true,
+		SourceMatched:              true,
+		SourceEnabled:              true,
+		WaitingFor:                 api.WaitingForArtifact,
+		RoutingNote:                &api.WorkloadRoutingNote{Code: "agentcore-artifact-change", Message: "Add odigos-agentcore[adot] to the agent's dependencies and redeploy."},
+	}
+	got := ToModel(w)
+	if got.Current.State != api.WorkloadStateNotInstrumented || ptr(got.Progress.WaitingFor) != api.WaitingForArtifact {
+		t.Fatalf("state %q waitingFor %q, want a NotInstrumented artifact wait", got.Current.State, ptr(got.Progress.WaitingFor))
+	}
+	if msg := ptr(got.Progress.Message); !strings.Contains(msg, "never rewrites the artifact") || strings.Contains(msg, "repackag") {
+		t.Errorf("message = %q", msg)
+	}
+	codes := map[string]string{}
+	for _, iss := range got.Issues {
+		codes[iss.Code] = iss.Message
+		if iss.Severity == "error" {
+			t.Errorf("issue %+v reads as a failure", iss)
+		}
+	}
+	if _, ok := codes["WaitingForArtifact"]; !ok {
+		t.Errorf("no wait issue: %v", codes)
+	}
+	if !strings.Contains(codes["agentcore-artifact-change"], "odigos-agentcore[adot]") {
+		t.Errorf("the dependency hint did not reach the report: %v", codes)
 	}
 }
 

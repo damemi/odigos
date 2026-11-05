@@ -90,6 +90,54 @@ printf '{}\n'
 	}
 }
 
+func TestAWSOnboardingPolicyAllowsScopedAgentCorePassRole(t *testing.T) {
+	for _, artifact := range MustGet("aws").SetupArtifacts() {
+		if artifact.ID != "policy-preview" {
+			continue
+		}
+		role := "arn:aws:iam::210987654321:role/AgentCoreExecution"
+		raw := renderSetupArtifact(artifact, []string{"bedrock-agentcore:UpdateAgentRuntime", "iam:PassRole"}, map[string]string{"passRoleResources": `["` + role + `"]`})
+		var policy struct {
+			Statement []struct {
+				Sid         string
+				NotResource []string
+				Condition   map[string]map[string][]string
+			}
+		}
+		// Decode the fields under test individually; unrelated IAM statements have scalar conditions.
+		var doc struct{ Statement []json.RawMessage }
+		if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+			t.Fatal(err)
+		}
+		for _, statement := range doc.Statement {
+			var id struct{ Sid string }
+			_ = json.Unmarshal(statement, &id)
+			if id.Sid != "RestrictPassRoleService" && id.Sid != "RestrictPassRoleResources" {
+				continue
+			}
+			var parsed struct {
+				Sid         string
+				NotResource []string
+				Condition   map[string]map[string][]string
+			}
+			if err := json.Unmarshal(statement, &parsed); err != nil {
+				t.Fatal(err)
+			}
+			policy.Statement = append(policy.Statement, parsed)
+		}
+		if len(policy.Statement) != 2 {
+			t.Fatal("missing PassRole boundaries")
+		}
+		services := policy.Statement[0].Condition["StringNotEquals"]["iam:PassedToService"]
+		if len(services) != 2 || services[0] != "ecs-tasks.amazonaws.com" || services[1] != "bedrock-agentcore.amazonaws.com" {
+			t.Fatalf("AgentCore is denied or service scope is too broad: %v", services)
+		}
+		if len(policy.Statement[1].NotResource) != 1 || policy.Statement[1].NotResource[0] != role {
+			t.Fatal("execution role scope was lost")
+		}
+	}
+}
+
 func TestAWSLambdaScriptsPreserveCustomerLayersInBashAndZsh(t *testing.T) {
 	if _, err := exec.LookPath("jq"); err != nil {
 		t.Skip("jq required to exercise the published instructions")

@@ -84,6 +84,7 @@ func main() {
 		// Optional override for the Fargate agents bundle staged by the AWS connector's ECS instrumentor;
 		// empty keeps the connector's compiled-in default (registry.odigos.io/odigos-fargate-agents).
 		FargateAgentsImage:    os.Getenv("CONNECTOR_AWS_FARGATE_AGENTS_IMAGE"),
+		AgentCoreAgentsImage:  os.Getenv("CONNECTOR_AWS_AGENTCORE_AGENTS_IMAGE"),
 		ManagedCollectorImage: os.Getenv("CONNECTOR_COLLECTOR_IMAGE"),
 		// Per environment, from cloudConnectors.managedCollectors.externalEndpoint in the odigos-central
 		// chart. Deliberately not defaulted: there is no address that is right for an unknown Central

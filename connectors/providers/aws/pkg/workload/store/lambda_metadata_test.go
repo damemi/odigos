@@ -232,7 +232,7 @@ func TestListWorkloadsQueriesShareColumnShape(t *testing.T) {
 		return m[1]
 	}
 	want := topLevelCommas(selectList(queries[0].sql))
-	// Sanity floor: the scan reads 20 columns. If a refactor drops the shared shape to something trivially
+	// Sanity floor: the scan reads 22 columns. If a refactor drops the shared shape to something trivially
 	// small, the comparison below would still pass while checking nothing.
 	if want < 10 {
 		t.Fatalf("query 0 selects only %d columns; this test has stopped checking anything", want)
@@ -243,6 +243,38 @@ func TestListWorkloadsQueriesShareColumnShape(t *testing.T) {
 				i+1, q.kind, got, want)
 		}
 	}
+	// The trailing column is the provider-side wait. Only AgentCore reads it from its metadata; a kind that
+	// selected it from a table without the key would still scan, so the shape check above cannot catch a
+	// query that forgot to pad it.
+	for _, q := range queries {
+		last := lastTopLevelColumn(selectList(q.sql))
+		wantLast := "''"
+		if q.kind == KindAgentCore {
+			wantLast = "COALESCE(metadata->>'waiting_for','')"
+		}
+		if last != wantLast {
+			t.Errorf("%s query's trailing column is %q, want %q (waiting_for)", q.kind, last, wantLast)
+		}
+	}
+}
+
+// lastTopLevelColumn is the final entry of a select list, splitting on the same separators topLevelCommas counts.
+func lastTopLevelColumn(sel string) string {
+	depth, quoted, start := 0, false, 0
+	for i, r := range sel {
+		switch {
+		case r == '\'':
+			quoted = !quoted
+		case quoted:
+		case r == '(':
+			depth++
+		case r == ')':
+			depth--
+		case r == ',' && depth == 0:
+			start = i + 1
+		}
+	}
+	return strings.TrimSpace(sel[start:])
 }
 
 // topLevelCommas counts commas outside parentheses and quotes — i.e. the column separators of a select list.

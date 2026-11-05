@@ -1,9 +1,6 @@
 provider: aws
 displayName: Amazon Web Services
 
-# Provider boundary and non-secret connector configuration (not authentication).
-# Workload discovery scans enabled account regions. Managed Collectors use the regions explicitly
-# configured through their API, so their role needs no account-wide region-enumeration permission.
 connector:
   # Commercial AWS regions: https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html
   bootstrapRegion:
@@ -106,11 +103,6 @@ auth:
           showInUi: true
           tooltip: ARN of the IAM role the connector assumes in the selected AWS account.
           envVar: ODIGOS_AWS_ROLE_ARN
-        # Optional at the protocol level (a trust policy without an ExternalId condition is assumable
-        # without one), but every create-role artifact below builds a trust policy that REQUIRES it.
-        # Set this before copying a setup snippet: a trust policy generated with an empty external id
-        # can never be satisfied, because the connector omits ExternalId entirely when the value is
-        # blank — the role cannot be assumed until its trust policy and supplied External ID agree.
         - name: externalId
           displayName: External ID
           componentType: input
@@ -122,21 +114,13 @@ auth:
             role created with a blank external ID cannot be assumed.
           envVar: ODIGOS_AWS_EXTERNAL_ID
 
-# Two parallel hierarchies (domains), completely separate, sharing only the codebase and running pod.
-# Each domain owns a `discovery` feature (enumerate its resources) plus a second feature for acting on
-# them; which feature/type pairs actually run is selected per connector by spec.capabilities on the CR.
-#   workloads        -> discovery + instrumentation (instrument a discovered workload directly).
-#   computePlatforms -> discovery + installation    (install a separate Odigos agent onto the platform).
-# A type is declared under its domain's discovery, and referenced by name under the domain's second
-# feature. Every type name is unique across both domains.
-
 # workloads: directly-instrumentable resources — discovered, then instrumented in place.
 workloads:
   discovery:
     enabled: true
     displayName: Workload discovery
     description: >-
-      Enumerate Lambda functions and ECS/Fargate tasks across every region enabled in the account, so
+      Enumerate Lambda functions, ECS/Fargate tasks and Bedrock AgentCore runtimes across supported regions enabled in the account, so
       they can be surfaced as Odigos Source candidates.
     # Baseline permission, not tied to a type: enumerate the account's enabled regions to scan.
     permissions:
@@ -151,18 +135,21 @@ workloads:
           - lambda:GetFunctionConfiguration
           # Read ownership/attribution tags and optional discovery selectors for every function.
           - lambda:ListTags
-      # Fargate discovery runs ONE region scan (clusters + Fargate services + Fargate tasks). EC2-backed
-      # services/tasks are NOT discovered — ecs-cluster instrumentation is delivered by the cluster agent
-      # (the eBPF odigos-ecs-agent daemon), a different solution.
+      - name: aws.bedrock-agentcore-runtime
+        displayName: Amazon Bedrock AgentCore Runtime
+        description: Discover runtime artifacts, instrumentation metadata and endpoint versions across enabled regions. Manual observation is read-only.
+        permissions:
+          - bedrock-agentcore:ListAgentRuntimes
+          - bedrock-agentcore:GetAgentRuntime
+          - bedrock-agentcore:ListAgentRuntimeEndpoints
+          - bedrock-agentcore:GetAgentRuntimeEndpoint
+          - bedrock-agentcore:ListTagsForResource
       - name: aws.fargate-task
         displayName: Amazon ECS (Fargate task)
         description: >-
           Discover Fargate ECS services and tasks per region. The service is the per-workload
           instrumentation unit (sidecar injected into its task definition); standalone tasks are
           discovered for coverage. A single ECS scan enumerates clusters, Fargate services and tasks.
-        # No ecs:DescribeClusters here: workload discovery only needs the cluster ARNs from
-        # ListClusters before descending into services/tasks. Describing the cluster itself is
-        # compute-platform discovery's job (EC2 capacity + Fargate classification).
         permissions:
           - ecs:ListClusters
           - ecs:ListServices
@@ -171,25 +158,43 @@ workloads:
           - ecs:DescribeServices
           - ecs:ListTasks
           - ecs:DescribeTasks
-          # Observation, not mutation. DescribeServices yields only the task-definition ARN, never the
-          # definition itself, so deriving whether a service actually carries Odigos instrumentation needs
-          # this read. Declared on DISCOVERY (not only on the instrumentation type) because manual mode runs
-          # on discovery alone: a connector the customer instruments themselves must still be able to see
-          # what they applied. Automatic mode also declares it, for the mutation path.
           - ecs:DescribeTaskDefinition
 
-  # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
-  # type and declares how instrumentation is injected. Gated on an OTLP destination.
-  #   aws.lambda        -> service (Lambda layer/extension on the function itself)
-  #   aws.fargate-task  -> sidecar (an agent-staging sidecar injected into the service's task definition)
   instrumentation:
     enabled: true
     displayName: Workload instrumentation
     description: >-
       Attach OpenTelemetry instrumentation directly to discovered workloads. The method depends on the
-      resource type: Lambda is instrumented at the service level, ECS Fargate via a per-task sidecar.
+      resource type: Lambda uses a layer, ECS Fargate uses a per-task sidecar, and AgentCore configures the SDK the artifact already carries through the runtime's environment, and never rewrites or republishes the artifact.
       Requires an OTLP destination.
     types:
+      - name: aws.bedrock-agentcore-runtime
+        displayName: Amazon Bedrock AgentCore Runtime
+        description: >-
+          Configure the OpenTelemetry SDK the agent's artifact already carries (the odigos-agentcore PyPI or
+          @odigos/agentcore npm package, or AWS Distro for OpenTelemetry) through the runtime's environment only;
+          the artifact is never rewritten or republished. Python and CommonJS Node.js,
+          ZIPs and container images. Manual mode observes customer deployments.
+          Requires a global OTLP/HTTP destination. Managed collector routing is deferred.
+          DEFAULT follows new versions; existing sessions and pinned custom endpoints can retain older code.
+        method: service
+        permissions:
+          - bedrock-agentcore:GetAgentRuntime
+          - bedrock-agentcore:UpdateAgentRuntime
+          - bedrock-agentcore:ListAgentRuntimeEndpoints
+          - bedrock-agentcore:GetAgentRuntimeEndpoint
+          # Automatic ZIP detection reads the source ZIP (never executes it) to find which SDK it carries.
+          # Scope object reads to the source keys.
+          - s3:GetObject
+          - s3:GetObjectVersion
+          # Automatic container detection reads the image config and layers in the existing same-account/region
+          # ECR repository to find which SDK the image carries.
+          - ecr:GetAuthorizationToken
+          - ecr:BatchGetImage
+          - ecr:GetDownloadUrlForLayer
+          - ecr:BatchCheckLayerAvailability
+          # Restrict this to existing execution roles and iam:PassedToService=bedrock-agentcore.amazonaws.com.
+          - iam:PassRole
       - name: aws.lambda
         displayName: AWS Lambda
         description: >-
@@ -229,25 +234,12 @@ workloads:
           - ecs:DescribeTaskDefinition
           - ecs:RegisterTaskDefinition
           - ecs:UpdateService
-          # A new revision carries over the customer's task-definition tags, and ECS treats that as
-          # tag-on-create: with tagging authorization enabled on the account, RegisterTaskDefinition
-          # with a `tags` payload is denied unless ecs:TagResource is also granted. Task definitions
-          # are tagged often enough that this is required, not optional.
           - ecs:TagResource
-          # Registering a task definition that carries a task/execution role — Fargate task definitions
-          # virtually always carry an execution role for the image pull — requires passing those roles.
-          # Scope the grant with the condition iam:PassedToService=ecs-tasks.amazonaws.com.
           - iam:PassRole
-          # Optional: best-effort language detection from the container image config in ECR (CNB
-          # buildpack labels + entrypoint/cmd/env). Absent permissions only degrade detection — the
-          # task-definition heuristics still run, and a source runtime override always works.
           - ecr:GetAuthorizationToken
           - ecr:BatchGetImage
           - ecr:GetDownloadUrlForLayer
 
-# computePlatforms: managed environments — discovered, then a separate Odigos agent is installed onto
-# them. Installation is NOT supported yet, so discovered compute platforms are reported but never
-# instrumented (surfaced as NotImplemented).
 computePlatforms:
   discovery:
     enabled: true
@@ -264,9 +256,6 @@ computePlatforms:
         description: >-
           Detect EC2-backed ECS clusters per region (clusters with registered EC2 container instances).
           The cluster is the unit; a global Odigos ecs-agent would be installed on it.
-        # One scan serves both cluster types: ListClusters + DescribeClusters for EC2 capacity, plus a
-        # Fargate-filtered ListTasks per cluster to tell an ecs-cluster from a fargate-cluster. The
-        # ListTasks denial is fatal to the scan, so it belongs on both types.
         permissions:
           - ecs:ListClusters
           - ecs:DescribeClusters
@@ -282,11 +271,6 @@ computePlatforms:
           - ecs:ListClusters
           - ecs:DescribeClusters
           - ecs:ListTasks
-      # aws.eks and aws.ec2 are declared SEAMS: the types, permissions and UI copy are pinned so the
-      # capability exists and its IAM cost is documented, but no detector is wired for them yet
-      # (awsprovider.ComputePlatformDetectors registers the ECS detector only). Enabling either
-      # capability today adds its permissions to the generated policy and discovers nothing — say so in
-      # customer docs until the detectors land.
       - name: aws.eks
         displayName: Amazon EKS (Kubernetes)
         description: >-
@@ -305,11 +289,6 @@ computePlatforms:
         permissions:
           - ec2:DescribeInstances
 
-  # installation: install a separate Odigos agent onto a discovered compute platform (the ECS-EC2 cluster
-  # agent, Odigos for Kubernetes on EKS, or the EC2 VM agent). This is NOT supported yet, so it declares no
-  # types: discovered compute platforms are reported but never instrumented (surfaced as NotImplemented).
-  # When support lands, each installable compute-platform type is referenced here with its install method
-  # (method: agent) and the IAM permissions the install requires.
   installation:
     enabled: false
     displayName: Compute-platform installation
@@ -318,15 +297,6 @@ computePlatforms:
       for Kubernetes on EKS, the Odigos VM agent on EC2). Not supported yet.
     types: []
 
-# collectors: an Odigos-managed OpenTelemetry Collector running in the customer's account, one per
-# region. It is hosted in one explicit VPC and may serve same-region workloads over validated,
-# customer-owned connectivity such as direct VPC peering.
-#   management -> Odigos owns the Collector's configuration and pushes it over OpAMP (BOTH modes).
-#   deployment -> Odigos creates and converges the ECS/ELB/IAM objects that run it (automatic mode only).
-#
-# Management also discovers existing tagged regional Collector services through read-only ECS calls.
-# `management` alone is manual (IaC) mode — the customer applies the published artifacts and Odigos
-# discovers, configures and observes the result. `deployment` adds writes only in automatic mode.
 collectors:
   management:
     enabled: true
@@ -337,11 +307,6 @@ collectors:
     # Management reads are granted to the connector identity in manual and automatic mode.
     permissions: []
     types:
-      # READ-ONLY, and that is the whole point of declaring the observation set here rather than on
-      # deployment: manual mode runs on management alone, so a customer who deploys the Collector
-      # themselves must still be able to have Odigos describe it, judge its health and report its
-      # endpoint. Automatic mode gets these too and wants them anyway — "is it actually serving?" is the
-      # same question in both modes.
       - name: aws.fargate-collector
         displayName: Odigos Collector (ECS Fargate)
         description: >-
@@ -361,19 +326,6 @@ collectors:
           - elasticloadbalancing:DescribeListeners
           - elasticloadbalancing:DescribeTargetGroups
           - elasticloadbalancing:DescribeTargetHealth
-          # Placement and reachability facts that are reported in both modes: which VPC hosts a regional
-          # Collector, which subnets and groups it sits in, and — the one that is not obvious —
-          # DescribeRouteTables, because a subnet with no egress route produces a Collector that cannot
-          # reach the destination or the OpAMP endpoint, and refusing that is better than deploying it.
-          #
-          # ec2:DescribeVpcEndpoints is deliberately NOT here. An interface VPC endpoint can reach the
-          # destination from a subnet with no default route at all, so without this permission Odigos
-          # cannot tell such a subnet from an isolated one. That ambiguity is resolved by authority
-          # rather than by asking for more access: where Odigos chooses the subnets it takes only ones
-          # it can prove work, and where the customer named them a route Odigos cannot find is reported
-          # and deployed anyway. See MANAGED-COLLECTOR.md §5.1.
-          # Peering reads validate whether a workload VPC can reach the regional host VPC; they do
-          # not authorize creating or changing customer network topology.
           - ec2:DescribeVpcs
           - ec2:DescribeRegions
           - ec2:DescribeSubnets
@@ -401,10 +353,6 @@ collectors:
           Odigos does create is tagged for ownership so only those objects are ever changed or removed.
         method: fargate-service
         permissions:
-          # ECS: clusterArn names a customer-provisioned cluster. DescribeClusters validates that it is
-          # active and supports the requested Fargate capacity provider; Odigos never mutates the
-          # cluster itself. The task-definition family and service are regional, and the service's
-          # awsvpc configuration places the Collector in the selected host VPC.
           - ecs:DescribeClusters
           - ecs:RegisterTaskDefinition
           - ecs:CreateService
@@ -427,13 +375,7 @@ collectors:
           - elasticloadbalancing:ModifyListener
           - elasticloadbalancing:SetSecurityGroups
           - elasticloadbalancing:AddTags
-          # DescribeTags is the only way to read an ELBv2 object's tags — neither
-          # DescribeLoadBalancers nor DescribeTargetGroups returns them — and the tags are what decide
-          # whether an object with the name Odigos wants is Odigos's to write to.
           - elasticloadbalancing:DescribeTags
-          # EC2: the Collector's own security group. Ingress includes the host VPC and only validated
-          # same-region consumer paths. The revoke is as important as the authorize — it removes access
-          # when a workload network ceases to be applicable or reachable.
           - ec2:CreateSecurityGroup
           - ec2:DeleteSecurityGroup
           - ec2:AuthorizeSecurityGroupIngress
@@ -446,53 +388,22 @@ collectors:
           - logs:DeleteLogGroup
           - logs:PutRetentionPolicy
           - logs:TagResource
-          # ListTagsForResource is what makes DeleteLogGroup safe to hold. A log group is the one object
-          # Odigos writes into without an ownership check — it is append-only and holds nothing but the
-          # Collector's own stdout — so the group Odigos created and a customer's group under a plausible
-          # name are indistinguishable until its tags are read, and DescribeLogGroups does not return them.
           - logs:ListTagsForResource
-          # Secrets Manager: one secret per Collector for the OpAMP credential and one for the licence
-          # token, so revocation is per Collector and the two lifetimes stay independent. The connector
-          # WRITES these and never reads them back, which is why there is no GetSecretValue here — that
-          # permission belongs to the task execution role the Collector runs with, not to the connector.
           - secretsmanager:CreateSecret
           - secretsmanager:PutSecretValue
           - secretsmanager:DescribeSecret
           - secretsmanager:DeleteSecret
           - secretsmanager:TagResource
-          # Current teardown force-deletes Collector secrets. RestoreSecret remains necessary when
-          # a secret was scheduled for deletion by an older deployment or by an operator: its name
-          # cannot be reused until it is restored, and EnsureSecret then writes a fresh value.
           - secretsmanager:RestoreSecret
-          # IAM: ECS must be allowed to use the customer-provisioned executionRoleArn when the connector
-          # registers a task definition. Scope this action to that exact role ARN and condition it with
-          # iam:PassedToService=ecs-tasks.amazonaws.com; the Collector prerequisite artifact below shows
-          # the complete statement. Odigos never creates, edits, tags or deletes the role.
           - iam:PassRole
-          # Application Auto Scaling: only used when a region opts into automatic scaling, but declared
-          # unconditionally because the permission set is per type, not per-region setting — and a
-          # deregistration left behind by a switch back to manual scaling needs the same grant.
           - application-autoscaling:RegisterScalableTarget
           - application-autoscaling:DeregisterScalableTarget
           - application-autoscaling:PutScalingPolicy
           - application-autoscaling:DescribeScalableTargets
           - application-autoscaling:DescribeScalingPolicies
-          # ListTagsForResource is the one that is not obvious, and it is what makes the mode switch
-          # safe. A describe returns no tags, so this is the only way to tell a scalable target Odigos
-          # registered from one a customer's own template did — and switching back to manual scaling
-          # deregisters the former and must leave the latter alone. Without it Odigos can prove nothing
-          # and therefore removes nothing, which fails safe but never cleans up.
           - application-autoscaling:ListTagsForResource
           # RegisterScalableTarget sends Tags on creation, which requires TagResource authorization.
           - application-autoscaling:TagResource
-          # Automatic scaling also requires the account-level
-          # AWSServiceRoleForApplicationAutoScaling_ECSService prerequisite. Odigos does not create it;
-          # the Collector prerequisite artifact below includes the one-time AWS CLI command.
-          # Target tracking's CloudWatch alarms. Application Auto Scaling creates and owns them through
-          # the service-linked role above, but these are the actions AWS's own documented policy for
-          # configuring target-tracking policies requires — and a PutScalingPolicy refused for a missing
-          # cloudwatch:PutMetricAlarm reports a CloudWatch failure rather than a scaling one, which is a
-          # long way from where the fix is.
           - cloudwatch:PutMetricAlarm
           - cloudwatch:DeleteAlarms
           - cloudwatch:DescribeAlarms
@@ -986,11 +897,6 @@ collectors:
           }
           {{end}}
 
-# setup: declarative onboarding artifacts rendered in the create-connector UI. The UI fills
-# {{permissions}} from the selected access level and scalar {{vars}} from form values, so the
-# preview always matches what test-connection validates. Provider-owned: AWS renders an IAM policy
-# JSON and create-role variants (CloudFormation / Terraform / CLI / Manual); other providers declare
-# their own artifacts without any UI changes.
 setup:
   subtitle: Apply the selected IAM policy in your AWS account.
   artifacts:
@@ -1000,7 +906,7 @@ setup:
       title: Policy preview
       description: >-
         The IAM policy Odigos needs for the selected access level. The AWS CLI and IAM-user setup
-        methods embed this policy in their setup script. PassRole is restricted to the explicitly supplied task/execution role ARNs and ECS tasks service.
+        methods embed this policy in their setup script. PassRole is restricted to the explicitly supplied execution role ARNs and the ECS tasks or Bedrock AgentCore services. Include AgentCore runtime execution roles in the supplied role list when enabling AgentCore automatic instrumentation.
       format: json
       itemTemplate: '"{{permission}}"'
       itemSeparator: ",\n"
@@ -1021,7 +927,7 @@ setup:
               "Effect": "Deny",
               "Action": "iam:PassRole",
               "Resource": "*",
-              "Condition": { "StringNotEquals": { "iam:PassedToService": "ecs-tasks.amazonaws.com" } }
+              "Condition": { "StringNotEquals": { "iam:PassedToService": ["ecs-tasks.amazonaws.com", "bedrock-agentcore.amazonaws.com"] } }
             },
             {
               "Sid": "RestrictPassRoleResources",
@@ -1056,10 +962,6 @@ setup:
           ]
         }
 
-    # Managed Collector setup guide. The base section for each mode is the overview; suffixes
-    # :aws-cli and :cloudformation select concrete prerequisite flows. Manual mode shares the base
-    # declaration and later steps across all methods. Automatic mode ends after prerequisites.
-    # Each artifact is a numbered step; paired `backticks` mark inline code in descriptions and steps.
     - id: collector-auto-execution-role
       section: collector:aws.fargate-collector:automatic
       variantLabel: Overview
@@ -1508,9 +1410,6 @@ setup:
         - 'Customer-supplied or adopted resources can remain: ECS service, load balancer {{loadBalancerRef}}, listeners, target groups, security groups {{securityGroupIds}}, secrets and log group. A regional licence secret or log group also remains while another Collector uses it. The uninstall result names retained objects that Odigos observed; inspect AWS for items created outside Odigos.'
       template: 'After uninstall, compare the reported retained objects with this inventory and your AWS account.'
 
-    # These method sections provide alternative prerequisites. The manual declaration and all
-    # post-declaration steps above are shared, so credentials and verification cannot drift by method.
-    # Automatic mode stops after prerequisites because the connector deploys the Collector itself.
     - id: collector-auto-cli-execution-role
       section: collector:aws.fargate-collector:automatic:aws-cli
       variantLabel: AWS CLI
@@ -1637,14 +1536,6 @@ setup:
         aws cloudformation describe-stacks --region {{region}} --stack-name odigos-collector-{{connectorName}}-prerequisites --query 'Stacks[0].Outputs' --output table || exit 1
         )
 
-    # create-role variants drive step-2 "Choose setup method" + "Create IAM role". The selected
-    # variant's steps + template are rendered; scalar tokens like {{externalId}} come from the form.
-    #
-    # Every variant must be self-contained and runnable as shown: the snippet either IS the artifact
-    # the steps tell the user to apply, or it references a file the steps told them to save.
-    # CLI scripts embed the final scoped policy preview and write odigos-policy.json themselves.
-    #
-    # TRUST PRINCIPAL: every trust policy uses the explicit source principal ARN.
     - id: create-role-cloudformation
       section: create-role
       variant: cloudformation
@@ -1713,7 +1604,7 @@ setup:
                         Resource: "*"
                         Condition:
                           StringNotEquals:
-                            iam:PassedToService: ecs-tasks.amazonaws.com
+                            iam:PassedToService: [ecs-tasks.amazonaws.com, bedrock-agentcore.amazonaws.com]
                       - Sid: RestrictPassRoleResources
                         Effect: Deny
                         Action: [iam:PassRole]
@@ -1813,7 +1704,7 @@ setup:
             condition {
               test = "StringNotEquals"
               variable = "iam:PassedToService"
-              values = ["ecs-tasks.amazonaws.com"]
+              values = ["ecs-tasks.amazonaws.com", "bedrock-agentcore.amazonaws.com"]
             }
           }
           statement {
@@ -1970,9 +1861,6 @@ setup:
           ]
         }
 
-    # The access-keys path (auth method "static-keys"): no role, no trust policy — an IAM user in the
-    # target account carrying the same permissions policy. Declared as a create-role-section variant so
-    # it appears in the same "Setup method" chooser; the artifact title reflects what it actually makes.
     - id: create-user-aws-cli
       section: create-role
       variant: iam-user
@@ -2565,11 +2453,6 @@ setup:
       template: |-
         {{sourcePolicyJson}}
 
-
-    # credentials section metadata: title/description for the final "enter credentials" panel.
-    # Template is unused; fields come from auth.methods[].fields + connector.fields. Method-neutral
-    # copy: the same panel serves assume-role (Role ARN), static-keys (access keys) and
-    # workload-identity (nothing to paste).
     - id: enter-credentials
       section: credentials
       title: Enter connector credentials
@@ -2579,48 +2462,788 @@ setup:
       format: text
       template: ""
 
-    # ---------------------------------------------------------------------------------------------------
-    # MANUAL (IaC) INSTRUMENTATION INSTRUCTIONS — sections "instrumentation:<type>".
-    #
-    # A workload type whose capability is {discovery: true, instrumentation: false} is instrumented BY THE
-    # CUSTOMER: Odigos discovers it, publishes what to apply, observes the result and reports conformance,
-    # and never mutates it. These artifacts are what "publishes what to apply" means. They are declared here
-    # rather than in a new spec hierarchy because central-backend maps the artifact list through
-    # uninterpreted, so they reach the catalog with no backend change and no agents-api bump.
-    #
-    # <ANGLE_BRACKETED> tokens are values the CUSTOMER substitutes. They deliberately do NOT use the
-    # {{token}} syntax: that is filled client-side from create-connector form values, and a token with no
-    # form value is left verbatim — so a per-workload token spelled that way renders as a bug rather than as
-    # a field to fill in.
-    #
-    # Each artifact is one DELIVERY VARIANT for one LANGUAGE (Terraform, CloudFormation, AWS CLI and AWS CDK
-    # per Lambda language; Terraform and CloudFormation per Fargate language), and both halves of that are load-bearing.
-    # `language` is the connector language key the plan carries — the workload's detected runtime, or its
-    # runtime override when the customer set one — and a connector serves only the matching set, so a
-    # customer opening a Java service is handed the Java documents alone. Before that, one artifact per
-    # variant had to document every language it might be opened for, which put five runtimes' environment
-    # variables in front of a reader who has one and left the paragraph that applies to them to be found
-    # rather than copied. Every variant still has to stand on its own within its language: a customer opens
-    # one document and applies it.
-    #
-    # A language declared here that no plan builds is unreachable — the selection finds nothing and falls
-    # back to the language-neutral artifacts, of which an instrumentation section may declare none — so a
-    # misspelled key silently serves prose. The coverage guard below fails on it.
-    #
-    # These templates are checked against the connector's own injection recipes by
-    # TestLambdaInstrumentationArtifactsMatchPlans and TestFargateInstrumentationArtifactsMatchPlans
-    # (providers/aws, pkg/workload/instrumentor). Every environment variable name, value, agent path,
-    # container name and staging command below is asserted to be what the instrumentor would actually apply
-    # — because nothing converges a manual-mode workload, so instructions that have drifted from the
-    # injector leave a customer applying a previous release's configuration and reading a drift verdict they
-    # cannot attribute. Do not hand-edit a value here to "fix" a failure; fix the recipe or update both.
-    #
-    # The coverage guard runs PER LANGUAGE, over the artifacts that language is actually served: every value
-    # every plan for it needs must appear in EVERY one of them, so a variant that omits the marker or the
-    # collector configuration fails rather than shipping half a recipe — and a language whose own agent path
-    # or loader variable is missing from its own documents fails too, which a check over the flat list could
-    # not see as long as some other language's document happened to mention the value.
-    # ---------------------------------------------------------------------------------------------------
+    - id: instrument-agentcore-aws-cli-python
+      section: instrumentation:aws.bedrock-agentcore-runtime
+      language: python
+      variant: aws-cli
+      variantLabel: AWS CLI
+      title: Instrument a Python Bedrock AgentCore runtime (AWS CLI)
+      description: Activate <AGENTCORE_DISTRO> on <AGENTCORE_RUNTIME_NAME> from the Odigos package (route A), or configure the ADOT the artifact already runs (route B), with the same recipes automatic mode applies.
+      format: shell
+      steps:
+        - 'Prepare and upload the artifact for your route (see the prerequisites). Set ROUTE=adot when it carries ADOT only (route B), and ARTIFACT_JSON if this update should switch to the new artifact. For a ZIP on route A, set ENTRY_SCRIPT=<YOUR_ENTRY_POINT> and point ARTIFACT_JSON at the start wrapper alone.'
+        - 'Replace every <ANGLE_BRACKETED> value, then run the script with credentials that can read and update the runtime.'
+        - 'Deploy, wait for the runtime and its DEFAULT endpoint to serve the new version, then invoke with a new session. Endpoints pinned to older versions keep them until you update them.'
+      prerequisites:
+        - 'Prepare the artifact before applying this (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare), on one of two routes. Route A (recommended): add the Odigos package to the agent''s dependencies, pip install "odigos-agentcore[adot]" or "odigos-agentcore[openllmetry]" (the extra must match <AGENTCORE_DISTRO>), or copy the bundle from <AGENTCORE_AGENTS_IMAGE>; environment settings alone install nothing, and the bootstrap stays dormant until this environment enables it.'
+        - 'Route B: the artifact carries ADOT only: pip install aws-opentelemetry-distro and start the agent through the opentelemetry-instrument launcher (the ZIP entry point or the image CMD). No Odigos package is needed, but ADOT cannot root an invocation at the agent, so AgentCore''s own service span stays missing from the trace; route A adds it. Only the ADOT distribution can be adopted.'
+        - 'Only for the carrier image route (copying the bundle from <AGENTCORE_AGENTS_IMAGE>): make sure that registry.odigos.io is accessible to your image build or packaging step, or mirror the image into your own registry (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare). The package routes need only your usual package registry (PyPI).'
+        - 'Use a global OTLP/HTTP destination. Supply destination authentication through your deployment''s secret mechanism; Odigos never puts credentials in these instructions.'
+      template: |-
+        # Prepare the artifact first: https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare
+        # Route A ZIP: entry point ["odigos_agentcore_start.py"] with ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>.
+        # Route B: start through the launcher, entry point ["opentelemetry-instrument", "<YOUR_ENTRY_POINT>"] or the image CMD.
+        #
+        # Requires AWS CLI v2 and jq. Reads the runtime's current configuration and changes only what is listed here.
+        RUNTIME_ID='<AGENTCORE_RUNTIME_ID>'
+        # odigos: the artifact carries the Odigos package or carrier bundle (route A).
+        # adot:   the artifact carries ADOT only (route B).
+        ROUTE="${ROUTE:-odigos}"
+        # To switch to the prepared artifact in the same update, set ARTIFACT_JSON. Direct code, route A:
+        #   ARTIFACT_JSON='{"codeConfiguration":{"code":{"s3":{"bucket":"<PREPARED_ARTIFACT_BUCKET>","prefix":"<PREPARED_ARTIFACT_KEY>"}},"runtime":"PYTHON_3_12","entryPoint":["odigos_agentcore_start.py"]}}'
+        # Direct code, route B:
+        #   ARTIFACT_JSON='{"codeConfiguration":{"code":{"s3":{"bucket":"<PREPARED_ARTIFACT_BUCKET>","prefix":"<PREPARED_ARTIFACT_KEY>"}},"runtime":"PYTHON_3_12","entryPoint":["opentelemetry-instrument","<YOUR_ENTRY_POINT>"]}}'
+        # Container (either route):
+        #   ARTIFACT_JSON='{"containerConfiguration":{"containerUri":"<PREPARED_IMAGE_URI>"}}'
+        ARTIFACT_JSON="${ARTIFACT_JSON:-null}"
+        # Direct code, route A: your entry point script, which the start wrapper reads from ODIGOS_AGENTCORE_ENTRYPOINT.
+        ENTRY_SCRIPT="${ENTRY_SCRIPT:-}"
+
+        aws bedrock-agentcore-control get-agent-runtime --agent-runtime-id "$RUNTIME_ID" > current.json
+
+        if [ "$ROUTE" = adot ]; then
+          # Route B: the ADOT recipe. No bootstrap switches, and no X-Ray propagator.
+          jq -n \
+            --arg ODIGOS_IAC '{"distro":"python-agentcore-adot","recipe":"1","v":1}' \
+            --arg ODIGOS_AGENTCORE_PACKAGE '{"v":1,"language":"python","distros":["python-agentcore-adot"],"mode":"adopt"}' \
+            '{
+              ODIGOS_IAC: $ODIGOS_IAC,
+              ODIGOS_AGENTCORE_PACKAGE: $ODIGOS_AGENTCORE_PACKAGE,
+              DISABLE_ADOT_OBSERVABILITY: "true",
+              AGENT_OBSERVABILITY_ENABLED: "false",
+              OTEL_SERVICE_NAME: "<AGENTCORE_SERVICE_NAME>",
+              OTEL_SDK_DISABLED: "false",
+              OTEL_EXPORTER_OTLP_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>",
+              OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf",
+              OTEL_TRACES_EXPORTER: "<AGENTCORE_TRACES_EXPORTER>",
+              OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/traces",
+              OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: "http/protobuf",
+              OTEL_METRICS_EXPORTER: "<AGENTCORE_METRICS_EXPORTER>",
+              OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/metrics",
+              OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: "http/protobuf",
+              OTEL_LOGS_EXPORTER: "<AGENTCORE_LOGS_EXPORTER>",
+              OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/logs",
+              OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf",
+              OTEL_PROPAGATORS: "tracecontext,baggage",
+              OTEL_TRACES_SAMPLER: "parentbased_always_on",
+              OTEL_AWS_APPLICATION_SIGNALS_ENABLED: "false",
+              OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED: "false",
+              OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false",
+              TRACELOOP_TRACE_CONTENT: "false",
+              OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true",
+              OTEL_PYTHON_DISTRO: "aws_distro",
+              OTEL_PYTHON_CONFIGURATOR: "aws_configurator",
+              OTEL_PYTHON_DISABLED_INSTRUMENTATIONS: "boto3",
+              OTEL_EXPORTER_OTLP_HEADERS: "<OTLP_AUTH_HEADERS>"
+            }' > odigos-env.json
+        else
+          # Route A: the Odigos package recipe.
+          jq -n \
+            --arg ODIGOS_IAC '{"distro":"<AGENTCORE_DISTRO>","recipe":"1","v":1}' \
+            --arg ODIGOS_AGENTCORE_PACKAGE '{"v":1,"language":"python","distros":["<AGENTCORE_DISTRO>"]}' \
+            '{
+              ODIGOS_IAC: $ODIGOS_IAC,
+              ODIGOS_AGENTCORE_PACKAGE: $ODIGOS_AGENTCORE_PACKAGE,
+              ODIGOS_AGENTCORE_ENABLED: "true",
+              ODIGOS_AGENTCORE_DISTRO: "<AGENTCORE_DISTRO>",
+              DISABLE_ADOT_OBSERVABILITY: "true",
+              AGENT_OBSERVABILITY_ENABLED: "false",
+              OTEL_SERVICE_NAME: "<AGENTCORE_SERVICE_NAME>",
+              OTEL_SDK_DISABLED: "false",
+              OTEL_EXPORTER_OTLP_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>",
+              OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf",
+              OTEL_TRACES_EXPORTER: "<AGENTCORE_TRACES_EXPORTER>",
+              OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/traces",
+              OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: "http/protobuf",
+              OTEL_METRICS_EXPORTER: "<AGENTCORE_METRICS_EXPORTER>",
+              OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/metrics",
+              OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: "http/protobuf",
+              OTEL_LOGS_EXPORTER: "<AGENTCORE_LOGS_EXPORTER>",
+              OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/logs",
+              OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf",
+              OTEL_PROPAGATORS: "tracecontext,baggage,xray",
+              OTEL_TRACES_SAMPLER: "parentbased_always_on",
+              OTEL_AWS_APPLICATION_SIGNALS_ENABLED: "false",
+              OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED: "false",
+              OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false",
+              TRACELOOP_TRACE_CONTENT: "false",
+              OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true",
+              OTEL_PYTHON_DISTRO: "<AGENTCORE_PYTHON_DISTRO>",
+              OTEL_PYTHON_CONFIGURATOR: "<AGENTCORE_PYTHON_CONFIGURATOR>",
+              OTEL_PYTHON_DISABLED_INSTRUMENTATIONS: "<AGENTCORE_PYTHON_DISABLED_INSTRUMENTATIONS>",
+              OTEL_EXPORTER_OTLP_HEADERS: "<OTLP_AUTH_HEADERS>"
+            }' > odigos-env.json
+        fi
+
+        # The per-signal header keys are removed: a signal-specific value replaces the shared headers. The bootstrap
+        # switches (and ODIGOS_AGENTCORE_ENTRYPOINT) are removed too, and route A sets them again.
+        jq --slurpfile odigos odigos-env.json --argjson artifact "$ARTIFACT_JSON" --arg route "$ROUTE" --arg entry "$ENTRY_SCRIPT" '
+          {agentRuntimeId, agentRuntimeArtifact: ($artifact // .agentRuntimeArtifact), roleArn, networkConfiguration,
+           description, authorizerConfiguration, requestHeaderConfiguration, protocolConfiguration,
+           lifecycleConfiguration, filesystemConfigurations, metadataConfiguration,
+           environmentVariables: ((.environmentVariables // {})
+             | del(.OTEL_EXPORTER_OTLP_TRACES_HEADERS, .OTEL_EXPORTER_OTLP_METRICS_HEADERS, .OTEL_EXPORTER_OTLP_LOGS_HEADERS)
+             | del(.ODIGOS_MANAGED, .ODIGOS_AGENTCORE_ENABLED, .ODIGOS_AGENTCORE_DISTRO, .ODIGOS_AGENTCORE_ENTRYPOINT)
+             + $odigos[0]
+             + (if $route == "odigos" and $entry != "" then {ODIGOS_AGENTCORE_ENTRYPOINT: $entry} else {} end))}
+          | with_entries(select(.value != null))' current.json > update.json
+
+        aws bedrock-agentcore-control update-agent-runtime --cli-input-json file://update.json
+
+    - id: instrument-agentcore-cdk-python
+      section: instrumentation:aws.bedrock-agentcore-runtime
+      language: python
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a Python Bedrock AgentCore runtime (AWS CDK)
+      description: Activate <AGENTCORE_DISTRO> on <AGENTCORE_RUNTIME_NAME> from the Odigos package (route A), or configure the ADOT the artifact already runs (route B), with the same recipes automatic mode applies.
+      format: text
+      steps:
+        - 'From the CDK project, run `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`. Paste only the TypeScript into your stack.'
+        - 'Point the runtime''s artifact at the prepared image or ZIP (see the prerequisites); the construct writes only the environment. For an artifact carrying ADOT only (route B), set `sdk: OdigosAgentCoreSdk.ADOT`.'
+        - '`cdk diff`, then `cdk deploy`. Deploy, wait for the runtime and its DEFAULT endpoint to serve the new version, then invoke with a new session. Endpoints pinned to older versions keep them until you update them.'
+      prerequisites:
+        - 'Prepare the artifact before applying this (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare), on one of two routes. Route A (recommended): add the Odigos package to the agent''s dependencies, pip install "odigos-agentcore[adot]" or "odigos-agentcore[openllmetry]" (the extra must match <AGENTCORE_DISTRO>), or copy the bundle from <AGENTCORE_AGENTS_IMAGE>; environment settings alone install nothing, and the bootstrap stays dormant until this environment enables it.'
+        - 'Route B: the artifact carries ADOT only: pip install aws-opentelemetry-distro and start the agent through the opentelemetry-instrument launcher (the ZIP entry point or the image CMD). No Odigos package is needed, but ADOT cannot root an invocation at the agent, so AgentCore''s own service span stays missing from the trace; route A adds it. Only the ADOT distribution can be adopted.'
+        - 'Only for the carrier image route (copying the bundle from <AGENTCORE_AGENTS_IMAGE>): make sure that registry.odigos.io is accessible to your image build or packaging step, or mirror the image into your own registry (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare). The package routes need only your usual package registry (PyPI).'
+        - 'Use a global OTLP/HTTP destination. Supply destination authentication through your deployment''s secret mechanism; Odigos never puts credentials in these instructions.'
+      template: |-
+        import { OdigosAgentCoreDistribution, OdigosAgentCoreInstrumentation, OdigosAgentCoreLanguage, OdigosAgentCoreSdk } from '@odigos/aws-cdk';
+
+        new OdigosAgentCoreInstrumentation(this, 'Odigos', {
+          destination: {
+            httpEndpoint: '<AGENTCORE_OTLP_ENDPOINT>',
+            traces: <AGENTCORE_TRACES_ENABLED>,
+            metrics: <AGENTCORE_METRICS_ENABLED>,
+            logs: <AGENTCORE_LOGS_ENABLED>,
+            // headers: { Authorization: authorization }, // destination authentication, from your secret mechanism
+          },
+          targets: [{
+            runtime: agentRuntime, // CfnRuntime, Runtime, or a CfnInclude resource of type AWS::BedrockAgentCore::Runtime
+            language: OdigosAgentCoreLanguage.PYTHON,
+            distribution: OdigosAgentCoreDistribution.<AGENTCORE_CDK_DISTRIBUTION>,
+            // ODIGOS: the artifact carries the Odigos package or carrier bundle (route A).
+            // ADOT: the artifact carries ADOT only (route B); the distribution must then be ADOT.
+            sdk: OdigosAgentCoreSdk.ODIGOS,
+            // entryPointScript: '<YOUR_ENTRY_POINT>',   // direct-code ZIP on route A: the wrapper is the EntryPoint alone
+            serviceName: '<AGENTCORE_SERVICE_NAME>',
+          }],
+        });
+
+        // Prepare the artifact first: https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare
+        // Route A ZIP: entry point ["odigos_agentcore_start.py"] with ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>.
+        // Route B: start through the launcher, entry point ["opentelemetry-instrument", "<YOUR_ENTRY_POINT>"] or the image CMD.
+
+        // What the construct writes to EnvironmentVariables with sdk ODIGOS (route A):
+        //   ODIGOS_IAC={"distro":"<AGENTCORE_DISTRO>","recipe":"1","v":1}
+        //   ODIGOS_AGENTCORE_PACKAGE={"v":1,"language":"python","distros":["<AGENTCORE_DISTRO>"]}
+        //   ODIGOS_AGENTCORE_ENABLED=true
+        //   ODIGOS_AGENTCORE_DISTRO=<AGENTCORE_DISTRO>
+        //   ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>  (route A direct-code ZIP only, from entryPointScript; the runtime's EntryPoint is the wrapper alone)
+        //   DISABLE_ADOT_OBSERVABILITY=true
+        //   AGENT_OBSERVABILITY_ENABLED=false
+        //   OTEL_SERVICE_NAME=<AGENTCORE_SERVICE_NAME>
+        //   OTEL_SDK_DISABLED=false
+        //   OTEL_EXPORTER_OTLP_ENDPOINT=<AGENTCORE_OTLP_ENDPOINT>
+        //   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+        //   OTEL_TRACES_EXPORTER=<AGENTCORE_TRACES_EXPORTER>
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=<AGENTCORE_OTLP_ENDPOINT>/v1/traces
+        //   OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
+        //   OTEL_METRICS_EXPORTER=<AGENTCORE_METRICS_EXPORTER>
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=<AGENTCORE_OTLP_ENDPOINT>/v1/metrics
+        //   OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/protobuf
+        //   OTEL_LOGS_EXPORTER=<AGENTCORE_LOGS_EXPORTER>
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=<AGENTCORE_OTLP_ENDPOINT>/v1/logs
+        //   OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/protobuf
+        //   OTEL_PROPAGATORS=tracecontext,baggage,xray
+        //   OTEL_TRACES_SAMPLER=parentbased_always_on
+        //   OTEL_AWS_APPLICATION_SIGNALS_ENABLED=false
+        //   OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED=false
+        //   OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false
+        //   TRACELOOP_TRACE_CONTENT=false
+        //   OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+        //   OTEL_PYTHON_DISTRO=<AGENTCORE_PYTHON_DISTRO>
+        //   OTEL_PYTHON_CONFIGURATOR=<AGENTCORE_PYTHON_CONFIGURATOR>
+        //   OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=<AGENTCORE_PYTHON_DISABLED_INSTRUMENTATIONS>
+        //   OTEL_EXPORTER_OTLP_HEADERS=<OTLP_AUTH_HEADERS>  (encoded from destination.headers; removed when there are none)
+        //
+        // With sdk ADOT (route B) it writes the same, except:
+        //   ODIGOS_IAC={"distro":"python-agentcore-adot","recipe":"1","v":1}
+        //   ODIGOS_AGENTCORE_PACKAGE={"v":1,"language":"python","distros":["python-agentcore-adot"],"mode":"adopt"}
+        //   OTEL_PROPAGATORS=tracecontext,baggage
+        //   OTEL_PYTHON_DISTRO=aws_distro
+        //   OTEL_PYTHON_CONFIGURATOR=aws_configurator
+        //   OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=boto3
+        // and it removes ODIGOS_AGENTCORE_ENABLED and ODIGOS_AGENTCORE_DISTRO instead of setting them (entryPointScript throws at synth).
+        //
+        // Either way it removes, if present: ODIGOS_MANAGED, OTEL_EXPORTER_OTLP_TRACES_HEADERS, OTEL_EXPORTER_OTLP_METRICS_HEADERS, OTEL_EXPORTER_OTLP_LOGS_HEADERS
+
+    - id: instrument-agentcore-cloudformation-python
+      section: instrumentation:aws.bedrock-agentcore-runtime
+      language: python
+      variant: cloudformation
+      variantLabel: CloudFormation
+      title: Instrument a Python Bedrock AgentCore runtime (CloudFormation)
+      description: Activate <AGENTCORE_DISTRO> on <AGENTCORE_RUNTIME_NAME> from the Odigos package (route A), or configure the ADOT the artifact already runs (route B), with the same recipes automatic mode applies.
+      format: yaml
+      steps:
+        - 'Prepare and upload the artifact for your route (see the prerequisites).'
+        - 'Add the OdigosAgentCoreRoute parameter and the OdigosADOT condition to the template, and merge this fragment into your AWS::BedrockAgentCore::Runtime. Keep the runtime''s other properties and environment variables, and remove the listed header keys.'
+        - 'Replace every <ANGLE_BRACKETED> value and update the stack with OdigosAgentCoreRoute=odigos (route A) or adot (route B). Deploy, wait for the runtime and its DEFAULT endpoint to serve the new version, then invoke with a new session. Endpoints pinned to older versions keep them until you update them.'
+      prerequisites:
+        - 'Prepare the artifact before applying this (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare), on one of two routes. Route A (recommended): add the Odigos package to the agent''s dependencies, pip install "odigos-agentcore[adot]" or "odigos-agentcore[openllmetry]" (the extra must match <AGENTCORE_DISTRO>), or copy the bundle from <AGENTCORE_AGENTS_IMAGE>; environment settings alone install nothing, and the bootstrap stays dormant until this environment enables it.'
+        - 'Route B: the artifact carries ADOT only: pip install aws-opentelemetry-distro and start the agent through the opentelemetry-instrument launcher (the ZIP entry point or the image CMD). No Odigos package is needed, but ADOT cannot root an invocation at the agent, so AgentCore''s own service span stays missing from the trace; route A adds it. Only the ADOT distribution can be adopted.'
+        - 'Only for the carrier image route (copying the bundle from <AGENTCORE_AGENTS_IMAGE>): make sure that registry.odigos.io is accessible to your image build or packaging step, or mirror the image into your own registry (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare). The package routes need only your usual package registry (PyPI).'
+        - 'Use a global OTLP/HTTP destination. Supply destination authentication through your deployment''s secret mechanism; Odigos never puts credentials in these instructions.'
+      template: |-
+        # Prepare the artifact first: https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare
+        # Route A ZIP: entry point ["odigos_agentcore_start.py"] with ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>.
+        # Route B: start through the launcher, entry point ["opentelemetry-instrument", "<YOUR_ENTRY_POINT>"] or the image CMD.
+        #
+        # Add to the template's top level: the route parameter and its condition.
+        #   Parameters:
+        #     OdigosAgentCoreRoute:
+        #       Type: String
+        #       AllowedValues: [odigos, adot]   # odigos: route A (Odigos package); adot: route B (ADOT only)
+        #       Default: odigos
+        #   Conditions:
+        #     OdigosADOT: !Equals [!Ref OdigosAgentCoreRoute, adot]
+        #
+        # Merge into Resources.<YOUR_RUNTIME>.Properties of your AWS::BedrockAgentCore::Runtime and keep its other
+        # settings and EnvironmentVariables. Never set ODIGOS_MANAGED here: that marker belongs to the connector.
+        AgentRuntimeArtifact:
+          # Direct code: point at the prepared ZIP and start through the wrapper (route A) or the launcher (route B).
+          # Containers: ContainerUri: <PREPARED_IMAGE_URI>
+          CodeConfiguration:
+            Code:
+              S3:
+                Bucket: <PREPARED_ARTIFACT_BUCKET>
+                Prefix: <PREPARED_ARTIFACT_KEY>
+            Runtime: PYTHON_3_12
+            EntryPoint: !If [OdigosADOT, [opentelemetry-instrument, <YOUR_ENTRY_POINT>], [odigos_agentcore_start.py]]
+        EnvironmentVariables:
+          # Values that differ by route are !If [OdigosADOT, <route B>, <route A>]; AWS::NoValue removes the key.
+          ODIGOS_IAC: !If [OdigosADOT, '{"distro":"python-agentcore-adot","recipe":"1","v":1}', '{"distro":"<AGENTCORE_DISTRO>","recipe":"1","v":1}']
+          ODIGOS_AGENTCORE_PACKAGE: !If [OdigosADOT, '{"v":1,"language":"python","distros":["python-agentcore-adot"],"mode":"adopt"}', '{"v":1,"language":"python","distros":["<AGENTCORE_DISTRO>"]}']
+          ODIGOS_AGENTCORE_ENABLED: !If [OdigosADOT, !Ref 'AWS::NoValue', 'true']
+          ODIGOS_AGENTCORE_DISTRO: !If [OdigosADOT, !Ref 'AWS::NoValue', '<AGENTCORE_DISTRO>']
+          # Direct code (route A ZIP) only: the script the start wrapper runs. Delete this line for a container image.
+          ODIGOS_AGENTCORE_ENTRYPOINT: !If [OdigosADOT, !Ref 'AWS::NoValue', '<YOUR_ENTRY_POINT>']
+          DISABLE_ADOT_OBSERVABILITY: 'true'
+          AGENT_OBSERVABILITY_ENABLED: 'false'
+          OTEL_SERVICE_NAME: '<AGENTCORE_SERVICE_NAME>'
+          OTEL_SDK_DISABLED: 'false'
+          OTEL_EXPORTER_OTLP_ENDPOINT: '<AGENTCORE_OTLP_ENDPOINT>'
+          OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf'
+          OTEL_TRACES_EXPORTER: '<AGENTCORE_TRACES_EXPORTER>'
+          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: '<AGENTCORE_OTLP_ENDPOINT>/v1/traces'
+          OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: 'http/protobuf'
+          OTEL_METRICS_EXPORTER: '<AGENTCORE_METRICS_EXPORTER>'
+          OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: '<AGENTCORE_OTLP_ENDPOINT>/v1/metrics'
+          OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: 'http/protobuf'
+          OTEL_LOGS_EXPORTER: '<AGENTCORE_LOGS_EXPORTER>'
+          OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: '<AGENTCORE_OTLP_ENDPOINT>/v1/logs'
+          OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: 'http/protobuf'
+          OTEL_PROPAGATORS: !If [OdigosADOT, 'tracecontext,baggage', 'tracecontext,baggage,xray']
+          OTEL_TRACES_SAMPLER: 'parentbased_always_on'
+          OTEL_AWS_APPLICATION_SIGNALS_ENABLED: 'false'
+          OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED: 'false'
+          OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: 'false'
+          TRACELOOP_TRACE_CONTENT: 'false'
+          OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: 'true'
+          OTEL_PYTHON_DISTRO: !If [OdigosADOT, 'aws_distro', '<AGENTCORE_PYTHON_DISTRO>']
+          OTEL_PYTHON_CONFIGURATOR: !If [OdigosADOT, 'aws_configurator', '<AGENTCORE_PYTHON_CONFIGURATOR>']
+          OTEL_PYTHON_DISABLED_INSTRUMENTATIONS: !If [OdigosADOT, 'boto3', '<AGENTCORE_PYTHON_DISABLED_INSTRUMENTATIONS>']
+          OTEL_EXPORTER_OTLP_HEADERS: '<OTLP_AUTH_HEADERS>'
+          # Remove these keys if present: a signal-specific value replaces the shared headers above.
+          # OTEL_EXPORTER_OTLP_TRACES_HEADERS, OTEL_EXPORTER_OTLP_METRICS_HEADERS, OTEL_EXPORTER_OTLP_LOGS_HEADERS
+
+    - id: instrument-agentcore-terraform-python
+      section: instrumentation:aws.bedrock-agentcore-runtime
+      language: python
+      variant: terraform
+      variantLabel: Terraform
+      title: Instrument a Python Bedrock AgentCore runtime (Terraform)
+      description: Activate <AGENTCORE_DISTRO> on <AGENTCORE_RUNTIME_NAME> from the Odigos package (route A), or configure the ADOT the artifact already runs (route B), with the same recipes automatic mode applies.
+      format: shell
+      steps:
+        - 'Prepare and upload the artifact for your route (see the prerequisites).'
+        - 'Merge this fragment into your aws_bedrockagentcore_agent_runtime resource in its existing workspace; do not replace the rest of the resource. Set odigos_agentcore_route to odigos (route A) or adot (route B), and pass the destination authentication as a sensitive variable.'
+        - 'Review `terraform plan`, then `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Deploy, wait for the runtime and its DEFAULT endpoint to serve the new version, then invoke with a new session. Endpoints pinned to older versions keep them until you update them.'
+      prerequisites:
+        - 'Prepare the artifact before applying this (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare), on one of two routes. Route A (recommended): add the Odigos package to the agent''s dependencies, pip install "odigos-agentcore[adot]" or "odigos-agentcore[openllmetry]" (the extra must match <AGENTCORE_DISTRO>), or copy the bundle from <AGENTCORE_AGENTS_IMAGE>; environment settings alone install nothing, and the bootstrap stays dormant until this environment enables it.'
+        - 'Route B: the artifact carries ADOT only: pip install aws-opentelemetry-distro and start the agent through the opentelemetry-instrument launcher (the ZIP entry point or the image CMD). No Odigos package is needed, but ADOT cannot root an invocation at the agent, so AgentCore''s own service span stays missing from the trace; route A adds it. Only the ADOT distribution can be adopted.'
+        - 'Only for the carrier image route (copying the bundle from <AGENTCORE_AGENTS_IMAGE>): make sure that registry.odigos.io is accessible to your image build or packaging step, or mirror the image into your own registry (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare). The package routes need only your usual package registry (PyPI).'
+        - 'Use a global OTLP/HTTP destination. Supply destination authentication through your deployment''s secret mechanism; Odigos never puts credentials in these instructions.'
+      template: |-
+        # Prepare the artifact first: https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare
+        # Route A ZIP: entry point ["odigos_agentcore_start.py"] with ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>.
+        # Route B: start through the launcher, entry point ["opentelemetry-instrument", "<YOUR_ENTRY_POINT>"] or the image CMD.
+        #
+        # Requires hashicorp/aws >= 6.17.0. Merge into your existing runtime and keep its other arguments;
+        # var.existing_environment holds the runtime's other variables.
+        variable "odigos_agentcore_route" {
+          description = "odigos: the artifact carries the Odigos package or carrier bundle (route A). adot: it carries ADOT only (route B)."
+          type        = string
+          default     = "odigos"
+          validation {
+            condition     = contains(["odigos", "adot"], var.odigos_agentcore_route)
+            error_message = "odigos_agentcore_route must be odigos or adot."
+          }
+        }
+
+        locals {
+          odigos_adot = var.odigos_agentcore_route == "adot"
+        }
+
+        resource "aws_bedrockagentcore_agent_runtime" "<YOUR_RUNTIME>" {
+          # Direct code: point at the prepared ZIP and start through the wrapper (route A) or the launcher (route B).
+          # Containers: agent_runtime_artifact { container_configuration { container_uri = "<PREPARED_IMAGE_URI>" } }
+          agent_runtime_artifact {
+            code_configuration {
+              entry_point = local.odigos_adot ? ["opentelemetry-instrument", "<YOUR_ENTRY_POINT>"] : ["odigos_agentcore_start.py"]
+              runtime     = "PYTHON_3_12"
+              code {
+                s3 {
+                  bucket = "<PREPARED_ARTIFACT_BUCKET>"
+                  prefix = "<PREPARED_ARTIFACT_KEY>"
+                }
+              }
+            }
+          }
+
+          # The per-signal header keys are removed: a signal-specific value replaces the shared headers. ODIGOS_MANAGED
+          # belongs to connector-managed runtimes and is never set by IaC. The bootstrap switches exist only on route A.
+          environment_variables = merge(
+            { for key, value in var.existing_environment : key => value if !contains(["ODIGOS_MANAGED", "ODIGOS_AGENTCORE_ENABLED", "ODIGOS_AGENTCORE_DISTRO", "ODIGOS_AGENTCORE_ENTRYPOINT", "OTEL_EXPORTER_OTLP_TRACES_HEADERS", "OTEL_EXPORTER_OTLP_METRICS_HEADERS", "OTEL_EXPORTER_OTLP_LOGS_HEADERS"], key) },
+
+            {
+              ODIGOS_IAC                                         = local.odigos_adot ? "{\"distro\":\"python-agentcore-adot\",\"recipe\":\"1\",\"v\":1}" : "{\"distro\":\"<AGENTCORE_DISTRO>\",\"recipe\":\"1\",\"v\":1}"
+              ODIGOS_AGENTCORE_PACKAGE                           = local.odigos_adot ? "{\"v\":1,\"language\":\"python\",\"distros\":[\"python-agentcore-adot\"],\"mode\":\"adopt\"}" : "{\"v\":1,\"language\":\"python\",\"distros\":[\"<AGENTCORE_DISTRO>\"]}"
+              DISABLE_ADOT_OBSERVABILITY                         = "true"
+              AGENT_OBSERVABILITY_ENABLED                        = "false"
+              OTEL_SERVICE_NAME                                  = "<AGENTCORE_SERVICE_NAME>"
+              OTEL_SDK_DISABLED                                  = "false"
+              OTEL_EXPORTER_OTLP_ENDPOINT                        = "<AGENTCORE_OTLP_ENDPOINT>"
+              OTEL_EXPORTER_OTLP_PROTOCOL                        = "http/protobuf"
+              OTEL_TRACES_EXPORTER                               = "<AGENTCORE_TRACES_EXPORTER>"
+              OTEL_EXPORTER_OTLP_TRACES_ENDPOINT                 = "<AGENTCORE_OTLP_ENDPOINT>/v1/traces"
+              OTEL_EXPORTER_OTLP_TRACES_PROTOCOL                 = "http/protobuf"
+              OTEL_METRICS_EXPORTER                              = "<AGENTCORE_METRICS_EXPORTER>"
+              OTEL_EXPORTER_OTLP_METRICS_ENDPOINT                = "<AGENTCORE_OTLP_ENDPOINT>/v1/metrics"
+              OTEL_EXPORTER_OTLP_METRICS_PROTOCOL                = "http/protobuf"
+              OTEL_LOGS_EXPORTER                                 = "<AGENTCORE_LOGS_EXPORTER>"
+              OTEL_EXPORTER_OTLP_LOGS_ENDPOINT                   = "<AGENTCORE_OTLP_ENDPOINT>/v1/logs"
+              OTEL_EXPORTER_OTLP_LOGS_PROTOCOL                   = "http/protobuf"
+              OTEL_PROPAGATORS                                   = local.odigos_adot ? "tracecontext,baggage" : "tracecontext,baggage,xray"
+              OTEL_TRACES_SAMPLER                                = "parentbased_always_on"
+              OTEL_AWS_APPLICATION_SIGNALS_ENABLED               = "false"
+              OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED           = "false"
+              OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = "false"
+              TRACELOOP_TRACE_CONTENT                            = "false"
+              OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED   = "true"
+              OTEL_PYTHON_DISTRO                                 = local.odigos_adot ? "aws_distro" : "<AGENTCORE_PYTHON_DISTRO>"
+              OTEL_PYTHON_CONFIGURATOR                           = local.odigos_adot ? "aws_configurator" : "<AGENTCORE_PYTHON_CONFIGURATOR>"
+              OTEL_PYTHON_DISABLED_INSTRUMENTATIONS              = local.odigos_adot ? "boto3" : "<AGENTCORE_PYTHON_DISABLED_INSTRUMENTATIONS>"
+              OTEL_EXPORTER_OTLP_HEADERS                         = var.otlp_auth_headers # sensitive; "<OTLP_AUTH_HEADERS>", or "" when the destination needs no authentication
+            },
+
+            # Route A only: the switches that start the Odigos bootstrap.
+            { for key, value in {
+              ODIGOS_AGENTCORE_ENABLED = "true"
+              ODIGOS_AGENTCORE_DISTRO  = "<AGENTCORE_DISTRO>"
+              # Direct code only: the script the start wrapper runs. Delete this line for a container image.
+              ODIGOS_AGENTCORE_ENTRYPOINT = "<YOUR_ENTRY_POINT>"
+            } : key => value if !local.odigos_adot },
+          )
+        }
+
+    - id: instrument-agentcore-aws-cli-nodejs
+      section: instrumentation:aws.bedrock-agentcore-runtime
+      language: nodejs
+      variant: aws-cli
+      variantLabel: AWS CLI
+      title: Instrument a Node.js Bedrock AgentCore runtime (AWS CLI)
+      description: Activate <AGENTCORE_DISTRO> on <AGENTCORE_RUNTIME_NAME> from the Odigos package (route A), or configure the ADOT the artifact already runs (route B), with the same recipes automatic mode applies.
+      format: shell
+      steps:
+        - 'Prepare and upload the artifact for your route (see the prerequisites). Set ROUTE=adot when it carries ADOT only (route B), and ARTIFACT_JSON if this update should switch to the new artifact. For a ZIP on route A, set ENTRY_SCRIPT=<YOUR_ENTRY_POINT> and point ARTIFACT_JSON at the start wrapper alone.'
+        - 'Replace every <ANGLE_BRACKETED> value, then run the script with credentials that can read and update the runtime.'
+        - 'Deploy, wait for the runtime and its DEFAULT endpoint to serve the new version, then invoke with a new session. Endpoints pinned to older versions keep them until you update them.'
+      prerequisites:
+        - 'Prepare the artifact before applying this (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare), on one of two routes. Route A (recommended): add the Odigos package to the agent''s dependencies, npm install @odigos/agentcore, or copy the bundle from <AGENTCORE_AGENTS_IMAGE>; environment settings alone install nothing, and the bootstrap stays dormant until this environment enables it.'
+        - 'Route B: the artifact carries ADOT only: npm install @aws/aws-distro-opentelemetry-node-autoinstrumentation and append --require @aws/aws-distro-opentelemetry-node-autoinstrumentation/register to NODE_OPTIONS. No Odigos package is needed, but ADOT cannot root an invocation at the agent, so AgentCore''s own service span stays missing from the trace; route A adds it. Only the ADOT distribution can be adopted.'
+        - 'Only for the carrier image route (copying the bundle from <AGENTCORE_AGENTS_IMAGE>): make sure that registry.odigos.io is accessible to your image build or packaging step, or mirror the image into your own registry (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare). The package routes need only your usual package registry (npm).'
+        - 'Use a global OTLP/HTTP destination. Supply destination authentication through your deployment''s secret mechanism; Odigos never puts credentials in these instructions.'
+      template: |-
+        # Prepare the artifact first: https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare
+        # Route A ZIP: the start wrapper alone (node_modules/@odigos/agentcore/odigos_agentcore_start.js, or odigos_agentcore_start.js from the carrier bundle) with ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>.
+        # Route B: the ADOT register hook in NODE_OPTIONS starts the SDK.
+        #
+        # Requires AWS CLI v2 and jq. Reads the runtime's current configuration and changes only what is listed here.
+        RUNTIME_ID='<AGENTCORE_RUNTIME_ID>'
+        # odigos: the artifact carries the Odigos package or carrier bundle (route A).
+        # adot:   the artifact carries ADOT only (route B).
+        ROUTE="${ROUTE:-odigos}"
+        # To switch to the prepared artifact in the same update, set ARTIFACT_JSON. Direct code, route A:
+        #   ARTIFACT_JSON='{"codeConfiguration":{"code":{"s3":{"bucket":"<PREPARED_ARTIFACT_BUCKET>","prefix":"<PREPARED_ARTIFACT_KEY>"}},"runtime":"NODE_22","entryPoint":["odigos_agentcore_start.js"]}}'
+        # Direct code, route B:
+        #   ARTIFACT_JSON='{"codeConfiguration":{"code":{"s3":{"bucket":"<PREPARED_ARTIFACT_BUCKET>","prefix":"<PREPARED_ARTIFACT_KEY>"}},"runtime":"NODE_22","entryPoint":["<YOUR_ENTRY_POINT>"]}}'
+        # Container (either route):
+        #   ARTIFACT_JSON='{"containerConfiguration":{"containerUri":"<PREPARED_IMAGE_URI>"}}'
+        ARTIFACT_JSON="${ARTIFACT_JSON:-null}"
+        # Direct code, route A: your entry point script, which the start wrapper reads from ODIGOS_AGENTCORE_ENTRYPOINT.
+        ENTRY_SCRIPT="${ENTRY_SCRIPT:-}"
+
+        aws bedrock-agentcore-control get-agent-runtime --agent-runtime-id "$RUNTIME_ID" > current.json
+
+        if [ "$ROUTE" = adot ]; then
+          # Route B: the ADOT recipe. No bootstrap switches, and no X-Ray propagator.
+          jq -n \
+            --arg ODIGOS_IAC '{"distro":"nodejs-agentcore-adot","recipe":"1","v":1}' \
+            --arg ODIGOS_AGENTCORE_PACKAGE '{"v":1,"language":"nodejs","distros":["nodejs-agentcore-adot"],"moduleFormat":"commonjs","mode":"adopt"}' \
+            '{
+              ODIGOS_IAC: $ODIGOS_IAC,
+              ODIGOS_AGENTCORE_PACKAGE: $ODIGOS_AGENTCORE_PACKAGE,
+              DISABLE_ADOT_OBSERVABILITY: "true",
+              AGENT_OBSERVABILITY_ENABLED: "false",
+              OTEL_SERVICE_NAME: "<AGENTCORE_SERVICE_NAME>",
+              OTEL_SDK_DISABLED: "false",
+              OTEL_EXPORTER_OTLP_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>",
+              OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf",
+              OTEL_TRACES_EXPORTER: "<AGENTCORE_TRACES_EXPORTER>",
+              OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/traces",
+              OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: "http/protobuf",
+              OTEL_METRICS_EXPORTER: "<AGENTCORE_METRICS_EXPORTER>",
+              OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/metrics",
+              OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: "http/protobuf",
+              OTEL_LOGS_EXPORTER: "<AGENTCORE_LOGS_EXPORTER>",
+              OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/logs",
+              OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf",
+              OTEL_PROPAGATORS: "tracecontext,baggage",
+              OTEL_TRACES_SAMPLER: "parentbased_always_on",
+              OTEL_AWS_APPLICATION_SIGNALS_ENABLED: "false",
+              OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED: "false",
+              OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false",
+              TRACELOOP_TRACE_CONTENT: "false",
+              OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true",
+              OTEL_EXPORTER_OTLP_HEADERS: "<OTLP_AUTH_HEADERS>"
+            }' > odigos-env.json
+        else
+          # Route A: the Odigos package recipe.
+          jq -n \
+            --arg ODIGOS_IAC '{"distro":"<AGENTCORE_DISTRO>","recipe":"1","v":1}' \
+            --arg ODIGOS_AGENTCORE_PACKAGE '{"v":1,"language":"nodejs","distros":["<AGENTCORE_DISTRO>"],"moduleFormat":"commonjs"}' \
+            '{
+              ODIGOS_IAC: $ODIGOS_IAC,
+              ODIGOS_AGENTCORE_PACKAGE: $ODIGOS_AGENTCORE_PACKAGE,
+              ODIGOS_AGENTCORE_ENABLED: "true",
+              ODIGOS_AGENTCORE_DISTRO: "<AGENTCORE_DISTRO>",
+              DISABLE_ADOT_OBSERVABILITY: "true",
+              AGENT_OBSERVABILITY_ENABLED: "false",
+              OTEL_SERVICE_NAME: "<AGENTCORE_SERVICE_NAME>",
+              OTEL_SDK_DISABLED: "false",
+              OTEL_EXPORTER_OTLP_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>",
+              OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf",
+              OTEL_TRACES_EXPORTER: "<AGENTCORE_TRACES_EXPORTER>",
+              OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/traces",
+              OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: "http/protobuf",
+              OTEL_METRICS_EXPORTER: "<AGENTCORE_METRICS_EXPORTER>",
+              OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/metrics",
+              OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: "http/protobuf",
+              OTEL_LOGS_EXPORTER: "<AGENTCORE_LOGS_EXPORTER>",
+              OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "<AGENTCORE_OTLP_ENDPOINT>/v1/logs",
+              OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: "http/protobuf",
+              OTEL_PROPAGATORS: "tracecontext,baggage,xray",
+              OTEL_TRACES_SAMPLER: "parentbased_always_on",
+              OTEL_AWS_APPLICATION_SIGNALS_ENABLED: "false",
+              OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED: "false",
+              OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: "false",
+              TRACELOOP_TRACE_CONTENT: "false",
+              OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true",
+              OTEL_EXPORTER_OTLP_HEADERS: "<OTLP_AUTH_HEADERS>"
+            }' > odigos-env.json
+        fi
+
+        # Removes the per-signal headers and the bootstrap switches; route A sets the switches again, route B appends the ADOT hook to NODE_OPTIONS.
+        jq --slurpfile odigos odigos-env.json --argjson artifact "$ARTIFACT_JSON" --arg route "$ROUTE" --arg entry "$ENTRY_SCRIPT" --arg hook '--require @aws/aws-distro-opentelemetry-node-autoinstrumentation/register' '
+          {agentRuntimeId, agentRuntimeArtifact: ($artifact // .agentRuntimeArtifact), roleArn, networkConfiguration,
+           description, authorizerConfiguration, requestHeaderConfiguration, protocolConfiguration,
+           lifecycleConfiguration, filesystemConfigurations, metadataConfiguration,
+           environmentVariables: ((.environmentVariables // {})
+             | del(.OTEL_EXPORTER_OTLP_TRACES_HEADERS, .OTEL_EXPORTER_OTLP_METRICS_HEADERS, .OTEL_EXPORTER_OTLP_LOGS_HEADERS)
+             | del(.ODIGOS_MANAGED, .ODIGOS_AGENTCORE_ENABLED, .ODIGOS_AGENTCORE_DISTRO, .ODIGOS_AGENTCORE_ENTRYPOINT)
+             | if $route == "adot" and ((.NODE_OPTIONS // "") | contains($hook) | not)
+               then .NODE_OPTIONS = ([.NODE_OPTIONS // empty, $hook] | join(" ") | ltrimstr(" ")) else . end
+             + $odigos[0]
+             + (if $route == "odigos" and $entry != "" then {ODIGOS_AGENTCORE_ENTRYPOINT: $entry} else {} end))}
+          | with_entries(select(.value != null))' current.json > update.json
+
+        aws bedrock-agentcore-control update-agent-runtime --cli-input-json file://update.json
+
+    - id: instrument-agentcore-cdk-nodejs
+      section: instrumentation:aws.bedrock-agentcore-runtime
+      language: nodejs
+      variant: cdk
+      variantLabel: AWS CDK
+      title: Instrument a Node.js Bedrock AgentCore runtime (AWS CDK)
+      description: Activate <AGENTCORE_DISTRO> on <AGENTCORE_RUNTIME_NAME> from the Odigos package (route A), or configure the ADOT the artifact already runs (route B), with the same recipes automatic mode applies.
+      format: text
+      steps:
+        - 'From the CDK project, run `npm install @odigos/aws-cdk@<PACKAGE_VERSION>`. Paste only the TypeScript into your stack.'
+        - 'Point the runtime''s artifact at the prepared image or ZIP (see the prerequisites); the construct writes only the environment. For an artifact carrying ADOT only (route B), set `sdk: OdigosAgentCoreSdk.ADOT`.'
+        - '`cdk diff`, then `cdk deploy`. Deploy, wait for the runtime and its DEFAULT endpoint to serve the new version, then invoke with a new session. Endpoints pinned to older versions keep them until you update them.'
+      prerequisites:
+        - 'Prepare the artifact before applying this (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare), on one of two routes. Route A (recommended): add the Odigos package to the agent''s dependencies, npm install @odigos/agentcore, or copy the bundle from <AGENTCORE_AGENTS_IMAGE>; environment settings alone install nothing, and the bootstrap stays dormant until this environment enables it.'
+        - 'Route B: the artifact carries ADOT only: npm install @aws/aws-distro-opentelemetry-node-autoinstrumentation and append --require @aws/aws-distro-opentelemetry-node-autoinstrumentation/register to NODE_OPTIONS. No Odigos package is needed, but ADOT cannot root an invocation at the agent, so AgentCore''s own service span stays missing from the trace; route A adds it. Only the ADOT distribution can be adopted.'
+        - 'Only for the carrier image route (copying the bundle from <AGENTCORE_AGENTS_IMAGE>): make sure that registry.odigos.io is accessible to your image build or packaging step, or mirror the image into your own registry (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare). The package routes need only your usual package registry (npm).'
+        - 'Use a global OTLP/HTTP destination. Supply destination authentication through your deployment''s secret mechanism; Odigos never puts credentials in these instructions.'
+      template: |-
+        import { OdigosAgentCoreDistribution, OdigosAgentCoreInstrumentation, OdigosAgentCoreLanguage, OdigosAgentCoreSdk } from '@odigos/aws-cdk';
+
+        new OdigosAgentCoreInstrumentation(this, 'Odigos', {
+          destination: {
+            httpEndpoint: '<AGENTCORE_OTLP_ENDPOINT>',
+            traces: <AGENTCORE_TRACES_ENABLED>,
+            metrics: <AGENTCORE_METRICS_ENABLED>,
+            logs: <AGENTCORE_LOGS_ENABLED>,
+            // headers: { Authorization: authorization }, // destination authentication, from your secret mechanism
+          },
+          targets: [{
+            runtime: agentRuntime, // CfnRuntime, Runtime, or a CfnInclude resource of type AWS::BedrockAgentCore::Runtime
+            language: OdigosAgentCoreLanguage.NODEJS,
+            distribution: OdigosAgentCoreDistribution.<AGENTCORE_CDK_DISTRIBUTION>,
+            // ODIGOS: the artifact carries the Odigos package or carrier bundle (route A).
+            // ADOT: the artifact carries ADOT only (route B); the distribution must then be ADOT.
+            sdk: OdigosAgentCoreSdk.ODIGOS,
+            // entryPointScript: '<YOUR_ENTRY_POINT>',   // direct-code ZIP on route A: the wrapper is the EntryPoint alone
+            serviceName: '<AGENTCORE_SERVICE_NAME>',
+          }],
+        });
+
+        // Prepare the artifact first: https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare
+        // Route A ZIP: the start wrapper alone (node_modules/@odigos/agentcore/odigos_agentcore_start.js, or odigos_agentcore_start.js from the carrier bundle) with ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>.
+        // Route B: the ADOT register hook in NODE_OPTIONS starts the SDK.
+
+        // What the construct writes to EnvironmentVariables with sdk ODIGOS (route A):
+        //   ODIGOS_IAC={"distro":"<AGENTCORE_DISTRO>","recipe":"1","v":1}
+        //   ODIGOS_AGENTCORE_PACKAGE={"v":1,"language":"nodejs","distros":["<AGENTCORE_DISTRO>"],"moduleFormat":"commonjs"}
+        //   ODIGOS_AGENTCORE_ENABLED=true
+        //   ODIGOS_AGENTCORE_DISTRO=<AGENTCORE_DISTRO>
+        //   ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>  (route A direct-code ZIP only, from entryPointScript; the runtime's EntryPoint is the wrapper alone)
+        //   DISABLE_ADOT_OBSERVABILITY=true
+        //   AGENT_OBSERVABILITY_ENABLED=false
+        //   OTEL_SERVICE_NAME=<AGENTCORE_SERVICE_NAME>
+        //   OTEL_SDK_DISABLED=false
+        //   OTEL_EXPORTER_OTLP_ENDPOINT=<AGENTCORE_OTLP_ENDPOINT>
+        //   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+        //   OTEL_TRACES_EXPORTER=<AGENTCORE_TRACES_EXPORTER>
+        //   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=<AGENTCORE_OTLP_ENDPOINT>/v1/traces
+        //   OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
+        //   OTEL_METRICS_EXPORTER=<AGENTCORE_METRICS_EXPORTER>
+        //   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=<AGENTCORE_OTLP_ENDPOINT>/v1/metrics
+        //   OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/protobuf
+        //   OTEL_LOGS_EXPORTER=<AGENTCORE_LOGS_EXPORTER>
+        //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=<AGENTCORE_OTLP_ENDPOINT>/v1/logs
+        //   OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/protobuf
+        //   OTEL_PROPAGATORS=tracecontext,baggage,xray
+        //   OTEL_TRACES_SAMPLER=parentbased_always_on
+        //   OTEL_AWS_APPLICATION_SIGNALS_ENABLED=false
+        //   OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED=false
+        //   OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false
+        //   TRACELOOP_TRACE_CONTENT=false
+        //   OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+        //   OTEL_EXPORTER_OTLP_HEADERS=<OTLP_AUTH_HEADERS>  (encoded from destination.headers; removed when there are none)
+        //
+        // With sdk ADOT (route B) it writes the same, except:
+        //   ODIGOS_IAC={"distro":"nodejs-agentcore-adot","recipe":"1","v":1}
+        //   ODIGOS_AGENTCORE_PACKAGE={"v":1,"language":"nodejs","distros":["nodejs-agentcore-adot"],"moduleFormat":"commonjs","mode":"adopt"}
+        //   OTEL_PROPAGATORS=tracecontext,baggage
+        // and it removes ODIGOS_AGENTCORE_ENABLED and ODIGOS_AGENTCORE_DISTRO instead of setting them (entryPointScript throws at synth).
+        //
+        // Either way it removes, if present: ODIGOS_MANAGED, OTEL_EXPORTER_OTLP_TRACES_HEADERS, OTEL_EXPORTER_OTLP_METRICS_HEADERS, OTEL_EXPORTER_OTLP_LOGS_HEADERS
+
+    - id: instrument-agentcore-cloudformation-nodejs
+      section: instrumentation:aws.bedrock-agentcore-runtime
+      language: nodejs
+      variant: cloudformation
+      variantLabel: CloudFormation
+      title: Instrument a Node.js Bedrock AgentCore runtime (CloudFormation)
+      description: Activate <AGENTCORE_DISTRO> on <AGENTCORE_RUNTIME_NAME> from the Odigos package (route A), or configure the ADOT the artifact already runs (route B), with the same recipes automatic mode applies.
+      format: yaml
+      steps:
+        - 'Prepare and upload the artifact for your route (see the prerequisites).'
+        - 'Add the OdigosAgentCoreRoute parameter and the OdigosADOT condition to the template, and merge this fragment into your AWS::BedrockAgentCore::Runtime. Keep the runtime''s other properties and environment variables, and remove the listed header keys.'
+        - 'Replace every <ANGLE_BRACKETED> value and update the stack with OdigosAgentCoreRoute=odigos (route A) or adot (route B). Deploy, wait for the runtime and its DEFAULT endpoint to serve the new version, then invoke with a new session. Endpoints pinned to older versions keep them until you update them.'
+      prerequisites:
+        - 'Prepare the artifact before applying this (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare), on one of two routes. Route A (recommended): add the Odigos package to the agent''s dependencies, npm install @odigos/agentcore, or copy the bundle from <AGENTCORE_AGENTS_IMAGE>; environment settings alone install nothing, and the bootstrap stays dormant until this environment enables it.'
+        - 'Route B: the artifact carries ADOT only: npm install @aws/aws-distro-opentelemetry-node-autoinstrumentation and append --require @aws/aws-distro-opentelemetry-node-autoinstrumentation/register to NODE_OPTIONS. No Odigos package is needed, but ADOT cannot root an invocation at the agent, so AgentCore''s own service span stays missing from the trace; route A adds it. Only the ADOT distribution can be adopted.'
+        - 'Only for the carrier image route (copying the bundle from <AGENTCORE_AGENTS_IMAGE>): make sure that registry.odigos.io is accessible to your image build or packaging step, or mirror the image into your own registry (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare). The package routes need only your usual package registry (npm).'
+        - 'Use a global OTLP/HTTP destination. Supply destination authentication through your deployment''s secret mechanism; Odigos never puts credentials in these instructions.'
+      template: |-
+        # Prepare the artifact first: https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare
+        # Route A ZIP: the start wrapper alone (node_modules/@odigos/agentcore/odigos_agentcore_start.js, or odigos_agentcore_start.js from the carrier bundle) with ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>.
+        # Route B: the ADOT register hook in NODE_OPTIONS starts the SDK.
+        #
+        # Add to the template's top level: the route parameter and its condition.
+        #   Parameters:
+        #     OdigosAgentCoreRoute:
+        #       Type: String
+        #       AllowedValues: [odigos, adot]   # odigos: route A (Odigos package); adot: route B (ADOT only)
+        #       Default: odigos
+        #   Conditions:
+        #     OdigosADOT: !Equals [!Ref OdigosAgentCoreRoute, adot]
+        #
+        # Merge into Resources.<YOUR_RUNTIME>.Properties of your AWS::BedrockAgentCore::Runtime and keep its other
+        # settings and EnvironmentVariables. Never set ODIGOS_MANAGED here: that marker belongs to the connector.
+        AgentRuntimeArtifact:
+          # Direct code: point at the prepared ZIP and start through the wrapper (route A) or the launcher (route B).
+          # Containers: ContainerUri: <PREPARED_IMAGE_URI>
+          CodeConfiguration:
+            Code:
+              S3:
+                Bucket: <PREPARED_ARTIFACT_BUCKET>
+                Prefix: <PREPARED_ARTIFACT_KEY>
+            Runtime: NODE_22
+            EntryPoint: !If [OdigosADOT, [<YOUR_ENTRY_POINT>], [odigos_agentcore_start.js]]
+        EnvironmentVariables:
+          # Values that differ by route are !If [OdigosADOT, <route B>, <route A>]; AWS::NoValue removes the key.
+          ODIGOS_IAC: !If [OdigosADOT, '{"distro":"nodejs-agentcore-adot","recipe":"1","v":1}', '{"distro":"<AGENTCORE_DISTRO>","recipe":"1","v":1}']
+          ODIGOS_AGENTCORE_PACKAGE: !If [OdigosADOT, '{"v":1,"language":"nodejs","distros":["nodejs-agentcore-adot"],"moduleFormat":"commonjs","mode":"adopt"}', '{"v":1,"language":"nodejs","distros":["<AGENTCORE_DISTRO>"],"moduleFormat":"commonjs"}']
+          ODIGOS_AGENTCORE_ENABLED: !If [OdigosADOT, !Ref 'AWS::NoValue', 'true']
+          ODIGOS_AGENTCORE_DISTRO: !If [OdigosADOT, !Ref 'AWS::NoValue', '<AGENTCORE_DISTRO>']
+          # Direct code (route A ZIP) only: the script the start wrapper runs. Delete this line for a container image.
+          ODIGOS_AGENTCORE_ENTRYPOINT: !If [OdigosADOT, !Ref 'AWS::NoValue', '<YOUR_ENTRY_POINT>']
+          DISABLE_ADOT_OBSERVABILITY: 'true'
+          AGENT_OBSERVABILITY_ENABLED: 'false'
+          OTEL_SERVICE_NAME: '<AGENTCORE_SERVICE_NAME>'
+          OTEL_SDK_DISABLED: 'false'
+          OTEL_EXPORTER_OTLP_ENDPOINT: '<AGENTCORE_OTLP_ENDPOINT>'
+          OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf'
+          OTEL_TRACES_EXPORTER: '<AGENTCORE_TRACES_EXPORTER>'
+          OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: '<AGENTCORE_OTLP_ENDPOINT>/v1/traces'
+          OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: 'http/protobuf'
+          OTEL_METRICS_EXPORTER: '<AGENTCORE_METRICS_EXPORTER>'
+          OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: '<AGENTCORE_OTLP_ENDPOINT>/v1/metrics'
+          OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: 'http/protobuf'
+          OTEL_LOGS_EXPORTER: '<AGENTCORE_LOGS_EXPORTER>'
+          OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: '<AGENTCORE_OTLP_ENDPOINT>/v1/logs'
+          OTEL_EXPORTER_OTLP_LOGS_PROTOCOL: 'http/protobuf'
+          OTEL_PROPAGATORS: !If [OdigosADOT, 'tracecontext,baggage', 'tracecontext,baggage,xray']
+          OTEL_TRACES_SAMPLER: 'parentbased_always_on'
+          OTEL_AWS_APPLICATION_SIGNALS_ENABLED: 'false'
+          OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED: 'false'
+          OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: 'false'
+          TRACELOOP_TRACE_CONTENT: 'false'
+          OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: 'true'
+          OTEL_EXPORTER_OTLP_HEADERS: '<OTLP_AUTH_HEADERS>'
+          # Route B loads ADOT through NODE_OPTIONS. If the runtime already sets NODE_OPTIONS, keep that key instead and
+          # append the hook to its value on route B.
+          NODE_OPTIONS: !If [OdigosADOT, '--require @aws/aws-distro-opentelemetry-node-autoinstrumentation/register', !Ref 'AWS::NoValue']
+          # Remove these keys if present: a signal-specific value replaces the shared headers above.
+          # OTEL_EXPORTER_OTLP_TRACES_HEADERS, OTEL_EXPORTER_OTLP_METRICS_HEADERS, OTEL_EXPORTER_OTLP_LOGS_HEADERS
+
+    - id: instrument-agentcore-terraform-nodejs
+      section: instrumentation:aws.bedrock-agentcore-runtime
+      language: nodejs
+      variant: terraform
+      variantLabel: Terraform
+      title: Instrument a Node.js Bedrock AgentCore runtime (Terraform)
+      description: Activate <AGENTCORE_DISTRO> on <AGENTCORE_RUNTIME_NAME> from the Odigos package (route A), or configure the ADOT the artifact already runs (route B), with the same recipes automatic mode applies.
+      format: shell
+      steps:
+        - 'Prepare and upload the artifact for your route (see the prerequisites).'
+        - 'Merge this fragment into your aws_bedrockagentcore_agent_runtime resource in its existing workspace; do not replace the rest of the resource. Set odigos_agentcore_route to odigos (route A) or adot (route B), and pass the destination authentication as a sensitive variable.'
+        - 'Review `terraform plan`, then `terraform apply` (OpenTofu: `tofu plan` and `tofu apply`). Deploy, wait for the runtime and its DEFAULT endpoint to serve the new version, then invoke with a new session. Endpoints pinned to older versions keep them until you update them.'
+      prerequisites:
+        - 'Prepare the artifact before applying this (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare), on one of two routes. Route A (recommended): add the Odigos package to the agent''s dependencies, npm install @odigos/agentcore, or copy the bundle from <AGENTCORE_AGENTS_IMAGE>; environment settings alone install nothing, and the bootstrap stays dormant until this environment enables it.'
+        - 'Route B: the artifact carries ADOT only: npm install @aws/aws-distro-opentelemetry-node-autoinstrumentation and append --require @aws/aws-distro-opentelemetry-node-autoinstrumentation/register to NODE_OPTIONS. No Odigos package is needed, but ADOT cannot root an invocation at the agent, so AgentCore''s own service span stays missing from the trace; route A adds it. Only the ADOT distribution can be adopted.'
+        - 'Only for the carrier image route (copying the bundle from <AGENTCORE_AGENTS_IMAGE>): make sure that registry.odigos.io is accessible to your image build or packaging step, or mirror the image into your own registry (https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare). The package routes need only your usual package registry (npm).'
+        - 'Use a global OTLP/HTTP destination. Supply destination authentication through your deployment''s secret mechanism; Odigos never puts credentials in these instructions.'
+      template: |-
+        # Prepare the artifact first: https://docs.odigos.io/cloud-connectors/aws/workloads/agentcore/prepare
+        # Route A ZIP: the start wrapper alone (node_modules/@odigos/agentcore/odigos_agentcore_start.js, or odigos_agentcore_start.js from the carrier bundle) with ODIGOS_AGENTCORE_ENTRYPOINT=<YOUR_ENTRY_POINT>.
+        # Route B: the ADOT register hook in NODE_OPTIONS starts the SDK.
+        #
+        # Requires hashicorp/aws >= 6.17.0. Merge into your existing runtime and keep its other arguments;
+        # var.existing_environment holds the runtime's other variables.
+        variable "odigos_agentcore_route" {
+          description = "odigos: the artifact carries the Odigos package or carrier bundle (route A). adot: it carries ADOT only (route B)."
+          type        = string
+          default     = "odigos"
+          validation {
+            condition     = contains(["odigos", "adot"], var.odigos_agentcore_route)
+            error_message = "odigos_agentcore_route must be odigos or adot."
+          }
+        }
+
+        locals {
+          odigos_adot = var.odigos_agentcore_route == "adot"
+        }
+
+        resource "aws_bedrockagentcore_agent_runtime" "<YOUR_RUNTIME>" {
+          # Direct code: point at the prepared ZIP and start through the wrapper (route A) or the launcher (route B).
+          # Containers: agent_runtime_artifact { container_configuration { container_uri = "<PREPARED_IMAGE_URI>" } }
+          agent_runtime_artifact {
+            code_configuration {
+              entry_point = local.odigos_adot ? ["<YOUR_ENTRY_POINT>"] : ["odigos_agentcore_start.js"]
+              runtime     = "NODE_22"
+              code {
+                s3 {
+                  bucket = "<PREPARED_ARTIFACT_BUCKET>"
+                  prefix = "<PREPARED_ARTIFACT_KEY>"
+                }
+              }
+            }
+          }
+
+          # The per-signal header keys are removed: a signal-specific value replaces the shared headers. ODIGOS_MANAGED
+          # belongs to connector-managed runtimes and is never set by IaC. The bootstrap switches exist only on route A.
+          environment_variables = merge(
+            { for key, value in var.existing_environment : key => value if !contains(["ODIGOS_MANAGED", "ODIGOS_AGENTCORE_ENABLED", "ODIGOS_AGENTCORE_DISTRO", "ODIGOS_AGENTCORE_ENTRYPOINT", "OTEL_EXPORTER_OTLP_TRACES_HEADERS", "OTEL_EXPORTER_OTLP_METRICS_HEADERS", "OTEL_EXPORTER_OTLP_LOGS_HEADERS"], key) },
+
+            {
+              ODIGOS_IAC                                         = local.odigos_adot ? "{\"distro\":\"nodejs-agentcore-adot\",\"recipe\":\"1\",\"v\":1}" : "{\"distro\":\"<AGENTCORE_DISTRO>\",\"recipe\":\"1\",\"v\":1}"
+              ODIGOS_AGENTCORE_PACKAGE                           = local.odigos_adot ? "{\"v\":1,\"language\":\"nodejs\",\"distros\":[\"nodejs-agentcore-adot\"],\"moduleFormat\":\"commonjs\",\"mode\":\"adopt\"}" : "{\"v\":1,\"language\":\"nodejs\",\"distros\":[\"<AGENTCORE_DISTRO>\"],\"moduleFormat\":\"commonjs\"}"
+              DISABLE_ADOT_OBSERVABILITY                         = "true"
+              AGENT_OBSERVABILITY_ENABLED                        = "false"
+              OTEL_SERVICE_NAME                                  = "<AGENTCORE_SERVICE_NAME>"
+              OTEL_SDK_DISABLED                                  = "false"
+              OTEL_EXPORTER_OTLP_ENDPOINT                        = "<AGENTCORE_OTLP_ENDPOINT>"
+              OTEL_EXPORTER_OTLP_PROTOCOL                        = "http/protobuf"
+              OTEL_TRACES_EXPORTER                               = "<AGENTCORE_TRACES_EXPORTER>"
+              OTEL_EXPORTER_OTLP_TRACES_ENDPOINT                 = "<AGENTCORE_OTLP_ENDPOINT>/v1/traces"
+              OTEL_EXPORTER_OTLP_TRACES_PROTOCOL                 = "http/protobuf"
+              OTEL_METRICS_EXPORTER                              = "<AGENTCORE_METRICS_EXPORTER>"
+              OTEL_EXPORTER_OTLP_METRICS_ENDPOINT                = "<AGENTCORE_OTLP_ENDPOINT>/v1/metrics"
+              OTEL_EXPORTER_OTLP_METRICS_PROTOCOL                = "http/protobuf"
+              OTEL_LOGS_EXPORTER                                 = "<AGENTCORE_LOGS_EXPORTER>"
+              OTEL_EXPORTER_OTLP_LOGS_ENDPOINT                   = "<AGENTCORE_OTLP_ENDPOINT>/v1/logs"
+              OTEL_EXPORTER_OTLP_LOGS_PROTOCOL                   = "http/protobuf"
+              OTEL_PROPAGATORS                                   = local.odigos_adot ? "tracecontext,baggage" : "tracecontext,baggage,xray"
+              OTEL_TRACES_SAMPLER                                = "parentbased_always_on"
+              OTEL_AWS_APPLICATION_SIGNALS_ENABLED               = "false"
+              OTEL_AWS_DYNAMIC_INSTRUMENTATION_ENABLED           = "false"
+              OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT = "false"
+              TRACELOOP_TRACE_CONTENT                            = "false"
+              OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED   = "true"
+              OTEL_EXPORTER_OTLP_HEADERS                         = var.otlp_auth_headers # sensitive; "<OTLP_AUTH_HEADERS>", or "" when the destination needs no authentication
+            },
+
+            # Route A only: the switches that start the Odigos bootstrap.
+            { for key, value in {
+              ODIGOS_AGENTCORE_ENABLED = "true"
+              ODIGOS_AGENTCORE_DISTRO  = "<AGENTCORE_DISTRO>"
+              # Direct code only: the script the start wrapper runs. Delete this line for a container image.
+              ODIGOS_AGENTCORE_ENTRYPOINT = "<YOUR_ENTRY_POINT>"
+            } : key => value if !local.odigos_adot },
+
+            # Route B only: load ADOT, appended to the NODE_OPTIONS the runtime already has.
+            { for key, value in {
+              NODE_OPTIONS = trimspace("${lookup(var.existing_environment, "NODE_OPTIONS", "")} --require @aws/aws-distro-opentelemetry-node-autoinstrumentation/register")
+            } : key => value if local.odigos_adot },
+          )
+        }
 
     - id: instrument-lambda-terraform-java
       section: instrumentation:aws.lambda
@@ -3276,7 +3899,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Java agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
               mountPoints = [{
@@ -3298,14 +3921,10 @@ setup:
                 condition     = "SUCCESS"
               }]
               environment = [
-                # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against.
-                # The value, unescaped, is exactly: {"v":1,"lang":"java"}
+                # The IaC marker, unescaped: {"v":1,"lang":"java"}
                 { name = "ODIGOS_IAC", value = "{\"v\":1,\"lang\":\"java\"}" },
 
-                # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-                # performed, including the rollback snapshot; setting it by hand claims a rollback that
-                # was never recorded. Remove it if an earlier attempt left one.
+                # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
@@ -3318,8 +3937,7 @@ setup:
                 { name = "OTEL_SDK_DISABLED", value = "false" },
 
                 # --- Java activation ---
-                # Keep whatever the container already carries and add ours after it, joined by a space.
-                # APPEND, never assign — assigning it discards your value.
+                # APPEND to the existing value, joined by a space; assigning discards it.
                 { name = "JAVA_TOOL_OPTIONS", value = trimspace("${var.java_tool_options} -javaagent:/var/odigos/java/javaagent.jar") },
 
                 # Do NOT set OTEL_LOG_LEVEL — it is compared against unset and a value is reported as drift.
@@ -3359,7 +3977,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
@@ -3376,15 +3994,11 @@ setup:
               - ContainerName: odigos-agent
                 Condition: SUCCESS
             Environment:
-              # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against.
-              # The value, unescaped, is exactly: {"v":1,"lang":"java"}
+              # The IaC marker, unescaped: {"v":1,"lang":"java"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"java"}'
 
-              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-              # performed, including the rollback snapshot; setting it by hand claims a rollback that
-              # was never recorded. Remove it if an earlier attempt left one.
+              # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -3442,7 +4056,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
         });
 
         odigos.instrument({
@@ -3506,7 +4120,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Python agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
               mountPoints = [{
@@ -3528,14 +4142,10 @@ setup:
                 condition     = "SUCCESS"
               }]
               environment = [
-                # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against.
-                # The value, unescaped, is exactly: {"v":1,"lang":"python"}
+                # The IaC marker, unescaped: {"v":1,"lang":"python"}
                 { name = "ODIGOS_IAC", value = "{\"v\":1,\"lang\":\"python\"}" },
 
-                # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-                # performed, including the rollback snapshot; setting it by hand claims a rollback that
-                # was never recorded. Remove it if an earlier attempt left one.
+                # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
@@ -3591,7 +4201,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
@@ -3608,15 +4218,11 @@ setup:
               - ContainerName: odigos-agent
                 Condition: SUCCESS
             Environment:
-              # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against.
-              # The value, unescaped, is exactly: {"v":1,"lang":"python"}
+              # The IaC marker, unescaped: {"v":1,"lang":"python"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"python"}'
 
-              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-              # performed, including the rollback snapshot; setting it by hand claims a rollback that
-              # was never recorded. Remove it if an earlier attempt left one.
+              # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -3678,7 +4284,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
         });
 
         odigos.instrument({
@@ -3744,7 +4350,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Node.js agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
               mountPoints = [{
@@ -3766,14 +4372,10 @@ setup:
                 condition     = "SUCCESS"
               }]
               environment = [
-                # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against.
-                # The value, unescaped, is exactly: {"v":1,"lang":"nodejs"}
+                # The IaC marker, unescaped: {"v":1,"lang":"nodejs"}
                 { name = "ODIGOS_IAC", value = "{\"v\":1,\"lang\":\"nodejs\"}" },
 
-                # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-                # performed, including the rollback snapshot; setting it by hand claims a rollback that
-                # was never recorded. Remove it if an earlier attempt left one.
+                # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
@@ -3786,8 +4388,7 @@ setup:
                 { name = "OTEL_SDK_DISABLED", value = "false" },
 
                 # --- Node.js activation ---
-                # Keep whatever the container already carries and add ours after it, joined by a space.
-                # APPEND, never assign — assigning it discards your value.
+                # APPEND to the existing value, joined by a space; assigning discards it.
                 { name = "NODE_OPTIONS", value = trimspace("${var.node_options} --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js") },
 
                 # Do NOT set OTEL_LOG_LEVEL — it is compared against unset and a value is reported as drift.
@@ -3827,7 +4428,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
@@ -3844,15 +4445,11 @@ setup:
               - ContainerName: odigos-agent
                 Condition: SUCCESS
             Environment:
-              # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against.
-              # The value, unescaped, is exactly: {"v":1,"lang":"nodejs"}
+              # The IaC marker, unescaped: {"v":1,"lang":"nodejs"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"nodejs"}'
 
-              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-              # performed, including the rollback snapshot; setting it by hand claims a rollback that
-              # was never recorded. Remove it if an earlier attempt left one.
+              # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -3910,7 +4507,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
         });
 
         odigos.instrument({
@@ -3974,7 +4571,7 @@ setup:
             {
               # --- the agent-staging container: it copies the .NET agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
               mountPoints = [{
@@ -3996,14 +4593,10 @@ setup:
                 condition     = "SUCCESS"
               }]
               environment = [
-                # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against.
-                # The value, unescaped, is exactly: {"v":1,"lang":"dotnet"}
+                # The IaC marker, unescaped: {"v":1,"lang":"dotnet"}
                 { name = "ODIGOS_IAC", value = "{\"v\":1,\"lang\":\"dotnet\"}" },
 
-                # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-                # performed, including the rollback snapshot; setting it by hand claims a rollback that
-                # was never recorded. Remove it if an earlier attempt left one.
+                # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
@@ -4059,7 +4652,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
@@ -4076,15 +4669,11 @@ setup:
               - ContainerName: odigos-agent
                 Condition: SUCCESS
             Environment:
-              # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against.
-              # The value, unescaped, is exactly: {"v":1,"lang":"dotnet"}
+              # The IaC marker, unescaped: {"v":1,"lang":"dotnet"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"dotnet"}'
 
-              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-              # performed, including the rollback snapshot; setting it by hand claims a rollback that
-              # was never recorded. Remove it if an earlier attempt left one.
+              # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -4149,7 +4738,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
         });
 
         odigos.instrument({
@@ -4216,7 +4805,7 @@ setup:
             {
               # --- the agent-staging container: it copies the PHP agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
               mountPoints = [{
@@ -4238,14 +4827,10 @@ setup:
                 condition     = "SUCCESS"
               }]
               environment = [
-                # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against.
-                # The value, unescaped, is exactly: {"v":1,"lang":"php"}
+                # The IaC marker, unescaped: {"v":1,"lang":"php"}
                 { name = "ODIGOS_IAC", value = "{\"v\":1,\"lang\":\"php\"}" },
 
-                # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-                # performed, including the rollback snapshot; setting it by hand claims a rollback that
-                # was never recorded. Remove it if an earlier attempt left one.
+                # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
@@ -4299,7 +4884,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
@@ -4316,15 +4901,11 @@ setup:
               - ContainerName: odigos-agent
                 Condition: SUCCESS
             Environment:
-              # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against.
-              # The value, unescaped, is exactly: {"v":1,"lang":"php"}
+              # The IaC marker, unescaped: {"v":1,"lang":"php"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"php"}'
 
-              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-              # performed, including the rollback snapshot; setting it by hand claims a rollback that
-              # was never recorded. Remove it if an earlier attempt left one.
+              # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -4386,7 +4967,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
         });
 
         odigos.instrument({
@@ -4452,7 +5033,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Ruby agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
               mountPoints = [{
@@ -4474,14 +5055,10 @@ setup:
                 condition     = "SUCCESS"
               }]
               environment = [
-                # The IaC marker: it is what attributes this container to Odigos, and its recorded
-                # language is the agent the activation environment below is checked against.
-                # The value, unescaped, is exactly: {"v":1,"lang":"ruby"}
+                # The IaC marker, unescaped: {"v":1,"lang":"ruby"}
                 { name = "ODIGOS_IAC", value = "{\"v\":1,\"lang\":\"ruby\"}" },
 
-                # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-                # performed, including the rollback snapshot; setting it by hand claims a rollback that
-                # was never recorded. Remove it if an earlier attempt left one.
+                # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
 
                 { name = "OTEL_SERVICE_NAME", value = "<ODIGOS_SOURCE_NAME>" },
                 { name = "OTEL_RESOURCE_ATTRIBUTES", value = "cloud.provider=aws,cloud.platform=aws_ecs,cloud.region=<REGION>" },
@@ -4535,7 +5112,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.19"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
@@ -4552,15 +5129,11 @@ setup:
               - ContainerName: odigos-agent
                 Condition: SUCCESS
             Environment:
-              # The IaC marker: it is what attributes this container to Odigos, and its recorded
-              # language is the agent the activation environment below is checked against.
-              # The value, unescaped, is exactly: {"v":1,"lang":"ruby"}
+              # The IaC marker, unescaped: {"v":1,"lang":"ruby"}
               - Name: ODIGOS_IAC
                 Value: '{"v":1,"lang":"ruby"}'
 
-              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
-              # performed, including the rollback snapshot; setting it by hand claims a rollback that
-              # was never recorded. Remove it if an earlier attempt left one.
+              # Do NOT add ODIGOS_MANAGED; remove it if an earlier attempt left one.
               - Name: OTEL_SERVICE_NAME
                 Value: "<ODIGOS_SOURCE_NAME>"
               - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -4622,7 +5195,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.19',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
         });
 
         odigos.instrument({
@@ -4659,9 +5232,6 @@ setup:
         //   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT  OTEL_EXPORTER_OTLP_LOGS_PROTOCOL
         //   OTEL_EXPORTER_OTLP_LOGS_HEADERS  OTEL_EXPORTER_OTLP_LOGS_INSECURE
 
-# gateway: connector-wide regional Collector wiring; not part of either domain. Fargate services and
-# VPC-attached Lambda functions are routed here when a same-region marker exists and the host/consumer
-# VPC path plus Collector ingress are proven. Non-VPC Lambda functions remain direct.
 gateway:
   enabled: true
   displayName: Gateway / collector wiring

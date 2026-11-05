@@ -47,6 +47,24 @@ func TestCoverageProblemsPassesACompleteArtifact(t *testing.T) {
 	}
 }
 
+// TestCoverageProblemsAcceptsAnEscapedJSONValue: a marker that is itself JSON is written escaped inside an HCL or
+// JSON string and bare in YAML; both evaluate to the same value. A changed value is still caught.
+func TestCoverageProblemsAcceptsAnEscapedJSONValue(t *testing.T) {
+	p := pythonPlan()
+	p.Fragments[4].Env = append(p.Fragments[4].Env, EnvVar{Name: "ODIGOS_IAC", Value: `{"v":1,"lang":"python"}`, Merge: MergeSet})
+	artifacts := map[string]string{
+		"terraform":      fullArtifact() + "\n" + `ODIGOS_IAC = "{\"v\":1,\"lang\":\"python\"}"`,
+		"cloudformation": fullArtifact() + "\n" + `ODIGOS_IAC: '{"v":1,"lang":"python"}'`,
+	}
+	if got := CoverageProblems(artifacts, []Plan{p}); len(got) != 0 {
+		t.Fatalf("escaped and bare forms of one value were rejected:\n%s", strings.Join(got, "\n"))
+	}
+	artifacts["terraform"] = fullArtifact() + "\n" + `ODIGOS_IAC = "{\"v\":1,\"lang\":\"java\"}"`
+	if got := CoverageProblems(artifacts, []Plan{p}); len(got) == 0 {
+		t.Fatal("an escaped marker with the wrong value was accepted")
+	}
+}
+
 // TestCoverageProblemsCatchesADriftedAgentPath is the case the guard exists for: the injector's agent
 // directory moved and nobody updated the instructions.
 func TestCoverageProblemsCatchesADriftedAgentPath(t *testing.T) {

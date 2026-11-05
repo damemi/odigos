@@ -35,7 +35,7 @@
 # passes this build arg, so a `make build-connector-aws` never uses the default below; the default exists
 # only so a bare `docker build -f connectors/providers/aws/Dockerfile .` still works. TestArtifactVersions
 # in pkg/config fails the build if the two drift.
-ARG LAMBDA_AGENTS_IMAGE=registry.odigos.io/odigos-lambda-agents:v0.0.19
+ARG LAMBDA_AGENTS_IMAGE=registry.odigos.io/odigos-lambda-agents:v0.0.27
 
 # --- Go build ------------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
@@ -64,10 +64,12 @@ RUN --mount=type=secret,id=github_token \
 FROM ${LAMBDA_AGENTS_IMAGE} AS layers
 
 # --- runtime image -------------------------------------------------------------------------------
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot AS runtime
 WORKDIR /
 COPY --from=builder /workspace/connector-aws /app
 COPY --from=layers /var/odigos/lambda /var/odigos/lambda
 COPY connectors/providers/aws/LICENSE /licenses/LICENSE
 USER 65532:65532
 ENTRYPOINT ["/app"]
+
+FROM runtime AS default

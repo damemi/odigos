@@ -1,0 +1,63 @@
+[
+  {
+    "name": "python-agentcore-adot",
+    "displayName": "AWS Distro for OpenTelemetry",
+    "language": "python",
+    "vendor": "adot",
+    "isDefault": true,
+    "dependencies": {
+      "aws-opentelemetry-distro": "AGENTCORE_ADOT_PYTHON_VERSION"
+    },
+    "version": "1"
+  },
+  {
+    "name": "python-agentcore-openllmetry",
+    "displayName": "OpenLLMetry Bedrock",
+    "language": "python",
+    "vendor": "openllmetry",
+    "isDefault": false,
+    "dependencies": {
+      "opentelemetry-distro": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-sdk": "AGENTCORE_OTEL_PYTHON_VERSION",
+      "opentelemetry-exporter-otlp-proto-http": "AGENTCORE_OTEL_PYTHON_VERSION",
+      "opentelemetry-instrumentation-bedrock": "AGENTCORE_OPENLLMETRY_PYTHON_VERSION",
+      "opentelemetry-propagator-aws-xray": "AGENTCORE_OTEL_PYTHON_XRAY_VERSION",
+      "opentelemetry-instrumentation-asgi": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-instrumentation-starlette": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-instrumentation-fastapi": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-instrumentation-aiohttp-client": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-instrumentation-httpx": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-instrumentation-requests": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-instrumentation-urllib3": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-instrumentation-logging": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION",
+      "opentelemetry-instrumentation-threading": "AGENTCORE_OTEL_PYTHON_INSTRUMENTATION_VERSION"
+    },
+    "version": "1"
+  },
+  {
+    "name": "nodejs-agentcore-adot",
+    "displayName": "AWS Distro for OpenTelemetry",
+    "language": "nodejs",
+    "vendor": "adot",
+    "isDefault": true,
+    "dependencies": {
+      "@aws/aws-distro-opentelemetry-node-autoinstrumentation": "AGENTCORE_ADOT_NODEJS_VERSION"
+    },
+    "version": "1"
+  },
+  {
+    "name": "nodejs-agentcore-openllmetry",
+    "displayName": "OpenLLMetry Bedrock",
+    "language": "nodejs",
+    "vendor": "openllmetry",
+    "isDefault": false,
+    "dependencies": {
+      "@opentelemetry/sdk-node": "AGENTCORE_OTEL_NODEJS_SDK_VERSION",
+      "@opentelemetry/auto-instrumentations-node": "AGENTCORE_OTEL_NODEJS_AUTO_VERSION",
+      "@opentelemetry/core": "AGENTCORE_OTEL_NODEJS_CORE_VERSION",
+      "@opentelemetry/propagator-aws-xray": "AGENTCORE_OTEL_NODEJS_XRAY_VERSION",
+      "@traceloop/instrumentation-bedrock": "AGENTCORE_OPENLLMETRY_NODEJS_VERSION"
+    },
+    "version": "1"
+  }
+]

@@ -249,7 +249,7 @@ type Plan struct {
 	// Language is the canonical connector language key ("java", "python", …). A type whose instrumentation
 	// is language-independent leaves it empty.
 	Language string
-	// Mode is the injection shape, for prose that has to name it: "layer" (Lambda) or "staged-agent".
+	// Mode is the injection shape: "layer", "staged-agent", or "packaged-sdk".
 	Mode string
 	// Activation distinguishes plans that share a type and language but activate the agent differently, and
 	// are therefore genuinely different instruction sets. Lambda has two — an exec wrapper on a RequestHandler
@@ -276,6 +276,8 @@ const (
 	// ModeStagedAgent: a helper container copies the agent into a shared volume the application container
 	// reads — the OSS Odigos k8s-init-container mount method, adapted per platform.
 	ModeStagedAgent = "staged-agent"
+	// ModePackagedSDK: dependencies and a dormant bootstrap are part of the customer's artifact.
+	ModePackagedSDK = "packaged-sdk"
 )
 
 // Placeholders are the values a plan cannot resolve, because they belong to the customer's own deployment
@@ -560,8 +562,8 @@ func (p Plan) Validate() error {
 	if p.Type == "" {
 		add("plan declares no instrumentation type")
 	}
-	if p.Mode != ModeLayer && p.Mode != ModeStagedAgent {
-		add("plan mode %q is not one of %q, %q", p.Mode, ModeLayer, ModeStagedAgent)
+	if p.Mode != ModeLayer && p.Mode != ModeStagedAgent && p.Mode != ModePackagedSDK {
+		add("plan mode %q is not one of %q, %q, %q", p.Mode, ModeLayer, ModeStagedAgent, ModePackagedSDK)
 	}
 	if len(p.Fragments) == 0 {
 		add("plan declares no fragments, so there is nothing for a customer to apply")

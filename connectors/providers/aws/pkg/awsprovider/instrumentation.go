@@ -6,8 +6,11 @@ import (
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
+	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
 	ins "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/instrumentor"
 )
+
+func (p *Provider) RequiresGlobalOTLPDestination(kind string) bool { return kind == agentcore.Kind }
 
 func (p *Provider) DescribeInstrumentation(ctx context.Context, w *baseapi.DiscoveredWorkload) {
 	language := w.RuntimeLanguage
@@ -15,7 +18,13 @@ func (p *Provider) DescribeInstrumentation(ctx context.Context, w *baseapi.Disco
 		language = w.Overrides.RuntimeLanguage
 	}
 	w.AvailableDistros = []baseapi.InstrumentationDistro{}
-	if w.Kind == "aws.lambda" {
+	if w.Kind == "aws.bedrock-agentcore-runtime" {
+		w.AvailableDistros = ins.AgentCoreDistros(language)
+		if d, err := ins.ResolveAgentCoreDistro(language, w.Overrides.OtelDistroName); err == nil {
+			w.EffectiveDistro = d.Name
+			w.InstrumentationVersion = d.Version
+		}
+	} else if w.Kind == "aws.lambda" {
 		activation := ins.ActivationHandler
 		runtime := ""
 		if fn, ok, _ := p.workloadStdb.GetLambdaFunction(ctx, w.ExternalID); ok {
@@ -54,6 +63,29 @@ func (p *Provider) DescribeInstrumentation(ctx context.Context, w *baseapi.Disco
 }
 
 func (p *Provider) ValidateSourceInstrumentation(ctx context.Context, src source.Source, w *baseapi.DiscoveredWorkload) error {
+	if src.Kind == "aws.bedrock-agentcore-runtime" {
+		if w == nil {
+			return fmt.Errorf("cannot select instrumentation for an undiscovered workload")
+		}
+		language := src.Config.RuntimeOverride.Language
+		if language == "" {
+			runtimes, err := p.workloadStdb.ListAgentCore(ctx)
+			if err != nil {
+				return err
+			}
+			for _, r := range runtimes {
+				if r.ARN == w.ExternalID {
+					language = r.Language
+					break
+				}
+			}
+		}
+		if language == "" && src.Config.DistroOverride.OtelDistroName == "" {
+			return nil
+		}
+		_, err := ins.ResolveAgentCoreDistro(language, src.Config.DistroOverride.OtelDistroName)
+		return err
+	}
 	if src.Kind != "aws.lambda" && src.Kind != "aws.fargate-task" {
 		return nil
 	}

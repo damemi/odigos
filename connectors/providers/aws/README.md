@@ -17,7 +17,7 @@ The connector splits discovery and reconciliation into two domains:
 
 | Domain | Examples | Instrumentable? | Store | Reports |
 | --- | --- | --- | --- | --- |
-| **Workloads** | Lambda, Fargate services/tasks | Yes — via `createSource` + instrumentation loop | `pkg/workload/store` | `workloadReports` |
+| **Workloads** | Lambda, Fargate services/tasks, Bedrock AgentCore runtimes | Yes — via `createSource` + instrumentation loop | `pkg/workload/store` | `workloadReports` |
 | **Compute platforms** | ECS-EC2 clusters, Fargate clusters (coverage), EKS, EC2 | No — agent install / coverage grouping | `pkg/computeplatform/store` | `computePlatformReports` |
 
 The base coordinator runs **four independent loops**: workload discovery, compute-platform discovery,
@@ -38,7 +38,31 @@ not destination-gated).
 7. Serves the agents-api GraphQL schema over HTTP (`/graphql`) for Central to query, plus `/healthz`.
 8. Serves the same agents-api schema over the odictl CLI WebSocket (`/ws`) on port `23678`.
 
-Workload kinds (`aws.lambda`, `aws.fargate-task`) are surfaced via `workloadReports` and `supportedSourceKinds`.
+Workload kinds (`aws.lambda`, `aws.fargate-task`, `aws.bedrock-agentcore-runtime`) are surfaced via `workloadReports` and `supportedSourceKinds`.
+
+### Bedrock AgentCore Runtime
+
+AgentCore discovery includes live versions and endpoint coverage. Automatic mode configures the OpenTelemetry
+SDK the agent's artifact already carries, for Python 3.12 and CommonJS Node.js 22 ZIPs and Linux arm64 microVM
+containers. It adopts whichever SDK the artifact carries: the source's distro override first, then the Odigos
+package (`odigos-agentcore[adot|openllmetry]`, `@odigos/agentcore`), then ADOT, which also covers an Odigos
+package that cannot start in that agent. The connector only reads the artifact and updates the
+runtime's environment and, for a ZIP, its entry point. It never rewrites or republishes the artifact: one with
+neither SDK waits with the dependency to add. Manual mode generates installation instructions and observes AWS
+without writes. What the package's bootstrap does at runtime (invocation rooting, GenAI content redaction, span
+naming) is described in `aws-connector-artifacts/agentcore/README.md`.
+
+This phase requires a **global `otlphttp` destination**. Collector health cannot redeploy, remove, switch
+or reroute instrumentation. Disable restores the original environment and entry point from a private
+snapshot. DEFAULT must settle and new sessions must be used; pinned endpoints
+remain with their deployment owner. Configuration conformance does not prove delivery.
+
+Native ESM (unless the agent carries ADOT), other languages, Instances, non-HTTP protocols and unsupported startup layouts
+have no qualified automatic recipe. See the [deployment and limitation guide](../../../../docs/cloud-connectors/aws/workloads/agentcore/instrument.mdx).
+The executable demo matrix lives in `odigos-apps/aws/bedrock-agentcore`; its automatic apps are bare.
+
+Apply `connector-postgres/migrations/0024_connector_aws_agentcore.sql` before starting the updated
+runtime (AWS schema version 13). The runtime checks schema compatibility and does not run migrations.
 Compute-platform kinds (`aws.ecs-cluster`, `aws.fargate-cluster`, `aws.eks`, `aws.ec2`) are surfaced via
 `computePlatformReports`. Only `aws.ecs-cluster` is assignable via `createSource` (enables ecs-agent
 deploy on the cluster).
@@ -181,7 +205,8 @@ pkg/computeplatform/
 | `ODIGOS_DB_SCHEMA` | no (`connector_aws`) | Provider schema |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` | no | Static credentials |
 | `ODIGOS_AWS_ROLE_ARN` / `ODIGOS_AWS_EXTERNAL_ID` | no | AssumeRole (else IRSA / default chain) |
-| `ODIGOS_FARGATE_AGENTS_IMAGE` | no (`registry.odigos.io/odigos-fargate-agents:v0.0.19`) | Fargate agents bundle the sidecar stages from |
+| `ODIGOS_FARGATE_AGENTS_IMAGE` | no (`registry.odigos.io/odigos-fargate-agents:v0.0.27`) | Fargate agents bundle the sidecar stages from |
+| `ODIGOS_AGENTCORE_AGENTS_IMAGE` | no (`registry.odigos.io/odigos-agentcore-agents:v0.0.27`) | AgentCore SDK carrier image that manual-mode instructions tell customers to copy from; the connector never pulls it |
 | `ODIGOS_ECS_AGENT_IMAGE` | no | odigos-ecs-agent (EC2 cluster eBPF daemon) image — a different artifact |
 | `ODIGOS_AWS_LAMBDA_LAYER_ARNS` / `ODIGOS_AWS_LAMBDA_LAYER_DIR` | no | Lambda layer table / staging dir overrides |
 | `ODIGOS_GQL_ADDR` | no (`:8080`) | GraphQL/health listen address |
@@ -193,7 +218,7 @@ setting. Discovery interval and tag selectors are DB-backed operational config (
 
 ## Artifacts this connector consumes
 
-The OpenTelemetry Lambda layers and the Fargate agents bundle are **not built in this repository**. Both
+The Lambda layers, Fargate agents and AgentCore SDK bundles are **not built in this repository**. They
 are released by [`odigos-io/aws-connector-artifacts`](https://github.com/odigos-io/aws-connector-artifacts),
 which publishes the same layer zips three ways from one build — into the image this connector reads them
 from, as public Lambda layer versions in every region, and as Serverless Application Repository
@@ -205,8 +230,9 @@ there is one build.
 | --- | --- | --- |
 | `odigos-lambda-agents:vX.Y.Z` | `LAMBDA_AGENTS_IMAGE` build arg in [`Dockerfile`](Dockerfile) | build time — supplies `/var/odigos/lambda/<lang>/<arch>/layer.zip`, which the connector publishes into customer accounts |
 | `odigos-fargate-agents:vX.Y.Z` | `config.DefaultFargateAgentsImage` | runtime — pulled by every instrumented Fargate task |
+| `odigos-agentcore-agents:vX.Y.Z` | `config.ArtifactsVersion`, or `ODIGOS_AGENTCORE_AGENTS_IMAGE` | named in manual-mode instructions; customers copy the bundle into their own build |
 
-Picking up new upstream OpenTelemetry versions means bumping those two pins, each as its own reviewed PR.
+Picking up new upstream OpenTelemetry versions requires updating the matching artifact pins.
 
 ## Build & run locally
 

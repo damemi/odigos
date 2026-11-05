@@ -40,7 +40,7 @@ func TestRegionalCollectorMarkerSatisfiesDestinationPrerequisite(t *testing.T) {
 		{Kind: "aws.lambda", Region: "us-east-1", InstrumentationAvailable: true, InstrumentationImplemented: true},
 		{Kind: "aws.fargate-task", Region: "eu-west-1", SourceMatched: true, SourceEnabled: true, InstrumentationAvailable: true, InstrumentationImplemented: true},
 	}
-	markWaitingForDestination(workloads, []store.DestinationRecord{{Type: "odigos-managed-collector", Region: "us-east-1"}})
+	markWaitingForDestination(workloads, []store.DestinationRecord{{Type: "odigos-managed-collector", Region: "us-east-1"}}, nil)
 	if workloads[0].WaitingFor != "" {
 		t.Errorf("marked Fargate in Collector region is waiting for a destination: %q", workloads[0].WaitingFor)
 	}
@@ -59,9 +59,23 @@ func TestDisabledRegionalCollectorMarkerDoesNotSatisfyDestinationPrerequisite(t 
 	markWaitingForDestination(workloads, []store.DestinationRecord{
 		{Type: "otlp", Region: ""},
 		{Type: "odigos-managed-collector", Region: "us-east-1", Disabled: true},
-	})
+	}, nil)
 	if workloads[0].WaitingFor != api.WaitingForDestination {
 		t.Errorf("Fargate next to a disabled Collector marker is waiting for %q, want destination", workloads[0].WaitingFor)
+	}
+}
+
+func TestGlobalOnlyWorkloadCannotUseRegionalCollectorMarker(t *testing.T) {
+	workloads := []api.DiscoveredWorkload{
+		{Kind: "global-only", Region: "us-east-1", SourceMatched: true, SourceEnabled: true, InstrumentationAvailable: true, InstrumentationImplemented: true},
+		{Kind: "global-only", Region: "us-east-1", SourceMatched: true, SourceEnabled: true, InstrumentationAvailable: true, InstrumentationImplemented: true,
+			ManagementMode: spec.ModeManual, Instrumented: true, ConformanceObservable: true},
+	}
+	markWaitingForDestination(workloads, []store.DestinationRecord{{Type: "odigos-managed-collector", Region: "us-east-1"}}, func(kind string) bool { return kind == "global-only" })
+	for _, workload := range workloads {
+		if workload.WaitingFor != api.WaitingForDestination {
+			t.Errorf("global-only workload must wait for a global destination: %+v", workload)
+		}
 	}
 }
 

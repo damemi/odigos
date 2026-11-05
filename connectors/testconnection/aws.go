@@ -25,6 +25,7 @@ import (
 // ECS discovery check when any is enabled.
 const (
 	typeLambda         = "aws.lambda"
+	typeAgentCore      = "aws.bedrock-agentcore-runtime"
 	typeFargateTask    = "aws.fargate-task"
 	typeFargateCluster = "aws.fargate-cluster"
 	typeECSCluster     = "aws.ecs-cluster"
@@ -40,11 +41,12 @@ const (
 
 // AWS connection check names.
 const (
-	CheckAuthIdentity    CheckName = "auth_identity"
-	CheckAccountMatch    CheckName = "account_match"
-	CheckRegionAccess    CheckName = "region_access"
-	CheckDiscoveryLambda CheckName = "discovery_lambda"
-	CheckDiscoveryECS    CheckName = "discovery_ecs"
+	CheckAuthIdentity       CheckName = "auth_identity"
+	CheckAccountMatch       CheckName = "account_match"
+	CheckRegionAccess       CheckName = "region_access"
+	CheckDiscoveryLambda    CheckName = "discovery_lambda"
+	CheckDiscoveryECS       CheckName = "discovery_ecs"
+	CheckDiscoveryAgentCore CheckName = "discovery_agentcore"
 )
 
 var externalIDCharacters = regexp.MustCompile(`^[A-Za-z0-9+=,.@:/-]+$`)
@@ -166,6 +168,13 @@ func (awsTester) Test(ctx context.Context, in Input) (*Result, error) {
 	// ecs:ListClusters probe (AWS has no launch-type-filtered list API), so probe ECS once when any is
 	// enabled and report a single ECS discovery check.
 	ecsActive := active[typeFargateTask] || active[typeFargateCluster] || active[typeECSCluster]
+	if active[typeAgentCore] {
+		denied := probeAgentCoreRegions(ctx, base, regions)
+		res.add(boolCheck(CheckDiscoveryAgentCore, "AgentCore discovery permissions", len(denied) == 0,
+			"AgentCore list and available runtime, tag and endpoint reads succeeded in supported enabled regions; empty inventories cannot verify resource-scoped permissions",
+			"probe failed in region(s): "+strings.Join(denied, ", "),
+			"grant the selected bedrock-agentcore discovery read permissions; automatic updates also require UpdateAgentRuntime and scoped iam:PassRole (not tested by read-only checks)"))
+	}
 	lambdaDenied, ecsDenied := probeAWSRegions(ctx, base, regions, active[typeLambda], ecsActive, active[typeFargateTask], active[typeFargateCluster] || active[typeECSCluster])
 
 	if active[typeLambda] {

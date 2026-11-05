@@ -225,7 +225,9 @@ type DiscoveredWorkload struct {
 	//
 	// Without this the skip is invisible: the workload reports as enabled-but-not-instrumented with no
 	// explanation, and the only trace is a connector log line the customer cannot see.
-	// Empty when nothing is blocking. Set by the coordinator, which knows the connector-wide state.
+	// Empty when nothing is blocking. Set by the coordinator, which knows the connector-wide state, except
+	// for a prerequisite only the provider can see on the workload itself (WaitingForArtifact), which the
+	// coordinator's connector-wide checks keep precedence over.
 	WaitingFor string
 	// Details carries kind-specific facts (an ECS task's containers, a Lambda's ARN and layer).
 	// Nil when the provider has nothing to add beyond the common report.
@@ -258,6 +260,12 @@ const (
 	// lower precedence than WaitingForDestination: without a destination there is no endpoint to put in the
 	// instructions, so there is nothing for the customer to apply yet.
 	WaitingForCustomer = "customer"
+	// WaitingForArtifact: automatic instrumentation configures the OpenTelemetry SDK an artifact already
+	// carries (an AgentCore agent's ZIP or image) and the deployed artifact needs a change first: it carries no
+	// SDK, or one it cannot start. Odigos never rewrites the artifact. Set by the provider, which is the only thing
+	// that reads artifacts; it resolves with the customer's next deployment that makes the change the workload's
+	// routing note names. A missing destination still overrides it.
+	WaitingForArtifact = "artifact"
 )
 
 // ReportedServiceName returns the OTel service.name instrumentation should report: the source-level

@@ -101,14 +101,19 @@ func artifactsVersion(t *testing.T) string {
 // the bundle the way this test believes, and silently passing would be worse than a broken test.
 func dockerfileLambdaAgentsImage(t *testing.T) string {
 	t.Helper()
+	return dockerfileImageArg(t, "LAMBDA_AGENTS_IMAGE")
+}
+
+func dockerfileImageArg(t *testing.T, name string) string {
+	t.Helper()
 	raw, err := os.ReadFile(filepath.Clean(dockerfilePath))
 	if err != nil {
 		t.Fatalf("read %s: %v", dockerfilePath, err)
 	}
-	m := regexp.MustCompile(`(?m)^ARG LAMBDA_AGENTS_IMAGE=(\S+)\s*$`).FindStringSubmatch(string(raw))
+	m := regexp.MustCompile(`(?m)^ARG ` + name + `=(\S+)\s*$`).FindStringSubmatch(string(raw))
 	if m == nil {
-		t.Fatalf("no `ARG LAMBDA_AGENTS_IMAGE=<image>` line in %s — the pin moved or was renamed, so the "+
-			"version binding this test enforces no longer exists", dockerfilePath)
+		t.Fatalf("no `ARG %s=<image>` line in %s — the pin moved or was renamed, so the "+
+			"version binding this test enforces no longer exists", name, dockerfilePath)
 	}
 	return m[1]
 }

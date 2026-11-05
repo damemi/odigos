@@ -20,7 +20,7 @@ api="$(cd "$api/go/server" && pwd)"
 cat > "$work/Dockerfile" <<'DOCKER'
 ARG LAMBDA_AGENTS_IMAGE
 FROM ${LAMBDA_AGENTS_IMAGE} AS layers
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot AS runtime
 COPY connector-aws /app
 COPY --from=layers /var/odigos/lambda /var/odigos/lambda
 COPY LICENSE /licenses/LICENSE
@@ -28,4 +28,5 @@ USER 65532:65532
 ENTRYPOINT ["/app"]
 DOCKER
 cp "$repo/connectors/providers/aws/LICENSE" "$work/LICENSE"
-docker build --platform "linux/$arch" --build-arg "LAMBDA_AGENTS_IMAGE=$layers" -t "$image" "$work"
+build_args=(--platform "linux/$arch" --build-arg "LAMBDA_AGENTS_IMAGE=$layers")
+docker build "${build_args[@]}" -t "$image" "$work"

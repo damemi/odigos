@@ -185,7 +185,10 @@ type DeploymentParams struct {
 	CentralBackendURL string
 	// FargateAgentsImage optionally overrides the odigos-fargate-agents bundle for AWS connectors
 	// (stamped as ODIGOS_FARGATE_AGENTS_IMAGE); empty keeps the connector's compiled-in default.
-	FargateAgentsImage    string
+	FargateAgentsImage string
+	// AgentCoreAgentsImage overrides the carrier image that manual-mode AgentCore instructions tell customers to
+	// copy from. The connector never pulls it.
+	AgentCoreAgentsImage  string
 	ManagedCollectorImage string
 	// OpAMPEndpoint is the public endpoint a managed Collector connects back to, per environment.
 	// Already resolved by the caller (see OpAMPEndpoint) — empty means unconfigured or unusable, and
@@ -250,6 +253,9 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 	// falls back to its compiled-in default when unset, so this env is stamped only when configured).
 	if cr.Spec.Provider == "aws" && p.FargateAgentsImage != "" {
 		env = append(env, corev1.EnvVar{Name: "ODIGOS_FARGATE_AGENTS_IMAGE", Value: p.FargateAgentsImage})
+	}
+	if cr.Spec.Provider == "aws" && p.AgentCoreAgentsImage != "" {
+		env = append(env, corev1.EnvVar{Name: "ODIGOS_AGENTCORE_AGENTS_IMAGE", Value: p.AgentCoreAgentsImage})
 	}
 
 	// Discovery interval + tag selectors are NOT stamped as env: they are operational config, held in the

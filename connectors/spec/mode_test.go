@@ -295,8 +295,9 @@ func typeNames(types []Type) []string {
 // environment and layers, so conformance there costs no extra permission.
 var manualObservationReads = map[string]map[string][]string{
 	"aws": {
-		"aws.lambda":       {},
-		"aws.fargate-task": {"ecs:DescribeTaskDefinition"},
+		"aws.lambda":                    {},
+		"aws.fargate-task":              {"ecs:DescribeTaskDefinition"},
+		"aws.bedrock-agentcore-runtime": {"bedrock-agentcore:GetAgentRuntime", "bedrock-agentcore:GetAgentRuntimeEndpoint", "bedrock-agentcore:ListAgentRuntimeEndpoints"},
 	},
 	"gcp": {
 		"gcp.cloud-run": {"run.revisions.list", "run.revisions.get"},

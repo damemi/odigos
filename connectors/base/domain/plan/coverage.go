@@ -77,7 +77,7 @@ func CoverageProblems(artifacts map[string]string, plans []Plan) []string {
 
 		var missing []string
 		for _, id := range ids {
-			if !strings.Contains(artifacts[id], lit) {
+			if !carriesLiteral(artifacts[id], lit) {
 				missing = append(missing, id)
 			}
 		}
@@ -322,14 +322,20 @@ func MarkerAttachmentProblems(artifacts map[string]Artifact, payload, wantVar, f
 // payloadLines returns the indexes of the lines carrying the payload, in either its bare or its
 // backslash-escaped form — HCL and shell heredocs carry the escaped one, YAML and Bicep the bare one.
 func payloadLines(body, payload string) []int {
-	escaped := strings.ReplaceAll(payload, `"`, `\"`)
 	var out []int
 	for i, line := range strings.Split(body, "\n") {
-		if strings.Contains(line, payload) || strings.Contains(line, escaped) {
+		if carriesLiteral(line, payload) {
 			out = append(out, i)
 		}
 	}
 	return out
+}
+
+// carriesLiteral reports whether text holds the value bare or backslash-escaped. A value that is itself JSON (a
+// marker) appears escaped inside an HCL or JSON string and bare in YAML or a single-quoted shell argument; both are
+// the same value once the document is evaluated.
+func carriesLiteral(text, literal string) bool {
+	return strings.Contains(text, literal) || strings.Contains(text, strings.ReplaceAll(literal, `"`, `\"`))
 }
 
 // nearLine reports whether needle appears on line i or immediately either side of it.
