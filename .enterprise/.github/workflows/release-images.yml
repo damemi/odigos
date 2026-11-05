@@ -231,11 +231,21 @@ jobs:
       # connector-runtime consumes the OSS odigos api/common modules via local-path replaces, so wire
       # the matching odigos checkout in as the `odigos` build context. Pin it to the release tag — the
       # same ref the other enterprise components resolve OSS.
+      - id: sts-odigos
+        name: Get read-only token for odigos
+        if: matrix.service == 'connector-runtime'
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: enterprise-ro
+          output-git-config: 'false'
+
       - name: Checkout Odigos OSS (connector-runtime build context)
         if: matrix.service == 'connector-runtime'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
+          token: ${{ steps.sts-odigos.outputs.GH_TOKEN }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.vars.outputs.tag }}
           path: odigos-oss
           persist-credentials: false
@@ -361,6 +371,14 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Resolved release tag: ${TAG}"
 
+      - id: sts-odigos-release-lookup
+        name: Get read-only token for odigos
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: enterprise-ro
+          output-git-config: 'false'
+
       # promote-rc-to-stable already dispatches release_cli for a first stable.
       # After that, this job would trigger a second run that 422s on already-uploaded
       # CLI archives. Skip the dispatch when those assets are already on the release.
@@ -368,6 +386,7 @@ jobs:
         id: skip-cli
         env:
           TAG: ${{ steps.release-tag.outputs.tag }}
+          GH_TOKEN: ${{ steps.sts-odigos-release-lookup.outputs.GH_TOKEN }}
         run: |
           VERSION="${TAG#v}"
           EXPECTED=(
@@ -382,6 +401,7 @@ jobs:
 
           HTTP_STATUS=$(curl -sS -o /tmp/odigos-release.json -w "%{http_code}" \
             -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
             "https://api.github.com/repos/odigos-io/odigos/releases/tags/${TAG}")
 
           if [ "$HTTP_STATUS" != "200" ]; then

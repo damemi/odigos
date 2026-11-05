@@ -30,12 +30,14 @@ COPY ui/go.mod /tmp/ui.go.mod
 # commit. All forms end in <yyyymmddhhmmss>-<sha>:
 #   v0.0.0-20260617121516-bfc5da9bb14b
 #   v1.32.0-pre5.0.20260722102948-f2986a6dc9da  (based on a pre-release tag)
-RUN ODIGOS_OSS_REF=$(grep -E '^replace github.com/odigos-io/odigos/frontend =>' /tmp/ui.go.mod | awk '{print $NF}') && \
+RUN --mount=type=secret,id=github_token \
+    ODIGOS_OSS_REF=$(grep -E '^replace github.com/odigos-io/odigos/frontend =>' /tmp/ui.go.mod | awk '{print $NF}') && \
     test -n "$ODIGOS_OSS_REF" && \
     CHECKOUT_REF=$(echo "$ODIGOS_OSS_REF" | sed -nE 's/.*[0-9]{14}-([0-9a-f]{12})$/\1/p') && \
     if [ -z "$CHECKOUT_REF" ]; then \
       CHECKOUT_REF="$ODIGOS_OSS_REF"; \
     fi && \
+    if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \
     git clone --filter=blob:none https://github.com/odigos-io/odigos.git oss && \
     git -C oss checkout "$CHECKOUT_REF"
 

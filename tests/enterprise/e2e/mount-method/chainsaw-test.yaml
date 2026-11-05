@@ -9,12 +9,12 @@ spec:
     - name: '[1 - Setup] Install - Simple Demo Apps'
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-simple-demo.yaml
+            file: ../../../../odigos/tests/common/apply/install-simple-demo.yaml
 
     - name: '[1 - Setup] Prepare destination'
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/simple-trace-db-deployment.yaml
+            file: ../../../../odigos/tests/common/apply/simple-trace-db-deployment.yaml
 
     - name: '[1 - Setup] Install Odigos'
       try:
@@ -24,7 +24,7 @@ spec:
               echo "Installing Odigos with tag $IMAGE_TAG"
               ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-init-container
               kubectl label namespace odigos-test odigos.io/system-object="true"
-              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/verify_odigos_installation.sh | bash -s -- odigos-test
+              bash ../../../../odigos/tests/common/verify_odigos_installation.sh odigos-test
         - assert:
             timeout: 4m
             file: ../../common/assert/odigos-installed-no-device-plugin.yaml
@@ -33,13 +33,13 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_config_value.sh | bash -s -- -k mountMethod -v k8s-init-container
+            content: bash ../../../../odigos/tests/common/assert_config_value.sh -k mountMethod -v k8s-init-container
 
     - name: '[1 - Setup] Assert - Simple Demo Apps Installed'
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
+            file: ../../../../odigos/tests/common/assert/simple-demo-installed.yaml
 
     # device-plugin container is dropped from the odiglet pod once a mount method is set, so wait for the rollout, and then assert it is no longer present.
     - name: '[1 - Setup] Odiglet ready with init container mount method'
@@ -56,23 +56,23 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
+            file: ../../../../odigos/tests/common/assert/simple-trace-db-running.yaml
 
     - name: '[1 - Setup] Add Destination'
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/add-simple-trace-db-destination.yaml
+            file: ../../../../odigos/tests/common/apply/add-simple-trace-db-destination.yaml
 
     - name: '[2 - Workload Instrumentation] Instrument default namespace workloads'
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/instrument-default-ns.yaml
+            file: ../../../../odigos/tests/common/apply/instrument-default-ns.yaml
 
     - name: '[2 - Workload Instrumentation] Assert Runtime Detected'
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
+            file: ../../../../odigos/tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: '[2 - Workload Instrumentation] Odigos pipeline ready'
       try:
@@ -87,7 +87,7 @@ spec:
             file: 02-simple-demo-instrumented.yaml
         - script:
             timeout: 1m10s
-            content: curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/wait_for_rollout.sh | bash
+            content: bash ../../../../odigos/tests/common/wait_for_rollout.sh
       catch:
         - script:
             content: |
@@ -102,7 +102,7 @@ spec:
       try:
         - script:
             timeout: 1m20s
-            content: bash traffic-and-trace.sh {{BASE_BRANCH}}
+            content: bash traffic-and-trace.sh
       catch:
         - script:
             content: |
@@ -115,7 +115,7 @@ spec:
             timeout: 1m10s
             content: |
               ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-host-path
-              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_config_value.sh | bash -s -- -k mountMethod -v k8s-host-path
+              bash ../../../../odigos/tests/common/assert_config_value.sh -k mountMethod -v k8s-host-path
 
     - name: '[3 - Host Path Test] Odiglet ready with host-path'
       try:
@@ -149,7 +149,7 @@ spec:
             timeout: 1m10s
             content: |
               ../../../../odigos/cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-csi-driver --set odiglet.odiglet.privileged=true
-              curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_config_value.sh | bash -s -- -k mountMethod -v k8s-csi-driver
+              bash ../../../../odigos/tests/common/assert_config_value.sh -k mountMethod -v k8s-csi-driver
 
     - name: '[4 - CSI Driver Test] Odiglet ready with CSI driver'
       try:
@@ -189,7 +189,7 @@ spec:
       try:
         - script:
             timeout: 1m20s
-            content: bash traffic-and-trace.sh {{BASE_BRANCH}}
+            content: bash traffic-and-trace.sh
 
     - name: 'Uninstall Odigos'
       try:
@@ -200,7 +200,7 @@ spec:
             timeout: 1m20s
             content: |
               for i in $(seq 1 10); do
-                if curl -sSL --retry 5 --retry-delay 5 https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert_odigos_uninstalled.sh | bash; then
+                if bash ../../../../odigos/tests/common/assert_odigos_uninstalled.sh; then
                   exit 0
                 fi
                 echo "Attempt $i: Odigos uninstallation verification failed, retrying in 5 seconds..."

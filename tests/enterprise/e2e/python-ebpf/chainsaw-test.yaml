@@ -16,12 +16,12 @@ spec:
     - name: Prepare destination
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/simple-trace-db-deployment.yaml
+            file: ../../../../odigos/tests/common/apply/simple-trace-db-deployment.yaml
 
     - name: Install - Simple Demo Apps
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-simple-demo.yaml
+            file: ../../../../odigos/tests/common/apply/install-simple-demo.yaml
 
     - name: Install Odigos
       try:
@@ -49,13 +49,13 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
+            file: ../../../../odigos/tests/common/assert/simple-trace-db-running.yaml
 
     - name: Assert - Simple Demo Apps Installed
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
+            file: ../../../../odigos/tests/common/assert/simple-demo-installed.yaml
 
     # The no-restart check below compares against this pod.
     - name: Record Inventory Pod
@@ -81,18 +81,18 @@ spec:
     - name: Instrument Namespace
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/instrument-default-ns.yaml
+            file: ../../../../odigos/tests/common/apply/instrument-default-ns.yaml
 
     - name: Assert Runtime Detected
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-runtime-detected.yaml
+            file: ../../../../odigos/tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: Add Destination
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/add-simple-trace-db-destination.yaml
+            file: ../../../../odigos/tests/common/apply/add-simple-trace-db-destination.yaml
 
     - name: Pipeline ready
       try:
@@ -135,7 +135,7 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
+            file: ../../../../odigos/tests/common/assert/simple-demo-installed.yaml
 
     # The first request through a freshly instrumented java app can't propagate context (http client
     # instrumentations load lazily on first use), so traffic repeats until inventory's span
@@ -146,8 +146,8 @@ spec:
             timeout: 4m
             content: |
               script=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 5 -o "$script" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
-              job=https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/generate-traffic-job.yaml
+              cp ../../../../odigos/tests/common/simple_trace_db_query_runner.sh "$script"
+              job=../../../../odigos/tests/common/apply/generate-traffic-job.yaml
 
               while true; do
                 kubectl apply -f "$job"
@@ -177,7 +177,7 @@ spec:
             timeout: 1m
             content: |
               script=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 5 -o "$script" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+              cp ../../../../odigos/tests/common/simple_trace_db_query_runner.sh "$script"
               bash "$script" no-other-python-agent.yaml
               status=$?
               rm -f "$script"

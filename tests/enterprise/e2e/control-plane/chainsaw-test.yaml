@@ -9,7 +9,7 @@ spec:
     - name: Prepare destination
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/simple-trace-db-deployment.yaml
+            file: ../../../../odigos/tests/common/apply/simple-trace-db-deployment.yaml
 
     - name: Install Odigos
       try:
@@ -58,12 +58,12 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-trace-db-running.yaml
+            file: ../../../../odigos/tests/common/assert/simple-trace-db-running.yaml
 
     - name: Add Destination
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/add-simple-trace-db-destination.yaml
+            file: ../../../../odigos/tests/common/apply/add-simple-trace-db-destination.yaml
 
     - name: Assert Control Plane Components Ready
       try:
@@ -101,7 +101,7 @@ spec:
             timeout: 1m10s
             content: |
               script=$(mktemp)
-              curl -sSL --retry 5 --retry-delay 5 -o "$script" https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/simple_trace_db_query_runner.sh
+              cp ../../../../odigos/tests/common/simple_trace_db_query_runner.sh "$script"
 
               while true; do
                 bash "$script" ../../common/queries/control-plane-traces.yaml

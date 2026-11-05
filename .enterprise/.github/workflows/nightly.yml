@@ -102,10 +102,18 @@ jobs:
   build-cli-image:
     runs-on: depot-ubuntu-24.04-4
     steps:
+      - id: sts-odigos
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: enterprise-ro
+          output-git-config: 'false'
+
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
           ref: main
+          token: ${{ steps.sts-odigos.outputs.GH_TOKEN }}
           persist-credentials: false
 
       - name: Set up Docker Buildx
@@ -157,12 +165,20 @@ jobs:
           path: odigos-enterprise
           persist-credentials: false
 
+      - id: sts-odigos
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: enterprise-ro
+          output-git-config: 'false'
+
       - name: Checkout Odigos OSS
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
           ref: main
           path: odigos
+          token: ${{ steps.sts-odigos.outputs.GH_TOKEN }}
           persist-credentials: false
 
       - name: Run Cross-Cloud Tests

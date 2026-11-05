@@ -114,6 +114,9 @@ jobs:
     # rather than "skipped" - a skipped check does not satisfy a ruleset that names
     # it. The job therefore always runs and every step below no-ops instead.
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -137,6 +140,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - id: sts
+        name: Get read-only token for private odigos-io modules
+        if: steps.should-run.outputs.skip != 'true'
+        uses: odigos-io/ci-core/sts@main
+        with:
+          pairs: |
+            odigos-io/odigos:enterprise-ro
+
       - name: Set up Go
         if: steps.should-run.outputs.skip != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
@@ -152,6 +163,7 @@ jobs:
         # tagged release that the default proxy serves.
         env:
           GOFLAGS: -mod=mod
+          GOPRIVATE: github.com/odigos-io/*
         run: |
           cd ${{ matrix.module }}
           go test ./... -race
@@ -386,6 +398,9 @@ jobs:
     # rather than "skipped" - a skipped check does not satisfy a ruleset that names
     # it. The job therefore always runs and every step below no-ops instead.
     runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      id-token: write
     env:
       BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
     steps:
@@ -399,14 +414,33 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - id: sts-odigos
+        name: Get read-only token for odigos
+        if: steps.should-run.outputs.skip != 'true'
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: enterprise-ro
+          output-git-config: 'false'
+
       - name: Checkout Odigos OSS
         if: steps.should-run.outputs.skip != 'true'
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
         with:
           repository: odigos-io/odigos
+          token: ${{ steps.sts-odigos.outputs.GH_TOKEN }}
           ref: ${{ env.BASE_BRANCH }}
           path: odigos
           persist-credentials: false
+
+      - name: Save Odigos OSS sources for e2e jobs
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: |
+            odigos/tests
+            odigos/helm
+          key: ${{ github.run_id }}-odigos-oss-src
 
       - name: Cache built OSS components
         id: cache-oss-components
@@ -645,14 +679,15 @@ jobs:
         if: steps.should-run.outputs.skip != 'true'
         uses: kyverno/action-install-chainsaw@f2b47b97dc889c12702113753d713f01ec268de5 #v0.2.12
 
-      - name: Checkout Odigos OSS
+      - name: Restore Odigos OSS sources
         if: steps.should-run.outputs.skip != 'true'
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
         with:
-          repository: odigos-io/odigos
-          ref: ${{ env.BASE_BRANCH }}
-          path: odigos
-          persist-credentials: false
+          path: |
+            odigos/tests
+            odigos/helm
+          key: ${{ github.run_id }}-odigos-oss-src
+          fail-on-cache-miss: true
 
       - name: Download Kind Config
         if: steps.should-run.outputs.skip != 'true'
@@ -660,12 +695,12 @@ jobs:
           # Most scenarios use the shared OSS kind-config. A scenario can override it
           # by shipping its own kind-config.yaml in its test dir (e.g. mount-method
           # ships one with extra worker nodes for its restart-heavy workload). Use that
-          # file if present, otherwise download the shared OSS config from main.
+          # file if present, otherwise use the shared OSS config from the odigos checkout.
           scenario_config="odigos-enterprise/tests/e2e/${{ matrix.test-scenario }}/kind-config.yaml"
           if [ -f "$scenario_config" ]; then
             cp "$scenario_config" kind-config.yaml
           else
-            curl -o kind-config.yaml https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/main/tests/common/apply/kind-config.yaml
+            cp odigos/tests/common/apply/kind-config.yaml kind-config.yaml
           fi
 
       - name: Create Kind Cluster
@@ -867,6 +902,7 @@ jobs:
       - name: Copy CLI to Expected Path
         if: steps.should-run.outputs.skip != 'true'
         run: |
+          mkdir -p odigos/cli
           cp /tmp/odigos-cli odigos/cli/odigos
           chmod +x odigos/cli/odigos
 
@@ -922,10 +958,6 @@ jobs:
 
           # Extract minor version number from the kube-version
           MINOR_VERSION=$(echo ${{ matrix.kube-version }} | sed -E 's/^1\.([0-9]+).*$/\1/')
-
-          # Replace {{BASE_BRANCH}} placeholders in the test scenario
-          # We're doing that to run the tests against the base branch and not always main
-          sed -i "s|{{BASE_BRANCH}}|$BASE_BRANCH|g" odigos-enterprise/tests/e2e/${{ matrix.test-scenario }}/chainsaw-test.yaml
 
           # Default apply timeout is 5s — too short when apiserver briefly flaps
           # under runner load (context deadline exceeded on early APPLY).

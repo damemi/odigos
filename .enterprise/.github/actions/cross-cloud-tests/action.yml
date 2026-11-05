@@ -160,7 +160,6 @@ runs:
       env:
         IMAGE_TAG: ${{ inputs.image_tag }}
       run: |
-        sed -i "s|{{BASE_BRANCH}}|main|g" odigos-enterprise/tests/e2e/${{ inputs.test_scenario }}/chainsaw-test.yaml
         chainsaw test odigos-enterprise/tests/e2e/${{ inputs.test_scenario }}
 
     - name: Cluster diagnostics
