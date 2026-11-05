@@ -14,12 +14,12 @@ spec:
     - name: Install - Jaeger
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-jaeger.yaml
+            file: ../../../../odigos/tests/common/apply/install-jaeger.yaml
 
     - name: Install - Simple Demo Apps
       try:
         - apply:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/apply/install-simple-demo.yaml
+            file: ../../../../odigos/tests/common/apply/install-simple-demo.yaml
 
     # Install Odigos as a Central Proxy. Mirrors the helm flow documented at
     #   https://docs.odigos.io/central/adding-connections/remote-clusters
@@ -136,13 +136,13 @@ spec:
     - name: Verify - Jaeger Installed
       try:
         - assert:
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/jaeger-installed.yaml
+            file: ../../../../odigos/tests/common/assert/jaeger-installed.yaml
 
     - name: Assert - Simple Demo Apps Installed
       try:
         - assert:
             timeout: 1m10s
-            file: https://raw.githubusercontent.com/odigos-io/odigos/refs/heads/{{BASE_BRANCH}}/tests/common/assert/simple-demo-installed.yaml
+            file: ../../../../odigos/tests/common/assert/simple-demo-installed.yaml
 
     - name: Wait for Central Backend Ready
       try:
