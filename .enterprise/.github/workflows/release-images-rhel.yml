@@ -136,7 +136,6 @@ jobs:
           push: true
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
-            keyval/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
             ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
             quay.io/odigos/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
           build-args: |
