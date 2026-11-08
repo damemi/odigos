@@ -1,8 +1,6 @@
 **
 !docs/
 !docs/**
-!odigosauth/
-!odigosauth/**
 docs/node_modules/
 docs/build/
 docs/.build-source/

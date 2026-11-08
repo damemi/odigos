@@ -7,8 +7,8 @@
     "dev": "mint dev --port 3001",
     "build": "node scripts/build.mjs",
     "check": "node scripts/check-docs.mjs --export",
-    "format": "prettier --config .prettierrc.json --ignore-unknown --write . ../odigosauth/docslogin ../.github/workflows/docs.yaml",
-    "format:check": "prettier --config .prettierrc.json --ignore-unknown --check . ../odigosauth/docslogin ../.github/workflows/docs.yaml"
+    "format": "prettier --config .prettierrc.json --ignore-unknown --write . ../.github/workflows/docs.yaml",
+    "format:check": "prettier --config .prettierrc.json --ignore-unknown --check . ../.github/workflows/docs.yaml"
   },
   "devDependencies": {
     "adm-zip": "0.5.16",

@@ -17,7 +17,7 @@ pnpm dev
 pnpm build
 ```
 
-`pnpm dev` is an **unauthenticated local authoring preview**; do not expose it publicly. The production image serves only the compiled `build/` through `odigosauth/cmd/docs-server`. The build copies MDX into an isolated staging directory before export, excludes raw sources and the export's example server, checks every page is exported, expands legacy redirects, and creates a local search index. Internet access is required during export to obtain the Mintlify renderer; runtime serving does not require a Mintlify account or API. The existing theme still references public font and icon CDNs.
+`pnpm dev` is an **unauthenticated local authoring preview**; do not expose it publicly. The production image serves only the compiled `build/` through `docs-server` from the odigos repo's `odigosauth/cmd/docs-server` (version pinned in `server/go.mod`). The build copies MDX into an isolated staging directory before export, excludes raw sources and the export's example server, checks every page is exported, expands legacy redirects, and creates a local search index. Internet access is required during export to obtain the Mintlify renderer; runtime serving does not require a Mintlify account or API. The existing theme still references public font and icon CDNs.
 
 Add each new page to `docs.json`. Use a hidden group for reference pages that should be reachable but absent from the sidebar. The build fails if any documentation page is missing from the export. Enterprise Kubernetes, Central, VM Agent, and Cloud Connectors stay in this site's navigation. Keep the link to the public docs visible.
 
@@ -25,7 +25,7 @@ Add each new page to `docs.json`. Use a hidden group for reference pages that sh
 
 ### Application source and formatting
 
-`assets/docs-runtime.js` and `assets/docs-runtime.css` are handwritten source and belong in Git. They provide session-expiry handling, authenticated navigation, local search, and sign-out controls around the exported Mintlify pages. `scripts/build.mjs` copies them into the build; they are not generated or minified bundles. The login template and styles in `../odigosauth/docslogin` are also handwritten source.
+`assets/docs-runtime.js` and `assets/docs-runtime.css` are handwritten source and belong in Git. They provide session-expiry handling, authenticated navigation, local search, and sign-out controls around the exported Mintlify pages. `scripts/build.mjs` copies them into the build; they are not generated or minified bundles. The login template and styles live in the odigos repo under `odigosauth/docslogin`.
 
 Generated site files live in `build/`, `.build-source/`, and `export.zip`, all ignored by Git. This includes the Mintlify bundles and Pagefind index. Do not commit or edit those build artifacts.
 
@@ -128,10 +128,8 @@ The test uses Docker, Node 22+, Python 3, and OpenSSL. The Go tests verify gener
 Build the docs first. The server requires `DOCS_ORIGIN` (HTTPS origin), `DOCS_CONTENT_DIR`, and either `DOCS_SESSION_KEY_BASE64` or `DOCS_SESSION_KEY_FILE` (base64). `LISTEN_ADDR` defaults to `:8080`. For local HTTPS, supply `DOCS_TLS_CERT_FILE` and `DOCS_TLS_KEY_FILE`; otherwise terminate TLS at a trusted proxy. Do not put the session key in Git.
 
 ```sh
-cd odigosauth
-GOWORK=off go test -race ./...
-GOWORK=off go vet ./...
-GOWORK=off go run ./cmd/docs-server
+cd server
+GOWORK=off go tool docs-server
 ```
 
-The tests generate their own RSA keys and exercise signature/claim rejection, generated-key compatibility, session expiry at the boundary, CSRF, cookie flags, redirect safety, and access controls on every type of content. No real customer key or AWS credentials are needed. CI also validates navigation and imports, exports every page from both editions, and validates the CloudFormation template.
+The server and its tests live in the odigos repo under `odigosauth`. The tests generate their own RSA keys and exercise signature/claim rejection, generated-key compatibility, session expiry at the boundary, CSRF, cookie flags, redirect safety, and access controls on every type of content. No real customer key or AWS credentials are needed. CI also validates navigation and imports, exports every page from both editions, and validates the CloudFormation template.
