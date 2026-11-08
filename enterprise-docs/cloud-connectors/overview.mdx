@@ -99,6 +99,11 @@ Current coverage includes the following providers and resource types. Additional
 | Amazon ECS clusters (`aws.ecs-cluster`, `aws.fargate-cluster`) | Yes | n/a (coverage/grouping only; agent install coming soon) |
 | GCP Cloud Run (`gcp.cloud-run`) | Yes | Yes |
 | GKE (`gcp.gke`) / Compute Engine (`gcp.gce`) | Yes | Coming soon |
+| MuleSoft CloudHub 2.0 shared spaces (`mulesoft.cloudhub2-app`) | Yes | Yes — Odigos-managed or self-managed |
+| MuleSoft CloudHub 2.0 private spaces (`mulesoft.private-space-app`) | Yes | Coming soon |
+| MuleSoft Runtime Fabric (`mulesoft.rtf-app`) | Yes | Coming soon |
+| MuleSoft hybrid servers (`mulesoft.hybrid-app`) | Yes | Configured per server by you |
+| MuleSoft Omni Gateway (`mulesoft.omni-gateway`) | Yes | Yes — Odigos-managed or self-managed on a Managed Omni Gateway; self-managed only on a gateway you host |
 
 ## Supported languages
 
@@ -109,6 +114,7 @@ Direct instrumentation depends on the workload type:
 | AWS Lambda (`aws.lambda`) | Java, Python, Node.js, Ruby |
 | Amazon ECS Fargate tasks (`aws.fargate-task`) | Java, Python, Node.js, .NET, PHP, Ruby |
 | GCP Cloud Run (`gcp.cloud-run`) | Java, Python, Node.js, .NET |
+| MuleSoft CloudHub 2.0 (`mulesoft.cloudhub2-app`) | Mule 4.11+ (metrics 4.12+), through Mule's built-in Direct Telemetry Stream |
 
 Other Lambda runtimes (for example Go or .NET) can still be discovered; they are not instrumented until support for those runtimes is added. On Fargate, Go and any other eBPF-based language cannot be instrumented at all — Fargate does not allow the privileged containers eBPF needs — and a task with no other instrumentable container is reported unsupported.
 
@@ -157,6 +163,13 @@ See [Add an OTLP destination](/cloud-connectors/instrument-workloads#add-an-otlp
     href="/cloud-connectors/add-connectors/add-gcp-connector"
   >
     Connect a Google Cloud project and discover Cloud Run services.
+  </Card>
+  <Card
+    title="Add MuleSoft connector"
+    icon="plug"
+    href="/cloud-connectors/add-connectors/add-mulesoft-connector"
+  >
+    Connect an Anypoint organization and discover Mule applications.
   </Card>
   <Card
     title="Instrument workloads"

@@ -6,7 +6,7 @@ sidebarTitle: 'Enable'
 
 Cloud Connectors are **off by default**. Until you enable them, Central does not install the connector controller, the connector PostgreSQL store, or the `OdigosCloudConnector` CRD.
 
-Enabling the feature does **not** create per-account connectors. After the subsystem is running, add an [AWS](/cloud-connectors/add-connectors/add-aws-connector) or [GCP](/cloud-connectors/add-connectors/add-gcp-connector) connector from the Central UI.
+Enabling the feature does **not** create per-account connectors. After the subsystem is running, add an [AWS](/cloud-connectors/add-connectors/add-aws-connector), [GCP](/cloud-connectors/add-connectors/add-gcp-connector) or [MuleSoft](/cloud-connectors/add-connectors/add-mulesoft-connector) connector from the Central UI.
 
 <Info>
   Cloud Connectors require the same Odigos Enterprise on-prem token (or install
@@ -143,7 +143,7 @@ Cloud Connectors use a bundled PostgreSQL instance under `cloudConnectors.postgr
   </Accordion>
 
   <Accordion title="Optional provider image overrides">
-    Provider connector images (`cloudConnectors.aws.image`, `cloudConnectors.gcp.image`) default to the versions shipped with the chart.
+    Provider connector images (`cloudConnectors.aws.image`, `cloudConnectors.gcp.image`, `cloudConnectors.azure.image`, `cloudConnectors.mulesoft.image`) default to the versions shipped with the chart.
 
     <Warning>
       Override these only when Odigos support or engineering asks you to. Custom
@@ -156,6 +156,10 @@ Cloud Connectors use a bundled PostgreSQL instance under `cloudConnectors.postgr
       aws:
         image: "" # empty = chart default; set only if directed by Odigos
       gcp:
+        image: "" # empty = chart default; set only if directed by Odigos
+      azure:
+        image: "" # empty = chart default; set only if directed by Odigos
+      mulesoft:
         image: "" # empty = chart default; set only if directed by Odigos
     ```
   </Accordion>

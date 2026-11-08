@@ -225,6 +225,7 @@ jobs:
           - connectors/providers/aws
           - connectors/providers/azure
           - connectors/providers/gcp
+          - connectors/providers/mulesoft
           # Not under connectors/, but these belong to this job rather than the central one because they
           # depend on connectors/ through local replaces AND this job is ungated. In `unit-tests` they
           # would be skipped whenever a change is confined to connectors/ — which is exactly when a
@@ -239,8 +240,12 @@ jobs:
       - id: sts
         uses: odigos-io/ci-core/sts@main
         with:
+          # odigos is private: every connector module needs it (connectors/base imports odigos/common and
+          # destinations). A module whose go.sum cache is warm never fetches it, so a missing token only shows up
+          # when a go.sum changes or a new module is added.
           pairs: |
             odigos-io/agents-api:ro
+            odigos-io/odigos:enterprise-ro
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0

@@ -220,6 +220,19 @@ build-connector-azure:
 		--build-arg LD_FLAGS="$(LD_FLAGS)" \
 		. $(NO_CACHE)
 
+.PHONY: build-connector-mulesoft
+build-connector-mulesoft:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
+		exit 1; \
+	fi
+	docker build $(TARGET_FLAG) \
+		-t $(ORG)/odigos-enterprise-connector-mulesoft$(IMG_SUFFIX):$(TAG) \
+		-f connectors/providers/mulesoft/Dockerfile \
+		--secret id=github_token,env=GITHUB_TOKEN \
+		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		. $(NO_CACHE)
+
 # connector-postgres is a plain Docker image (PostgreSQL + goose + migrations); it needs no Go build
 # or GITHUB_TOKEN, so it does not go through build-image/%.
 .PHONY: build-connector-postgres
@@ -256,12 +269,15 @@ build-connector-gcp-dev: build-connector-gcp
 .PHONY: build-connector-azure-dev
 build-connector-azure-dev: build-connector-azure
 
+.PHONY: build-connector-mulesoft-dev
+build-connector-mulesoft-dev: build-connector-mulesoft
+
 # Aggregate builds are plain prerequisite fan-outs (no sub-make), so parallel make builds the
 # independent images concurrently — e.g. `make -j$(nproc) build-connector-images`. The images share no
 # build ordering; ORG/TAG/IMG_SUFFIX are in scope for every prerequisite, so no explicit pass-through is
 # needed. Tip: add -O (output-sync) to keep concurrent docker build logs grouped per target.
 .PHONY: build-connector-images
-build-connector-images: build-connector-postgres build-connector-runtime build-connector-opamp-gateway build-connector-aws build-connector-gcp build-connector-azure
+build-connector-images: build-connector-postgres build-connector-runtime build-connector-opamp-gateway build-connector-aws build-connector-gcp build-connector-azure build-connector-mulesoft
 
 # Build every image the cloud-connectors dev stack needs: the central images plus postgres and the
 # connector services (all built inside Docker). Parallel-safe like build-connector-images.
@@ -271,7 +287,7 @@ build-connector-stack: build-central-backend build-central-ui build-connector-im
 
 .PHONY: load-connector-stack-to-kind
 load-connector-stack-to-kind:
-	make load-to-kind-central-backend load-to-kind-central-ui load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-opamp-gateway load-to-kind-connector-aws load-to-kind-connector-gcp load-to-kind-connector-azure ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-to-kind-central-backend load-to-kind-central-ui load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-opamp-gateway load-to-kind-connector-aws load-to-kind-connector-gcp load-to-kind-connector-azure load-to-kind-connector-mulesoft ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-connector-runtime
 push-connector-runtime:
@@ -336,13 +352,28 @@ push-connector-azure:
 		--push \
 		. $(NO_CACHE)
 
+.PHONY: push-connector-mulesoft
+push-connector-mulesoft:
+	@if [ -z "$(GITHUB_TOKEN)" ]; then \
+		echo "❌ GITHUB_TOKEN is not set. Export a GitHub PAT with access to odigos-io private repos."; \
+		exit 1; \
+	fi
+	docker buildx build $(TARGET_FLAG) \
+		--platform linux/amd64,linux/arm64/v8 \
+		-t $(ORG)/odigos-enterprise-connector-mulesoft$(IMG_SUFFIX):$(TAG) \
+		-f connectors/providers/mulesoft/Dockerfile \
+		--secret id=github_token,env=GITHUB_TOKEN \
+		--build-arg LD_FLAGS="$(LD_FLAGS)" \
+		--push \
+		. $(NO_CACHE)
+
 .PHONY: push-connector-postgres
 push-connector-postgres:
 	docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-enterprise-connector-postgres$(IMG_SUFFIX):$(TAG) connector-postgres -f connector-postgres/Dockerfile
 
 .PHONY: load-connectors-to-kind
 load-connectors-to-kind:
-	make load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws load-to-kind-connector-gcp load-to-kind-connector-azure ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
+	make load-to-kind-connector-postgres load-to-kind-connector-runtime load-to-kind-connector-aws load-to-kind-connector-gcp load-to-kind-connector-azure load-to-kind-connector-mulesoft ORG=$(ORG) TAG=$(TAG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: restart-connector-runtime
 restart-connector-runtime:
@@ -407,6 +438,24 @@ port-forward-connector-azure:
 	@target="$(CONNECTOR)"; \
 	if [ -z "$$target" ]; then \
 		target=$$(kubectl -n $(ODIGOS_CENTRAL_NS) get pods -l odigos.io/provider=azure -o jsonpath='{.items[0].metadata.name}'); \
+	fi; \
+	echo "port-forwarding $$target 23678:23678 (run odictl with no flags to connect)"; \
+	kubectl -n $(ODIGOS_CENTRAL_NS) port-forward "$$target" 23678:23678
+
+# Restart connector-mulesoft workload pods (created by connector-runtime from OdigosCloudConnector CRs).
+# Set CONNECTOR=<cr-name> to restart one connector; defaults to all MuleSoft connectors in the namespace.
+.PHONY: restart-connector-mulesoft
+restart-connector-mulesoft:
+	@selector="odigos.io/provider=mulesoft"; \
+	if [ -n "$(CONNECTOR)" ]; then selector="odigos.io/cloud-connector=$(CONNECTOR)"; fi; \
+	echo "restarting connector deployments in $(ODIGOS_CENTRAL_NS) ($$selector)"; \
+	kubectl rollout restart deployment -n $(ODIGOS_CENTRAL_NS) -l "$$selector"
+
+.PHONY: port-forward-connector-mulesoft
+port-forward-connector-mulesoft:
+	@target="$(CONNECTOR)"; \
+	if [ -z "$$target" ]; then \
+		target=$$(kubectl -n $(ODIGOS_CENTRAL_NS) get pods -l odigos.io/provider=mulesoft -o jsonpath='{.items[0].metadata.name}'); \
 	fi; \
 	echo "port-forwarding $$target 23678:23678 (run odictl with no flags to connect)"; \
 	kubectl -n $(ODIGOS_CENTRAL_NS) port-forward "$$target" 23678:23678
@@ -715,6 +764,12 @@ deploy-connector-azure:
 	make build-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
 	make load-to-kind-connector-azure TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
 	make restart-connector-azure
+
+.PHONY: deploy-connector-mulesoft
+deploy-connector-mulesoft:
+	make build-connector-mulesoft TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
+	make load-to-kind-connector-mulesoft TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) && \
+	make restart-connector-mulesoft
 
 .PHONY: deploy
 deploy:
