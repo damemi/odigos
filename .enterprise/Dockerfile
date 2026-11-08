@@ -3,7 +3,6 @@ ARG SERVICE_NAME
 
 # Copy local modules required by the build
 WORKDIR /workspace
-COPY distros/ distros/
 COPY connectors/ connectors/
 
 WORKDIR /workspace/$SERVICE_NAME

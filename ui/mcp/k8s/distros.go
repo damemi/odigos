@@ -18,8 +18,8 @@ import (
 	"github.com/odigos-io/odigos/frontend/kube"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 
-	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
 	odigosdistros "github.com/odigos-io/odigos/distros"
+	enterprisedistros "github.com/odigos-io/odigos/distros/enterprise"
 )
 
 // distros.go owns the distro / instrumentation-agent management tools. A "distro"

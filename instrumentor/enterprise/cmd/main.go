@@ -4,8 +4,8 @@ import (
 	"flag"
 	"os"
 
-	"github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/instrumentor/urltemplatization"
+	distros "github.com/odigos-io/odigos/distros/enterprise"
 	"github.com/odigos-io/odigos/odigosauth"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"

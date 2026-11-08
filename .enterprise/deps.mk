@@ -39,7 +39,7 @@ update-odigos-oss-mod-deps/%:
 update-odigos-oss-mod-deps-all:
 	@echo "🔄 Updating Odigos OSS module dependencies for all relevant directories..."
 	@echo "📌 Using OSS_TAG: $(OSS_TAG)"
-	@for dir in odiglet onprem-token-generator instrumentor distros central-proxy central-backend ui insights collector/extension/odigosenterpriseauthextension collector/exporters/odigosurltemplatizationexporter collector/processors/odigosvmprofileattrsprocessor collector/receivers/odigosebpfreceiver docs/server; do \
+	@for dir in odiglet onprem-token-generator instrumentor central-proxy central-backend ui insights collector/extension/odigosenterpriseauthextension collector/exporters/odigosurltemplatizationexporter collector/processors/odigosvmprofileattrsprocessor collector/receivers/odigosebpfreceiver docs/server; do \
 		if [ -f $$dir/go.mod ]; then \
 			echo "📦 Updating dependencies for $$dir..."; \
 			$(MAKE) update-odigos-oss-mod-deps/$$dir OSS_TAG=$(OSS_TAG); \
