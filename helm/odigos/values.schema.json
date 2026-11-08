@@ -696,7 +696,7 @@
     },
     "imagePrefix": {
       "default": "",
-      "description": "Default image registry prefix. When unset:\n  - community installs use `docker.io/keyval`\n  - enterprise installs (onPremToken / odigos-pro secret) use `registry.odigos.io`\n  - OpenShift installs use `registry.connect.redhat.com/odigos`\nIf you use a custom or internal registry, set imagePrefix to your registry.\nFor example, if you set imagePrefix to `myregistry.io/odigos`, the images will be pulled from `myregistry.io/odigos/odigos-\u003ccomponent\u003e:\u003ctag\u003e`",
+      "description": "Default image registry prefix. When unset:\n  - OpenShift installs use `registry.connect.redhat.com/odigos`\n  - all other installs use `registry.odigos.io`\nIf you use a custom or internal registry, set imagePrefix to your registry.\nFor example, if you set imagePrefix to `myregistry.io/odigos`, the images will be pulled from `myregistry.io/odigos/odigos-\u003ccomponent\u003e:\u003ctag\u003e`",
       "required": [],
       "title": "imagePrefix"
     },

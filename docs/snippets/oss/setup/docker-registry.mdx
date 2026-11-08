@@ -14,15 +14,15 @@ Replace `<YOUR-DESIRED-VERSION>` with the version of the Odigos images you want 
 ---
 
 ### Step 2: Pull the Images
-Start by pulling the required images from the default community registry (`docker.io/keyval`) onto your local machine or CI environment:
+Start by pulling the required images from the default registry (`registry.odigos.io`) onto your local machine or CI environment:
 
 ```bash
-docker pull docker.io/keyval/odigos-instrumentor:$VERSION
-docker pull docker.io/keyval/odigos-ui:$VERSION
-docker pull docker.io/keyval/odigos-odiglet:$VERSION
-docker pull docker.io/keyval/odigos-collector:$VERSION
-docker pull docker.io/keyval/odigos-victoria-metrics:$VERSION
-docker pull docker.io/keyval/odigos-cache:$VERSION
+docker pull registry.odigos.io/odigos-instrumentor:$VERSION
+docker pull registry.odigos.io/odigos-ui:$VERSION
+docker pull registry.odigos.io/odigos-odiglet:$VERSION
+docker pull registry.odigos.io/odigos-collector:$VERSION
+docker pull registry.odigos.io/odigos-victoria-metrics:$VERSION
+docker pull registry.odigos.io/odigos-cache:$VERSION
 ```
 
 If you are using the [k8s-init-container](../instrumentations/configuration/mount-method#3-InitContainer) mount method
@@ -31,7 +31,7 @@ On Kubernetes 1.35+, that init container also needs the registry pull secret in 
 **This is not the default configuration**, if you're unsure what this means, you can safely ignore this step and continue with the standard setup.
 
 ```bash
-docker pull docker.io/keyval/odigos-agents:$VERSION
+docker pull registry.odigos.io/odigos-agents:$VERSION
 ```
 
 If you are using [image mirrored Go offsets updates](../instrumentations/golang/ebpf#about-go-offsets), also mirror the offsets image:
@@ -47,28 +47,25 @@ Odigos component images are published in multi-arch for ARM64 and AMD64 architec
 </Warning>
 
 ```bash
-docker pull --platform $PLATFORM docker.io/keyval/odigos-instrumentor:$VERSION
-docker pull --platform $PLATFORM docker.io/keyval/odigos-ui:$VERSION
-docker pull --platform $PLATFORM docker.io/keyval/odigos-odiglet:$VERSION
-docker pull --platform $PLATFORM docker.io/keyval/odigos-collector:$VERSION
-docker pull --platform $PLATFORM docker.io/keyval/odigos-victoria-metrics:$VERSION
-docker pull --platform $PLATFORM docker.io/keyval/odigos-cache:$VERSION
+docker pull --platform $PLATFORM registry.odigos.io/odigos-instrumentor:$VERSION
+docker pull --platform $PLATFORM registry.odigos.io/odigos-ui:$VERSION
+docker pull --platform $PLATFORM registry.odigos.io/odigos-odiglet:$VERSION
+docker pull --platform $PLATFORM registry.odigos.io/odigos-collector:$VERSION
+docker pull --platform $PLATFORM registry.odigos.io/odigos-victoria-metrics:$VERSION
+docker pull --platform $PLATFORM registry.odigos.io/odigos-cache:$VERSION
 ```
 
 ### Step 3: Tag the Images
 Next, Tag each image with your custom Docker registry prefix:
 
 ```bash
-docker tag docker.io/keyval/odigos-instrumentor:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-instrumentor:$VERSION
-docker tag docker.io/keyval/odigos-ui:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-ui:$VERSION
-docker tag docker.io/keyval/odigos-odiglet:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-odiglet:$VERSION
-docker tag docker.io/keyval/odigos-collector:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-collector:$VERSION
-docker tag docker.io/keyval/odigos-victoria-metrics:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-victoria-metrics:$VERSION
-docker tag docker.io/keyval/odigos-cache:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-cache:$VERSION
+docker tag registry.odigos.io/odigos-instrumentor:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-instrumentor:$VERSION
+docker tag registry.odigos.io/odigos-ui:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-ui:$VERSION
+docker tag registry.odigos.io/odigos-odiglet:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-odiglet:$VERSION
+docker tag registry.odigos.io/odigos-collector:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-collector:$VERSION
+docker tag registry.odigos.io/odigos-victoria-metrics:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-victoria-metrics:$VERSION
+docker tag registry.odigos.io/odigos-cache:$VERSION $CUSTOM_DOCKER_REGISTRY/odigos-cache:$VERSION
 ```
-
-
-> **Note:** Community images use the registry prefix `docker.io/keyval` (for example `docker.io/keyval/odigos-instrumentor`). Image names themselves are `odigos-<component>` without an embedded `keyval/` path segment. If you previously mirrored images under an older layout, re-tag them to match this naming when pushing to your custom registry.
 
 ### Step 4: Push the Images
 Now, push the tagged images to your custom Docker registry:

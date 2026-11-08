@@ -13,9 +13,8 @@ imagePullSecrets: []
 # @schema
 # description: |-
 #   Default image registry prefix. When unset:
-#     - community installs use `docker.io/keyval`
-#     - enterprise installs (onPremToken / odigos-pro secret) use `registry.odigos.io`
 #     - OpenShift installs use `registry.connect.redhat.com/odigos`
+#     - all other installs use `registry.odigos.io`
 #   If you use a custom or internal registry, set imagePrefix to your registry.
 #   For example, if you set imagePrefix to `myregistry.io/odigos`, the images will be pulled from `myregistry.io/odigos/odigos-<component>:<tag>`
 # @schema

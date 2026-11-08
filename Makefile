@@ -3,12 +3,10 @@ ODIGOS_CLI_VERSION ?= $(shell odigos version --cli)
 CLUSTER_NAME ?= local-dev-cluster
 CENTRAL_BACKEND_URL ?=
 ODIGOS_NS ?= odigos-system
-OSS_ORG ?= docker.io/keyval
-ENTERPRISE_ORG ?= registry.odigos.io
 # Default for builds/pushes. Local deploy/load-to-kind resolve registry + image name
 # via scripts/resolve-dev-image.sh so OSS make deploy works against enterprise
-# installs (registry.odigos.io, odigos-enterprise-ui, etc.).
-ORG ?= $(OSS_ORG)
+# installs (odigos-enterprise-ui, etc.).
+ORG ?= registry.odigos.io
 # Override ORG for staging pushes
 ifeq ($(STAGING_ORG),true)
     ORG = us-central1-docker.pkg.dev/odigos-cloud/staging-components
@@ -38,20 +36,12 @@ ifneq ($(strip $(TARGET)),)
   TARGET_FLAG := --target $(TARGET)
 endif
 
-# When ORG is set on the CLI or environment, force that registry in deploy resolution.
-# The Makefile default (OSS_ORG) is not forced so enterprise clusters get ENTERPRISE_ORG.
-ifneq ($(filter command line environment,$(origin ORG)),)
-  DEV_IMAGE_ORG_OVERRIDE := $(ORG)
-endif
-
 # IMAGE=registry/name:tag overrides resolution for a single-component deploy.
 # Otherwise resolve registry + repository from the live cluster / install tier.
 dev_image_repo = $(shell \
 	ODIGOS_NS=$(ODIGOS_NS) \
 	ODIGOS_ENTERPRISE=$(ODIGOS_ENTERPRISE) \
-	ORG_OVERRIDE=$(DEV_IMAGE_ORG_OVERRIDE) \
-	OSS_ORG=$(OSS_ORG) \
-	ENTERPRISE_ORG=$(ENTERPRISE_ORG) \
+	ORG=$(ORG) \
 	IMG_SUFFIX=$(IMG_SUFFIX) \
 	bash $(CURDIR)/scripts/resolve-dev-image.sh $(1))
 dev_image = $(or $(IMAGE),$(call dev_image_repo,$(1)):$(TAG))

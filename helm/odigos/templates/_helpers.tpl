@@ -1,15 +1,12 @@
 {{- define "utils.imagePrefix" -}}
-{{- $enterpriseRegistry := "registry.odigos.io" -}}
-{{- $communityRegistry := "docker.io/keyval" -}}
+{{- $odigosRegistry := "registry.odigos.io" -}}
 {{- $redHatRegistry := "registry.connect.redhat.com/odigos" -}}
 {{- if $.Values.imagePrefix -}}
     {{- $.Values.imagePrefix -}}
 {{- else if $.Values.openshift.enabled -}}
     {{- $redHatRegistry -}}
-{{- else if include "odigos.secretExists" . -}}
-    {{- $enterpriseRegistry -}}
 {{- else -}}
-    {{- $communityRegistry -}}
+    {{- $odigosRegistry -}}
 {{- end -}}
 {{- end -}}
 
