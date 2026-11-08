@@ -618,8 +618,8 @@ github.com/odigos-io/odigos/k8sutils v1.39.0-pre3.0.20261104135744-93eebf3ae885 
 github.com/odigos-io/odigos/k8sutils v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:cTnE/bdtTW2kgYuuxrqV/XBYkdIwpTWOsvz/y+fl9Jg=
 github.com/odigos-io/odigos/mcp v0.0.0-20261108080630-5ff6d008289a h1:xMZQlqWf3WSWMWIbRf42PIsX9M4YFba5dcZGelFXGb4=
 github.com/odigos-io/odigos/mcp v0.0.0-20261108080630-5ff6d008289a/go.mod h1:TYiIs0CltCKIo88Kz9Tq/NZGQw9Xb3WrEKDRgkHGfrs=
-github.com/odigos-io/odigos/odigosauth v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:vRxHtynb5SPRY5WVF23Nn1ZFGR9xsqPtUL384AtvejA=
-github.com/odigos-io/odigos/odigosauth v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:hGPQknni7NV31X72FPFy2cVEXBV6kobqJnWEKv3YP1U=
+github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd h1:jjenZzX/oopErPxLJkJpIeI5t7wtRStgjJo6LUWH5Ss=
+github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd/go.mod h1:zIkUDqqYKDVPTrT74S6kn/eUnHg1PFSh2u7WpCZwW5I=
 github.com/odigos-io/odigos/profiles v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:km6qdwt5gEnrl5tUQdbljW2iQe5UllGRhjFiYcgQ0e8=
 github.com/odigos-io/odigos/profiles v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:c9xYTX+oG2w5syKScAWLPP0utec+FkeqnwaEYhaV+j8=
 github.com/odigos-io/odigos/recommendations v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:RWBzArFcqaaE9dH4ijSf+PqVUeL6tw1wum9XBliCaR0=

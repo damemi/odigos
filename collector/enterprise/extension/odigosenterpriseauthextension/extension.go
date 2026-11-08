@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/collector/component/componentstatus"
 	"go.uber.org/zap"
 
-	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	"github.com/odigos-io/odigos/odigosauth"
 )
 
 // OnPremTokenEnvVar is populated by helm from the odigos-pro secret, as for the other components.

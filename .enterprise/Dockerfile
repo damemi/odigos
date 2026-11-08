@@ -4,7 +4,6 @@ ARG SERVICE_NAME
 # Copy local modules required by the build
 WORKDIR /workspace
 COPY distros/ distros/
-COPY odigosauth/ odigosauth/
 COPY common-enterprise/ common-enterprise/
 COPY connectors/ connectors/
 

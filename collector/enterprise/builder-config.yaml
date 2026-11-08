@@ -169,8 +169,6 @@ replaces:
   - github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension => ../extension/odigosconfigvmextension
   - github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigconnectorextension => ../extension/odigosconfigconnectorextension
   - github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter => ../exporters/odigosurltemplatizationexporter
-  # odigosauth lives at the enterprise repo root, copied into the build context by the Dockerfile.
-  - github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
   # Not a component itself - enterprise-only shared logic (the counterpart of OSS common, incl.
   # the eBPF map exchange with odiglet) that components use, so the generated dist has to resolve it too.
   - github.com/odigos-io/odigos-enterprise/common-enterprise => ../../common-enterprise

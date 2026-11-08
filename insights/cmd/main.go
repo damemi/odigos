@@ -32,7 +32,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/otlp"
 	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	"github.com/odigos-io/odigos/odigosauth"
 )
 
 const (

@@ -512,8 +512,8 @@ require (
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
 	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261103103244-989c24ca083f // indirect
+	github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd // indirect
 	github.com/oklog/ulid/v2 v2.1.2 // indirect
 	github.com/open-telemetry/opamp-go v0.23.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.159.0 // indirect
@@ -827,8 +827,6 @@ replace github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigv
 replace github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigconnectorextension => ../extension/odigosconfigconnectorextension
 
 replace github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter => ../exporters/odigosurltemplatizationexporter
-
-replace github.com/odigos-io/odigos-enterprise/odigosauth => ../../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../../common-enterprise
 

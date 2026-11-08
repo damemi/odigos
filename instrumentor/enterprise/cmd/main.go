@@ -6,7 +6,7 @@ import (
 
 	"github.com/odigos-io/odigos-enterprise/distros"
 	"github.com/odigos-io/odigos-enterprise/instrumentor/urltemplatization"
-	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	"github.com/odigos-io/odigos/odigosauth"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/instrumentor"

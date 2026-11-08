@@ -139,7 +139,6 @@ use (
   ./instrumentor
   ./odiglet
   ./odiglet/licenses/github.com/hashicorp/go-version
-  ./odigosauth
   ./onprem-token-generator
 )
 

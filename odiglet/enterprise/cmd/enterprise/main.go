@@ -26,7 +26,7 @@ import (
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/kernelobservability"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/sdks"
-	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	"github.com/odigos-io/odigos/odigosauth"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	commonInstrumentation "github.com/odigos-io/odigos/instrumentation"

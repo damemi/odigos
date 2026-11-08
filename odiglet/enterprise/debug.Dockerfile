@@ -63,7 +63,6 @@ FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copy local modules required by the build
-COPY odigosauth/ odigosauth/
 COPY distros/ distros/
 WORKDIR ./odiglet/
 ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation/v2

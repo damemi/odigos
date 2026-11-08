@@ -39,7 +39,7 @@ update-odigos-oss-mod-deps/%:
 update-odigos-oss-mod-deps-all:
 	@echo "🔄 Updating Odigos OSS module dependencies for all relevant directories..."
 	@echo "📌 Using OSS_TAG: $(OSS_TAG)"
-	@for dir in odiglet onprem-token-generator instrumentor distros central-proxy central-backend odigosauth ui common-enterprise insights; do \
+	@for dir in odiglet onprem-token-generator instrumentor distros central-proxy central-backend ui common-enterprise insights collector/extension/odigosenterpriseauthextension docs/server; do \
 		if [ -f $$dir/go.mod ]; then \
 			echo "📦 Updating dependencies for $$dir..."; \
 			$(MAKE) update-odigos-oss-mod-deps/$$dir OSS_TAG=$(OSS_TAG); \
@@ -112,7 +112,7 @@ update-collector-oss-deps:
 	cat "$$tmp/manifest" > collector/builder-config.yaml; \
 	echo "✅ $$(wc -l < "$$tmp/pins" | tr -d ' ') components pinned at $(OSS_TAG)"
 	# the owned component modules pull odigos/common indirectly through their local-replaced siblings
-	# (odigosauth, common-enterprise), so retidy them here to match the freshly bumped versions - otherwise
+	# (common-enterprise), so retidy them here to match the freshly bumped versions - otherwise
 	# verify-collector-ocb's `make generate` fails on stale component go.mod/go.sum
 	@$(MAKE) -C collector tidy
 	@$(MAKE) -C collector genodigoscol

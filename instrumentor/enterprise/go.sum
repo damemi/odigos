@@ -129,6 +129,8 @@ github.com/odigos-io/odigos/instrumentor v1.39.0-pre3.0.20261104135744-93eebf3ae
 github.com/odigos-io/odigos/instrumentor v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:pkuAqaxuHvl/SUkpWQqFdZe/C8Hxv9F4NWuhNh+hN1Q=
 github.com/odigos-io/odigos/k8sutils v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:uUTK88Aj822jvVR1e/eMqHDB5aD716Ro29OQhjRULWM=
 github.com/odigos-io/odigos/k8sutils v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:cTnE/bdtTW2kgYuuxrqV/XBYkdIwpTWOsvz/y+fl9Jg=
+github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd h1:jjenZzX/oopErPxLJkJpIeI5t7wtRStgjJo6LUWH5Ss=
+github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd/go.mod h1:zIkUDqqYKDVPTrT74S6kn/eUnHg1PFSh2u7WpCZwW5I=
 github.com/odigos-io/odigos/profiles v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:km6qdwt5gEnrl5tUQdbljW2iQe5UllGRhjFiYcgQ0e8=
 github.com/odigos-io/odigos/profiles v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:c9xYTX+oG2w5syKScAWLPP0utec+FkeqnwaEYhaV+j8=
 github.com/odigos-io/odigos/recommendations v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:RWBzArFcqaaE9dH4ijSf+PqVUeL6tw1wum9XBliCaR0=

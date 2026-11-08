@@ -82,7 +82,6 @@ ARG LD_FLAGS
 
 WORKDIR /workspace
 COPY distros/ distros/
-COPY odigosauth/ odigosauth/
 
 COPY --from=oss-src /actions /workspace/oss/actions
 COPY --from=oss-src /api /workspace/oss/api
@@ -92,7 +91,6 @@ COPY --from=oss-src /destinations /workspace/oss/destinations
 COPY --from=oss-src /distros /workspace/oss/distros
 COPY --from=oss-src /instrumentationrules /workspace/oss/instrumentationrules
 COPY --from=oss-src /k8sutils /workspace/oss/k8sutils
-COPY --from=oss-src /odigosauth /workspace/oss/odigosauth
 COPY --from=oss-src /profiles /workspace/oss/profiles
 COPY --from=oss-src /recommendations /workspace/oss/recommendations
 COPY --from=oss-src /status /workspace/oss/status

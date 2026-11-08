@@ -16,7 +16,7 @@ import (
 	"k8s.io/klog/v2"
 
 	enterprisedistros "github.com/odigos-io/odigos-enterprise/distros"
-	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	"github.com/odigos-io/odigos/odigosauth"
 	"github.com/odigos-io/odigos-enterprise/ui/mcp"
 	"github.com/odigos-io/odigos-enterprise/ui/mcp/k8s"
 	"github.com/odigos-io/odigos/api/k8sconsts"

@@ -3,7 +3,6 @@ on:
   pull_request:
     paths: &docs-paths
       - 'docs/**'
-      - 'odigosauth/**'
       - 'onprem-token-generator/**'
       - '.github/workflows/docs.yaml'
   push:
@@ -19,9 +18,6 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-node@v6
@@ -35,23 +31,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.8'
-          cache-dependency-path: odigosauth/go.sum
-      - id: sts
-        name: Get read-only token for private odigos-io modules
-        uses: odigos-io/ci-core/sts@main
-        with:
-          pairs: |
-            odigos-io/odigos:enterprise-ro
-      - name: Test and vet authentication
-        working-directory: odigosauth
-        env:
-          GOWORK: 'off'
-          GOPRIVATE: github.com/odigos-io/*
-        run: |
-          gofmt -l docslogin cmd/docs-server docs_token_test.go | tee "$RUNNER_TEMP/docs-gofmt.txt"
-          test ! -s "$RUNNER_TEMP/docs-gofmt.txt"
-          go test -race ./...
-          go vet ./...
+          cache-dependency-path: docs/server/go.sum
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
@@ -137,7 +117,7 @@ jobs:
         id: revision
         run: |
           git fetch --no-tags --depth=1 origin main
-          if git diff --quiet HEAD FETCH_HEAD -- docs odigosauth onprem-token-generator .github/workflows/docs.yaml; then
+          if git diff --quiet HEAD FETCH_HEAD -- docs onprem-token-generator .github/workflows/docs.yaml; then
             echo "current=true" >> "$GITHUB_OUTPUT"
           else
             echo "current=false" >> "$GITHUB_OUTPUT"

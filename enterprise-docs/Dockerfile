@@ -7,13 +7,12 @@ COPY docs/ ./
 RUN pnpm check && pnpm build
 
 FROM golang:1.26.8 AS server
-WORKDIR /src/odigosauth
-COPY odigosauth/go.mod odigosauth/go.sum ./
+WORKDIR /src/server
+COPY docs/server/go.mod docs/server/go.sum ./
 RUN --mount=type=secret,id=gitconfig,required=false \
     git config --global include.path /run/secrets/gitconfig && \
     go mod download
-COPY odigosauth/ ./
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /docs-server ./cmd/docs-server
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /docs-server github.com/odigos-io/odigos/odigosauth/cmd/docs-server
 
 FROM gcr.io/distroless/static:nonroot
 # Lambda assigns its own user, which cannot enter distroless /home/nonroot.

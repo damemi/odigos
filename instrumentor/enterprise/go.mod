@@ -4,7 +4,6 @@ go 1.26.4
 
 require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/api v1.39.0-pre3.0.20261104135744-93eebf3ae885
 	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261104135744-93eebf3ae885
 	github.com/odigos-io/odigos/instrumentor v1.39.0-pre3.0.20261104135744-93eebf3ae885
@@ -68,6 +67,7 @@ require (
 	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/destinations v1.39.0-pre3.0.20261104135744-93eebf3ae885 // indirect
 	github.com/odigos-io/odigos/distros v1.39.0-pre3.0.20261104135744-93eebf3ae885 // indirect
+	github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
 	github.com/odigos-io/odigos/profiles v1.39.0-pre3.0.20261104135744-93eebf3ae885 // indirect
 	github.com/odigos-io/odigos/status v1.39.0-pre3.0.20261104135744-93eebf3ae885 // indirect
 	github.com/open-policy-agent/cert-controller v0.16.0 // indirect
@@ -112,8 +112,6 @@ require (
 
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
-replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
-
 replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.39.0-pre3.0.20261104135744-93eebf3ae885
 
 replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.39.0-pre3.0.20261104135744-93eebf3ae885
@@ -136,7 +134,7 @@ replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/prof
 replace github.com/odigos-io/odigos/recommendations => github.com/odigos-io/odigos/recommendations v1.39.0-pre3.0.20261104135744-93eebf3ae885
 
 // k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.39.0-pre3.0.20261104135744-93eebf3ae885
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
 
 // argo-rollouts@v1.9.1 requires this via its own internal-only replace, which doesn't propagate to us.
 replace k8s.io/kubelet => k8s.io/kubelet v0.34.1

@@ -127,7 +127,6 @@ FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
 WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
 # Copy local modules required by the build
-COPY odigosauth/ odigosauth/
 COPY distros/ distros/
 COPY common-enterprise/ common-enterprise/
 WORKDIR ./odiglet/

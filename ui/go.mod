@@ -4,7 +4,6 @@ go 1.26.4
 
 require (
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/api v1.39.0-pre3.0.20261104135744-93eebf3ae885
 	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261104135744-93eebf3ae885
 	github.com/odigos-io/odigos/frontend v1.39.0-pre3.0.20261104135744-93eebf3ae885
@@ -203,7 +202,7 @@ require (
 	github.com/odigos-io/odigos/distros v1.39.0-pre3.0.20261104135744-93eebf3ae885
 	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/mcp v0.0.0-20261108080630-5ff6d008289a
-	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/exp/metrics v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.159.0 // indirect
@@ -405,13 +404,11 @@ replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8su
 
 replace github.com/odigos-io/odigos/recommendations => github.com/odigos-io/odigos/recommendations v1.39.0-pre3.0.20261104135744-93eebf3ae885
 
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.39.0-pre3.0.20261104135744-93eebf3ae885
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
 
 replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status v1.39.0-pre3.0.20261104135744-93eebf3ae885
 
 replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.39.0-pre3.0.20261104135744-93eebf3ae885
-
-replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 

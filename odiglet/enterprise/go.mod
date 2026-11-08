@@ -12,7 +12,6 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.17.1
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos-enterprise/distros v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos-enterprise/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261104135744-93eebf3ae885
 	github.com/odigos-io/odigos/deviceplugin v0.0.0-00010101000000-000000000000
@@ -155,6 +154,7 @@ require (
 	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/odiglet v1.39.0-pre3.0.20261104135744-93eebf3ae885
 	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v1.39.0-pre3.0.20261104135744-93eebf3ae885 // indirect
+	github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
 	github.com/odigos-io/odigos/opampserver v1.39.0-pre3.0.20261104135744-93eebf3ae885 // indirect
 	github.com/odigos-io/runtime-detector v0.0.25 // indirect
 	github.com/ohler55/ojg v1.28.2 // indirect
@@ -299,8 +299,6 @@ replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/o
 
 replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.39.0-pre3.0.20261104135744-93eebf3ae885
 
-replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
-
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros
 
 // parca-agent pins cloud.google.com/go/compute v1.6.1, which still embeds cloud.google.com/go/compute/metadata.
@@ -319,6 +317,6 @@ replace github.com/odigos-io/odigos/deviceplugin => github.com/odigos-io/odigos/
 replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.39.0-pre3.0.20261104135744-93eebf3ae885
 
 // Same as actions above, required transitively via k8sutils.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.39.0-pre3.0.20261104135744-93eebf3ae885
+replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
 
 replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../common-enterprise
