@@ -71,7 +71,13 @@ func (s *Server) Run(ctx context.Context) error {
 			continue
 		}
 
-		go s.handleRequest(ctx, conn.(*net.UnixConn))
+		uc, ok := conn.(*net.UnixConn)
+		if !ok {
+			logger.Error(fmt.Errorf("unexpected connection type %T", conn), "accept failed")
+			_ = conn.Close()
+			continue
+		}
+		go s.handleRequest(ctx, uc)
 	}
 }
 

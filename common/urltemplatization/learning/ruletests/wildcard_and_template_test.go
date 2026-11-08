@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	learning "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/learning"
+	learning "github.com/odigos-io/odigos/common/urltemplatization/learning"
 )
 
 func setChildTemplateProbability(t *testing.T, trie *learning.PathTrie, segment string, p float64) {

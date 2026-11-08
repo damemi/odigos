@@ -3,7 +3,7 @@ package ruletests
 import (
 	"testing"
 
-	learning "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/learning"
+	learning "github.com/odigos-io/odigos/common/urltemplatization/learning"
 )
 
 func TestChildrenNeedEnoughObservations(t *testing.T) {

@@ -27,24 +27,24 @@ func TestCardinalityThresholdsFromChildProbability(t *testing.T) {
 
 	cfg := LiveTrafficLearningParams{}.withDefaults()
 	static := cardinalityThresholdsFor(children, cfg)
-	if static.templateAt != templateChildrenWhenStatic || static.wildcardAt != 25 || static.recurseAt != 12 {
-		t.Fatalf("p=0 thresholds=%+v, want recurse 12 wildcard 25 template 50", static)
+	if static.templateAt != templateChildrenWhenStatic || static.wildcardAt != 12 {
+		t.Fatalf("p=0 thresholds=%+v, want wildcard 12 template 50", static)
 	}
 
 	for _, child := range children {
 		child.TemplateProbability = 1
 	}
 	certain := cardinalityThresholdsFor(children, cfg)
-	if certain.templateAt != defaultMinCardinalityForTemplating || certain.wildcardAt != 10 || certain.recurseAt != 5 {
-		t.Fatalf("p=1 thresholds=%+v, want recurse 5 wildcard 10 template 20", certain)
+	if certain.templateAt != defaultMinCardinalityForTemplating || certain.wildcardAt != 5 {
+		t.Fatalf("p=1 thresholds=%+v, want wildcard 5 template 20", certain)
 	}
 
 	for _, child := range children {
 		child.TemplateProbability = 0.5
 	}
 	mid := cardinalityThresholdsFor(children, cfg)
-	if mid.templateAt != 35 || mid.wildcardAt != 17 || mid.recurseAt != 8 {
-		t.Fatalf("p=0.5 thresholds=%+v, want recurse 8 wildcard 17 template 35", mid)
+	if mid.templateAt != 35 || mid.wildcardAt != 8 {
+		t.Fatalf("p=0.5 thresholds=%+v, want wildcard 8 template 35", mid)
 	}
 
 	recurse := 10
@@ -56,8 +56,8 @@ func TestCardinalityThresholdsFromChildProbability(t *testing.T) {
 		MinCardinalityForTemplating: &templating,
 	}.withDefaults()
 	scaled := cardinalityThresholdsFor(children, custom)
-	if scaled.templateAt != 40 || scaled.wildcardAt != 20 || scaled.recurseAt != 13 {
-		t.Fatalf("custom params thresholds=%+v, want recurse 13 wildcard 20 template 40", scaled)
+	if scaled.templateAt != 40 || scaled.wildcardAt != 13 {
+		t.Fatalf("custom params thresholds=%+v, want wildcard 13 template 40", scaled)
 	}
 }
 

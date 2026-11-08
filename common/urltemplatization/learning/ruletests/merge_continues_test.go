@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	learning "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/learning"
+	learning "github.com/odigos-io/odigos/common/urltemplatization/learning"
 )
 
 func TestMergeContinuesIntoStaticSuffix(t *testing.T) {

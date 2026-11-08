@@ -3,7 +3,7 @@ package ruletests
 import (
 	"testing"
 
-	learning "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/learning"
+	learning "github.com/odigos-io/odigos/common/urltemplatization/learning"
 )
 
 // Mixed Kubernetes API traffic shaped like real apiserver calls: root probes,

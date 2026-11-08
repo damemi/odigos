@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	learning "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/learning"
+	learning "github.com/odigos-io/odigos/common/urltemplatization/learning"
 )
 
 //go:embed testdata/kube-apiserver-kind-control-plane-unmatched-server.json

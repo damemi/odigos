@@ -4,8 +4,8 @@ import (
 	"maps"
 	"strconv"
 
-	"github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/model"
 	"github.com/odigos-io/odigos/common/urltemplate"
+	"github.com/odigos-io/odigos/common/urltemplatization/model"
 )
 
 // maxTerminalExamplePaths is how many full endpoints are kept on a terminal node.

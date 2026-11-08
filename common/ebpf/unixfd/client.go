@@ -126,7 +126,11 @@ func connectProfileAttrsSession(ctx context.Context, socketPath string, onAttr f
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
-	uc := conn.(*net.UnixConn)
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		_ = conn.Close()
+		return fmt.Errorf("unexpected connection type %T", conn)
+	}
 	defer func() { _ = uc.Close() }()
 
 	go func() {
@@ -167,7 +171,11 @@ func connectLogsSession(ctx context.Context, socketPath string, onFD func(fd int
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
-	uc := conn.(*net.UnixConn)
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		_ = conn.Close()
+		return fmt.Errorf("unexpected connection type %T", conn)
+	}
 	defer func() { _ = uc.Close() }()
 
 	// Close the connection when the context is canceled to unblock scanner.Scan().
@@ -212,7 +220,11 @@ func connectAndGetFDs(ctx context.Context, socketPath string, requestType string
 		return nil, err
 	}
 
-	return recvFDs(conn.(*net.UnixConn))
+	uc, ok := conn.(*net.UnixConn)
+	if !ok {
+		return nil, fmt.Errorf("unexpected connection type %T", conn)
+	}
+	return recvFDs(uc)
 }
 
 // recvFDs reads multiple file descriptors from the connection
