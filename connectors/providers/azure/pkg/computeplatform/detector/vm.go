@@ -2,7 +2,7 @@ package detector
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
 	"github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/azureclient"
@@ -21,7 +21,11 @@ func NewVMDetector(st *store.Store, clients *azureclient.Clients) *VMDetector {
 }
 
 func (d *VMDetector) Detect(ctx context.Context) (baseapi.DetectResult, error) {
-	scanStart := time.Now()
+	// The prune cutoff comes from the database clock, the one last_seen_at is written with.
+	scanStart, err := d.store.Now(ctx)
+	if err != nil {
+		return baseapi.DetectResult{}, fmt.Errorf("read database clock: %w", err)
+	}
 	log.Info("vm detector starting", "subscription", d.clients.SubscriptionID())
 
 	client, err := d.clients.VirtualMachines()

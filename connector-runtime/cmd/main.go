@@ -136,6 +136,9 @@ func providerImagesFromEnv() map[string]string {
 	if v := os.Getenv("CONNECTOR_AZURE_IMAGE"); v != "" {
 		images["azure"] = v
 	}
+	if v := os.Getenv("CONNECTOR_MULESOFT_IMAGE"); v != "" {
+		images["mulesoft"] = v
+	}
 	return images
 }
 

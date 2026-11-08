@@ -65,6 +65,9 @@ type Coordinator struct {
 	// heartbeat ticks skip re-running that mutate pass and only re-count manual-mode leftovers — discovery
 	// must keep running so the customer removing IaC instrumentation can be observed.
 	automaticDrainDone atomic.Bool
+	// cleanupInFlight is set while RequestCleanup runs its inline rollback. The heartbeat leaves a manual
+	// cleanup to that call while it runs, and does not clear draining from under it.
+	cleanupInFlight atomic.Bool
 
 	// awaitingManual holds the live count/sample of manual-mode workloads still instrumented after the
 	// automatic drain. Heartbeat merges these into health so connector-runtime can surface

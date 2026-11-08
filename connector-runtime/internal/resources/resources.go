@@ -220,6 +220,7 @@ func BuildDeployment(cr *cloudconnectorsv1.OdigosCloudConnector, p DeploymentPar
 		{Name: "ODIGOS_AWS_ACCOUNT_ID", Value: cr.Spec.Account.ID},
 		{Name: "ODIGOS_GCP_PROJECT_ID", Value: cr.Spec.Account.ID},
 		{Name: "ODIGOS_AZURE_SUBSCRIPTION_ID", Value: cr.Spec.Account.ID},
+		{Name: "ODIGOS_MULESOFT_ORG_ID", Value: cr.Spec.Account.ID},
 		{Name: "ODIGOS_CENTRAL_BACKEND_URL", Value: p.CentralBackendURL},
 		{Name: "ODIGOS_GQL_ADDR", Value: fmt.Sprintf(":%d", GraphQLPort)},
 		{Name: "ODIGOS_CLI_ADDR", Value: fmt.Sprintf("127.0.0.1:%d", CLIPort)},

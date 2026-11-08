@@ -200,6 +200,9 @@ func Run(ctx context.Context, cfg config.Config, cfgMgr *config.Manager, st *sto
 // runShutdownDrain rolls back instrumentation when the controller (or RequestCleanup) set the shared
 // drain flag. Upgrades and reschedules leave the flag unset, so the process exits without touching
 // provider workloads.
+//
+// A pending manual cleanup is finished, not turned into a delete: the connector is not being deleted, so
+// its Collectors stay and shutdownComplete is not recorded.
 func runShutdownDrain(cfgMgr *config.Manager, st *store.Store, coord *coordinator.Coordinator) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfgMgr.Settings().ShutdownTimeout)
 	defer cancel()
@@ -213,6 +216,9 @@ func runShutdownDrain(cfgMgr *config.Manager, st *store.Store, coord *coordinato
 		return nil
 	}
 	runLog.Info("drain requested; rolling back instrumentation", "reason", drain.Reason)
+	if drain.Reason == cpg.DrainReasonManualCleanup {
+		return coord.FinishManualCleanup(shutdownCtx)
+	}
 	return coord.Shutdown(shutdownCtx)
 }
 

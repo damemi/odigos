@@ -472,8 +472,12 @@ func stageFor(w api.DiscoveredWorkload) string {
 	if w.Instrumented {
 		return api.PhaseInstrumented
 	}
-	if w.SourceMatched {
+	// A disabled source is not a request to instrument, so it does not read as one.
+	if w.SourceMatched && w.SourceEnabled {
 		return "SourceMatched"
+	}
+	if w.SourceMatched {
+		return "SourceDisabled"
 	}
 	return "Discovered"
 }
@@ -538,6 +542,7 @@ var stageLabels = map[string]string{
 	api.PhaseVerifying:     "Verifying",
 	api.PhaseLayerReady:    "Instrumentation artifact ready",
 	"SourceMatched":        "Marked for instrumentation",
+	"SourceDisabled":       "Source disabled",
 	"Discovered":           "Discovered",
 	"Unknown":              "Unknown",
 	"Error":                "Failed",

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
 	"github.com/odigos-io/odigos-enterprise/connectors/spec"
 )
 
@@ -93,6 +95,11 @@ func (c *Coordinator) observeDrain(ctx context.Context, cancelLoops context.Canc
 	}
 	if !drain.Requested {
 		c.clearAwaitingManual()
+		c.endDrain()
+		return false
+	}
+	if !endsConnector(drain.Reason) {
+		c.resumeManualCleanup(ctx)
 		return false
 	}
 	c.draining.Store(true)
@@ -136,6 +143,62 @@ func (c *Coordinator) observeDrain(ctx context.Context, cancelLoops context.Canc
 	}
 	cancelLoops()
 	return true
+}
+
+// endsConnector reports whether a drain with this reason is a deletion, which tears down the managed
+// Collectors, records shutdownComplete and stops the loops. Only a manual cleanup is not. A reason this
+// runtime does not recognize (or none, from an older controller) counts as a deletion, which is what every
+// drain meant before the reasons were told apart.
+func endsConnector(reason string) bool {
+	return reason != cpg.DrainReasonManualCleanup
+}
+
+// endDrain resumes normal operation once the drain request is gone: a manual cleanup finished, or the request
+// was withdrawn. draining otherwise stays set for the life of the pod and the reconcile loops never run again.
+// A RequestCleanup still in flight owns the flag itself and is left alone.
+func (c *Coordinator) endDrain() {
+	if c.cleanupInFlight.Load() {
+		return
+	}
+	c.draining.Store(false)
+	c.automaticDrainDone.Store(false)
+}
+
+// resumeManualCleanup finishes a manual cleanup whose inline rollback did not complete: RequestCleanup leaves
+// the request set when it fails, so the rollback is retried here on every heartbeat until it succeeds, then
+// the request is cleared and the loops resume.
+//
+// It never tears down Collectors, records shutdownComplete or stops the loops. The connector is not being
+// deleted: recording completion would mark it Deleting and stop discovery and reconcile for good while its
+// custom resource still exists.
+func (c *Coordinator) resumeManualCleanup(ctx context.Context) {
+	if c.cleanupInFlight.Load() {
+		return
+	}
+	if err := c.finishManualCleanup(ctx); err != nil {
+		coordLog.Error("manual cleanup incomplete; will retry on next tick", "error", err)
+	}
+}
+
+// finishManualCleanup rolls back instrumentation and clears the manual-cleanup request. Shared by the
+// heartbeat and by a pod shutdown that finds the request still pending.
+func (c *Coordinator) finishManualCleanup(ctx context.Context) error {
+	c.draining.Store(true)
+	if err := c.drainInstrumentation(ctx); err != nil {
+		return fmt.Errorf("manual cleanup rollback failed: %w", err)
+	}
+	if err := c.store.ClearDrain(ctx, cpg.DrainReasonManualCleanup); err != nil {
+		return fmt.Errorf("clear drain request after cleanup: %w", err)
+	}
+	c.draining.Store(false)
+	coordLog.Info("manual cleanup complete")
+	return nil
+}
+
+// FinishManualCleanup is finishManualCleanup for a pod that is shutting down with a manual cleanup still
+// pending, so a restart does not leave instrumentation the customer asked to remove.
+func (c *Coordinator) FinishManualCleanup(ctx context.Context) error {
+	return c.finishManualCleanup(ctx)
 }
 
 // markShutdownComplete records a finished drain on a fresh, bounded context, independent of ctx: the
@@ -292,40 +355,38 @@ func (c *Coordinator) runComputePlatformReconcileShutdown(ctx context.Context, r
 }
 
 // RequestCleanup performs an immediate instrumentation rollback on demand. It records the drain intent in
-// Postgres (so a pod restart before completion stays drained) and then rolls back inline — disabling all
-// sources and running the rollback reconcile now — rather than only flagging the request and waiting for
-// an external restart/delete. The inline pass takes the same reconcile lock as the loops, so it never
-// races a loop tick. Returns an error if the rollback did not fully succeed.
+// Postgres and then rolls back inline — disabling all sources and running the rollback reconcile now —
+// rather than only flagging the request and waiting for an external restart/delete. The inline pass takes
+// the same reconcile lock as the loops, so it never races a loop tick. Returns an error if the rollback did
+// not fully succeed.
 //
 // RequestCleanup only rolls back what this connector owns (automatic-mode types). Manual-mode
 // instrumentation is the customer's; this API does not wait for them to remove it (unlike CR-delete drain,
-// which withholds shutdownComplete until discovery reports those workloads uninstrumented).
+// which withholds shutdownComplete until discovery reports those workloads uninstrumented). It does not tear
+// down managed Collectors either, and the pod keeps running.
 //
-// On success it clears the drain request: the pod keeps running (unlike shutdown-drain, this is not a
-// termination) and every source is now disabled, so leaving the flag set would make a later, unrelated
-// pod restart (an upgrade/reschedule) roll back instrumentation the user may have re-enabled since. If the
-// rollback fails the flag is intentionally left set, so a restart before it succeeds still drains.
+// On success it clears the request, so a later, unrelated pod restart (an upgrade/reschedule) does not roll
+// back instrumentation the user may have re-enabled since. On failure the request is left set and the loops
+// stay quiesced: the heartbeat retries the rollback every tick (resumeManualCleanup), and a pod shutdown
+// finishes it, until it succeeds. A cleanup asked for while the connector is being deleted is refused, since
+// the delete drain already rolls back everything.
 func (c *Coordinator) RequestCleanup(ctx context.Context, _ string) error {
 	coordLog.Info("manual cleanup requested; draining instrumentation")
-	// Gate source create/update for the duration of the rollback (mirrors Shutdown/observeDrain) so a
-	// mutation racing the cleanup can't re-enable a source the rollback just disabled and leave it
-	// un-reconciled. Unlike a termination drain the pod keeps running, so the flag is cleared once the
-	// rollback fully succeeds and normal operation resumes.
-	c.draining.Store(true)
-	if err := c.store.RequestDrain(ctx, "manual_cleanup"); err != nil {
-		// Nothing was drained; resume normal operation so a transient DB blip doesn't quiesce the connector.
-		c.draining.Store(false)
+	c.cleanupInFlight.Store(true)
+	defer c.cleanupInFlight.Store(false)
+	if err := c.store.RequestDrain(ctx, cpg.DrainReasonManualCleanup); err != nil {
+		if errors.Is(err, store.ErrOtherDrainPending) {
+			return errors.New("the connector is being deleted, and its delete drain already rolls back all instrumentation")
+		}
 		return fmt.Errorf("record drain request: %w", err)
 	}
-	if err := c.drainInstrumentation(ctx); err != nil {
-		// Rollback incomplete: leave draining set (and the DB drain flag set, per below) so the connector
-		// stays quiesced and a restart re-drains rather than accepting new sources over live instrumentation.
-		return fmt.Errorf("manual cleanup rollback failed: %w", err)
+	// Gate source create/update and the reconcile loops for the duration of the rollback (mirrors
+	// Shutdown/observeDrain) so a mutation racing the cleanup can't re-enable a source the rollback just
+	// disabled and leave it un-reconciled.
+	if err := c.finishManualCleanup(ctx); err != nil {
+		// Rollback incomplete: draining stays set and so does the request, so the connector stays quiesced
+		// and the heartbeat retries rather than accepting new sources over live instrumentation.
+		return err
 	}
-	if err := c.store.ClearDrain(ctx); err != nil {
-		return fmt.Errorf("clear drain request after cleanup: %w", err)
-	}
-	c.draining.Store(false)
-	coordLog.Info("manual cleanup complete")
 	return nil
 }

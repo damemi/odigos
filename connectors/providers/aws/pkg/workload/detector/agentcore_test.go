@@ -85,6 +85,7 @@ func (s *agentCoreDiscoveryStore) PruneAgentCore(context.Context, string, time.T
 	s.pruned = true
 	return nil
 }
+func (s *agentCoreDiscoveryStore) Now(context.Context) (time.Time, error) { return time.Now(), nil }
 
 func TestAgentCoreDiscoveryPaginatesFiltersAndRedacts(t *testing.T) {
 	st, client := &agentCoreDiscoveryStore{}, &agentCoreDiscoveryClient{}

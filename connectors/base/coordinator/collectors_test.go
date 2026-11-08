@@ -491,6 +491,19 @@ func TestAProviderWithoutTheCollectorSurfaceIsAbsent(t *testing.T) {
 	}
 	// The loop returns immediately rather than panicking on the type assertion.
 	c.collectorReconcileLoop(context.Background())
+
+	// Central asks every connector for its Collector actions, and only a provider with Collectors has the table
+	// they live in. The store is nil here, so any query would panic: the answer has to be "none" without one.
+	ctx := context.Background()
+	if got, err := c.AllManagedCollectorActions(ctx); err != nil || len(got) != 0 {
+		t.Errorf("AllManagedCollectorActions = %v, %v; want none", got, err)
+	}
+	if got, err := c.ManagedCollectorActions(ctx, "us"); err != nil || len(got) != 0 {
+		t.Errorf("ManagedCollectorActions = %v, %v; want none", got, err)
+	}
+	if got, err := c.ManagedCollectorAction(ctx, "us", "a"); err != nil || got != nil {
+		t.Errorf("ManagedCollectorAction = %v, %v; want none", got, err)
+	}
 }
 
 // TestObservationHappensEvenWhenItFails: a converge pass that has to create everything from scratch is

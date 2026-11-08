@@ -310,6 +310,7 @@ provider-agnostic.
 | `CONNECTOR_AWS_IMAGE`   | `cloudConnectors.aws.image`   | `odigos-enterprise-connector-aws`   |
 | `CONNECTOR_GCP_IMAGE`   | `cloudConnectors.gcp.image`   | `odigos-enterprise-connector-gcp`   |
 | `CONNECTOR_AZURE_IMAGE` | `cloudConnectors.azure.image` | `odigos-enterprise-connector-azure` |
+| `CONNECTOR_MULESOFT_IMAGE` | `cloudConnectors.mulesoft.image` | `odigos-enterprise-connector-mulesoft` (Helm values not added yet) |
 
 Empty image overrides derive from global `imagePrefix` + `image.tag` via `utils.imageName` helper.
 
@@ -605,6 +606,13 @@ Checklist (mirrors AWS → GCP → Azure pattern):
 8. **Helm** — `CONNECTOR_<PROVIDER>_IMAGE` + `cloudConnectors.<provider>.image` in odigos chart
 9. **ui-kit** — provider icon/mock data; Step 2 should eventually be fully spec-driven ([CORE-1389](https://linear.app/odigos/issue/CORE-1389)) — do not add new `isAws`-style forks
 10. **Example CR + README**
+11. **Hardcoded provider lists** the steps above do not reach (found onboarding MuleSoft):
+    - `connectors/base/config/config.go` — the boundary env var in the `AccountID` loop
+    - `connectors/spec/mode_test.go` — `manualObservationReads` (and `writeVerbs` if the provider's write permissions use new verbs)
+    - `connectors/spec/region_test.go` — default bootstrap region
+    - `central-backend/graph/cloud_connector_helpers_test.go` — providers without collectors
+    - `.github/workflows/build.yaml` (`connector-unit-tests` matrix), `release-images.yml`, `vulnerability-scan.yaml`, `.github/cve-autofix/images.yaml`
+    - `base/domain/workloadreport/model.go` `detailsToModel` — a new kind reports nil details until it gets a case (and possibly an agents-api type)
 
 ---
 

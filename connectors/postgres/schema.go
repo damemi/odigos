@@ -10,6 +10,7 @@ const (
 	SchemaAWS      = "connector_aws"
 	SchemaGCP      = "connector_gcp"
 	SchemaAzure    = "connector_azure"
+	SchemaMuleSoft = "connector_mulesoft"
 )
 
 // ExpectedSchemaVersions maps a schema name to the version a runtime built from this module requires
@@ -21,6 +22,7 @@ var ExpectedSchemaVersions = map[string]string{
 	SchemaAWS:      "13",
 	SchemaGCP:      "3",
 	SchemaAzure:    "3",
+	SchemaMuleSoft: "1",
 }
 
 // AWSExpectedVersion is the connector_aws schema version the AWS runtime is built against. It is the
@@ -34,6 +36,10 @@ func GCPExpectedVersion() string { return ExpectedSchemaVersions[SchemaGCP] }
 // AzureExpectedVersion is the connector_azure schema version the Azure runtime is built against. It is
 // the value the connector-runtime controller stamps into ODIGOS_EXPECTED_SCHEMA_VERSION for Azure pods.
 func AzureExpectedVersion() string { return ExpectedSchemaVersions[SchemaAzure] }
+
+// MuleSoftExpectedVersion is the connector_mulesoft schema version the MuleSoft runtime is built against. It
+// is the value the connector-runtime controller stamps into ODIGOS_EXPECTED_SCHEMA_VERSION for MuleSoft pods.
+func MuleSoftExpectedVersion() string { return ExpectedSchemaVersions[SchemaMuleSoft] }
 
 // Platform tables.
 const (
@@ -58,4 +64,14 @@ const (
 	HeartbeatStatusError     = "Error"
 	HeartbeatStatusDisabled  = "Disabled"
 	HeartbeatStatusDeleting  = "Deleting"
+)
+
+// Drain reasons written into connector_platform.runtime_heartbeat.drain_reason. The two drains share the
+// flag but not their meaning. A deleted connector rolls back everything it owns, tears down its managed
+// Collectors, records shutdownComplete and stops. A manual cleanup only rolls back instrumentation, and the
+// connector keeps running: treating it as a delete would remove the Collectors, mark the connector Deleting
+// and stop its loops while its custom resource still exists.
+const (
+	DrainReasonConnectorDeleted = "connector_deleted"
+	DrainReasonManualCleanup    = "manual_cleanup"
 )

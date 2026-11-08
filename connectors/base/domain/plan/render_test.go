@@ -171,3 +171,27 @@ func TestLoaderVarsExcludesPlainSets(t *testing.T) {
 		t.Errorf("loader var separator = %q, want the join a template has to honor", got[0].Separator)
 	}
 }
+
+// TestPropertiesFragmentsRenderAsApplicationProperties: a configuration-only platform has no environment, so
+// prose telling a customer to "configure these environment variables" would send them to the wrong place.
+func TestPropertiesFragmentsRenderAsApplicationProperties(t *testing.T) {
+	p := Plan{
+		Type: "mulesoft.cloudhub2-app",
+		Mode: ModeRuntimeConfig,
+		Fragments: []Fragment{{
+			Anchor: Anchor{Scope: ScopeWorkload, Field: FieldProperties},
+			Kind:   KindEnv,
+			Env: []EnvVar{
+				{Name: "mule.openTelemetry.tracer.exporter.enabled", Value: "true", Merge: MergeSet},
+				{Name: "mule.openTelemetry.exporter.resource.attributes", Value: "deployment.environment.name=dev", Merge: MergeAppend, Separator: ","},
+			},
+		}},
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("a runtime-config plan of property fragments must validate: %v", err)
+	}
+	prose := Prose(p)
+	if !strings.Contains(prose, "application properties") || strings.Contains(prose, "environment variables") {
+		t.Errorf("prose = %q, want application properties, not environment variables", prose)
+	}
+}

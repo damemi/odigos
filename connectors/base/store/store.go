@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -61,6 +62,16 @@ func (s *Store) Close() {
 
 // Pool exposes the connection pool so a provider's embedding store can run inventory queries on it.
 func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
+// Now returns the database's current time. A discovery cycle takes its prune cutoff from it: inventory rows
+// record last_seen_at with Postgres's now(), so a cutoff read from the connector's own clock compares two
+// clocks, and with Postgres even slightly behind the pod a row upserted just after the cutoff looks older
+// than it and is soft-deleted as gone.
+func (s *Store) Now(ctx context.Context) (time.Time, error) {
+	var t time.Time
+	err := s.pool.QueryRow(ctx, `SELECT now()`).Scan(&t)
+	return t, err
+}
 
 // ConnectorName returns the row-discriminator identity.
 func (s *Store) ConnectorName() string { return s.connectorName }

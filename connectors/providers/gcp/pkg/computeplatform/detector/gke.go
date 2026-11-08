@@ -8,7 +8,6 @@ package detector
 import (
 	"context"
 	"fmt"
-	"time"
 
 	containerpb "cloud.google.com/go/container/apiv1/containerpb"
 
@@ -32,7 +31,11 @@ func NewGKEClusterDetector(st *store.Store, clients *gcpclient.Clients) *GKEClus
 }
 
 func (d *GKEClusterDetector) Detect(ctx context.Context) (baseapi.DetectResult, error) {
-	scanStart := time.Now()
+	// The prune cutoff comes from the database clock, the one last_seen_at is written with.
+	scanStart, err := d.store.Now(ctx)
+	if err != nil {
+		return baseapi.DetectResult{}, fmt.Errorf("read database clock: %w", err)
+	}
 	log.Info("gke cluster detector starting", "project", d.clients.ProjectID())
 
 	client, err := d.clients.GKEClusters(ctx)

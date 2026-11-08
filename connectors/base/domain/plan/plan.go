@@ -101,6 +101,10 @@ const (
 	FieldContainers   Field = "containers"   // the agent-staging helper container, at workload scope
 	FieldDependsOn    Field = "dependsOn"    // start ordering between a container and the helper
 	FieldLayers       Field = "layers"       // Lambda layer attachment, at workload scope
+	// FieldProperties is an application's configuration properties, at workload scope, carried by env-shaped
+	// (name, value, merge) fragments. Platforms instrumented purely by configuration — Mule's Direct Telemetry
+	// Stream — have no environment and no agent: the properties ARE the instrumentation.
+	FieldProperties Field = "properties"
 )
 
 // Anchor names the path a fragment belongs at.
@@ -278,6 +282,10 @@ const (
 	ModeStagedAgent = "staged-agent"
 	// ModePackagedSDK: dependencies and a dormant bootstrap are part of the customer's artifact.
 	ModePackagedSDK = "packaged-sdk"
+	// ModeRuntimeConfig: the platform's runtime already carries an OpenTelemetry exporter and only needs
+	// configuring (Mule's Direct Telemetry Stream). Nothing is staged or attached; every fragment is a
+	// FieldProperties setting.
+	ModeRuntimeConfig = "runtime-config"
 )
 
 // Placeholders are the values a plan cannot resolve, because they belong to the customer's own deployment
@@ -562,8 +570,8 @@ func (p Plan) Validate() error {
 	if p.Type == "" {
 		add("plan declares no instrumentation type")
 	}
-	if p.Mode != ModeLayer && p.Mode != ModeStagedAgent && p.Mode != ModePackagedSDK {
-		add("plan mode %q is not one of %q, %q, %q", p.Mode, ModeLayer, ModeStagedAgent, ModePackagedSDK)
+	if p.Mode != ModeLayer && p.Mode != ModeStagedAgent && p.Mode != ModePackagedSDK && p.Mode != ModeRuntimeConfig {
+		add("plan mode %q is not one of %q, %q, %q, %q", p.Mode, ModeLayer, ModeStagedAgent, ModePackagedSDK, ModeRuntimeConfig)
 	}
 	if len(p.Fragments) == 0 {
 		add("plan declares no fragments, so there is nothing for a customer to apply")

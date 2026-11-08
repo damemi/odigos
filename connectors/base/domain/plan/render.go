@@ -42,9 +42,12 @@ func stepFor(f Fragment) (Step, bool) {
 	case KindEnv:
 		// Named by anchor, not assumed: a Lambda function's environment is the function's own, and telling a
 		// customer to configure "the application container" of a function is an instruction with no referent.
-		if f.Anchor.Scope == ScopeContainer {
+		switch {
+		case f.Anchor.Field == FieldProperties:
+			s.Instruction = "Set these application properties on the application."
+		case f.Anchor.Scope == ScopeContainer:
 			s.Instruction = fmt.Sprintf("Configure these environment variables on container %q.", f.Anchor.Container)
-		} else {
+		default:
 			s.Instruction = "Configure these environment variables on the workload itself."
 		}
 		for _, e := range f.Env {

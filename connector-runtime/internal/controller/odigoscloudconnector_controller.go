@@ -279,8 +279,12 @@ func (r *Reconciler) reconcileDelete(ctx context.Context, cr *cloudconnectorsv1.
 	// pod runs, so a transient provider (AWS) error simply retries on the next loop tick instead of being
 	// force-killed mid-rollback by pod termination (which cannot be halted once started). The pod is torn
 	// down by owner-reference GC once the finalizer is removed here.
-	if !hb.DrainRequested {
-		if err := r.Heartbeat.RequestDrain(ctx, cr.Name, "connector_deleted"); err != nil {
+	//
+	// A pending manual cleanup is replaced rather than left alone. The connector treats that drain as a
+	// cleanup — it never tears down the managed Collectors or records shutdownComplete — so the deletion
+	// would wait on a completion nobody records.
+	if !hb.DrainRequested || hb.DrainReason != cpg.DrainReasonConnectorDeleted {
+		if err := r.Heartbeat.RequestDrain(ctx, cr.Name, cpg.DrainReasonConnectorDeleted); err != nil {
 			return ctrl.Result{}, err
 		}
 		logger.Info("drain requested; waiting for the connector to roll back instrumentation")

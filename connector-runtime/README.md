@@ -197,6 +197,7 @@ internal/heartbeat/reader.go                  # best-effort pgx read of runtime_
 | `CONNECTOR_AWS_IMAGE` | — | Image stamped onto AWS connector Deployments (overridable per-CR via `spec.runtime.image`) |
 | `CONNECTOR_GCP_IMAGE` | — | Image stamped onto GCP connector Deployments (overridable per-CR via `spec.runtime.image`) |
 | `CONNECTOR_AZURE_IMAGE` | — | Image stamped onto Azure connector Deployments (overridable per-CR via `spec.runtime.image`) |
+| `CONNECTOR_MULESOFT_IMAGE` | — | Image stamped onto MuleSoft connector Deployments (overridable per-CR via `spec.runtime.image`). MuleSoft has no agent-artifact image: Direct Telemetry Stream is built into the Mule runtime |
 | `CONNECTOR_AWS_FARGATE_AGENTS_IMAGE` | — | Optional override of the odigos-fargate-agents bundle, stamped as `ODIGOS_FARGATE_AGENTS_IMAGE` onto AWS connector Deployments (empty keeps the connector's compiled-in default) |
 | `CONNECTOR_AWS_AGENTCORE_AGENTS_IMAGE` | — | Optional override of the AgentCore SDK carrier named in manual-mode instructions (the connector never pulls it), stamped as `ODIGOS_AGENTCORE_AGENTS_IMAGE` onto AWS connector Deployments |
 | `CONNECTOR_OPAMP_ENDPOINT` | — | Public endpoint managed Collectors connect back to, stamped as `ODIGOS_OPAMP_ENDPOINT`. See below; empty disables managed-Collector deployment |

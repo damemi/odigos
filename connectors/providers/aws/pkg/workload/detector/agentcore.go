@@ -18,6 +18,7 @@ import (
 type agentCoreInventory interface {
 	UpsertAgentCore(context.Context, agentcore.Runtime) error
 	PruneAgentCore(context.Context, string, time.Time) error
+	Now(context.Context) (time.Time, error)
 }
 type agentCoreRegions interface {
 	EnabledRegions(context.Context) ([]string, error)
@@ -56,8 +57,12 @@ func (d *AgentCoreDetector) Detect(ctx context.Context) (baseapi.DetectResult, e
 		workers.Go(func() {
 			for region := range jobs {
 				regionCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
-				start := time.Now()
-				client, err := d.client(regionCtx, region)
+				// The prune cutoff comes from the database clock, the one last_seen_at is written with.
+				start, err := d.store.Now(regionCtx)
+				var client agentcore.Client
+				if err == nil {
+					client, err = d.client(regionCtx, region)
+				}
 				if err == nil {
 					err = d.scan(regionCtx, client, region, start)
 				}

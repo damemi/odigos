@@ -3,7 +3,7 @@ package spec
 import "testing"
 
 func TestBootstrapRegions(t *testing.T) {
-	for _, tc := range []struct{ provider, defaultRegion string }{{"aws", "us-east-1"}, {"azure", "eastus"}, {"gcp", "us-central1"}} {
+	for _, tc := range []struct{ provider, defaultRegion string }{{"aws", "us-east-1"}, {"azure", "eastus"}, {"gcp", "us-central1"}, {"mulesoft", "us"}} {
 		t.Run(tc.provider, func(t *testing.T) {
 			cfg := MustGet(tc.provider).Connector.BootstrapRegion
 			got, err := cfg.Resolve("")
@@ -23,7 +23,8 @@ func TestBootstrapRegions(t *testing.T) {
 			if _, err := cfg.Resolve("invalid-region"); err == nil {
 				t.Fatal("invalid region accepted")
 			}
-			if tc.provider != "aws" && len(cfg.SupportedRegions) != 1 {
+			// MuleSoft's "region" is the Anypoint control plane (us, eu), which the connector does implement.
+			if tc.provider != "aws" && tc.provider != "mulesoft" && len(cfg.SupportedRegions) != 1 {
 				t.Fatal("unimplemented provider must use a fixed default")
 			}
 		})

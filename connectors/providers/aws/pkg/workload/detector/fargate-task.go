@@ -68,7 +68,12 @@ func (d *ECSTaskDetector) Detect(ctx context.Context) (baseapi.DetectResult, err
 	var anyErr error
 	authed := false
 	for _, region := range regions {
-		scanStart := time.Now()
+		// The prune cutoff comes from the database clock, the one last_seen_at is written with.
+		scanStart, err := d.store.Now(ctx)
+		if err != nil {
+			anyErr = fmt.Errorf("region %s: read database clock: %w", region, err)
+			continue
+		}
 		cfg, err := d.cache.Config(ctx, region)
 		if err != nil {
 			anyErr = err

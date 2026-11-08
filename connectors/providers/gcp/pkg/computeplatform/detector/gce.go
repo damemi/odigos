@@ -2,9 +2,9 @@ package detector
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"google.golang.org/api/iterator"
@@ -27,7 +27,11 @@ func NewGCEInstanceDetector(st *store.Store, clients *gcpclient.Clients) *GCEIns
 }
 
 func (d *GCEInstanceDetector) Detect(ctx context.Context) (baseapi.DetectResult, error) {
-	scanStart := time.Now()
+	// The prune cutoff comes from the database clock, the one last_seen_at is written with.
+	scanStart, err := d.store.Now(ctx)
+	if err != nil {
+		return baseapi.DetectResult{}, fmt.Errorf("read database clock: %w", err)
+	}
 	log.Info("gce instance detector starting", "project", d.clients.ProjectID())
 
 	client, err := d.clients.GCEInstances(ctx)

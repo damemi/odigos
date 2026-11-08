@@ -193,6 +193,8 @@ const mapLanguage = (language?: string | null): ProgrammingLanguages | null => {
     rust: ProgrammingLanguages.Rust,
     swift: ProgrammingLanguages.Swift,
     elixir: ProgrammingLanguages.Elixir,
+    // MuleSoft applications. Not Java: the version reported beside it is the Mule runtime's.
+    mule: ProgrammingLanguages.Mule,
   };
   return aliases[normalized] ?? ProgrammingLanguages.Unknown;
 };

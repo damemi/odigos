@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
@@ -41,11 +42,19 @@ func (s *Store) DrainRequested(ctx context.Context) (DrainState, error) {
 	return st, nil
 }
 
-// RequestDrain marks the connector for instrumentation rollback on the next pod shutdown. Used by
-// RequestCleanup and by connector-runtime before terminating a connector pod on CR deletion.
+// ErrOtherDrainPending is returned by RequestDrain when a drain with a different reason is already pending.
+var ErrOtherDrainPending = errors.New("another drain is already in progress")
+
+// RequestDrain records a drain request with this reason. Used by RequestCleanup; connector-runtime writes its
+// own CR-delete request.
+//
+// A pending drain with a different reason is never relabeled, and ErrOtherDrainPending is returned instead.
+// The reason decides what the drain does (see the cpg.DrainReason constants), so a manual cleanup asked for
+// while the connector is being deleted would turn the delete drain into a cleanup that never completes the
+// delete. The check and the write are one statement, so a request racing the controller's cannot slip in.
 func (s *Store) RequestDrain(ctx context.Context, reason string) error {
 	heartbeatLog.Info("request drain", "connector", s.connectorName, "reason", reason)
-	_, err := s.pool.Exec(ctx, `
+	tag, err := s.pool.Exec(ctx, `
 		INSERT INTO connector_platform.runtime_heartbeat
 			(connector_name, runtime_id, status, supported_kinds, health, last_seen_at, updated_at,
 			 drain_requested_at, drain_reason)
@@ -54,11 +63,17 @@ func (s *Store) RequestDrain(ctx context.Context, reason string) error {
 			drain_requested_at = now(),
 			drain_reason = EXCLUDED.drain_reason,
 			updated_at = now()
+		WHERE runtime_heartbeat.drain_requested_at IS NULL
+		   OR runtime_heartbeat.drain_reason IS NOT DISTINCT FROM EXCLUDED.drain_reason
 	`, s.connectorName, cpg.HeartbeatStatusConnected, reason)
 	if err != nil {
 		heartbeatLog.Error("request drain failed", "connector", s.connectorName, "error", err)
+		return err
 	}
-	return err
+	if tag.RowsAffected() == 0 {
+		return ErrOtherDrainPending
+	}
+	return nil
 }
 
 // ClearDrain clears a drain request WITHOUT the pod-termination semantics of MarkShutdownComplete: it
@@ -67,15 +82,19 @@ func (s *Store) RequestDrain(ctx context.Context, reason string) error {
 // is already disabled in the store, so the request must not persist — otherwise a later, unrelated pod
 // restart (an upgrade/reschedule, which must NOT drain) would observe the stale flag and silently roll
 // back instrumentation the user re-enabled in the meantime.
-func (s *Store) ClearDrain(ctx context.Context) error {
-	heartbeatLog.Info("clear drain request", "connector", s.connectorName)
+//
+// Only a request with this reason is cleared. The controller may replace a pending manual cleanup with a
+// CR-delete request at any moment, and clearing that one would leave the deletion waiting on a drain nobody
+// runs.
+func (s *Store) ClearDrain(ctx context.Context, reason string) error {
+	heartbeatLog.Info("clear drain request", "connector", s.connectorName, "reason", reason)
 	_, err := s.pool.Exec(ctx, `
 		UPDATE connector_platform.runtime_heartbeat
 		SET drain_requested_at = NULL,
 		    drain_reason = NULL,
 		    updated_at = now()
-		WHERE connector_name = $1 AND runtime_id = $2
-	`, s.connectorName, s.runtimeID)
+		WHERE connector_name = $1 AND runtime_id = $2 AND drain_reason = $3
+	`, s.connectorName, s.runtimeID, reason)
 	if err != nil {
 		heartbeatLog.Error("clear drain request failed", "connector", s.connectorName, "error", err)
 	}

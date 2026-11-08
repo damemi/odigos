@@ -630,7 +630,7 @@ func TestEveryStageIsReadable(t *testing.T) {
 	// Every identifier ToModel assigns to progress.Stage, plus the ones stageLabels names.
 	identifiers := []string{
 		api.PhaseVerifying, api.PhaseLayerReady, api.PhaseInstrumenting, api.PhaseInstrumented,
-		"SourceMatched", "Discovered", "Unknown", "Error",
+		"SourceMatched", "SourceDisabled", "Discovered", "Unknown", "Error",
 		"NotImplemented", "Unsupported", "VerifyingCustomerChanges", "InstrumentationDrift",
 		"SourceDisabledButInstrumented", "SourceMissingButInstrumented",
 		waitingForLabel(api.WaitingForDestination), waitingForLabel(api.WaitingForCustomer),
@@ -683,5 +683,18 @@ func TestWaitingIssueCodesStayIdentifiers(t *testing.T) {
 		if strings.Contains(code, " ") {
 			t.Errorf("%s: issue code %q contains a space; codes are matched, not read", waitingFor, code)
 		}
+	}
+}
+
+// A disabled source is not a request to instrument, so its stage must not say the workload is marked for
+// instrumentation. It used to: the stage looked only at whether a source row existed.
+func TestADisabledSourceIsNotMarkedForInstrumentation(t *testing.T) {
+	w := api.DiscoveredWorkload{SourceMatched: true, InstrumentationAvailable: true}
+	if got := ToModel(w).Progress.Stage; got != "Source disabled" {
+		t.Errorf("disabled source: stage = %q, want %q", got, "Source disabled")
+	}
+	w.SourceEnabled = true
+	if got := ToModel(w).Progress.Stage; got != "Marked for instrumentation" {
+		t.Errorf("enabled source: stage = %q, want %q", got, "Marked for instrumentation")
 	}
 }

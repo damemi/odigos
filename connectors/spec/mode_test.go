@@ -143,14 +143,18 @@ func TestManualModeGrantsNoMutationPermissions(t *testing.T) {
 					t.Errorf("%s/%s: manual mode aggregates instrumentation permission %q", provider, it.Name, p)
 				}
 			}
-			// Automatic mode must keep demanding them, or the connector cannot do its job.
+			// Automatic mode must keep demanding them, or the connector cannot do its job. A type declared
+			// implemented: false is the exception: Odigos never changes it, so it must not ask for the right to.
 			autoPerms := map[string]bool{}
 			for _, p := range s.RequiredPermissions(auto) {
 				autoPerms[p] = true
 			}
 			for _, p := range it.Permissions {
-				if !autoPerms[p] {
+				switch {
+				case it.IsImplemented() && !autoPerms[p]:
 					t.Errorf("%s/%s: automatic mode lost instrumentation permission %q", provider, it.Name, p)
+				case !it.IsImplemented() && autoPerms[p] && !discoveryDeclares(s, it.Name, p):
+					t.Errorf("%s/%s: unimplemented type still asks for instrumentation permission %q", provider, it.Name, p)
 				}
 			}
 		}
@@ -305,6 +309,15 @@ var manualObservationReads = map[string]map[string][]string{
 	"azure": {
 		"azure.container-apps": {"Microsoft.App/containerApps/revisions/read"},
 	},
+	// The deployment read that discovery already makes returns the application properties, which are the whole
+	// of a Mule app's instrumentation, so manual-mode conformance needs nothing beyond discovery's own scope.
+	"mulesoft": {
+		"mulesoft.cloudhub2-app":     {"Read Applications"},
+		"mulesoft.private-space-app": {"Read Applications"},
+		"mulesoft.rtf-app":           {"Read Applications"},
+		// The gateway record discovery reads carries its tracing configuration, which is what manual mode judges.
+		"mulesoft.omni-gateway": {"Read Servers"},
+	},
 }
 
 // TestManualModeGrantsObservationReads is the positive counterpart to TestManualModeGrantsNoMutationPermissions:
@@ -448,15 +461,16 @@ func TestUnsupportedCapabilities(t *testing.T) {
 }
 
 // TestRealProviderCapabilitiesAreHonorable guards against a spec that cannot serve its own advertised types: for
-// every provider, enabling everything it declares must produce no warnings.
+// every provider, enabling everything it declares must produce no warnings. A type whose instrumentation is
+// declared implemented: false is enabled for discovery only, which is everything it advertises.
 func TestRealProviderCapabilitiesAreHonorable(t *testing.T) {
 	for _, provider := range Providers() {
 		s := MustGet(provider)
 		var caps Capabilities
 		for _, t := range s.Workloads.Discovery.Types {
-			_, instrumentable := s.Workloads.Instrumentation.findType(t.Name)
+			it, declared := s.Workloads.Instrumentation.findType(t.Name)
 			caps.Workloads = append(caps.Workloads, WorkloadCapability{
-				Type: t.Name, Discovery: true, Instrumentation: instrumentable,
+				Type: t.Name, Discovery: true, Instrumentation: declared && it.IsImplemented(),
 			})
 		}
 		if got := s.UnsupportedCapabilities(caps); len(got) != 0 {

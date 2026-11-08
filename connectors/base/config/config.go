@@ -136,11 +136,11 @@ func FromEnv() (Config, error) {
 		c.RuntimeID = c.ConnectorName
 	}
 
-	// The controller stamps the SAME account id into all three provider variables — a connector reads
+	// The controller stamps the SAME account id into every provider variable — a connector reads
 	// only its own and the others are harmless no-ops (connector-runtime resources.go). Reading the
 	// first non-empty therefore gives this connector's account without base needing to know which
 	// provider it is running as.
-	for _, key := range []string{"ODIGOS_AWS_ACCOUNT_ID", "ODIGOS_GCP_PROJECT_ID", "ODIGOS_AZURE_SUBSCRIPTION_ID"} {
+	for _, key := range []string{"ODIGOS_AWS_ACCOUNT_ID", "ODIGOS_GCP_PROJECT_ID", "ODIGOS_AZURE_SUBSCRIPTION_ID", "ODIGOS_MULESOFT_ORG_ID"} {
 		if v := os.Getenv(key); v != "" {
 			c.AccountID = v
 			break

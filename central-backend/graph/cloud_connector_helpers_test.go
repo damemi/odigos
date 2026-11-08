@@ -276,11 +276,11 @@ func TestCollectorFeaturesDoNotDisturbTheExistingCatalog(t *testing.T) {
 	}
 }
 
-// TestProvidersWithoutCollectorsEmitAnEmptyFeature: Azure and GCP declare no collectors domain yet. They
+// TestProvidersWithoutCollectorsEmitAnEmptyFeature: Azure, GCP and MuleSoft declare no collectors domain yet. They
 // must still emit the feature — disabled and empty — rather than nothing, so a client can render the
 // same shape for every provider instead of branching on which ones have the domain.
 func TestProvidersWithoutCollectorsEmitAnEmptyFeature(t *testing.T) {
-	for _, provider := range []string{"azure", "gcp"} {
+	for _, provider := range []string{"azure", "gcp", "mulesoft"} {
 		s := spec.MustGet(provider)
 		if len(s.Collectors.Management.Types) != 0 {
 			continue // this provider has since declared the domain; nothing to assert here

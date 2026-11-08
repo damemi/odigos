@@ -989,17 +989,34 @@ func (c *Coordinator) DeleteManagedCollectorDestination(ctx context.Context, reg
 
 // ManagedCollectorActions returns the actions owned by one regional Collector.
 func (c *Coordinator) ManagedCollectorActions(ctx context.Context, region string) ([]collectoraction.Action, error) {
+	if !c.hasCollectorSurface() {
+		return nil, nil
+	}
 	return c.store.ListCollectorActions(ctx, region)
+}
+
+// hasCollectorSurface reports whether this provider builds Collectors at all. Only such a provider's schema has
+// the Collector action table, while Central asks every connector for its actions; for any other provider the
+// answer is that there are none, rather than an error from a table that does not exist.
+func (c *Coordinator) hasCollectorSurface() bool {
+	_, ok := c.provider.(api.CollectorProvider)
+	return ok
 }
 
 // AllManagedCollectorActions is the connector-wide read used by the shared
 // Action query when Central has not selected a Collector region. Definitions
 // remain region-owned; this is only a read projection for generic clients.
 func (c *Coordinator) AllManagedCollectorActions(ctx context.Context) ([]collectoraction.Action, error) {
+	if !c.hasCollectorSurface() {
+		return nil, nil
+	}
 	return c.store.ListAllCollectorActions(ctx)
 }
 
 func (c *Coordinator) ManagedCollectorAction(ctx context.Context, region, name string) (*collectoraction.Action, error) {
+	if !c.hasCollectorSurface() {
+		return nil, nil
+	}
 	return c.store.GetCollectorAction(ctx, region, name)
 }
 
