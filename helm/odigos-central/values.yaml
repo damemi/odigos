@@ -145,7 +145,7 @@ auth:
   # When empty, defaults to auth.externalUrl, except for local port-forward
   # (http://localhost:8081) where the UI is reached on port 3000.
   externalUIUrl: ''
-  image: registry.odigos.io/keycloak:24.0.3
+  image: registry.odigos.io/keycloak:24.0.3-odigos1
   adminUsername: admin
   # -- Keycloak admin password for internal API access.
   # On first install: uses this value, or auto-generates if empty.
