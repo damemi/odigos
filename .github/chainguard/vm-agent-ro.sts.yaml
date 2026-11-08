@@ -1,0 +1,6 @@
+issuer: https://token.actions.githubusercontent.com
+# subject allows the vm-agent repository, for pull requests and branch/tag references.
+subject_pattern: '^repo:odigos-io(@84347062)?/vm-agent(@735830940)?:(pull_request|ref:.*)$'
+
+permissions:
+  contents: read
