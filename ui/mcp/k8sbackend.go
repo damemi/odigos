@@ -6,7 +6,7 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/frontend/kube"
 
-	"github.com/odigos-io/odigos-enterprise/mcp/provider"
+	"github.com/odigos-io/odigos/mcp/provider"
 )
 
 // k8sBackend implements provider.Backend for the enterprise k8s UI. It reads the

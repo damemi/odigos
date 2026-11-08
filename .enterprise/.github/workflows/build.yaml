@@ -123,7 +123,7 @@ jobs:
         # Every Go module that carries its own tests. The enterprise UI + shared
         # MCP modules live in their own go.mod, so they need explicit entries —
         # central-backend's `go test ./...` does not reach them.
-        module: [central-backend, mcp, ui]
+        module: [central-backend, ui]
     steps:
       - name: Check if tests should run
         id: should-run

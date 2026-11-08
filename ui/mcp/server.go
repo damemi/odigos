@@ -17,8 +17,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/odigos-io/odigos-enterprise/mcp/audit"
-	odigosmcp "github.com/odigos-io/odigos-enterprise/mcp/shared"
+	"github.com/odigos-io/odigos/mcp/audit"
+	odigosmcp "github.com/odigos-io/odigos/mcp/shared"
 	"github.com/odigos-io/odigos-enterprise/ui/mcp/k8s"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/frontend/version"

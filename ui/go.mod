@@ -198,11 +198,11 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
-	github.com/odigos-io/odigos-enterprise/mcp v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/config v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/distros v1.39.0-pre3.0.20261104135744-93eebf3ae885
 	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/mcp v0.0.0-20261108080630-5ff6d008289a
 	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/exp/metrics v0.159.0 // indirect
@@ -411,8 +411,6 @@ replace github.com/odigos-io/odigos/status => github.com/odigos-io/odigos/status
 
 replace github.com/odigos-io/odigos/profiles => github.com/odigos-io/odigos/profiles v1.39.0-pre3.0.20261104135744-93eebf3ae885
 
-replace github.com/odigos-io/odigos-enterprise/mcp => ../mcp
-
 replace github.com/odigos-io/odigos-enterprise/odigosauth => ../odigosauth
 
 replace github.com/odigos-io/odigos-enterprise/distros => ../distros
@@ -424,3 +422,5 @@ replace k8s.io/cloud-provider => k8s.io/cloud-provider v0.35.0
 replace k8s.io/kubelet => k8s.io/kubelet v0.35.0
 
 replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.39.0-pre3.0.20261104135744-93eebf3ae885
+
+replace github.com/odigos-io/odigos/mcp => github.com/odigos-io/odigos/mcp v0.0.0-20261108080630-5ff6d008289a

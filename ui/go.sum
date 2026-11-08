@@ -616,6 +616,8 @@ github.com/odigos-io/odigos/instrumentationrules v1.39.0-pre3.0.20261104135744-9
 github.com/odigos-io/odigos/instrumentationrules v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:MS/gQX5XZ6HjFatUYwuNu0C3EZT1cN9zTDsJMpTPRpM=
 github.com/odigos-io/odigos/k8sutils v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:uUTK88Aj822jvVR1e/eMqHDB5aD716Ro29OQhjRULWM=
 github.com/odigos-io/odigos/k8sutils v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:cTnE/bdtTW2kgYuuxrqV/XBYkdIwpTWOsvz/y+fl9Jg=
+github.com/odigos-io/odigos/mcp v0.0.0-20261108080630-5ff6d008289a h1:xMZQlqWf3WSWMWIbRf42PIsX9M4YFba5dcZGelFXGb4=
+github.com/odigos-io/odigos/mcp v0.0.0-20261108080630-5ff6d008289a/go.mod h1:TYiIs0CltCKIo88Kz9Tq/NZGQw9Xb3WrEKDRgkHGfrs=
 github.com/odigos-io/odigos/odigosauth v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:vRxHtynb5SPRY5WVF23Nn1ZFGR9xsqPtUL384AtvejA=
 github.com/odigos-io/odigos/odigosauth v1.39.0-pre3.0.20261104135744-93eebf3ae885/go.mod h1:hGPQknni7NV31X72FPFy2cVEXBV6kobqJnWEKv3YP1U=
 github.com/odigos-io/odigos/profiles v1.39.0-pre3.0.20261104135744-93eebf3ae885 h1:km6qdwt5gEnrl5tUQdbljW2iQe5UllGRhjFiYcgQ0e8=
