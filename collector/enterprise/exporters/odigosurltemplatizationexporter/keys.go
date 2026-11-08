@@ -3,7 +3,7 @@ package odigosurltemplatizationexporter
 import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 
-	"github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization"
+	"github.com/odigos-io/odigos/common/urltemplatization"
 )
 
 // unmatchedRedisKey is the Redis HASH for unmatched HTTP paths of one workload

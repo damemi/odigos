@@ -50,8 +50,8 @@ github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee h1:W5t00kpgFd
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/odigos-io/go-rtml v0.0.1 h1:5w21AOXZGq/6UhECv5B9RCrW7R8PzA8YgwdxqtajD0w=
 github.com/odigos-io/go-rtml v0.0.1/go.mod h1:LqKwlorUKSNj1WQ0p/5e9+aOkirEiHQx+FOxdhku/cs=
-github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261103103244-989c24ca083f h1:nqIPGgaKrYb6anwuefiOXxxR+S1gV+6mqvym6tMsfVI=
-github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261103103244-989c24ca083f/go.mod h1:DxirbcP4EDm/0/iddNYC/LGz84r10DTOq6cNGlTPIR8=
+github.com/odigos-io/odigos/common v1.40.0-pre1.0.20261108135538-13718770f199 h1:LYvksLhz9p5b1Jhtdd45BobYeLJkefvXTB4DpPv8znI=
+github.com/odigos-io/odigos/common v1.40.0-pre1.0.20261108135538-13718770f199/go.mod h1:k9tk71vpiQwAUFCRjax3lQGaBlPkuhWExShgBqU7wzg=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=

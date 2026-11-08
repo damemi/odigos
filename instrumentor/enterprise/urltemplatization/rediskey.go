@@ -6,7 +6,7 @@ import (
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 
-	commonurltemplatization "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization"
+	commonurltemplatization "github.com/odigos-io/odigos/common/urltemplatization"
 )
 
 type unmatchedKeyMeta struct {

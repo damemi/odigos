@@ -12,8 +12,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	commonurltemplatization "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization"
-	learning "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/learning"
+	commonurltemplatization "github.com/odigos-io/odigos/common/urltemplatization"
+	learning "github.com/odigos-io/odigos/common/urltemplatization/learning"
 )
 
 const scanCount = 100

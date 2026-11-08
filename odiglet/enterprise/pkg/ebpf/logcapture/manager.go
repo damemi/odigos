@@ -11,8 +11,8 @@ import (
 
 	"github.com/cilium/ebpf"
 	"github.com/odigos-io/ebpf-core/pkg/instrumentors/logs"
+	"github.com/odigos-io/odigos/common/ebpf/unixfd"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
-	"github.com/odigos-io/odigos-enterprise/common-enterprise/ebpf/unixfd"
 )
 
 var (
@@ -39,7 +39,7 @@ type Manager struct {
 
 	currentAttrs map[uint32]string // pid → packed attrs
 	attrSubs     []chan<- string   // subscriber channels
-	attrSubsMu   sync.Mutex       // separate from mu to avoid deadlock
+	attrSubsMu   sync.Mutex        // separate from mu to avoid deadlock
 }
 
 // Must be called before the first RegisterProcess.

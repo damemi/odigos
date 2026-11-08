@@ -6,9 +6,6 @@ FROM --platform=$BUILDPLATFORM golang:1.26.9-trixie AS builder
 # install the required tooling for calling `setcap` on the compiled binary
 RUN apt-get update && apt-get install -y --no-install-recommends libcap2-bin
 COPY ./collector/ /go/src/collector
-# Components replace common-enterprise by relative path, so it has to sit next to the collector
-# tree rather than inside it.
-COPY ./common-enterprise/ /go/src/common-enterprise
 WORKDIR /go/src/collector
 
 # download dependencies before branching out to cross-compile for better caching

@@ -9,7 +9,7 @@ import (
 	"github.com/odigos-io/odigos/api/odigos/v1alpha1/actions"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
-	learning "github.com/odigos-io/odigos-enterprise/common-enterprise/urltemplatization/learning"
+	learning "github.com/odigos-io/odigos/common/urltemplatization/learning"
 )
 
 func TestTemplatesByNamespace(t *testing.T) {

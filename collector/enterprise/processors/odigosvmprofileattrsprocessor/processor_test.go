@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pprofile"
 	"go.uber.org/zap"
 
-	"github.com/odigos-io/odigos-enterprise/common-enterprise/ebpf/unixfd"
+	"github.com/odigos-io/odigos/common/ebpf/unixfd"
 )
 
 // resetSharedForTest cancels the singleton's client goroutine and resets package state

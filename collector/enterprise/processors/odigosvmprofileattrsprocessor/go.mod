@@ -24,7 +24,7 @@ require (
 	go.uber.org/zap v1.28.0
 )
 
-require github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261103103244-989c24ca083f // indirect
+require github.com/odigos-io/odigos/common v1.40.0-pre1.0.20261108135538-13718770f199
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -43,7 +43,6 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
-	github.com/odigos-io/odigos-enterprise/common-enterprise v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/component/componentstatus v0.159.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
@@ -58,5 +57,3 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
-
-replace github.com/odigos-io/odigos-enterprise/common-enterprise => ../../../common-enterprise
