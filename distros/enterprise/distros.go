@@ -1,10 +1,10 @@
-package distros
+package enterprise
 
 import (
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/distros"
 
-	"github.com/odigos-io/odigos-enterprise/distros/yamls"
+	"github.com/odigos-io/odigos/distros/enterprise/yamls"
 )
 
 type entepriseDefaulter struct{}

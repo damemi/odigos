@@ -1,4 +1,4 @@
-package distros
+package enterprise
 
 import (
 	"testing"
