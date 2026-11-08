@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/odigos-io/central-proxy/kube"
+	"github.com/odigos-io/odigos/api/k8sconsts"
 )
 
 // Generator collects workload data from the cached K8s resources
@@ -42,8 +43,20 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 		return nil, err
 	}
 
+	// Workloads excluded by their own disabled Source
+	disabledWorkloads, err := g.cache.ListDisabledWorkloads()
+	if err != nil {
+		return nil, err
+	}
+
 	// Build a map of namespace -> workloads
 	nsWorkloads := make(map[string][]WorkloadSnapshot)
+	addWorkload := func(namespace, name, kind string) {
+		info := g.cache.GetWorkloadInstrumentationInfo(namespace, name, kind)
+		snapshot := workloadSnapshotFromInfo(namespace, name, kind, info)
+		snapshot.Disabled = disabledWorkloads[k8sconsts.PodWorkload{Namespace: namespace, Name: name, Kind: k8sconsts.WorkloadKind(kind)}]
+		nsWorkloads[namespace] = append(nsWorkloads[namespace], snapshot)
+	}
 
 	// Collect all deployments
 	deployments, err := g.cache.ListAllDeployments()
@@ -52,8 +65,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	}
 	for _, dep := range deployments {
 		if !g.isIgnoredNamespace(dep.Namespace) {
-			info := g.cache.GetWorkloadInstrumentationInfo(dep.Namespace, dep.Name, "Deployment")
-			nsWorkloads[dep.Namespace] = append(nsWorkloads[dep.Namespace], workloadSnapshotFromInfo(dep.Namespace, dep.Name, "Deployment", info))
+			addWorkload(dep.Namespace, dep.Name, "Deployment")
 		}
 	}
 
@@ -64,8 +76,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	}
 	for _, sts := range statefulsets {
 		if !g.isIgnoredNamespace(sts.Namespace) {
-			info := g.cache.GetWorkloadInstrumentationInfo(sts.Namespace, sts.Name, "StatefulSet")
-			nsWorkloads[sts.Namespace] = append(nsWorkloads[sts.Namespace], workloadSnapshotFromInfo(sts.Namespace, sts.Name, "StatefulSet", info))
+			addWorkload(sts.Namespace, sts.Name, "StatefulSet")
 		}
 	}
 
@@ -76,8 +87,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	}
 	for _, ds := range daemonsets {
 		if !g.isIgnoredNamespace(ds.Namespace) {
-			info := g.cache.GetWorkloadInstrumentationInfo(ds.Namespace, ds.Name, "DaemonSet")
-			nsWorkloads[ds.Namespace] = append(nsWorkloads[ds.Namespace], workloadSnapshotFromInfo(ds.Namespace, ds.Name, "DaemonSet", info))
+			addWorkload(ds.Namespace, ds.Name, "DaemonSet")
 		}
 	}
 
@@ -88,8 +98,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	}
 	for _, cj := range cronjobs {
 		if !g.isIgnoredNamespace(cj.Namespace) {
-			info := g.cache.GetWorkloadInstrumentationInfo(cj.Namespace, cj.Name, "CronJob")
-			nsWorkloads[cj.Namespace] = append(nsWorkloads[cj.Namespace], workloadSnapshotFromInfo(cj.Namespace, cj.Name, "CronJob", info))
+			addWorkload(cj.Namespace, cj.Name, "CronJob")
 		}
 	}
 
@@ -100,8 +109,7 @@ func (g *Generator) GenerateSnapshot() (*ClusterSnapshot, error) {
 	}
 	for _, dc := range deploymentConfigs {
 		if !g.isIgnoredNamespace(dc.GetNamespace()) {
-			info := g.cache.GetWorkloadInstrumentationInfo(dc.GetNamespace(), dc.GetName(), "DeploymentConfig")
-			nsWorkloads[dc.GetNamespace()] = append(nsWorkloads[dc.GetNamespace()], workloadSnapshotFromInfo(dc.GetNamespace(), dc.GetName(), "DeploymentConfig", info))
+			addWorkload(dc.GetNamespace(), dc.GetName(), "DeploymentConfig")
 		}
 	}
 

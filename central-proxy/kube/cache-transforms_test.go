@@ -178,3 +178,26 @@ func TestSourcesTransformFunc_KeepsWorkload(t *testing.T) {
 		t.Fatalf("expected otelServiceName preserved, got %q", minimal.Spec.OtelServiceName)
 	}
 }
+
+func TestSourcesTransformFunc_KeepsDisableInstrumentation(t *testing.T) {
+	input := &odigosv1.Source{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "app-ns", Name: "deployment-checkout"},
+		Spec: odigosv1.SourceSpec{
+			Workload: k8sconsts.PodWorkload{
+				Name:      "checkout",
+				Namespace: "app-ns",
+				Kind:      k8sconsts.WorkloadKindDeployment,
+			},
+			DisableInstrumentation: true,
+		},
+	}
+
+	out, err := sourcesTransformFunc(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !out.(*odigosv1.Source).Spec.DisableInstrumentation {
+		t.Fatal("expected disableInstrumentation preserved")
+	}
+}

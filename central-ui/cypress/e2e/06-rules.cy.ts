@@ -44,9 +44,9 @@ describe('Instrumentation Rules CRUD (via Central UI → Proxy)', () => {
       SELECTED_ENTITIES.INSTRUMENTATION_RULES.forEach((ruleType) => {
         updateV2Entity(
           {
-            // rules are fetched in random order, so we locate the row by the type text it shows
+            // rules are fetched in random order, so we locate the row by the type's label it shows
             nodeId: 'div',
-            nodeContains: ruleType,
+            nodeContains: SELECTED_ENTITIES.INSTRUMENTATION_RULE_LABELS[ruleType],
             prefix: DATA_IDS.RULE_DRAWER_PREFIX,
             fieldKey: DATA_IDS.RULE_NAME_INPUT,
             // Embed the rule type in the new name. The v2 ListItem renders

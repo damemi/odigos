@@ -124,6 +124,12 @@ export const CREATE_USER_FORM_DESCRIPTION_2 = 'Assign their role and link them t
 export const EDIT_USER = 'Edit user';
 export const DELETE_USER = 'Delete user';
 export const DELETE_USER_CONFIRM = (name: string) => `Are you sure you want to delete "${name}"?`;
+export const RESET_PASSWORD = 'Reset password';
+export const RESET_PASSWORD_CONFIRM = (name: string) => `Reset the password of "${name}"?\nThey will be signed out, and can sign in again only with the temporary password you get next.`;
+export const RESET_PASSWORD_ERROR = 'Failed to reset password';
+export const PASSWORD_RESET_SUCCESS = 'Password Reset Successfully!';
+export const PASSWORD_RESET_SUCCESS_SUBTITLE = (email: string) => `The password of ${email} has been reset.\nTo let them sign in again, share the temporary password below with the user.`;
+export const RESET_PASSWORD_DISCLAIMER = 'This password works for the next sign-in only and must be changed after signing in. You won’t be able to view it again, make sure to copy and share it now';
 
 // Team strings
 export const TEAM = 'Team';

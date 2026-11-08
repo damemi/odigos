@@ -13,17 +13,17 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@apollo/client": "^4.2.12",
-    "@odigos/ui-kit": "0.0.325",
-    "@odigos/vmagent-api-apollo-client": "0.32.0",
+    "@apollo/client": "^4.3.5",
+    "@odigos/ui-kit": "npm:@odigos-io/ui-kit@0.0.328",
+    "@odigos/vmagent-api-apollo-client": "0.37.0",
     "graphql": "^16.14.2",
     "graphql-ws": "^6.2.1",
     "next": "15.5.24",
     "picomatch": "4.0.7",
-    "react": "19.2.8",
-    "react-dom": "19.2.8",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "rxjs": "^7.8.2",
-    "styled-components": "6.5.3",
+    "styled-components": "6.6.0",
     "ws": "8.21.3",
     "zustand": "^5.0.15"
   },

@@ -1,6 +1,7 @@
 export * from './actions';
 export * from './data-streams';
 export * from './destinations';
+export * from './go-offsets';
 export * from './instrumentation-rules';
 export * from './namespaces';
 export * from './local-ui-config';

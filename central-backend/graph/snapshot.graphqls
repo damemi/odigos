@@ -5,6 +5,9 @@ type WorkloadSnapshot {
   name: String!
   kind: String!
   selected: Boolean!
+  # True when the workload's own Source has disableInstrumentation set, so it stays uninstrumented
+  # even when its namespace is auto-instrumented. Proxies before this field report false.
+  disabled: Boolean
   otelServiceName: String
   healthStatus: String
   dataStreamNames: [String!]

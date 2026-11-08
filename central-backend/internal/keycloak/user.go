@@ -1050,6 +1050,31 @@ func (kc *KeycloakUserService) DeleteUserByID(token string, userID string) error
 	return nil
 }
 
+// HasFederatedIdentity reports whether the user is linked to an identity
+// provider, meaning their password is managed outside Keycloak.
+func (kc *KeycloakUserService) HasFederatedIdentity(token string, userID string) (bool, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/federated-identity", kc.host, kc.realm, userID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != StatusOK {
+		responseBody, _ := io.ReadAll(resp.Body)
+		return false, fmt.Errorf("failed to get federated identities: status %d, response: %s", resp.StatusCode, string(responseBody))
+	}
+	var links []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&links); err != nil {
+		return false, fmt.Errorf("failed to decode federated identities: %w", err)
+	}
+	return len(links) > 0, nil
+}
+
 func (kc *KeycloakUserService) ListUsersByTeamID(token string, teamID string) (UserList, error) {
 	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s/members", kc.host, kc.realm, teamID)
 	req, err := http.NewRequest("GET", url, nil)

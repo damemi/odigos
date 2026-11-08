@@ -207,18 +207,35 @@ func (svc *UserService) revokeUserAccess(adminToken, userID string) error {
 }
 
 func (svc *UserService) DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error) {
+	if callerID, ok := utils.GetSubjectFromContext(ctx); ok && callerID == userID {
+		errorMsg := "you cannot delete your own user"
+		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
+	}
+
 	user, err := svc.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if user.Role == model.RoleAdmin || user.Role == model.RoleOwner {
-		errorMsg := "admin users cannot be deleted"
+	if user.Role == model.RoleOwner && !utils.IsUserOwner(ctx) {
+		errorMsg := "only an owner can delete an owner"
 		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
 	}
 
 	adminToken, err := svc.adminService.GetAdminToken()
 	if err != nil {
 		return nil, err
+	}
+
+	// With no admin or owner left, Central would reopen first-run admin setup.
+	if user.Role == model.RoleAdmin || user.Role == model.RoleOwner {
+		hasOther, err := svc.hasOtherAdmin(adminToken, userID)
+		if err != nil {
+			return nil, err
+		}
+		if !hasOther {
+			errorMsg := "the last admin cannot be deleted"
+			return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
+		}
 	}
 
 	// Removing the account from Keycloak does not invalidate access tokens already
@@ -237,6 +254,99 @@ func (svc *UserService) DeleteUser(ctx context.Context, userID string) (*model.G
 	}
 
 	return &model.GeneralResult{Success: true, Error: nil}, nil
+}
+
+// ResetUserPassword replaces the user's password with a generated one-time
+// password and requires a new one at next sign-in, the same state an invited
+// user starts in, then ends their sessions.
+func (svc *UserService) ResetUserPassword(ctx context.Context, userID string) (*model.ResetUserPasswordResult, error) {
+	if callerID, ok := utils.GetSubjectFromContext(ctx); ok && callerID == userID {
+		errorMsg := "you cannot reset your own password"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	kcUser, err := svc.kcUser.GetUserByID(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+	// Central signs in to Keycloak as the built-in admin, so changing its password would lock Central out.
+	if ShouldIgnoreKeycloakUser(kcUser, svc.adminService.GetAdminUsername()) {
+		errorMsg := "this user cannot be managed from Central"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+	// setInitialPassword only accepts users whose username is their email.
+	if !strings.EqualFold(getString(kcUser, "username"), getString(kcUser, "email")) {
+		errorMsg := "this user was not created in Central; reset their password in Keycloak"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	// Owners rank above Admins, so an Admin cannot take over an Owner's account.
+	targetRole, err := svc.kcUser.GetUserRole(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+	if utils.ConvertStringRoleToModel(targetRole) == model.RoleOwner && !utils.IsUserOwner(ctx) {
+		errorMsg := "you cannot reset the password of a user with a higher role than yours"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	// A local password would let an SSO user sign in without their identity provider.
+	federated, err := svc.kcUser.HasFederatedIdentity(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+	if federated {
+		errorMsg := "this user signs in with SSO; reset their password in your identity provider"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	oneTimePassword := utils.GenerateRandomPassword(12)
+	if err := svc.kcUser.UpdateUserPasswordByID(adminToken, userID, oneTimePassword); err != nil {
+		return nil, err
+	}
+	// Revoke before setting the requirement: revoking writes back the user
+	// representation it reads, which would otherwise race the requirement.
+	if err := svc.revokeUserAccess(adminToken, userID); err != nil {
+		logger.Log.Warn("Failed to revoke access after resetting password", "userID", userID, "error", err)
+	}
+	if err := svc.kcUser.SetUserPasswordRequirementByID(adminToken, userID, true); err != nil {
+		return nil, fmt.Errorf("the password was changed but the user was not asked to replace it, reset it again: %w", err)
+	}
+
+	return &model.ResetUserPasswordResult{Success: true, GeneratedPassword: &oneTimePassword}, nil
+}
+
+// hasOtherAdmin reports whether a real user other than excludeUserID holds the
+// admin or owner role. Role lookup errors fail closed so a delete is never let
+// through on an unknown role.
+func (svc *UserService) hasOtherAdmin(adminToken, excludeUserID string) (bool, error) {
+	users, err := svc.kcUser.ListUsers(adminToken)
+	if err != nil {
+		return false, err
+	}
+	adminUsername := svc.adminService.GetAdminUsername()
+	for _, u := range users {
+		if ShouldIgnoreKeycloakUser(u, adminUsername) {
+			continue
+		}
+		id, _ := u["id"].(string)
+		if id == "" || id == excludeUserID {
+			continue
+		}
+		role, err := svc.kcUser.GetUserRole(adminToken, id)
+		if err != nil {
+			return false, err
+		}
+		if role == keycloak.RoleAdmin || role == keycloak.RoleOwner {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (svc *UserService) GetUsers(ctx context.Context) ([]*model.User, error) {

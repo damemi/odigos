@@ -95,7 +95,13 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({ isOpen, onClos
         {modalState === CreateUserModalState.Form ? (
           <CreateUserForm formData={formData} errors={formErrors} creating={creating} onChange={handleInputChange} onSubmit={handleSubmit} />
         ) : (
-          <UserCreatedSuccessfully email={formData[CreateUserFormField.Email]} password={generatedPassword ?? ''} onDone={handleClose} />
+          <UserCreatedSuccessfully
+            title={STRINGS.USER_CREATED_SUCCESS}
+            subtitle={STRINGS.USER_CREATED_SUCCESS_SUBTITLE(formData[CreateUserFormField.Email])}
+            disclaimer={STRINGS.SIGN_UP_PASSWORD_DISCLAIMER}
+            password={generatedPassword ?? ''}
+            onDone={handleClose}
+          />
         )}
       </ModalContent>
     </Modal>

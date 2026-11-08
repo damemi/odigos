@@ -1,5 +1,5 @@
 import { generateId } from '@odigos/ui-kit/functions';
-import { ActionKeyTypes, ActionType as KitActionType, PlatformType, SignalType, type Action, type ActionFormData, type Extraction, type UrlTemplatizationRulesGroup } from '@odigos/ui-kit/types';
+import { ActionKeyTypes, ActionType as KitActionType, PlatformType, SignalType, type Action, type ActionFields, type ActionFormData, type Extraction, type UrlTemplatizationRulesGroup } from '@odigos/ui-kit/types';
 import {
   ActionType as VmActionType,
   TelemetrySignal,
@@ -9,6 +9,7 @@ import {
   type GetActionsQuery,
   type UpdateActionInput,
   type UpdateActionMutation,
+  type PiiMaskingConfigInput,
   type ProcessorAdditionConfigInput,
   type SpanMetricsConfigInput,
   type UrlTemplatizationConfigInput,
@@ -16,7 +17,7 @@ import {
 } from '@odigos/vmagent-api-apollo-client';
 import type { CreateActionResult, CreateActionVars, DeleteActionResult, DeleteActionVars, GetActionsData, UpdateActionResult, UpdateActionVars } from '@odigos/ui-kit/contexts';
 import { stripEmpty, supportsActionRegion, withFieldSelections } from './utils';
-import { dialectVersion } from './vm-dialect';
+import { assertAgentCanWriteActionsAndRules, dialectVersion } from './vm-dialect';
 import type { OperationContext } from '@odigos/ui-kit/contexts';
 
 // The agents-api action surface (v0.12.0+) is a discriminated union
@@ -27,12 +28,37 @@ import type { OperationContext } from '@odigos/ui-kit/contexts';
 // `PiiMasking`, `URLTemplatization`, `ExtractAttribute`).
 //
 // The UI kit uses a platform-neutral field bag; this adapter owns conversion
-// to the typed agents-api configuration branches. PII masking remains excluded.
+// to the typed agents-api configuration branches. PII masking reads and writes
+// its categories and its custom format / regex maskings (the catalog's table fields).
 
 type VmAction = GetActionsQuery['actions'][number];
 type VmUrlTemplatizationAction = Extract<VmAction, { __typename: 'URLTemplatizationAction' }>;
 type VmProcessorAdditionAction = Extract<VmAction, { __typename: 'ProcessorAdditionAction' }>;
 type VmSpanMetricsAction = Extract<VmAction, { __typename: 'SpanMetricsAction' }>;
+type VmPiiMaskingAction = Extract<VmAction, { __typename: 'PiiMaskingAction' }>;
+
+// Agents reporting a schema older than agents-api v0.12.0 serve actions under
+// `computePlatform` with an untyped `spec`; the spec `type` strings and config
+// keys already match the kit's `ActionType` values and `ActionKeyTypes`.
+interface LegacyVmAction {
+  name: string;
+  spec: { actionName?: string | null; notes?: string | null; disabled?: boolean | null; signals?: string[] | null; type: string; config?: Record<string, unknown> | null };
+}
+export interface LegacyGetActionsQuery {
+  computePlatform?: { actions?: LegacyVmAction[] | null } | null;
+}
+
+// The agent's PII catalog publishes the two custom masking lists as
+// `multiTabledInput` fields, so the kit form reads and writes them as row arrays
+// keyed by the field name.
+interface PiiFormFields extends ActionFields {
+  customFormatMaskings?: { dataFormat: string; lookupKey: string }[];
+  customRegexMaskings?: { regex: string }[];
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const recordRows = (value: unknown): Record<string, unknown>[] => (Array.isArray(value) ? value.filter(isRecord) : []);
+const trimmed = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
 
 // kit <-> agents-api telemetry signal. Both enums use identical string values
 // (LOGS / METRICS / TRACES / PROFILES), but map explicitly so an enum drift in
@@ -147,21 +173,84 @@ export const mapVmActionToAction = (action: VmAction): Action | null => {
       const { config } = action as Extract<VmAction, { __typename: 'RenameAttributeAction' }>;
       return { ...baseAction(action), type: KitActionType.RenameAttributes, fields: { [ActionKeyTypes.Renames]: Object.fromEntries((config?.renames ?? []).map(({ from, to }) => [from, to])) } };
     }
+    case VmActionType.PiiMasking: {
+      const { config } = action as VmPiiMaskingAction;
+      const fields: PiiFormFields = {
+        [ActionKeyTypes.PiiCategories]: config?.piiCategories ?? [],
+        customFormatMaskings: (config?.customFormatMaskings ?? []).map(({ dataFormat, lookupKey }) => ({ dataFormat, lookupKey })),
+        customRegexMaskings: (config?.customRegexMaskings ?? []).map(({ regex }) => ({ regex })),
+      };
+      return { ...baseAction(action), type: KitActionType.PiiMasking, fields };
+    }
     default:
       return null;
   }
 };
 
+const stringList = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
+
+// Legacy `renames` is a JSON-encoded string map on k8s-style agents.
+const legacyRenames = (value: unknown): Record<string, string> => {
+  let map = value;
+  if (typeof value === 'string') {
+    try {
+      map = JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  return isRecord(map) ? Object.fromEntries(Object.entries(map).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {};
+};
+
+// Only the action types the Actions column can show meaningfully are read from the
+// untyped legacy config; the rest list by name and type with empty fields.
+const legacyActionFields = (type: KitActionType, config: Record<string, unknown>): ActionFields => {
+  switch (type) {
+    case KitActionType.DeleteAttributes:
+      return { [ActionKeyTypes.AttributeNamesToDelete]: stringList(config.attributeNamesToDelete) };
+    case KitActionType.RenameAttributes:
+      return { [ActionKeyTypes.Renames]: legacyRenames(config.renames) };
+    case KitActionType.PiiMasking: {
+      const fields: PiiFormFields = {
+        [ActionKeyTypes.PiiCategories]: stringList(config.piiCategories),
+        customFormatMaskings: recordRows(config.customFormatMaskings).map((row) => ({ dataFormat: trimmed(row.dataFormat), lookupKey: trimmed(row.lookupKey) })),
+        customRegexMaskings: recordRows(config.customRegexMaskings).map((row) => ({ regex: trimmed(row.regex) })),
+      };
+      return fields;
+    }
+    case KitActionType.URLTemplatization:
+      return {
+        [ActionKeyTypes.UrlTemplatizationRulesGroups]: recordRows(config.templatizationRulesGroups).map((group) => ({
+          templatizationRules: recordRows(group.templatizationRules).map((rule) => ({ template: trimmed(rule.template) })),
+        })),
+      };
+    default:
+      return {};
+  }
+};
+
+const KIT_ACTION_TYPES: KitActionType[] = Object.values(KitActionType);
+const KIT_SIGNALS: SignalType[] = Object.values(SignalType);
+
+const mapLegacyVmAction = ({ name, spec }: LegacyVmAction): Action | null => {
+  const type = KIT_ACTION_TYPES.find((t) => t === spec.type);
+  if (!type) return null;
+  const signals = (spec.signals ?? []).filter((s): s is SignalType => KIT_SIGNALS.some((known) => known === s));
+  return { id: name, region: null, type, name: spec.actionName ?? null, notes: spec.notes ?? null, disabled: spec.disabled ?? false, signals, conditions: null, fields: legacyActionFields(type, spec.config ?? {}) };
+};
+
 // `GetActions` envelope (`{ actions: [...] }`) -> `GET_ACTIONS` result.
-export const mapVmActions = (data: GetActionsQuery | null | undefined): GetActionsData => {
-  const actions = data?.actions ?? [];
+export const mapVmActions = (data: GetActionsQuery | LegacyGetActionsQuery | null | undefined): GetActionsData => {
+  const legacy = (data as LegacyGetActionsQuery | null | undefined)?.computePlatform?.actions;
+  if (legacy) return { actions: legacy.map(mapLegacyVmAction).filter((a): a is Action => a !== null) };
+  const actions = (data as GetActionsQuery | null | undefined)?.actions ?? [];
   return { actions: actions.map(mapVmActionToAction).filter((a): a is Action => a !== null) };
 };
 
 // ----- mutation variable mappers (-> agents-api `{ input }`) -----
 
 const assertVmSupportedActionType = (type: KitActionType): void => {
-  if (![KitActionType.URLTemplatization, KitActionType.ProcessorAddition, KitActionType.SpanMetrics, KitActionType.DbQueryTemplatization, KitActionType.InferDbAttributes, KitActionType.ExtractAttribute, KitActionType.DeleteAttributes, KitActionType.RenameAttributes].includes(type)) {
+  if (![KitActionType.URLTemplatization, KitActionType.ProcessorAddition, KitActionType.SpanMetrics, KitActionType.DbQueryTemplatization, KitActionType.InferDbAttributes, KitActionType.ExtractAttribute, KitActionType.DeleteAttributes, KitActionType.RenameAttributes, KitActionType.PiiMasking].includes(type)) {
     throw new Error(`Action type "${type}" is not supported by this collector.`);
   }
 };
@@ -232,7 +321,7 @@ const buildProcessorAddition = (action: ActionFormData): ProcessorAdditionConfig
   return { type, processorConfig: processorConfig as Record<string, unknown>, ...(processorName ? { processorName } : {}) };
 };
 
-const buildAdditionalAction = (action: ActionFormData): Pick<CreateActionInput, 'actionType' | 'dbQueryTemplatization' | 'extractAttribute' | 'deleteAttribute' | 'renameAttribute'> => {
+const buildAdditionalAction = (action: ActionFormData): Pick<CreateActionInput, 'actionType' | 'dbQueryTemplatization' | 'extractAttribute' | 'deleteAttribute' | 'renameAttribute' | 'piiMasking'> => {
   const fields = action.fields ?? {};
   switch (action.type) {
     case KitActionType.DbQueryTemplatization: {
@@ -263,6 +352,18 @@ const buildAdditionalAction = (action: ActionFormData): Pick<CreateActionInput, 
       if (!extractions.length || extractions.some((row) => !row.targetAttributeName || (!!row.regex === !!row.lookupKey) || (!!row.lookupKey !== !!row.dataFormat))) throw new Error('Each extraction needs a target and either a regex or a lookup key with data format.');
       return { actionType: VmActionType.ExtractAttribute, extractAttribute: { extractions } };
     }
+    case KitActionType.PiiMasking: {
+      const form: PiiFormFields = fields;
+      const piiCategories = asStringArray(form[ActionKeyTypes.PiiCategories]) ?? [];
+      const customFormatMaskings = recordRows(form.customFormatMaskings)
+        .map((row) => ({ dataFormat: trimmed(row.dataFormat), lookupKey: trimmed(row.lookupKey) }))
+        .filter((row) => row.dataFormat && row.lookupKey);
+      const customRegexMaskings = recordRows(form.customRegexMaskings)
+        .map((row) => ({ regex: trimmed(row.regex) }))
+        .filter((row) => row.regex);
+      if (!piiCategories.length && !customFormatMaskings.length && !customRegexMaskings.length) throw new Error('Add at least one PII category, format masking or regex masking.');
+      return { actionType: VmActionType.PiiMasking, piiMasking: { piiCategories, customFormatMaskings, customRegexMaskings } };
+    }
     default:
       throw new Error(`Action type "${action.type}" is not supported by this collector.`);
   }
@@ -285,7 +386,8 @@ const buildSpanMetrics = (action: ActionFormData): SpanMetricsConfigInput => {
   };
 };
 
-export const vmCreateActionVariables = (vars: CreateActionVars): Record<string, unknown> => {
+export const vmCreateActionVariables = (vars: CreateActionVars, ctx?: OperationContext): Record<string, unknown> => {
+  assertAgentCanWriteActionsAndRules(ctx);
   const action = vars.action;
   assertVmSupportedActionType(action.type);
   assertVmSupportedActionFields(action);
@@ -320,7 +422,8 @@ export const vmCreateActionVariables = (vars: CreateActionVars): Record<string, 
   throw new Error(`Action type "${action.type}" is not supported by this collector.`);
 };
 
-export const vmUpdateActionVariables = (vars: UpdateActionVars): Record<string, unknown> => {
+export const vmUpdateActionVariables = (vars: UpdateActionVars, ctx?: OperationContext): Record<string, unknown> => {
+  assertAgentCanWriteActionsAndRules(ctx);
   const action = vars.action;
   assertVmSupportedActionType(action.type);
   assertVmSupportedActionFields(action);
@@ -353,7 +456,10 @@ export const vmUpdateActionVariables = (vars: UpdateActionVars): Record<string, 
   throw new Error(`Action type "${action.type}" is not supported by this collector.`);
 };
 
-export const vmDeleteActionVariables = (vars: DeleteActionVars): Record<string, unknown> => ({ input: { name: vars.id, ...(stripEmpty(vars.region) ? { region: stripEmpty(vars.region) } : {}) } });
+export const vmDeleteActionVariables = (vars: DeleteActionVars, ctx?: OperationContext): Record<string, unknown> => {
+  assertAgentCanWriteActionsAndRules(ctx);
+  return { input: { name: vars.id, ...(stripEmpty(vars.region) ? { region: stripEmpty(vars.region) } : {}) } };
+};
 
 // ----- mutation result mappers -----
 

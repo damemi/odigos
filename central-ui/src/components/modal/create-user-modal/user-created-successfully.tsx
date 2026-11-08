@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { CopyIcon } from '@odigos/ui-kit/icons';
 import { StatusType } from '@odigos/ui-kit/types';
 import { IconButton, IconButtonSize, Note } from '@odigos/ui-kit/components';
-import { DONE, SIGN_UP_PASSWORD_DISCLAIMER, USER_CREATED_SUCCESS, USER_CREATED_SUCCESS_SUBTITLE } from '@/utils';
+import { DONE } from '@/utils';
 import { DoneButton, PasswordBox, PasswordInputWrapper, PasswordText, SuccessContainer, SuccessSubtitle, SuccessTitle } from './create-user-modal.styled';
 
 interface UserCreatedSuccessfullyProps {
-  email: string;
+  title: string;
+  subtitle: string;
+  disclaimer: string;
   password: string;
   onDone: () => void;
 }
@@ -33,7 +35,7 @@ const copyToClipboard = async (value: string) => {
   document.body.removeChild(textarea);
 };
 
-export const UserCreatedSuccessfully: React.FC<UserCreatedSuccessfullyProps> = ({ email, password, onDone }) => {
+export const UserCreatedSuccessfully: React.FC<UserCreatedSuccessfullyProps> = ({ title, subtitle, disclaimer, password, onDone }) => {
   const [done, setDone] = useState(false);
 
   const handleCopy = async () => {
@@ -43,8 +45,8 @@ export const UserCreatedSuccessfully: React.FC<UserCreatedSuccessfullyProps> = (
 
   return (
     <SuccessContainer>
-      <SuccessTitle>{USER_CREATED_SUCCESS}</SuccessTitle>
-      <SuccessSubtitle>{USER_CREATED_SUCCESS_SUBTITLE(email)}</SuccessSubtitle>
+      <SuccessTitle>{title}</SuccessTitle>
+      <SuccessSubtitle>{subtitle}</SuccessSubtitle>
 
       <PasswordInputWrapper>
         <PasswordBox>
@@ -52,7 +54,7 @@ export const UserCreatedSuccessfully: React.FC<UserCreatedSuccessfullyProps> = (
           <IconButton icon={CopyIcon} size={IconButtonSize.S} onClick={handleCopy} />
         </PasswordBox>
       </PasswordInputWrapper>
-      <Note status={StatusType.Default} message={SIGN_UP_PASSWORD_DISCLAIMER} />
+      <Note status={StatusType.Default} message={disclaimer} />
 
       <DoneButton type='button' onClick={onDone} disabled={!done} label={DONE} />
     </SuccessContainer>

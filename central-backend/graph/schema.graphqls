@@ -118,6 +118,12 @@ type CreateUserResult {
   generatedPassword: String
 }
 
+type ResetUserPasswordResult {
+  success: Boolean!
+  error: String
+  generatedPassword: String
+}
+
 type Team {
   id: String!
   name: String!
@@ -280,6 +286,7 @@ type Mutation {
   createUser(input: WriteUserInput!): CreateUserResult!
   updateUser(userID: String!, input: WriteUserInput!): GeneralResult!
   deleteUser(userID: String!): GeneralResult!
+  resetUserPassword(userID: String!): ResetUserPasswordResult!
 
   createTeam(input: WriteTeamInput!): GeneralResult!
   updateTeam(teamID: String!, input: WriteTeamInput!): GeneralResult!

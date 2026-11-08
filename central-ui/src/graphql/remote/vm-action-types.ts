@@ -1,4 +1,5 @@
-import { ActionType as KitActionType, FieldTypes, SignalType, type ActionTypeOption, type ActionYamlProperties, type GetActionTypesResult } from '@odigos/ui-kit/types';
+import { ActionType as KitActionType, FieldTypes, PlatformType, SignalType, type ActionTypeOption, type ActionYamlProperties, type GetActionTypesResult } from '@odigos/ui-kit/types';
+import type { OperationContext } from '@odigos/ui-kit/contexts';
 
 // Maps the agents-api `actionTypes` catalog into the ui-kit's GET_ACTION_TYPES
 // result shape. Mirrors `mapVmDestinationTypesToCategories`.
@@ -14,6 +15,7 @@ const VM_TO_KIT_ACTION_TYPE: { [vmType: string]: KitActionType } = {
   extractAttribute: KitActionType.ExtractAttribute,
   deleteAttribute: KitActionType.DeleteAttributes,
   renameAttribute: KitActionType.RenameAttributes,
+  piiMasking: KitActionType.PiiMasking,
 };
 
 // Raw (untyped) shape of the agents-api `actionTypes` query. We avoid importing a
@@ -45,10 +47,11 @@ const toCatalogField = (f: RawActionField): ActionYamlProperties => ({
   renderCondition: f.renderCondition ? [f.renderCondition] : undefined,
 });
 
-// The connector and VM agent both publish this catalog. Keep a local fallback
-// for the two non-URL types while an already-connected proxy is catching up to
-// a new catalog response: unlike falling back to the general k8s action list,
-// these fields and signals exactly match the agents-api contracts.
+// Cloud Connectors publish these two types, but an already-connected proxy can
+// lag behind a new catalog response, so keep a local fallback for them: unlike
+// falling back to the general k8s action list, these fields and signals exactly
+// match the agents-api contracts. VM agents deliberately leave both types out of
+// their catalog, so the fallbacks are never appended for them.
 const COLLECTOR_ACTION_FALLBACKS: ActionTypeOption[] = [
   {
     type: KitActionType.ProcessorAddition,
@@ -82,7 +85,7 @@ const COLLECTOR_ACTION_FALLBACKS: ActionTypeOption[] = [
   },
 ];
 
-export const mapVmActionTypesToOptions = (data: unknown): GetActionTypesResult => {
+export const mapVmActionTypesToOptions = (data: unknown, ctx?: Pick<OperationContext, 'platformType'>): GetActionTypesResult => {
   const items = (data as { actionTypes?: RawActionTypeOption[] } | null | undefined)?.actionTypes ?? [];
 
   const actionTypes: ActionTypeOption[] = items
@@ -102,6 +105,8 @@ export const mapVmActionTypesToOptions = (data: unknown): GetActionTypesResult =
       };
     })
     .filter((a): a is ActionTypeOption => a !== null);
+
+  if (ctx?.platformType !== PlatformType.Connector) return { actionTypes };
 
   return { actionTypes: [...actionTypes, ...COLLECTOR_ACTION_FALLBACKS.filter((fallback) => !actionTypes.some((item) => item.type === fallback.type))] };
 };

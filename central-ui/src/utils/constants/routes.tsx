@@ -11,6 +11,9 @@ export const ROUTES = {
   SERVICE_MAP: '/service-map',
   COLLECTORS: '/collectors',
   SAMPLING: '/sampling',
+  PROFILING: '/profiling',
+  URL_TEMPLATIZATION: '/url-templatization',
+  INSTRUMENTATION_AGENTS: '/instrumentation-agents',
   SETTINGS: '/settings',
 };
 

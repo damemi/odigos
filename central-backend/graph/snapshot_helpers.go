@@ -23,6 +23,7 @@ func parseClusterSnapshot(snapshot *redisclient.ClusterSnapshotData) (*model.Clu
 				Name                 string   `json:"name"`
 				Kind                 string   `json:"kind"`
 				Selected             bool     `json:"selected"`
+				Disabled             bool     `json:"disabled,omitempty"`
 				ServiceName          string   `json:"serviceName,omitempty"`
 				Health               string   `json:"health"` // DesiredStateProgress enum as string
 				DataStreamNames      []string `json:"dataStreamNames,omitempty"`
@@ -56,11 +57,13 @@ func parseClusterSnapshot(snapshot *redisclient.ClusterSnapshotData) (*model.Clu
 				agentInjection = &wl.AgentInjectionStatus
 			}
 
+			disabled := wl.Disabled
 			workloads = append(workloads, &model.WorkloadSnapshot{
 				Namespace:            wl.Namespace,
 				Name:                 wl.Name,
 				Kind:                 wl.Kind,
 				Selected:             wl.Selected,
+				Disabled:             &disabled,
 				OtelServiceName:      otelServiceName,
 				HealthStatus:         &wl.Health,
 				DataStreamNames:      wl.DataStreamNames,

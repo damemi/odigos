@@ -12,7 +12,7 @@ import type {
 } from '@odigos/ui-kit/contexts';
 import { type Destination, type DestinationTypes, type GetDestinationCategoriesResult, type TestConnectionResponse } from '@odigos/ui-kit/types';
 import { dialectVersion } from '@/graphql/remote/vm-dialect';
-import { supportsDestinationDisabled, supportsDestinationRegion, withFragmentSelections } from '@/graphql/remote/utils';
+import { supportsDestinationDisabled, supportsDestinationRegion, supportsDestinationTestConnection, withFragmentSelections } from '@/graphql/remote/utils';
 
 // The agents-api destination surface (v0.12.0+) differs from the odigos k8s
 // backend that central-ui was built against:
@@ -178,7 +178,8 @@ const toCatalogItem = (t: VmDestinationTypeItem) => ({
   type: t.type,
   displayName: t.displayName,
   imageUrl: t.imageUrl,
-  testConnectionSupported: t.type !== MANAGED_COLLECTOR_TYPE,
+  // Agents that predate the field don't send it: treat missing as unsupported.
+  testConnectionSupported: t.type !== MANAGED_COLLECTOR_TYPE && (t as { testConnectionSupported?: boolean | null }).testConnectionSupported === true,
   supportedSignals: {
     logs: { supported: t.supportedSignals.logs },
     metrics: { supported: t.supportedSignals.metrics },
@@ -256,6 +257,11 @@ export const patchVmDestinationsQuery = (printedQuery: string, ctx: OperationCon
   if (supportsDestinationDisabled(version)) query = withFragmentSelections(query, 'Destination', 'disabled');
   return query;
 };
+
+// Same, for the `destinationTypes` catalog: only select `testConnectionSupported`
+// when the connected schema has it, since older agents reject the whole query.
+export const patchVmDestinationTypesQuery = (printedQuery: string, ctx: OperationContext): string =>
+  supportsDestinationTestConnection(dialectVersion(ctx)) ? withFragmentSelections(printedQuery, 'DestinationType', 'testConnectionSupported') : printedQuery;
 
 const destinationConfigAndRegion = (type: string, fields?: { key: string; value: string }[]) => {
   const config = fieldsToConfig(fields);

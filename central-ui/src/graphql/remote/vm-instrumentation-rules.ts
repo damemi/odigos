@@ -19,10 +19,13 @@ import type {
   UpdateInstrumentationRuleVars,
 } from '@odigos/ui-kit/contexts';
 import { stripEmpty } from './utils';
+import { assertAgentCanWriteActionsAndRules } from './vm-dialect';
+import type { OperationContext } from '@odigos/ui-kit/contexts';
 
 // The agents-api instrumentation-rule surface (v0.12.0+) is a discriminated
 // union (`CodeAttributesRule` | `CustomInstrumentationRule` |
-// `HeadersCollectionRule` | `PayloadCollectionRule`) keyed by `ruleType`, with
+// `HeadersCollectionRule` | `PayloadCollectionRule` | `KernelTracesRule`) keyed
+// by `ruleType` (plus `SamplingRule`, which the Sampling page owns), with
 // a per-type `config`. central-ui's domain model (the ui-kit `InstrumentationRule`)
 // is a single flat shape carrying one optional config object per rule type. The
 // VM surface is also narrower than k8s: rules are global (no `sourceScopes` /
@@ -50,6 +53,8 @@ const toKitRuleType = (ruleType: RuleType): InstrumentationRuleType => {
       return InstrumentationRuleType.PayloadCollection;
     case RuleType.CustomInstrumentation:
       return InstrumentationRuleType.CustomInstrumentation;
+    case RuleType.KernelTraces:
+      return InstrumentationRuleType.KernelTraces;
     default:
       return InstrumentationRuleType.UnknownType;
   }
@@ -76,6 +81,7 @@ export const mapVmRuleToInstrumentationRule = (rule: VmRule): InstrumentationRul
     headersCollection: null,
     payloadCollection: null,
     customInstrumentations: null,
+    kernelTraces: null,
   };
 
   switch (rule.ruleType) {
@@ -126,16 +132,102 @@ export const mapVmRuleToInstrumentationRule = (rule: VmRule): InstrumentationRul
         : null;
       return base;
     }
+    case RuleType.KernelTraces: {
+      const c = rule.config as VmRuleConfigOf<'KernelTracesRule'>;
+      // The agent's catalog renders each operation as a checkbox stored as an
+      // object (`checkedValue: emptyObject`), so the kit form treats a present
+      // object as checked. Only operations the agent reports as enabled are set.
+      base.kernelTraces = c
+        ? {
+            filesystem: c.filesystem && c.filesystem.enabled !== false ? { enabled: true } : null,
+            subprocesses: c.subprocesses ? { recordCommandArgs: c.subprocesses.recordCommandArgs ?? false } : null,
+            cpuDelay: c.cpuDelay && c.cpuDelay.enabled !== false ? { enabled: true } : null,
+          }
+        : null;
+      return base;
+    }
     default:
       return base;
   }
 };
 
+// Agents reporting a schema older than agents-api v0.12.0 serve rules under
+// `computePlatform` with an untyped `config`; the `type` strings match the kit's
+// `InstrumentationRuleType` values and the config keys its per-type fields.
+interface LegacyVmRule {
+  name: string;
+  type: string;
+  config?: Record<string, unknown> | null;
+}
+export interface LegacyGetInstrumentationRulesQuery {
+  computePlatform?: { instrumentationRules?: LegacyVmRule[] | null } | null;
+}
+
+const KIT_RULE_TYPES = [InstrumentationRuleType.CodeAttributes, InstrumentationRuleType.HeadersCollection, InstrumentationRuleType.PayloadCollection, InstrumentationRuleType.CustomInstrumentation, InstrumentationRuleType.KernelTraces] as const;
+type LegacyKitRuleType = (typeof KIT_RULE_TYPES)[number];
+const isLegacyKitRuleType = (type: string): type is LegacyKitRuleType => KIT_RULE_TYPES.some((known) => known === type);
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+const flag = (value: unknown): boolean | null => (typeof value === 'boolean' ? value : null);
+const nestedFlag = (value: unknown, key: string): { [k: string]: boolean | null } | null => (isRecord(value) ? { [key]: flag(value[key]) } : null);
+
+// Per-type config fields the Rules list can show from untyped legacy config. Custom
+// instrumentation probes are not decoded: the rule lists by name and type only.
+const legacyRuleConfig = (type: LegacyKitRuleType, config: Record<string, unknown>): Partial<InstrumentationRule> => {
+  switch (type) {
+    case InstrumentationRuleType.CodeAttributes:
+      return { codeAttributes: { column: flag(config.column), filePath: flag(config.filePath), function: flag(config.function), lineNumber: flag(config.lineNumber), namespace: flag(config.namespace), stacktrace: flag(config.stacktrace) } };
+    case InstrumentationRuleType.HeadersCollection:
+      return { headersCollection: { headerKeys: Array.isArray(config.headerKeys) ? config.headerKeys.filter((k): k is string => typeof k === 'string') : null } };
+    case InstrumentationRuleType.PayloadCollection:
+      return {
+        payloadCollection: {
+          httpRequest: isRecord(config.httpRequest) ? {} : null,
+          httpResponse: isRecord(config.httpResponse) ? {} : null,
+          dbQuery: isRecord(config.dbQuery) ? {} : null,
+          messaging: isRecord(config.messaging) ? {} : null,
+        },
+      };
+    case InstrumentationRuleType.KernelTraces:
+      return { kernelTraces: { filesystem: nestedFlag(config.filesystem, 'enabled'), subprocesses: nestedFlag(config.subprocesses, 'recordCommandArgs'), cpuDelay: nestedFlag(config.cpuDelay, 'enabled') } };
+    default:
+      return {};
+  }
+};
+
+// Legacy agents cannot take the typed write documents, so their rules are listed
+// as immutable (the kit disables editing rather than failing on submit).
+const mapLegacyVmRule = ({ name, type, config }: LegacyVmRule): InstrumentationRule | null => {
+  if (!isLegacyKitRuleType(type)) return null;
+  return {
+    ruleId: name,
+    ruleName: name,
+    type,
+    notes: '',
+    disabled: false,
+    mutable: false,
+    profileName: '',
+    sourceScopes: null,
+    workloads: null,
+    instrumentationLibraries: null,
+    conditions: null,
+    codeAttributes: null,
+    headersCollection: null,
+    payloadCollection: null,
+    customInstrumentations: null,
+    kernelTraces: null,
+    ...legacyRuleConfig(type, config ?? {}),
+  };
+};
+
 // `GetInstrumentationRules` envelope (`{ instrumentationRules: [...] }`) ->
 // `GET_INSTRUMENTATION_RULES` result.
-export const mapVmInstrumentationRules = (data: GetInstrumentationRulesQuery | null | undefined): GetInstrumentationRulesData => {
-  const rules = data?.instrumentationRules ?? [];
-  return { instrumentationRules: rules.map(mapVmRuleToInstrumentationRule) };
+export const mapVmInstrumentationRules = (data: GetInstrumentationRulesQuery | LegacyGetInstrumentationRulesQuery | null | undefined): GetInstrumentationRulesData => {
+  const legacy = (data as LegacyGetInstrumentationRulesQuery | null | undefined)?.computePlatform?.instrumentationRules;
+  if (legacy) return { instrumentationRules: legacy.map(mapLegacyVmRule).filter((r): r is InstrumentationRule => r !== null) };
+  const rules = (data as GetInstrumentationRulesQuery | null | undefined)?.instrumentationRules ?? [];
+  // Sampling rules live on the Sampling page, not in the instrumentation rules list.
+  return { instrumentationRules: rules.filter((rule) => rule.ruleType !== RuleType.Sampling).map(mapVmRuleToInstrumentationRule) };
 };
 
 // ----- mutation variable mappers (-> agents-api `{ input }`) -----
@@ -146,7 +238,7 @@ export const mapVmInstrumentationRules = (data: GetInstrumentationRulesQuery | n
 // config object the form populated. The VM `CreateInstrumentationRuleInput` /
 // `UpdateInstrumentationRuleInput` share the same config-branch fields, so a
 // single builder serves both.
-type VmRuleConfigInput = Pick<CreateInstrumentationRuleInput, 'ruleType' | 'codeAttributes' | 'HeadersCollection' | 'payloadCollection' | 'customInstrumentation'>;
+type VmRuleConfigInput = Pick<CreateInstrumentationRuleInput, 'ruleType' | 'codeAttributes' | 'HeadersCollection' | 'payloadCollection' | 'customInstrumentation' | 'kernelTraces'>;
 
 type VmRuleInput = CreateInstrumentationRuleVars['instrumentationRule'];
 
@@ -182,6 +274,18 @@ const assertVmSupportedRuleFields = (rule: VmRuleInput, opts?: { ruleId?: string
 };
 
 const buildVmRuleConfig = (rule: CreateInstrumentationRuleVars['instrumentationRule']): VmRuleConfigInput => {
+  if (rule.kernelTraces) {
+    const { filesystem, subprocesses, cpuDelay } = rule.kernelTraces;
+    return {
+      ruleType: RuleType.KernelTraces,
+      // A checked operation arrives as a present object (`{}`), an unchecked one as absent.
+      kernelTraces: {
+        ...(filesystem ? { filesystem: { enabled: true } } : {}),
+        ...(subprocesses ? { subprocesses: { recordCommandArgs: !!subprocesses.recordCommandArgs } } : {}),
+        ...(cpuDelay ? { cpuDelay: { enabled: true } } : {}),
+      },
+    };
+  }
   if (rule.customInstrumentations) {
     const ci = rule.customInstrumentations;
     // VM requires `className`/`methodName` (java) and `packageName` (golang);
@@ -241,7 +345,8 @@ const buildVmRuleConfig = (rule: CreateInstrumentationRuleVars['instrumentationR
   };
 };
 
-export const vmCreateInstrumentationRuleVariables = (vars: CreateInstrumentationRuleVars): Record<string, unknown> => {
+export const vmCreateInstrumentationRuleVariables = (vars: CreateInstrumentationRuleVars, ctx?: OperationContext): Record<string, unknown> => {
+  assertAgentCanWriteActionsAndRules(ctx);
   const rule = vars.instrumentationRule;
   assertVmSupportedRuleFields(rule);
   // VM requires a non-empty resource `name` (it doubles as the id); generate one
@@ -257,7 +362,8 @@ export const vmCreateInstrumentationRuleVariables = (vars: CreateInstrumentation
   return { input };
 };
 
-export const vmUpdateInstrumentationRuleVariables = (vars: UpdateInstrumentationRuleVars): Record<string, unknown> => {
+export const vmUpdateInstrumentationRuleVariables = (vars: UpdateInstrumentationRuleVars, ctx?: OperationContext): Record<string, unknown> => {
+  assertAgentCanWriteActionsAndRules(ctx);
   const rule = vars.instrumentationRule;
   assertVmSupportedRuleFields(rule, { ruleId: vars.ruleId });
   const notes = stripEmpty(rule.notes);
@@ -270,7 +376,10 @@ export const vmUpdateInstrumentationRuleVariables = (vars: UpdateInstrumentation
   return { input };
 };
 
-export const vmDeleteInstrumentationRuleVariables = (vars: DeleteInstrumentationRuleVars): Record<string, unknown> => ({ input: { name: vars.ruleId } });
+export const vmDeleteInstrumentationRuleVariables = (vars: DeleteInstrumentationRuleVars, ctx?: OperationContext): Record<string, unknown> => {
+  assertAgentCanWriteActionsAndRules(ctx);
+  return { input: { name: vars.ruleId } };
+};
 
 // ----- mutation result mappers -----
 

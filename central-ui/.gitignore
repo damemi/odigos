@@ -15,6 +15,7 @@ cypress/downloads
 /.next/
 /out/
 
+.npmrc
 .yalc
 yalc.lock
 

@@ -14,6 +14,7 @@ export const GET_ALL_CLUSTER_SNAPSHOTS = gql`
             kind
             name
             selected
+            disabled
             otelServiceName
             healthStatus
           }
@@ -40,6 +41,7 @@ export const GET_CLUSTER_SNAPSHOT = gql`
           kind
           name
           selected
+          disabled
           otelServiceName
           healthStatus
         }

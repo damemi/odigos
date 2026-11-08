@@ -10,6 +10,20 @@ export const PERSIST_SOURCES: VersionedRemoteFetch = {
   },
 };
 
+// Workloads and namespaces in one request, with `disableInstrumentation` per workload: the proxy
+// creates those Sources already disabled, and applies workloads before namespaces so a disabled
+// workload is never instrumented when its namespace's Auto turns on.
+// 'v1.40' is a placeholder for the first Odigos release with this mutation (latest is v1.39.0);
+// set it to that release once it is tagged.
+export const PERSIST_SOURCES_AND_NAMESPACES: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.40': `
+  mutation PersistSourcesAndNamespaces($sources: [PersistNamespaceSourceInput!]!, $namespaces: [PersistNamespaceItemInput!]) {
+    persistK8sSources(sources: $sources, namespaces: $namespaces)
+  }`,
+  },
+};
+
 export const UPDATE_SOURCE: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
     'v1.11': `

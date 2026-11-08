@@ -1,26 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { useProxy } from '../proxy';
+import { useVmSourcesPolling } from './useVmSourcesPolling';
+import { EventTypes, OpenSourceCrdTypes, OpenSourceEventTypes } from './sseEvents';
+import { shouldRefetchAllSources, shouldToastSseEvent } from './vmSourcesPolling';
 import { getSSEEventsUrl } from '@/utils';
 import { StatusType } from '@odigos/ui-kit/types';
 import { safeJsonParse } from '@odigos/ui-kit/functions';
 import { useOdigosApi } from '@odigos/ui-kit/contexts';
 import { type NotifyPayload, useNotificationStore, useProgressStore, ProgressKeys } from '@odigos/ui-kit/store';
-
-enum EventTypes {
-  CONNECTED = 'connected',
-  K8S_CLUSTER_EVENT = 'k8s_cluster_event',
-}
-
-enum OpenSourceEventTypes {
-  ADDED = 'Added',
-  MODIFIED = 'Modified',
-  DELETED = 'Deleted',
-}
-
-enum OpenSourceCrdTypes {
-  InstrumentationConfig = 'InstrumentationConfig',
-  Destination = 'Destination',
-}
 
 interface OpenSourceSSE {
   crdType: OpenSourceCrdTypes;
@@ -47,7 +34,8 @@ interface DebouncedEvent {
 const EVENT_DEBOUNCE_MS = 5000;
 
 export const useSSE = () => {
-  const { proxyID } = useProxy();
+  const { proxyID, platformType } = useProxy();
+  const { markAgentSendsEvents } = useVmSourcesPolling(proxyID, platformType);
   const { addNotification } = useNotificationStore();
   const { sourcesApi, destinationsApi } = useOdigosApi();
   const fetchSources = sourcesApi.fetchAll;
@@ -141,7 +129,6 @@ export const useSSE = () => {
             crdType: typeof sseData === 'object' ? sseData?.crdType || '' : '',
           };
 
-          const isConnected = notification.crdType === EventTypes.CONNECTED;
           const isSource = notification.crdType === OpenSourceCrdTypes.InstrumentationConfig;
           const isDestination = notification.crdType === OpenSourceCrdTypes.Destination;
 
@@ -149,11 +136,12 @@ export const useSSE = () => {
           // by the kit's `useDestinationsApi` (consistent with sources and every
           // other entity). Exclude them here so we don't double-notify; the
           // destination branch below still drives the refetch.
-          if ((notification.title || notification.message) && !isConnected && notification.title !== OpenSourceEventTypes.MODIFIED && !isSource && !isDestination) {
+          if (shouldToastSseEvent({ crdType: notification.crdType, title: notification.title, message: notification.message })) {
             addNotification(notification);
           }
 
           if (isSource) {
+            markAgentSendsEvents();
             switch (notification.title) {
               case OpenSourceEventTypes.ADDED:
                 const newCreated = Number(notification.message?.toString().replace(/[^\d]/g, '') || 0);
@@ -163,10 +151,10 @@ export const useSSE = () => {
                   const { resetProgress } = useProgressStore.getState();
                   resetProgress(ProgressKeys.Instrumenting);
 
-                  if (accumulatedTargets.length > 0) {
-                    fetchSourcesByTargets(accumulatedTargets, { slim: true });
-                  } else {
+                  if (shouldRefetchAllSources(accumulatedTargets)) {
                     fetchSources();
+                  } else {
+                    fetchSourcesByTargets(accumulatedTargets, { slim: true });
                   }
                 });
                 break;
@@ -175,10 +163,10 @@ export const useSSE = () => {
                 const { progress } = useProgressStore.getState();
                 if (!progress[ProgressKeys.Instrumenting] && !progress[ProgressKeys.Uninstrumenting]) {
                   handleEvent(OpenSourceEventTypes.MODIFIED, targets, (accumulatedTargets) => {
-                    if (accumulatedTargets.length > 0) {
-                      fetchSourcesByTargets(accumulatedTargets, { slim: true });
-                    } else {
+                    if (shouldRefetchAllSources(accumulatedTargets)) {
                       fetchSources();
+                    } else {
+                      fetchSourcesByTargets(accumulatedTargets, { slim: true });
                     }
                   });
                 }

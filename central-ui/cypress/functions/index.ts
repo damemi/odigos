@@ -412,7 +412,7 @@ interface UpdateV2EntityOptions {
   nodeContains?: string;
 
   // Drawer convention prefix. Together with the `{prefix}-btn-{edit,delete,save,cancel}` naming,
-  // this identifies the dropdown options and footer buttons rendered by a v2 edit drawer.
+  // this identifies the header and footer buttons rendered by a v2 edit drawer.
   // E.g. `'edit-rule'`, `'edit-action'`, `'edit-source'`, `'edit-destination'`.
   prefix: string;
 
@@ -421,8 +421,8 @@ interface UpdateV2EntityOptions {
   fieldValue: string;
 }
 
-// ui-kit Drawer portals a full-screen Overlay sibling of `[data-id=drawer]`
-// (no data-id on the Overlay itself). When isOpen flips false both unmount
+// ui-kit's Sheet portals a full-screen overlay sibling of `[data-slot=sheet-content]`.
+// When isOpen flips false both unmount
 // together — so "drawer gone" is the correct sync point. Waiting only on
 // save/toast and then force-clicking the next row was papering over cases
 // where close hadn't finished (or a toast still covered the row).
@@ -443,7 +443,7 @@ const openOverviewEntity = (nodeId: string, nodeContains?: string) => {
 
 // v2 edit-drawer flow:
 // 1. open the entity's drawer by clicking its data-flow row
-// 2. open the drawer header's actions dropdown and click "Edit"
+// 2. click "Edit" in the drawer's header
 // 3. update the named field and click "Save"
 // 4. run post-save waits (mutation/toast), then close so the Overlay cannot
 //    cover the next entity row
@@ -452,8 +452,7 @@ export const updateV2Entity = ({ nodeId, nodeContains, prefix, fieldKey, fieldVa
 
   cy.get(DATA_IDS.DRAWER).should('exist');
 
-  cy.get(DATA_IDS.DRAWER_ACTIONS).click();
-  cy.get(DATA_IDS.DROPDOWN_OPTION(`${prefix}-btn-edit`)).click();
+  cy.get(`[data-id=${prefix}-btn-edit]`).click();
 
   cy.get(fieldKey).click().focused().clear().type(fieldValue);
   cy.get(fieldKey).should('have.value', fieldValue);
@@ -466,7 +465,7 @@ export const updateV2Entity = ({ nodeId, nodeContains, prefix, fieldKey, fieldVa
   // `isEditing && isFormDirty`: while that is true, the X opens a discard
   // warn modal instead of unmounting. Save flips isEditing off only after
   // the mutation await resolves and React commits — racing that commit was
-  // leaving `[data-id=drawer]` mounted (seen as Overlay timeout in CI).
+  // leaving the drawer mounted (seen as Overlay timeout in CI).
   cy.get(`[data-id=${prefix}-btn-save]`, { timeout: 20000 }).should('not.exist');
 
   cy.get(DATA_IDS.DRAWER_CLOSE).click();
@@ -481,14 +480,13 @@ interface DeleteV2EntityOptions {
   warnModalNote?: string;
 }
 
-// v2 edit-drawer flow: open drawer → actions dropdown → "Delete" → confirm modal.
+// v2 edit-drawer flow: open drawer → "Delete" in its header → confirm modal.
 export const deleteV2Entity = ({ nodeId, nodeContains, prefix, warnModalTitle, warnModalNote }: DeleteV2EntityOptions, callback?: () => void) => {
   openOverviewEntity(nodeId, nodeContains);
 
   cy.get(DATA_IDS.DRAWER).should('exist');
 
-  cy.get(DATA_IDS.DRAWER_ACTIONS).click();
-  cy.get(DATA_IDS.DROPDOWN_OPTION(`${prefix}-btn-delete`)).click();
+  cy.get(`[data-id=${prefix}-btn-delete]`).click();
 
   if (!!warnModalTitle) cy.get(DATA_IDS.MODAL).contains(warnModalTitle).should('exist');
   if (!!warnModalNote) cy.get(DATA_IDS.MODAL).contains(warnModalNote).should('exist');

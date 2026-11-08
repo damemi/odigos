@@ -3,7 +3,7 @@
 import React, { useCallback } from 'react';
 import { ROUTES } from '@/utils';
 import { useRouter } from 'next/navigation';
-import { Overview } from '@odigos/ui-kit/containers';
+import { OverviewNext } from '@odigos/ui-kit/containers';
 
 export default function Page() {
   const router = useRouter();
@@ -12,6 +12,15 @@ export default function Page() {
   // The kit handles both the source-drawer close and staging which rule to
   // open (via `useSamplingDrawerStore`); the page's only job is to navigate.
   const onRedirectToSampling = useCallback(() => router.push(ROUTES.SAMPLING), [router]);
+  // URL templatization actions are added and edited on their own page.
+  const onRedirectToUrlTemplatization = useCallback(() => router.push(ROUTES.URL_TEMPLATIZATION), [router]);
+  const onRedirectToProfiling = useCallback(
+    (sourceKey: string | null, unavailableSourceKey?: string) => {
+      const params = new URLSearchParams({ ...(sourceKey ? { source: sourceKey } : {}), ...(unavailableSourceKey ? { unavailableSource: unavailableSourceKey } : {}) });
+      router.push(`${ROUTES.PROFILING}?${params}`);
+    },
+    [router],
+  );
 
-  return <Overview onRedirectToSampling={onRedirectToSampling} />;
+  return <OverviewNext onRedirectToProfiling={onRedirectToProfiling} onRedirectToSampling={onRedirectToSampling} onRedirectToUrlTemplatization={onRedirectToUrlTemplatization} />;
 }

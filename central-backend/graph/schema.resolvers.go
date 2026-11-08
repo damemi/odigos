@@ -171,6 +171,14 @@ func (r *mutationResolver) DeleteUser(ctx context.Context, userID string) (*mode
 	return r.UserService.DeleteUser(ctx, userID)
 }
 
+// ResetUserPassword is the resolver for the resetUserPassword field.
+func (r *mutationResolver) ResetUserPassword(ctx context.Context, userID string) (*model.ResetUserPasswordResult, error) {
+	if err := utils.RequireAdmin(ctx); err != nil {
+		return nil, err
+	}
+	return r.UserService.ResetUserPassword(ctx, userID)
+}
+
 // CreateTeam is the resolver for the createTeam field.
 func (r *mutationResolver) CreateTeam(ctx context.Context, input model.WriteTeamInput) (*model.GeneralResult, error) {
 	// Team management is access-management and is restricted to ADMIN/OWNER.

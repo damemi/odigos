@@ -25,6 +25,11 @@ const atLeastMinor = (schemaVersion: string, minor: number): boolean => {
 export const isParseableAgentsApiVersion = (schemaVersion: string | undefined): boolean =>
   !!schemaVersion && /^\d+\.\d+/.test(schemaVersion.replace(/^v/i, '').trim());
 
+// agents-api v0.12.0 introduced the typed `actions` / `instrumentationRules`
+// surface (and its create / update / delete documents). Older schemas only expose
+// the untyped `computePlatform` reads.
+export const supportsTypedActionsAndRules = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 12);
+
 // WorkloadReport.region landed in agents-api v0.16.0. Older schemas reject the
 // field, so only inject it when the connected platform reports >= that version.
 export const supportsWorkloadReportRegion = (schemaVersion: string): boolean => atLeastMinor(schemaVersion, 16);
@@ -60,6 +65,12 @@ export const supportsInstrumentationDistributions = (schemaVersion: string): boo
 // patchVmDestinationsQuery is a no-op once the floored dialect already selects it.
 export const supportsDestinationDisabled = (schemaVersion: string): boolean =>
   !isParseableAgentsApiVersion(schemaVersion) || atLeastMinor(schemaVersion, 24);
+
+// DestinationType.testConnectionSupported (which destination types can be tested)
+// lands in the agents-api release after v0.36.0. Older schemas reject the field,
+// so unparseable (local / `development`) versions are treated as not supporting it.
+export const supportsDestinationTestConnection = (schemaVersion: string): boolean =>
+  isParseableAgentsApiVersion(schemaVersion) && atLeastMinor(schemaVersion, 37);
 
 // Region side-channel.
 //
@@ -222,15 +233,17 @@ export interface VmSourceConfigSnapshot {
  * Which kind-specific `SourceConfig` branch a workload kind accepts, or undefined
  * for the kinds that accept neither (Lambda, Cloud Run, systemd, process, k8s).
  *
- * Mirrors the connector's `kindAcceptsConfigBranch`: the branch names a platform
- * family, so every ECS kind takes `ecs` while only the VM agent's flat `docker`
- * kind takes `docker`. The server rejects a branch that disagrees with the kind,
+ * Mirrors the VM agent's `ConfigBranchForKind` (vm-agent
+ * `pkg/components/domain/source/source.go`): the branch names a platform family,
+ * so every ECS kind takes `ecs` while the VM agent's flat `docker` and `podman`
+ * kinds take `docker` (the agent stores Podman settings in the Docker branch).
+ * The server rejects a branch that disagrees with the kind,
  * so this is the gate on the write path — never guess a branch.
  */
 export const configBranchForKind = (kind: string | null | undefined): 'ecs' | 'docker' | undefined => {
   if (!kind) return undefined;
   if (kind.startsWith('aws.fargate-task') || kind.startsWith('aws.ecs')) return 'ecs';
-  if (kind === 'docker') return 'docker';
+  if (kind === 'docker' || kind === 'podman') return 'docker';
   return undefined;
 };
 

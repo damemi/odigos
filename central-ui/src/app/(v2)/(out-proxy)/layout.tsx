@@ -4,8 +4,8 @@ import React, { type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { getNavbarIcons } from '@/utils';
-import { OverviewHeader } from '@/components';
-import { Navbar } from '@odigos/ui-kit/components';
+import { CentralHeader } from '@/components';
+import { NavbarNext } from '@odigos/ui-kit/components';
 import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
 const ViewportColumn = styled(FlexColumn)`
@@ -25,9 +25,9 @@ function Layout({ children }: PropsWithChildren) {
   return (
     <ErrorBoundary>
       <ViewportColumn $gap={0}>
-        <OverviewHeader />
+        <CentralHeader />
         <ContentRow $gap={0}>
-          <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname)} />
+          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname)} />
           {children}
         </ContentRow>
       </ViewportColumn>

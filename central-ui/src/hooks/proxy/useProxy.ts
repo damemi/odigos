@@ -18,7 +18,7 @@ interface UseProxy {
   clearProxy: () => void;
 }
 
-// Module-scoped so EVERY `useProxy()` instance (page, OverviewHeader, in-proxy
+// Module-scoped so EVERY `useProxy()` instance (page, CentralHeader, in-proxy
 // layout) honors the same grace window. `selectProxy` writes SELECTED_PROXY
 // while still on /connections, then `router.push(/overview)`. Any remount of a
 // `useProxy` consumer in that window used to re-run the out-of-proxy clear

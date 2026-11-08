@@ -18,6 +18,16 @@ export const UPDATE_USER = gql`
   }
 `;
 
+export const RESET_USER_PASSWORD = gql`
+  mutation ResetUserPassword($userID: String!) {
+    resetUserPassword(userID: $userID) {
+      success
+      error
+      generatedPassword
+    }
+  }
+`;
+
 export const DELETE_USER = gql`
   mutation DeleteUser($userID: String!) {
     deleteUser(userID: $userID) {

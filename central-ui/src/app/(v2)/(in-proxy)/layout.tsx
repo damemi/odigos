@@ -4,8 +4,8 @@ import React, { type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
 import { getNavbarIcons } from '@/utils';
-import { OverviewHeader } from '@/components';
-import { Navbar } from '@odigos/ui-kit/components';
+import { CentralHeader } from '@/components';
+import { NavbarNext } from '@odigos/ui-kit/components';
 import { useProxy, useSSE, useTokenTracker } from '@/hooks';
 import { ErrorBoundary, FlexColumn, FlexRow } from '@odigos/ui-kit/components';
 
@@ -37,9 +37,9 @@ function Layout({ children }: PropsWithChildren) {
     <ErrorBoundary>
       <Listeners />
       <ViewportColumn $gap={0}>
-        <OverviewHeader />
+        <CentralHeader />
         <ContentRow $gap={0}>
-          <Navbar height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, proxyID, platformType)} />
+          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, proxyID, platformType)} />
           {children}
         </ContentRow>
       </ViewportColumn>

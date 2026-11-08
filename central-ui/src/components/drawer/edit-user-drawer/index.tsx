@@ -19,8 +19,10 @@ interface EditUserDrawerProps {
 const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDelete, onResetPassword }) => {
   // User management (edit role / delete / reset password) is restricted to ADMIN/OWNER.
   // MAINTAINER and VIEWER can open the drawer to view details, but cannot modify anything.
-  const { isAdmin } = useUserStore();
-  const isProtectedAdmin = user.role === Role.ADMIN || user.role === Role.OWNER;
+  const { isAdmin, user: currentUser } = useUserStore();
+  const isSelf = user.id === currentUser?.id;
+  // Owners rank above admins, so only an owner can reset or delete an owner.
+  const canManage = user.role !== Role.OWNER || currentUser?.role === Role.OWNER;
   const { formData, handleFormChange, resetFormData, isFormDirty } = useGenericForm({
     email: user.email || '',
     role: user.role,
@@ -48,9 +50,10 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
           onClose: () => handleWithCancelWarning(onClose),
           icon: UserIcon,
           title: user.email,
-          actions:
-            isAdmin && !isProtectedAdmin
-              ? [
+          actions: isAdmin
+            ? isSelf || !canManage
+              ? []
+              : [
                   {
                     id: 'reset-password',
                     label: 'Reset Password',
@@ -62,15 +65,7 @@ const EditUserDrawer: FC<EditUserDrawerProps> = ({ user, onClose, onSave, onDele
                     onClick: onDelete,
                   },
                 ]
-              : isAdmin
-                ? [
-                    {
-                      id: 'reset-password',
-                      label: 'Reset Password',
-                      onClick: onResetPassword,
-                    },
-                  ]
-                : [],
+            : [],
         }}
         footer={{
           actions:

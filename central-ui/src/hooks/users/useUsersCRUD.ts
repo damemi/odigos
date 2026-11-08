@@ -1,8 +1,8 @@
 import { Crud, StatusType } from '@odigos/ui-kit/types';
 import { useNotificationStore } from '@odigos/ui-kit/store';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { GET_USERS, CREATE_USER, DELETE_USER, UPDATE_USER } from '@/graphql';
-import type { User, CreateUserResult, UserInput, GeneralResult } from '@/types';
+import { GET_USERS, CREATE_USER, DELETE_USER, UPDATE_USER, RESET_USER_PASSWORD } from '@/graphql';
+import type { User, CreateUserResult, UserInput, GeneralResult, ResetUserPasswordResult } from '@/types';
 
 export const useUsersCRUD = () => {
   const { addNotification } = useNotificationStore();
@@ -13,6 +13,7 @@ export const useUsersCRUD = () => {
   const [createUserMutation, { loading: creating }] = useMutation<{ createUser: CreateUserResult }, { input: UserInput }>(CREATE_USER);
   const [updateUserMutation, { loading: updating }] = useMutation<{ updateUser: GeneralResult }, { userID: string; input: UserInput }>(UPDATE_USER);
   const [deleteUserMutation, { loading: deleting }] = useMutation<{ deleteUser: GeneralResult }, { userID: string }>(DELETE_USER);
+  const [resetUserPasswordMutation, { loading: resettingPassword }] = useMutation<{ resetUserPassword: ResetUserPasswordResult }, { userID: string }>(RESET_USER_PASSWORD);
 
   const createUser = async (input: UserInput): Promise<CreateUserResult | undefined> => {
     try {
@@ -52,6 +53,15 @@ export const useUsersCRUD = () => {
     }
   };
 
+  const resetUserPassword = async (userID: string): Promise<ResetUserPasswordResult | undefined> => {
+    try {
+      const { data } = await resetUserPasswordMutation({ variables: { userID } });
+      return data?.resetUserPassword;
+    } catch (error) {
+      notifyError(error instanceof Error ? error : { message: String(error) }, Crud.Update);
+    }
+  };
+
   return {
     users: data?.users || [],
     loading,
@@ -63,5 +73,7 @@ export const useUsersCRUD = () => {
     updating,
     deleteUser,
     deleting,
+    resetUserPassword,
+    resettingPassword,
   };
 };

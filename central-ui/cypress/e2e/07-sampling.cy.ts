@@ -113,7 +113,7 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
 
   // ── CREATE: Highly Relevant Operation Rule ───────────────────────────────
 
-  it('Should create a Highly Relevant Operation rule (Error type)', () => {
+  it('Should create a Highly Relevant Operation rule (Duration type)', () => {
     visitPage(ROUTES.SAMPLING, () => {
       waitForGraphqlOperation('GetSamplingRules').then(() => {
         selectSamplingTab(TAB_HIGHLY_RELEVANT);
@@ -123,7 +123,8 @@ describe('Sampling Rules CRUD (via Central UI → Proxy)', () => {
         cy.get('input[name=sampling-input-rule-name]').type(HIGHLY_RELEVANT_RULE_NAME);
         cy.get('input[name=sampling-input-note]').type('Created by Cypress');
 
-        cy.contains('button', 'Error').scrollIntoView().click({ force: true });
+        // Duration: an Error rule on the whole cluster would read as the "Keep All Error Traces" preset, which isn't listed.
+        cy.get('[data-id=sampling-segment-rule-type-Duration]').scrollIntoView().click({ force: true });
 
         cy.get(DATA_IDS.SAMPLING_CREATE_BTN_SUBMIT).click();
 

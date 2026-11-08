@@ -14,7 +14,8 @@ import {
 // can run. Its catalog `type` strings use the agents-api enum spelling (e.g.
 // `CodeAttributes`), which we translate to the kit's `InstrumentationRuleType`.
 // Catalog entries the kit can't represent are dropped so they never appear in the
-// rule picker.
+// rule picker. `Sampling` is one of them on purpose: sampling rules are managed
+// from the Sampling page, not the instrumentation rules picker.
 
 // Intentionally typed as a plain record (not Record<string, KitRuleType>) so a VM
 // catalog type with no kit equivalent maps to `undefined` and is filtered out.
@@ -23,6 +24,7 @@ const VM_TO_KIT_RULE_TYPE: { [vmType: string]: KitRuleType } = {
   CustomInstrumentation: KitRuleType.CustomInstrumentation,
   HeadersCollection: KitRuleType.HeadersCollection,
   PayloadCollection: KitRuleType.PayloadCollection,
+  KernelTraces: KitRuleType.KernelTraces,
 };
 
 // Raw (untyped) shape of the agents-api `instrumentationRuleTypes` query. We avoid importing a

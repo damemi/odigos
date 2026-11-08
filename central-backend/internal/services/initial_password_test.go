@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -22,6 +23,10 @@ type fakeKeycloakUser struct {
 	email           string
 	password        string
 	requiredActions []string
+	// federated users are linked to an identity provider.
+	federated bool
+	// role is the user's realm role name, e.g. "admin".
+	role string
 }
 
 // fakePasswordKeycloak mimics the Keycloak endpoints setInitialPassword uses.
@@ -50,7 +55,8 @@ func newFakePasswordKeycloak(t *testing.T, users ...*fakeKeycloakUser) *fakePass
 	mux.HandleFunc("GET /admin/realms/master/users", kc.search)
 	mux.HandleFunc("PUT /admin/realms/master/users/{id}/reset-password", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Value string `json:"value"`
+			Value     string `json:"value"`
+			Temporary bool   `json:"temporary"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		kc.mu.Lock()
@@ -58,20 +64,59 @@ func newFakePasswordKeycloak(t *testing.T, users ...*fakeKeycloakUser) *fakePass
 		kc.writes = append(kc.writes, "reset-password "+r.PathValue("id"))
 		if u := kc.byID(r.PathValue("id")); u != nil {
 			u.password = body.Value
+			// Keycloak drops a pending password change when a permanent password is set.
+			if !body.Temporary {
+				u.requiredActions = slices.DeleteFunc(u.requiredActions, func(a string) bool { return a == "UPDATE_PASSWORD" })
+			}
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("PUT /admin/realms/master/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		// Keycloak leaves required actions unchanged when the field is absent.
 		var body struct {
-			RequiredActions []string `json:"requiredActions"`
+			RequiredActions *[]string `json:"requiredActions"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		kc.mu.Lock()
 		defer kc.mu.Unlock()
 		kc.writes = append(kc.writes, "update "+r.PathValue("id"))
-		if u := kc.byID(r.PathValue("id")); u != nil {
-			u.requiredActions = body.RequiredActions
+		if u := kc.byID(r.PathValue("id")); u != nil && body.RequiredActions != nil {
+			u.requiredActions = *body.RequiredActions
 		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("GET /admin/realms/master/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		kc.mu.Lock()
+		defer kc.mu.Unlock()
+		u := kc.byID(r.PathValue("id"))
+		if u == nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": u.id, "username": u.username, "email": u.email, "requiredActions": u.requiredActions})
+	})
+	mux.HandleFunc("GET /admin/realms/master/users/{id}/federated-identity", func(w http.ResponseWriter, r *http.Request) {
+		kc.mu.Lock()
+		defer kc.mu.Unlock()
+		links := []map[string]any{}
+		if u := kc.byID(r.PathValue("id")); u != nil && u.federated {
+			links = append(links, map[string]any{"identityProvider": "oidc", "userId": u.id})
+		}
+		_ = json.NewEncoder(w).Encode(links)
+	})
+	mux.HandleFunc("GET /admin/realms/master/users/{id}/role-mappings/realm", func(w http.ResponseWriter, r *http.Request) {
+		kc.mu.Lock()
+		defer kc.mu.Unlock()
+		roles := []map[string]any{}
+		if u := kc.byID(r.PathValue("id")); u != nil && u.role != "" {
+			roles = append(roles, map[string]any{"name": u.role})
+		}
+		_ = json.NewEncoder(w).Encode(roles)
+	})
+	mux.HandleFunc("POST /admin/realms/master/users/{id}/logout", func(w http.ResponseWriter, r *http.Request) {
+		kc.mu.Lock()
+		defer kc.mu.Unlock()
+		kc.writes = append(kc.writes, "logout "+r.PathValue("id"))
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

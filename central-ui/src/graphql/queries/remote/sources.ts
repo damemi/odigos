@@ -467,6 +467,72 @@ export const GET_PEER_SOURCES: VersionedRemoteFetch = {
   },
 };
 
+// A workload's URL templatization per container: the rules that apply to it and what live traffic learning saw
+// (unmatched paths, recommended rules). Workload containers serve it from odigos v1.39; older proxies have no bucket,
+// so the source drawer reports the section as unsupported. The kit sends `{ namespace, kind, name }`, which the
+// query places in the workloads filter itself.
+export const GET_LIVE_TRAFFIC_LEARNING: VersionedRemoteFetch = {
+  [PlatformType.K8s]: {
+    'v1.39': `
+  query GetWorkloadLiveTrafficLearning($namespace: String!, $kind: K8sResourceKind!, $name: String!) {
+    workloads(filter: { namespace: $namespace, kind: $kind, name: $name }) {
+      containers {
+        containerName
+        urlTemplatization {
+          templatization {
+            templates {
+              template
+              examples
+              notes
+              actionId
+              actionName
+              managedBy
+            }
+            patternBasedTemplatization {
+              disabled
+              skipPolicy {
+                skipForNonSuccessCodes
+                skipHttpStatusCodes
+              }
+            }
+          }
+          liveTrafficLearning {
+            unmatchedServerPaths {
+              path
+              count
+            }
+            unmatchedClientPaths {
+              path
+              count
+            }
+            serverRecommendedRules {
+              template
+              reason
+              segments {
+                templateName
+                static
+                certainty
+                examples
+              }
+            }
+            clientRecommendedRules {
+              template
+              reason
+              segments {
+                templateName
+                static
+                certainty
+                examples
+              }
+            }
+          }
+        }
+      }
+    }
+  }`,
+  },
+};
+
 export const GET_SOURCE_LIBRARIES: VersionedRemoteFetch = {
   [PlatformType.K8s]: {
     'v1.11': `

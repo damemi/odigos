@@ -219,7 +219,8 @@ const setTimeInput = (fieldPath: string, value: string) => {
       .scrollIntoView()
       .click({ force: true });
     // Portal-rendered option may land outside the viewport; force-click skips actionability checks.
-    cy.get(`[data-id="option-${unitId}"]`).click({ force: true });
+    // The previous dropdown's list can still be closing, and the open one is the last in the DOM.
+    cy.get(`[data-id="option-${unitId}"]`).last().click({ force: true });
   });
 };
 
@@ -227,7 +228,8 @@ const selectDropdownOption = (fieldPath: string, optionLabel: string) => {
   withFieldPath(fieldPath, '', (path) => {
     cy.get(DATA_IDS.SETTINGS_FIELD(path)).scrollIntoView().click({ force: true });
     // Portal-rendered option may land outside the viewport; force-click skips actionability checks.
-    cy.get(`[data-id="option-${optionLabel}"]`).click({ force: true });
+    // The previous dropdown's list can still be closing, and the open one is the last in the DOM.
+    cy.get(`[data-id="option-${optionLabel}"]`).last().click({ force: true });
   });
 };
 
@@ -440,7 +442,8 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
 
       cy.contains('Save changes').click();
 
-      // awaitToast({ message: TEXTS.NOTIF_CONFIG_UPDATED });
+      // The toast holds the test until it did: ending it now would cancel the request with the page.
+      awaitToast({ message: TEXTS.NOTIF_CONFIG_UPDATED });
     });
   });
 
@@ -581,18 +584,12 @@ describe('Settings CRUD (via Central UI → Proxy)', () => {
   it('Should reset settings via the Reset button and confirm modal', () => {
     visitPage(ROUTES.SETTINGS, () => {
       waitForSettingsHydrated(testClusterName);
-      // Reset is now an icon-only toolbar action (tooltip "Reset to defaults") — the last
-      // button in the settings toolbar actions group (anchored via the labeled "Show Config YAML").
-      cy.contains('Show Config YAML')
-        .parents()
-        .filter((_i, el) => el.querySelectorAll('button').length >= 3)
-        .first()
-        .find('button')
-        .last()
-        .click({ force: true });
+      // Reset sits in the toolbar's "more actions" menu.
+      cy.get('[data-id=settings-more]').click();
+      cy.get('[data-id=settings-reset]').click();
 
       // Confirm the reset warning modal
-      cy.contains('button', 'Approve').click();
+      cy.get(DATA_IDS.APPROVE).click();
 
       awaitToast({ message: TEXTS.NOTIF_CONFIG_RESET });
     });

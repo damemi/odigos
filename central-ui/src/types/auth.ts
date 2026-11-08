@@ -43,6 +43,12 @@ export interface CreateUserResult {
   generatedPassword?: string;
 }
 
+export interface ResetUserPasswordResult {
+  success: boolean;
+  error?: string;
+  generatedPassword?: string;
+}
+
 export interface User {
   id: string;
   email: string;

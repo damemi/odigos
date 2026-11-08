@@ -204,8 +204,9 @@ func sourcesTransformFunc(obj interface{}) (interface{}, error) {
 			ResourceVersion: source.ResourceVersion,
 		},
 		Spec: odigosv1.SourceSpec{
-			Workload:        source.Spec.Workload,
-			OtelServiceName: source.Spec.OtelServiceName,
+			Workload:               source.Spec.Workload,
+			OtelServiceName:        source.Spec.OtelServiceName,
+			DisableInstrumentation: source.Spec.DisableInstrumentation,
 		},
 	}
 	cacheutils.MarkObjectAsTransformed(minimal)

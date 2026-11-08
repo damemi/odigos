@@ -5,11 +5,13 @@ FROM node:24.22.2-alpine AS builder
 WORKDIR /app
 
 # Copy package.json and yarn.lock for dependency installation
-COPY package.json yarn.lock ./
+COPY package.json yarn.lock .npmrc ./
 COPY .yalc* ./.yalc/
 
 # This allows us to deploy the UI to local clusters with the yalc-linked version of the UI kit.
-RUN if [ -d .yalc ] && [ "$(ls -A .yalc 2>/dev/null)" ]; then \
+# The optional npmrc secret holds the GitHub Packages token for the @odigos-io scope (never copied into a layer).
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
+    if [ -d .yalc ] && [ "$(ls -A .yalc 2>/dev/null)" ]; then \
       echo "Using yalc"; \
       npm install -g yalc; \
       yarn install; \

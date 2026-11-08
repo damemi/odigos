@@ -261,6 +261,23 @@ func (c *Cache) IsNamespaceAutoInstrumented(namespace string) bool {
 	return false
 }
 
+// ListDisabledWorkloads returns the workloads whose own Source has disableInstrumentation set.
+// Such a workload stays uninstrumented even when its namespace is auto-instrumented.
+func (c *Cache) ListDisabledWorkloads() (map[k8sconsts.PodWorkload]bool, error) {
+	sources, err := c.sourceLister.List(labels.Everything())
+	if err != nil {
+		return nil, err
+	}
+
+	disabled := make(map[k8sconsts.PodWorkload]bool)
+	for _, source := range sources {
+		if source.Spec.DisableInstrumentation && source.Spec.Workload.Kind != k8sconsts.WorkloadKindNamespace {
+			disabled[source.Spec.Workload] = true
+		}
+	}
+	return disabled, nil
+}
+
 // WorkloadInstrumentationInfo contains instrumentation details for a workload
 type WorkloadInstrumentationInfo struct {
 	Selected             bool

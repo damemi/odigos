@@ -284,6 +284,12 @@ type RemoteFetchResult struct {
 	Error   *string `json:"error,omitempty"`
 }
 
+type ResetUserPasswordResult struct {
+	Success           bool    `json:"success"`
+	Error             *string `json:"error,omitempty"`
+	GeneratedPassword *string `json:"generatedPassword,omitempty"`
+}
+
 type SamlIdentityProviderInput struct {
 	ProviderID             AuthProviderID `json:"providerId"`
 	IdpEntityID            string         `json:"idpEntityId"`
@@ -342,6 +348,7 @@ type WorkloadSnapshot struct {
 	Name                 string   `json:"name"`
 	Kind                 string   `json:"kind"`
 	Selected             bool     `json:"selected"`
+	Disabled             *bool    `json:"disabled,omitempty"`
 	OtelServiceName      *string  `json:"otelServiceName,omitempty"`
 	HealthStatus         *string  `json:"healthStatus,omitempty"`
 	DataStreamNames      []string `json:"dataStreamNames,omitempty"`

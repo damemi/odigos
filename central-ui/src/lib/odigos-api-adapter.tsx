@@ -45,7 +45,9 @@ import { GraphQLError } from 'graphql';
 import { createClient } from 'graphql-ws';
 import { useConfig } from '@/hooks/config/useConfig';
 import { ErrorLink } from '@apollo/client/link/error';
+import { useQuery } from '@apollo/client/react';
 import { useUserStore, useProxyStore } from '@/store';
+import { buildProxyVersions, targetProxyContext, type ProxyVersion, type TargetableContext } from '@/lib/target-proxy-context';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { mapManagedCollectorInstructions, mapManagedCollectorReport } from '@/graphql/remote/managed-collector';
 import { REVOKE_MANAGED_COLLECTOR_CREDENTIAL } from '@/graphql/remote/managed-collector-credentials';
@@ -56,10 +58,11 @@ import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
 import { CombinedGraphQLErrors, ServerError } from '@apollo/client/errors';
 import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
-import type { VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
+import type { ComputePlatform, VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
 import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-normalization';
 import { mapVmInstrumentationInstructions, vmInstrumentationInstructionsVariables } from '@/graphql/remote/vm-instrumentation-instructions';
 import { PlatformType, Tier, type Action, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
+import { mapVmOverviewMetrics } from '@/graphql/remote/vm-overview-metrics';
 import { mapVmClearProfileCache, mapVmEnableSourceProfiling, mapVmHotFunctions, mapVmProfilingSlots, mapVmSourceProfile, vmProfilingService } from '@/graphql/remote/vm-profiling';
 import { mapVmActions, patchVmActionsQuery, vmCreateActionResult, vmCreateActionVariables, vmDeleteActionResult, vmDeleteActionVariables, vmUpdateActionResult, vmUpdateActionVariables } from '@/graphql/remote/vm-actions';
 import {
@@ -78,6 +81,7 @@ import {
   mapVmDestinationTypesToCategories,
   mapVmDestinations,
   patchVmDestinationsQuery,
+  patchVmDestinationTypesQuery,
   vmCreateDestinationResult,
   vmCreateDestinationVariables,
   vmDeleteDestinationResult,
@@ -104,8 +108,6 @@ import type {
   DeleteActionMutation,
   DeleteInstrumentationRuleMutation,
   DestroyManagedCollectorDestinationMutation,
-  GetActionsQuery,
-  GetInstrumentationRulesQuery,
   GetManagedCollectorDestinationTypesQuery,
   GetManagedCollectorInstructionsQuery,
   GetManagedCollectorMetricsQuery,
@@ -206,6 +208,7 @@ import {
   type OperationContext,
   type PersistNamespacesResult,
   type PersistNamespacesVars,
+  type PersistSourcesAndNamespacesVars,
   type PersistSourcesResult,
   type PersistSourcesVars,
   type RecoverFromRollbackVars,
@@ -240,7 +243,9 @@ import {
 import type {
   AllClusterSnapshots,
   ClusterSnapshot,
+  ConfigureProfilingCacheVars,
   CostReductionRuleInput,
+  DisableProfilingResult,
   EffectiveConfig,
   EnableProfilingResult,
   ExtendedPodInfo,
@@ -256,6 +261,9 @@ import type {
   GetInstrumentationRuleTypesResult,
   GetDestinationCategoriesResult,
   GetPotentialDestinationsResult,
+  GoOffsets,
+  GoOffsetsUpdateCheck,
+  InstrumentationAgent,
   PodInfo,
   ProfilingSlots,
   SamplingRules,
@@ -316,6 +324,7 @@ import {
   GET_SOURCE,
   GET_SOURCE_WITH_DETAILS,
   GET_PEER_SOURCES,
+  GET_LIVE_TRAFFIC_LEARNING,
   GET_SOURCE_LIBRARIES,
   GET_INSTRUMENTATION_INSTRUCTIONS,
   GET_TOKENS,
@@ -340,7 +349,13 @@ import {
   RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS,
   PERSIST_NAMESPACES,
   ENABLE_SOURCE_PROFILING,
+  DISABLE_SOURCE_PROFILING,
+  CONFIGURE_PROFILING_CACHE,
   CLEAR_PROFILE_CACHE,
+  GET_INSTRUMENTATION_AGENTS,
+  GET_GO_OFFSETS,
+  CHECK_GO_OFFSETS_UPDATES,
+  UPDATE_GO_OFFSETS,
   UPDATE_REMOTE_CONFIG,
   CREATE_NOISY_OPERATION_RULE,
   UPDATE_NOISY_OPERATION_RULE,
@@ -353,6 +368,7 @@ import {
   DELETE_COST_REDUCTION_RULE,
   UPDATE_LOCAL_UI_SAMPLING_CONFIG,
   PERSIST_SOURCES,
+  PERSIST_SOURCES_AND_NAMESPACES,
   UPDATE_SOURCE,
   RESTART_WORKLOADS,
   RESTART_POD,
@@ -433,11 +449,16 @@ const resolveProxyID = (ctx: OperationContext): string | undefined => ctx.proxyI
 // drives dialect/bucket selection. The published kit doesn't declare this
 // field yet; once it does (it's added to the kit's `OperationContext`), this
 // alias collapses to `OperationContext` and the casts below become no-ops.
-type ProxyOperationContext = OperationContext & { schemaVersion?: string };
+type ProxyOperationContext = TargetableContext;
 
 // ui-kit exposes the reset input through its operation slot but does not re-export
 // its named variables type. Derive it here so the adapter follows that contract.
 type ResetLocalUiConfigVars = NonNullable<OdigosApiOperations['RESET_LOCAL_UI_CONFIG_TO_FACTORY_DEFAULTS']> extends Operation<ResetLocalUiConfigResult, infer TVars> ? TVars : never;
+// The kit doesn't re-export this optional slot's types, so read them off the slot.
+type GetLiveTrafficLearningOperation = NonNullable<OdigosApiOperations['GET_LIVE_TRAFFIC_LEARNING']>;
+type GetLiveTrafficLearningData = GetLiveTrafficLearningOperation extends Operation<infer TData, unknown> ? TData : never;
+type GetLiveTrafficLearningVars = GetLiveTrafficLearningOperation extends Operation<unknown, infer TVars> ? TVars : never;
+type GoOffsetsContentVars = NonNullable<OdigosApiOperations['UPDATE_GO_OFFSETS']> extends Operation<boolean, infer TVars> ? TVars : never;
 
 // Version used to pick the GraphQL document/dialect bucket. VM proxies use the
 // reported schema version; everything else falls back to the agent version
@@ -718,6 +739,27 @@ const blockWhenReadonly = <TData, TVars>(op: Operation<TData, TVars>): Operation
   ...op,
   canRun: (ctx) => !ctx.isReadonly && (op.canRun ? op.canRun(ctx) : true),
 });
+
+// The kit runs some writes once per cluster by overlaying only `proxyID` on the ambient context,
+// so `dialectVersion(ctx)` would still be the selected proxy's. This resolves the query, input
+// sanitizing and `canRun` against the addressed proxy's own version instead, and refuses a proxy
+// whose version is unknown. No multi-fetch: a fan-out would group every proxy under one version.
+const withTargetProxyVersion = <TData, TVars>(op: Operation<TData, TVars>): Operation<TData, TVars> => {
+  const target = (ctx: OperationContext) => targetProxyContext(ctx as ProxyOperationContext);
+  return {
+    document: op.document,
+    canRun: (ctx) => {
+      const targetCtx = target(ctx);
+      return !!targetCtx && (op.canRun ? op.canRun(targetCtx) : true);
+    },
+    transformVariables: (vars, ctx) => {
+      const targetCtx = target(ctx);
+      if (!targetCtx) throw new Error(`Unknown Odigos version for cluster ${resolveProxyID(ctx) ?? ''}`.trim());
+      return op.transformVariables ? op.transformVariables(vars, targetCtx) : (vars as Record<string, unknown>);
+    },
+    transformResult: (raw, ctx) => (op.transformResult ? op.transformResult(raw, target(ctx) ?? ctx) : (raw as TData | undefined)),
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Legacy (< v1.20) proxy support.
@@ -1027,19 +1069,19 @@ const withGuardedRun = <TData, TVars>(op: Operation<TData, TVars>): Operation<TD
 };
 
 // Apply `withGuardedRun` to query / REMOTE_FETCH ops (skips bare GraphQL mutations).
-const withGuardedRuns = (ops: OdigosApiOperations): OdigosApiOperations => {
+const withGuardedRuns = <T extends OdigosApiOperations>(ops: T): T => {
   const guarded = {} as Record<string, Operation<unknown, unknown> | undefined>;
   for (const [key, op] of Object.entries(ops)) {
     guarded[key] = op ? (withGuardedRun(op as Operation<unknown, unknown>) as Operation<unknown, unknown>) : op;
   }
-  return guarded as unknown as OdigosApiOperations;
+  return guarded as unknown as T;
 };
 
 // The kit's `persist`/`update` don't refetch the list themselves — they rely on
 // SSE. Re-run GET_WORKLOADS here so the overview (cache-first on that slot)
 // shows the new sources immediately; persist can land before the proxy has
 // created the InstrumentationConfigs, hence the short retry.
-const withSourceMutationWorkloadsRefresh = (ops: OdigosApiOperations): OdigosApiOperations => {
+const withSourceMutationWorkloadsRefresh = <T extends OdigosApiOperations>(ops: T): T => {
   const refreshWorkloads = async (client: ApolloClient, ctx: OperationContext, attempts: number) => {
     const getWorkloads = ops.GET_WORKLOADS;
     if (!getWorkloads?.run) return;
@@ -1071,6 +1113,7 @@ const withSourceMutationWorkloadsRefresh = (ops: OdigosApiOperations): OdigosApi
     ...ops,
     // Persist may race IC creation — retry briefly. Update already has ICs.
     PERSIST_SOURCES: wrapMutation(ops.PERSIST_SOURCES, 5)!,
+    PERSIST_SOURCES_AND_NAMESPACES: wrapMutation(ops.PERSIST_SOURCES_AND_NAMESPACES, 5),
     UPDATE_SOURCE: wrapMutation(ops.UPDATE_SOURCE, 2)!,
   };
 };
@@ -1177,6 +1220,8 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       transformResult: (data) => mapVmInstrumentationInstructions(data),
     }),
     GET_PEER_SOURCES: wrapVersioned<{ peerSources?: PeerSources }, GetPeerSourcesVars>(GET_PEER_SOURCES),
+    // K8s only, from odigos v1.39 (no VM bucket, so `canRun` is false there and the drawer reports it unsupported).
+    GET_LIVE_TRAFFIC_LEARNING: wrapVersioned<GetLiveTrafficLearningData, GetLiveTrafficLearningVars>(GET_LIVE_TRAFFIC_LEARNING),
     // VM: no bulk persist op — fan out into one combined, aliased
     // createSource/deleteSource mutation (enable -> create, disable -> delete).
     PERSIST_SOURCES: wrapVersioned<PersistSourcesResult, PersistSourcesVars>(PERSIST_SOURCES, undefined, undefined, {
@@ -1184,6 +1229,12 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       transformVariables: (vars) => buildVmPersistSources(vars).variables,
       transformResult: () => ({ persistK8sSources: true }),
     }),
+    // Workloads + namespaces in one request, creating disabled Sources where asked. K8s clusters on
+    // a release with that mutation only; elsewhere `canRun` is false, which the kit checks per
+    // cluster, so it hides the disable option and falls back to PERSIST_NAMESPACES + PERSIST_SOURCES.
+    PERSIST_SOURCES_AND_NAMESPACES: withTargetProxyVersion(
+      wrapVersioned<PersistSourcesResult, PersistSourcesAndNamespacesVars>(PERSIST_SOURCES_AND_NAMESPACES, undefined, undefined, { unsupported: true }),
+    ),
     // VM: `updateSource(input: UpdateSourceInput!)`.
     UPDATE_SOURCE: wrapVersioned<{ updateK8sActualSource: boolean }, UpdateSourceVars>(UPDATE_SOURCE, undefined, undefined, {
       select: (d) => d.UpdateSourceDocument,
@@ -1210,6 +1261,7 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     // VM: `destinationTypes` (flat catalog) -> the kit's category catalog.
     GET_DESTINATION_CATEGORIES: wrapVersioned<GetDestinationCategoriesResult, undefined>(GET_DESTINATION_CATEGORIES, undefined, undefined, {
       select: (d) => d.GetDestinationTypesDocument,
+      patchQuery: patchVmDestinationTypesQuery,
       transformResult: (data) => mapVmDestinationTypesToCategories(data),
     }),
     // No VM equivalent for `potentialDestinations` (k8s auto-detect); VM `canRun`
@@ -1259,7 +1311,7 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       wrapVersioned<GetActionsData, undefined>(GET_ACTIONS, undefined, undefined, {
         select: (d) => d.GetActionsDocument,
         patchQuery: patchVmActionsQuery,
-        transformResult: (data) => mapVmActions(data as GetActionsQuery),
+        transformResult: (data) => mapVmActions(data as Parameters<typeof mapVmActions>[0]),
       }),
     ),
     // Dynamic action-type catalog (YAML-driven). K8s: introduced in odigos v1.31 —
@@ -1269,25 +1321,25 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     // the kit's catalog shape (VM-only types dropped, see vm-action-types).
     GET_ACTION_TYPES: wrapVersioned<GetActionTypesResult, undefined>(GET_ACTION_TYPES, undefined, undefined, {
       select: (d) => d.GetActionTypesDocument,
-      transformResult: (data) => mapVmActionTypesToOptions(data),
+      transformResult: (data, ctx) => mapVmActionTypesToOptions(data, ctx),
     }),
     CREATE_ACTION: withActionRenames(
       wrapVersioned<CreateActionResult, CreateActionVars>(CREATE_ACTION, undefined, undefined, {
         select: (d) => d.CreateActionDocument,
-        transformVariables: (vars) => vmCreateActionVariables(vars),
+        transformVariables: (vars, ctx) => vmCreateActionVariables(vars, ctx),
         transformResult: (data) => vmCreateActionResult(data as CreateActionMutation),
       }),
     ),
     UPDATE_ACTION: withActionRenames(
       wrapVersioned<UpdateActionResult, UpdateActionVars>(UPDATE_ACTION, undefined, undefined, {
         select: (d) => d.UpdateActionDocument,
-        transformVariables: (vars) => vmUpdateActionVariables(vars),
+        transformVariables: (vars, ctx) => vmUpdateActionVariables(vars, ctx),
         transformResult: (data) => vmUpdateActionResult(data as UpdateActionMutation),
       }),
     ),
     DELETE_ACTION: wrapVersioned<DeleteActionResult, DeleteActionVars>(DELETE_ACTION, undefined, undefined, {
       select: (d) => d.DeleteActionDocument,
-      transformVariables: (vars) => vmDeleteActionVariables(vars),
+      transformVariables: (vars, ctx) => vmDeleteActionVariables(vars, ctx),
       transformResult: (data) => vmDeleteActionResult(data as DeleteActionMutation),
     }),
 
@@ -1299,7 +1351,7 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     // payload-collection), so those fields map to neutral defaults.
     GET_INSTRUMENTATION_RULES: wrapVersioned<GetInstrumentationRulesData, undefined>(GET_INSTRUMENTATION_RULES, undefined, undefined, {
       select: (d) => d.GetInstrumentationRulesDocument,
-      transformResult: (data) => mapVmInstrumentationRules(data as GetInstrumentationRulesQuery),
+      transformResult: (data) => mapVmInstrumentationRules(data as Parameters<typeof mapVmInstrumentationRules>[0]),
     }),
     // Dynamic rule-type catalog (YAML-driven), mirroring GET_ACTION_TYPES. K8s:
     // introduced in odigos v1.31 — older proxies have no bucket, so `canRun` is
@@ -1313,17 +1365,17 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     }),
     CREATE_INSTRUMENTATION_RULE: wrapVersioned<CreateInstrumentationRuleResult, CreateInstrumentationRuleVars>(CREATE_INSTRUMENTATION_RULE, undefined, undefined, {
       select: (d) => d.CreateInstrumentationRuleDocument,
-      transformVariables: (vars) => vmCreateInstrumentationRuleVariables(vars),
+      transformVariables: (vars, ctx) => vmCreateInstrumentationRuleVariables(vars, ctx),
       transformResult: (data) => vmCreateInstrumentationRuleResult(data as CreateInstrumentationRuleMutation),
     }),
     UPDATE_INSTRUMENTATION_RULE: wrapVersioned<UpdateInstrumentationRuleResult, UpdateInstrumentationRuleVars>(UPDATE_INSTURMENTATION_RULE, undefined, undefined, {
       select: (d) => d.UpdateInstrumentationRuleDocument,
-      transformVariables: (vars) => vmUpdateInstrumentationRuleVariables(vars),
+      transformVariables: (vars, ctx) => vmUpdateInstrumentationRuleVariables(vars, ctx),
       transformResult: (data) => vmUpdateInstrumentationRuleResult(data as UpdateInstrumentationRuleMutation),
     }),
     DELETE_INSTRUMENTATION_RULE: wrapVersioned<DeleteInstrumentationRuleResult, DeleteInstrumentationRuleVars>(DELETE_INSTURMENTATION_RULE, undefined, undefined, {
       select: (d) => d.DeleteInstrumentationRuleDocument,
-      transformVariables: (vars) => vmDeleteInstrumentationRuleVariables(vars),
+      transformVariables: (vars, ctx) => vmDeleteInstrumentationRuleVariables(vars, ctx),
       transformResult: (data) => vmDeleteInstrumentationRuleResult(data as DeleteInstrumentationRuleMutation),
     }),
 
@@ -1426,7 +1478,12 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
     UPDATE_TOKEN: wrapVersioned<UpdateTokenResult, UpdateTokenVars>(UPDATE_TOKEN),
 
     // metrics / service map
-    GET_METRICS: wrapVersioned<GetMetricsData, undefined>(GET_METRICS),
+    // VM: agents-api `overviewMetrics` (v0.37.0). Older dialects don't carry the
+    // document, so `canRun` is false and older agents report no metrics at all.
+    GET_METRICS: wrapVersioned<GetMetricsData, undefined>(GET_METRICS, undefined, undefined, {
+      select: (d) => d.OverviewMetricsDocument,
+      transformResult: (data) => mapVmOverviewMetrics(data),
+    }),
     // Wire returns `{ getServiceMap: { services: [...] } }`. Surface the
     // bare `services` array on `serviceMap` so the kit's container can
     // pluck `data.serviceMap` without walking the wire envelope.
@@ -1464,6 +1521,13 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
         transformResult: (data) => mapVmEnableSourceProfiling(data),
       }),
     ),
+    // K8s only: the profiling page's per-source removal (v1.25) and slot TTL (v1.33).
+    DISABLE_SOURCE_PROFILING: blockWhenReadonly(
+      wrapVersioned<DisableProfilingResult, SourceProfilingVars>(DISABLE_SOURCE_PROFILING, (d) => (d as { disableSourceProfiling?: DisableProfilingResult })?.disableSourceProfiling),
+    ),
+    CONFIGURE_PROFILING_CACHE: blockWhenReadonly(
+      wrapVersioned<ProfilingSlots, ConfigureProfilingCacheVars>(CONFIGURE_PROFILING_CACHE, (d) => (d as { configureProfilingCache?: ProfilingSlots })?.configureProfilingCache),
+    ),
     // VM agents-api hot functions (secondary; flame path above is the primary Central UI).
     GET_PROFILE_HOT_FUNCTIONS: wrapVersioned<HotFunctionsResult, GetProfileHotFunctionsVars | undefined>(GET_PROFILE_HOT_FUNCTIONS, undefined, undefined, {
       select: (d) => d.ProfileHotFunctionsDocument ?? d.ProfileHotFunctionsV2Document,
@@ -1476,6 +1540,19 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
         transformResult: (data) => mapVmClearProfileCache(data),
       }),
     ),
+
+    // instrumentation agents — K8s only, from odigos v1.38. Checking offsets only compares a file, so read-only
+    // users may run it; installing them may not.
+    GET_INSTRUMENTATION_AGENTS: wrapVersioned<InstrumentationAgent[], undefined>(
+      GET_INSTRUMENTATION_AGENTS,
+      (d) => (d as { instrumentationAgents?: InstrumentationAgent[] })?.instrumentationAgents ?? [],
+    ),
+    GET_GO_OFFSETS: wrapVersioned<GoOffsets, undefined>(GET_GO_OFFSETS, (d) => (d as { goOffsets?: GoOffsets })?.goOffsets),
+    CHECK_GO_OFFSETS_UPDATES: wrapVersioned<GoOffsetsUpdateCheck, GoOffsetsContentVars>(
+      CHECK_GO_OFFSETS_UPDATES,
+      (d) => (d as { checkGoOffsetsUpdates?: GoOffsetsUpdateCheck })?.checkGoOffsetsUpdates,
+    ),
+    UPDATE_GO_OFFSETS: blockWhenReadonly(wrapVersioned<boolean, GoOffsetsContentVars>(UPDATE_GO_OFFSETS, (d) => !!(d as { updateGoOffsets?: boolean })?.updateGoOffsets)),
 
     // pipeline collectors — bare-shape slots. The backend's GraphQL
     // field names predate the kit's normalization: the gateway is
@@ -1702,6 +1779,18 @@ const ConfigSync: FC<{ onChange: (ctx: ProxyOperationContext) => void }> = ({ on
   const { config, isReadonly } = useConfig();
   // Read proxy state directly from the zustand store (no Apollo dependency).
   const { proxyID, platformType, odigosVersion, graphqlSchemaVersion } = useProxyStore();
+  // Each proxy's own version, for ops the kit runs per cluster (see `withTargetProxyVersion`).
+  // Cache-only: `useProxy` already loads the connections list, and this must never fire an
+  // authenticated request on its own (sign-in page).
+  const { data: connectionsData } = useQuery<{ computePlatforms?: ComputePlatform[] }>(GET_COMPUTE_PLATFORMS, { fetchPolicy: 'cache-only' });
+  const computePlatforms = connectionsData?.computePlatforms;
+  // Keyed by the version fields only, so stats/lastSeenAt refreshes don't churn the context.
+  const proxyVersionsKey = JSON.stringify([proxyID, platformType, odigosVersion, graphqlSchemaVersion, computePlatforms?.map((cp) => [cp.id, cp.type, cp.odigosVersion, cp.graphqlSchemaVersion])]);
+  const proxyVersions = useMemo<Record<string, ProxyVersion>>(
+    () => buildProxyVersions(computePlatforms ?? [], { proxyID, platformType, odigosVersion, graphqlSchemaVersion }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [proxyVersionsKey],
+  );
 
   useEffect(() => {
     const resolvedPlatformType = platformType || config?.platformType || INITIAL_CONTEXT.platformType;
@@ -1728,8 +1817,9 @@ const ConfigSync: FC<{ onChange: (ctx: ProxyOperationContext) => void }> = ({ on
       // etc.) the same way VM agents do, so they inherit the user's normal role-based
       // readonly flag rather than being force-locked.
       isReadonly,
+      proxyVersions,
     });
-  }, [proxyID, platformType, odigosVersion, graphqlSchemaVersion, config?.platformType, config?.tier, config?.odigosVersion, isReadonly, onChange]);
+  }, [proxyID, platformType, odigosVersion, graphqlSchemaVersion, config?.platformType, config?.tier, config?.odigosVersion, isReadonly, proxyVersions, onChange]);
 
   return null;
 };

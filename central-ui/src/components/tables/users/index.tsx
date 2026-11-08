@@ -1,11 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Role } from '@/types';
 import * as UTILS from '@/utils';
 import { IconCircle } from '../styled';
 import { useUsersCRUD } from '@/hooks';
 import { useUserStore } from '@/store';
 import { useTheme } from 'styled-components';
-import { EditUserDrawer } from '@/components';
+import { EditUserDrawer, ResetPasswordModal } from '@/components';
 import type { User, UserInput } from '@/types';
 import type { SVG } from '@odigos/ui-kit/types';
 import { Crud, StatusType } from '@odigos/ui-kit/types';
@@ -22,12 +22,16 @@ export enum UserTableColumn {
 
 export const UsersTable: React.FC = () => {
   const theme = useTheme();
-  const { isAdmin } = useUserStore();
+  const { isAdmin, user: currentUser } = useUserStore();
   const { addNotification } = useNotificationStore();
-  const { users, updateUser, updating, deleteUser, deleting, loading } = useUsersCRUD();
+  const { users, updateUser, updating, deleteUser, deleting, resetUserPassword, loading } = useUsersCRUD();
 
   const [editOpenForUser, setEditOpenForUser] = useState<User | null>(null);
   const [deleteOpenForUser, setDeleteOpenForUser] = useState<User | null>(null);
+  const [resetOpenForUser, setResetOpenForUser] = useState<User | null>(null);
+  const [resetPasswordResult, setResetPasswordResult] = useState<{ email: string; password: string } | null>(null);
+  // A second reset while one is in flight would leave the modal showing a password that no longer works.
+  const resettingPasswordRef = useRef(false);
 
   const handleUpdateUser = useCallback(
     async (userID: string, input: UserInput) => {
@@ -63,6 +67,23 @@ export const UsersTable: React.FC = () => {
       }
     },
     [deleting, deleteUser, addNotification],
+  );
+
+  const handleResetPassword = useCallback(
+    async (user: User) => {
+      if (resettingPasswordRef.current) return;
+      resettingPasswordRef.current = true;
+      const result = await resetUserPassword(user.id).finally(() => {
+        resettingPasswordRef.current = false;
+      });
+
+      if (result?.success && result.generatedPassword) {
+        setResetPasswordResult({ email: user.email, password: result.generatedPassword });
+      } else if (result) {
+        addNotification({ type: StatusType.Error, title: UTILS.RESET_PASSWORD_ERROR, description: result.error || UTILS.RESET_PASSWORD_ERROR });
+      }
+    },
+    [resetUserPassword, addNotification],
   );
 
   const columns: TableProps['columns'] = useMemo(
@@ -121,8 +142,8 @@ export const UsersTable: React.FC = () => {
         },
       ];
 
-      const isProtectedAdmin = user.role === Role.ADMIN || user.role === Role.OWNER;
-      if (!isProtectedAdmin) {
+      const canDelete = user.id !== currentUser?.id && (user.role !== Role.OWNER || currentUser?.role === Role.OWNER);
+      if (canDelete) {
         actions.push({
           id: `delete-${user.id}`,
           tooltip: UTILS.DELETE_USER,
@@ -133,7 +154,7 @@ export const UsersTable: React.FC = () => {
 
       return actions;
     },
-    [isAdmin, users, theme.text.error],
+    [isAdmin, users, currentUser?.id, currentUser?.role, theme.text.error],
   );
 
   return (
@@ -155,10 +176,31 @@ export const UsersTable: React.FC = () => {
             setEditOpenForUser(null);
           }}
           onResetPassword={() => {
-            alert('TODO');
+            setResetOpenForUser(editOpenForUser);
+            setEditOpenForUser(null);
           }}
         />
       )}
+
+      <WarningModal
+        isOpen={resetOpenForUser !== null}
+        title={UTILS.RESET_PASSWORD}
+        description={UTILS.RESET_PASSWORD_CONFIRM((resetOpenForUser?.username || resetOpenForUser?.email || resetOpenForUser?.id) ?? '')}
+        onClose={() => setResetOpenForUser(null)}
+        approveButton={{
+          label: UTILS.RESET_PASSWORD,
+          onClick: () => {
+            if (resetOpenForUser) handleResetPassword(resetOpenForUser);
+            setResetOpenForUser(null);
+          },
+        }}
+        denyButton={{
+          label: UTILS.CANCEL,
+          onClick: () => setResetOpenForUser(null),
+        }}
+      />
+
+      {resetPasswordResult && <ResetPasswordModal email={resetPasswordResult.email} password={resetPasswordResult.password} onClose={() => setResetPasswordResult(null)} />}
 
       <WarningModal
         isOpen={deleteOpenForUser !== null}

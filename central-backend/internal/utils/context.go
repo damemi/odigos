@@ -121,6 +121,17 @@ func IsUserAdmin(ctx context.Context) bool {
 	return false
 }
 
+// IsUserOwner reports whether the requesting user holds the OWNER role, which
+// ranks above ADMIN.
+func IsUserOwner(ctx context.Context) bool {
+	for _, role := range rolesForAuthz(ctx) {
+		if strings.EqualFold(role, "OWNER") {
+			return true
+		}
+	}
+	return false
+}
+
 // IsUserEditor reports whether the requesting user may edit product configuration
 // (sources, destinations, actions, etc.). This includes ADMIN, OWNER and MAINTAINER.
 // User management and other admin-only operations should keep using IsUserAdmin.

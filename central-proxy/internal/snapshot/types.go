@@ -13,6 +13,7 @@ type WorkloadSnapshot struct {
 	Name                 string                     `json:"name"`
 	Kind                 string                     `json:"kind"`
 	Selected             bool                       `json:"selected"`
+	Disabled             bool                       `json:"disabled,omitempty"`
 	ServiceName          string                     `json:"serviceName,omitempty"`
 	Health               model.DesiredStateProgress `json:"health"`
 	DataStreamNames      []string                   `json:"dataStreamNames,omitempty"`

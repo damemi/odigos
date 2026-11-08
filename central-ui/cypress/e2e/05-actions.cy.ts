@@ -84,9 +84,9 @@ describe('Actions CRUD (via Central UI → Proxy)', () => {
       SELECTED_ENTITIES.ACTIONS.forEach((actionType) => {
         updateV2Entity(
           {
-            // actions are fetched in random order, so we locate the row by the type text it shows
+            // actions are fetched in random order, so we locate the row by the type's label it shows
             nodeId: 'div',
-            nodeContains: actionType,
+            nodeContains: SELECTED_ENTITIES.ACTION_LABELS[actionType],
             prefix: DATA_IDS.ACTION_DRAWER_PREFIX,
             fieldKey: DATA_IDS.ACTION_NAME_INPUT,
             // Embed the action type in the new name. The v2 ListItem renders

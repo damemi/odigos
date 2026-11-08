@@ -3,6 +3,7 @@ export * from './config';
 export * from './data-streams';
 export * from './describe';
 export * from './destinations';
+export * from './instrumentation-agents';
 export * from './instrumentation-rules';
 export * from './k8s-manifest';
 export * from './metrics';

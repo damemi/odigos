@@ -1,7 +1,7 @@
 import { print, type DocumentNode } from 'graphql';
 import { LATEST_DIALECT_VERSION, resolveDialect } from '@odigos/vmagent-api-apollo-client/registry';
 import type { OperationContext } from '@odigos/ui-kit/contexts';
-import { isParseableAgentsApiVersion } from '@/graphql/remote/utils';
+import { isParseableAgentsApiVersion, supportsTypedActionsAndRules } from '@/graphql/remote/utils';
 
 // VM dialect resolution for the central-ui REMOTE_FETCH path.
 //
@@ -53,4 +53,18 @@ export type VmSelect = (dialect: DialectDocs) => DocumentNode;
 export const vmQuery = (ctx: OperationContext, select: VmSelect): string | undefined => {
   const document = select(resolveDialect(dialectVersion(ctx)) as unknown as DialectDocs);
   return document ? print(document) : undefined;
+};
+
+// agents-api v0.12.0 replaced the `computePlatform { actions, instrumentationRules }`
+// reads and the `*V2` / legacy mutations with the typed `actions` /
+// `instrumentationRules` surface. Agents reporting an older schema can still be
+// read (their `computePlatform` shape is mapped), but their write documents take
+// a different input, so Central asks for an upgrade instead of sending a request
+// the agent would reject.
+export const isLegacyActionsAndRulesSchema = (ctx: OperationContext): boolean => !supportsTypedActionsAndRules(dialectVersion(ctx));
+
+export const LEGACY_AGENT_UPGRADE_MESSAGE = 'This VM agent is too old to create, edit or delete actions and rules from Central. Upgrade the agent (it must report agents-api schema v0.12 or newer).';
+
+export const assertAgentCanWriteActionsAndRules = (ctx: OperationContext | undefined): void => {
+  if (ctx && isLegacyActionsAndRulesSchema(ctx)) throw new Error(LEGACY_AGENT_UPGRADE_MESSAGE);
 };

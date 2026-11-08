@@ -33,3 +33,26 @@ test('every handler SDK selection survives source reads, updates and clearing wi
   assert.equal(cleared.input.config.distroOverride,null);
  }
 });
+test('podman sources read and write container settings through the docker config branch',()=>{
+ assert.equal(utils.configBranchForKind('podman'),'docker');
+ assert.equal(utils.configBranchForKind('docker'),'docker');
+ assert.equal(utils.configBranchForKind('systemd'),undefined);
+ const source={name:'web',kind:'podman',enabled:true,config:{docker:{containerOverrides:[{containerName:'app',runtimeOverride:{language:'python',version:'3.12'}}]}}};
+ const workload=sources.mapVmSourceToWorkload(source);
+ assert.equal(workload.sourceConfig.containerOverrides.length,1);
+ assert.equal(workload.sourceConfig.containerOverrides[0].containerName,'app');
+ const variables=sources.vmUpdateSourceVariables({sourceId:workload.id,patchSourceRequest:{containerName:'sidecar',language:'java'}},{version:'0.28.0'});
+ const rows=variables.input.config.docker.containerOverrides.map(r=>r.containerName).sort();
+ assert.deepEqual(rows,['app','sidecar']);
+ assert.equal(variables.input.config.ecs,undefined);
+ assert.equal(variables.input.kind,'podman');
+});
+test('podman workload reports with docker details surface their containers and saved overrides',()=>{
+ const source={name:'web',kind:'podman',enabled:true,config:{docker:{containerOverrides:[{containerName:'app',runtimeOverride:{language:'python',version:'3.12'}}]}}};
+ const workload=sources.mapVmSourceToWorkload(source);
+ const report={serviceName:'web',kind:'podman',region:null,details:{__typename:'DockerWorkloadDetails',containers:[{name:'app',instrumented:false},{name:'sidecar',instrumented:false}]}};
+ const [merged]=reports.mergeVmWorkloadReports([workload],[report]);
+ assert.deepEqual(merged.containers.map(c=>c.containerName),['app','sidecar']);
+ assert.equal(merged.containers[0].overrides.runtimeInfo.runtimeVersion,'3.12');
+ assert.equal(merged.containers[1].overrides,null);
+});
