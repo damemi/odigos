@@ -132,7 +132,7 @@ Odigos Central images are hosted at `registry.odigos.io`. To install from a priv
 
 The Keycloak and Redis image versions are defined in the [`odigos-central` Helm values file](https://github.com/odigos-io/odigos/blob/main/helm/odigos-central/values.yaml) (`auth.image` and `redis.image`). Use those values as the source of truth when mirroring; do not rely on tags copied from this page.
 
-If Cloud Connectors are enabled, also mirror `odigos-enterprise-connector-runtime`, `odigos-enterprise-connector-aws`, `odigos-enterprise-connector-gcp`, `odigos-enterprise-connector-azure`, and `odigos-enterprise-connector-postgres`.
+If Cloud Connectors are enabled, also mirror `odigos-enterprise-connector-runtime`, `odigos-enterprise-connector-aws`, `odigos-enterprise-connector-gcp`, `odigos-enterprise-connector-azure`, `odigos-enterprise-connector-mulesoft`, and `odigos-enterprise-connector-postgres`.
 
 Keycloak is set with `auth.image`, not `imagePrefix`. After you push the mirrored Keycloak image, set `auth.image` to that full URL. Copy `auth.image` from the Helm values file first:
 

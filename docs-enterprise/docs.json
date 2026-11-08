@@ -524,7 +524,8 @@
                 "group": "Add Connectors",
                 "pages": [
                   "cloud-connectors/add-connectors/add-aws-connector",
-                  "cloud-connectors/add-connectors/add-gcp-connector"
+                  "cloud-connectors/add-connectors/add-gcp-connector",
+                  "cloud-connectors/add-connectors/add-mulesoft-connector"
                 ]
               },
               "cloud-connectors/instrument-workloads",
