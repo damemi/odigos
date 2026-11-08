@@ -29,7 +29,7 @@ import (
 	"github.com/odigos-io/central-backend/internal/ssehub"
 	"github.com/odigos-io/central-backend/internal/utils"
 	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
-	"github.com/odigos-io/odigos-enterprise/odigosauth"
+	"github.com/odigos-io/odigos/odigosauth"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"golang.org/x/sync/singleflight"
 )
