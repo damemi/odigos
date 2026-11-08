@@ -1,0 +1,57 @@
+apiVersion: internal.odigos.io/v1beta1
+kind: OtelDistribution
+metadata:
+  name: python-ebpf
+spec:
+  name: python-ebpf
+  language: python
+  runtimeEnvironments:
+    - name: python-runtime
+      supportedVersions: '>= 3.6, < 3.16'
+  # A Python version python-ebpf does not support keeps today's agent: the instrumentor walks this chain
+  # (python-enterprise, then python-enterprise3.8) to the first distro that supports the version.
+  fallbackDistro: python-enterprise
+  displayName: python-ebpf
+  description: |
+    Out-of-process, pure-eBPF CPython instrumentation (python-ebpf). The odiglet
+    ptrace-attaches to the running interpreter, maps a resident hook, detours the
+    eval loop's opcode handlers, and reads args/returns/exceptions straight from
+    interpreter memory -- no SDK, no PYTHONPATH, no USDT, and NO application
+    restart. Emits OTel spans with W3C context propagation in and out of process.
+  isEbpf: true
+  # No device and no env/manifest injection -> the instrumentor marks the container
+  # PodManifestInjectionOptional=true, so the odiglet attaches to the ALREADY-RUNNING
+  # pod with no restart (the whole point of this distro).
+  runtimeAgent:
+    noRestartRequired: true
+  # python-ebpf counts every call it would make a span of in the kernel, sampled or not, and exports
+  # traces.span.metrics.calls and .duration as Odigos's span-metrics connector would.
+  agentMetrics:
+    spanMetrics:
+      supported: true
+  traces:
+    codeAttributes:
+      supported: true
+    # python-ebpf decides head sampling in the kernel at each trace's root, matching match-all,
+    # HTTP server and HTTP client rules. Query-param rules are not matched, so they are not
+    # advertised (httpQueryParamsSupported).
+    headSampling:
+      supported: true
+    # A trace-verbosity rule turns a python-ebpf library (its Libraries name or scope name) off and
+    # on at runtime. Spans of the app's own tracers carry other scopes, which it cannot turn off.
+    traceVerbosity:
+      disablingOdigosAgentLibrariesSupported: true
+    # A headers-collection rule's keys are recorded on server spans as http.request.header.<key>, read
+    # in the kernel at the server's enter. Response and client request headers are not recorded yet.
+    headersCollection:
+      supported: true
+    # A payload-collection rule's messaging part records a Kafka message's value as
+    # messaging.message.body (kafka-python, aiokafka, confluent-kafka), read in the kernel. Its DB query
+    # part records a DB span's whole query as db.query.text, which python-ebpf records only with it, as
+    # the Go agent does. HTTP bodies are not recorded yet.
+    payloadCollection:
+      supported: true
+    # A custom instrumentation rule's Python probes, each a function by module and qualname, get a span
+    # of their own, internal, with code.function.name module.qualname, applied and removed with no restart.
+    customInstrumentations:
+      supported: true
