@@ -1,10 +1,12 @@
 FROM --platform=$BUILDPLATFORM node:24 AS deps
 WORKDIR /app
-COPY frontend/webapp/package.json frontend/webapp/yarn.lock ./
+COPY frontend/webapp/package.json frontend/webapp/yarn.lock frontend/webapp/.npmrc ./
 COPY frontend/webapp/.yalc* ./.yalc/
 
 # This allows us to deploy the UI to local clusters with the yalc-linked version of the UI kit.
+# The optional npmrc secret authenticates to GitHub Packages (the UI Kit is private) without leaving a token in any layer.
 RUN --mount=type=cache,target=/usr/local/share/.cache/yarn \
+    --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     if [ -d .yalc ] && [ "$(ls -A .yalc 2>/dev/null)" ]; then \
       echo "Using yalc"; \
       npm install -g yalc; \

@@ -32,15 +32,25 @@ jobs:
           - service: operator
             dockerfile_path: operator
     runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v5
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+      - name: Write npm auth
+        id: npmrc
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build ${{ matrix.service }} Image
         uses: docker/build-push-action@v7
         with:
+          secret-files: |
+            npmrc=${{ steps.npmrc.outputs.path }}
           platforms: linux/amd64,linux/arm64
           push: false
           provenance: false

@@ -112,11 +112,18 @@ jobs:
               username: ${{ secrets.QUAY_USERNAME }}
               password: ${{ secrets.QUAY_TOKEN }}
 
+          - name: Write npm auth
+            id: npmrc
+            uses: ./.github/actions/npm-auth
+            with:
+              token: ${{ secrets.GITHUB_TOKEN }}
           - name: Build and Push Docker Image for ${{ matrix.service }}
             uses: docker/build-push-action@v7
             env:
               ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.extract_tag.outputs.tag}}
             with:
+              secret-files: |
+                npmrc=${{ steps.npmrc.outputs.path }}
               # Use the checked-out files (at inputs.tag) instead of build-push-action's
               # default Git context, which would otherwise build from the workflow's
               # triggering ref (e.g. main) and ignore the actions/checkout above.
