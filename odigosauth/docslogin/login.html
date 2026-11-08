@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Sign in · Odigos Enterprise docs</title>
+    <link rel="stylesheet" href="/login-assets/style.css" />
+  </head>
+  <body>
+    <header>
+      <a href="https://docs.odigos.io/oss/overview" aria-label="Odigos Open Source docs">
+        <img class="light-logo" src="/login-assets/logo_black.svg" alt="Odigos" />
+        <img class="dark-logo" src="/login-assets/logo_white.svg" alt="Odigos" />
+      </a>
+      <a href="https://docs.odigos.io/oss/overview">Open Source docs</a>
+    </header>
+    <main>
+      <p class="edition">Odigos Enterprise</p>
+      <h1>
+        Your enterprise
+        <br />
+        documentation.
+      </h1>
+      <p class="intro">
+        Installation, instrumentation, and operations guides for Odigos Enterprise.
+      </p>
+      <form action="/login" method="post">
+        <input type="hidden" name="redirect" value="{{ .Redirect }}" />
+        <label for="api-key">Enterprise API key</label>
+        <p id="key-help">Use the API key issued for your Odigos Enterprise installation.</p>
+        <input
+          id="api-key"
+          name="api_key"
+          type="password"
+          required
+          maxlength="12000"
+          autocomplete="current-password"
+          spellcheck="false"
+          autocapitalize="none"
+          {{ if .Error }}
+            aria-describedby="key-help key-error" aria-invalid="true"
+          {{ else }}
+            aria-describedby="key-help"
+          {{ end }}
+        />
+        {{ if .Error }}
+          <p id="key-error" role="alert">{{ .Error }}</p>
+        {{ end }}
+        <button type="submit">Open enterprise docs</button>
+      </form>
+      <p class="help">
+        Need an enterprise key?
+        <a href="https://odigos.io/?demo">Contact Odigos</a>.
+      </p>
+    </main>
+    <footer>
+      Using Odigos Open Source?
+      <a href="https://docs.odigos.io/oss/overview">Read the public docs</a>.
+    </footer>
+  </body>
+</html>
