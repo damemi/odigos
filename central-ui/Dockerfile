@@ -1,5 +1,5 @@
 # 1️⃣ Build Stage: Compile Next.js App
-FROM node:24-alpine AS builder
+FROM node:24.22.2-alpine AS builder
 
 # Set working directory inside the container
 WORKDIR /app
@@ -62,7 +62,7 @@ USER 65532:65532
 CMD ["yarn", "start"]
 
 # 2️⃣ Runtime Stage: Serve with Next.js Built-in Server
-FROM node:24-alpine
+FROM node:24.22.2-alpine
 
 # Upgrade all Alpine packages to pick up security fixes (e.g. zlib CVE-2026-27171).
 RUN apk upgrade --no-cache
