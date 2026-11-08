@@ -33,6 +33,10 @@ ifneq ($(strip $(TARGET)),)
   TARGET_FLAG := --target $(TARGET)
 endif
 
+# Authenticates the @odigos-io GitHub Packages scope inside UI image builds (see central-ui/README.md).
+# Only passed when the developer has an ~/.npmrc, so builds still work while the package is public.
+comma := ,
+NPMRC_SECRET := $(if $(wildcard $(HOME)/.npmrc),--secret id=npmrc$(comma)src=$(HOME)/.npmrc,)
 .PHONY: build-image/%
 build-image/%:
 	@if [ -z "$(GITHUB_TOKEN)" ]; then \
@@ -42,6 +46,7 @@ build-image/%:
 	docker build $(TARGET_FLAG) \
 	-t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
+	$(NPMRC_SECRET) \
 	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
 	--build-arg SUMMARY="Odiglet for Odigos" \
 	--build-arg DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." \
@@ -539,6 +544,7 @@ push-image/%:
 	docker buildx build $(TARGET_FLAG) \
 	--platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
+	$(NPMRC_SECRET) \
 	$(if $(filter true,$(PUSH_IMAGE)),--push,) \
 	$(if $(filter true,$(GCP_MARKETPLACE)),--annotation="index:com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog",) \
 	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
@@ -727,6 +733,7 @@ ecr-login:
 build-tag-push-ecr-image/%:
 	docker build --platform linux/amd64 -t $(ORG)/odigos-enterprise-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--secret id=github_token,env=GITHUB_TOKEN \
+	$(NPMRC_SECRET) \
 	--build-arg SERVICE_NAME="$(if $(SERVICE_NAME),$(SERVICE_NAME),$*)" \
 	--build-arg VERSION=$(TAG) \
 	--build-arg RELEASE=$(TAG) \

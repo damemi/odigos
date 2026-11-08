@@ -57,7 +57,9 @@ COPY --from=oss-clone /src/oss /
 FROM --platform=$BUILDPLATFORM node:24 AS webapp-build
 WORKDIR /webapp
 COPY --from=oss-src --exclude=**/node_modules --exclude=**/.next --exclude=**/out /frontend/webapp .
+# The optional npmrc secret holds the GitHub Packages token for the @odigos-io scope (never copied into a layer).
 RUN --mount=type=cache,target=/usr/local/share/.cache/yarn \
+    --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     if [ -d .yalc ] && [ "$(ls -A .yalc 2>/dev/null)" ]; then \
       npm install -g yalc && yarn install; \
     else \
