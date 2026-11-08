@@ -1,0 +1,44 @@
+apiVersion: internal.odigos.io/v1beta1
+kind: OtelDistribution
+metadata:
+  name: golang-enterprise
+spec:
+  name: golang-enterprise
+  language: go
+  runtimeEnvironments:
+    - name: go-runtime
+      supportedVersions: '>= 1.17'
+  displayName: Golang Enterprise eBPF Instrumentation
+  description: |
+    This distribution is for Golang applications using Odigos enterprise version, with ebpf-based SDK and instrumentation libraries, additional features and libraries coverage.
+  isEbpf: true
+  environmentVariables:
+    staticVariables:
+    # The GODEBUG env var is not required after https://github.com/odigos-io/enterprise-go-instrumentation/pull/1839
+    # keeping it here for now for migration purposes, but can be removed once we have more confidence in the no restart feature.
+    # We will add this to new pods that should be instrumented but current no-restarted pods will work without it.
+      - envName: GODEBUG
+        envValue: 'tracebackancestors=5'
+  # Device not needed in go, but adding the device mount here ensures Go pods are scheduled only on nodes with the Odiglet installed,
+  # since we intentionally skip setting node affinity when the mount method is 'virtual device'.
+  runtimeAgent:
+    device: 'instrumentation.odigos.io/generic'
+    waspSupported: true
+    k8sAttrsViaEnvVars: true
+    noRestartRequired: true
+  logs:
+    ebpfLogCapture:
+      traceCorrelation: true
+  traces:
+    codeAttributes:
+      supported: true
+    customInstrumentations:
+      supported: true
+    headersCollection:
+      supported: true
+    payloadCollection:
+      supported: true
+    traceVerbosity:
+      disablingOdigosAgentLibrariesSupported: true
+    headSampling:
+      supported: true
