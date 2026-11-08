@@ -8,7 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/odigos-io/odigos-enterprise/mcp/provider"
+	"github.com/odigos-io/odigos/mcp/provider"
 )
 
 // A "tool" is a single named operation an MCP client (Claude, Cursor, an in-cluster

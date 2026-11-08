@@ -11,7 +11,7 @@ package shared
 import (
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/odigos-io/odigos-enterprise/mcp/provider"
+	"github.com/odigos-io/odigos/mcp/provider"
 )
 
 // Register mounts every shared (cross-platform) read tool onto s, wired to b.
