@@ -9,6 +9,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 jobs:
   build-cli:
@@ -60,6 +61,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Write npm auth
+        id: npmrc
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Odigos Images
         run: |
@@ -162,6 +169,7 @@ jobs:
         with:
           kubernetes-version: ${{ matrix.kubernetes-version }}
           test-scenario: ${{ matrix.test-scenario }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   kubernetes-tests-report:
     if: always()
