@@ -1,0 +1,10 @@
+.build-source/
+build/
+assets/
+scripts/
+deploy/
+Dockerfile
+Dockerfile.dockerignore
+pnpm-lock.yaml
+pnpm-workspace.yaml
+package.json

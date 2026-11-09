@@ -1,0 +1,8 @@
+- name: pii-masking
+  type: piiMasking
+  signals:
+    - TRACES
+  config:
+    piiCategories:
+      - CREDIT_CARD
+      - EMAIL

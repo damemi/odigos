@@ -1,0 +1,33 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+kubeadmConfigPatches:
+  # single control-plane node. Without a lease to renew.
+  - |
+    kind: ClusterConfiguration
+    controllerManager:
+      extraArgs:
+        leader-elect: "false"
+    scheduler:
+      extraArgs:
+        leader-elect: "false"
+  # optimize performance for CI, reduce large etcd latency under spikes
+  - |
+    kind: ClusterConfiguration
+    etcd:
+      local:
+        dataDir: /tmp/etcd
+  # Secret volumes are refreshed on the kubelet's periodic pod sync (default 1m), which delays
+  # webhook certs that are written to a secret after the pod started.
+  # https://kubernetes.io/docs/concepts/configuration/secret/#using-secrets-as-files-from-a-pod
+  - |
+    kind: KubeletConfiguration
+    syncFrequency: 10s
+# Two workers: mountMethod=k8s-init-container injects a 300m-CPU odigos-agents init
+# container into every instrumented pod. Since the simple-demo app containers request
+# little/no CPU, each pod's effective scheduling request becomes ~300m for its whole
+# lifetime, saturating a single worker (~95% CPU) and leaving no room for the rolling-
+# update surge pod (FailedScheduling: Insufficient cpu). A second worker spreads the load.
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker

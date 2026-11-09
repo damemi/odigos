@@ -1,0 +1,7 @@
+- name: url-templatization
+  type: urlTemplatization
+  signals:
+    - TRACES
+  config:
+    templatizationRules:
+      - /api/v1/resource/{id}

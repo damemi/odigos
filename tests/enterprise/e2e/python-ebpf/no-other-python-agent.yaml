@@ -1,0 +1,12 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  Every inventory span comes from python-ebpf. A span from any other Python distro would mean the
+  in-process agent was loaded too, and every request traced twice.
+query: |
+  length([?
+    span.serviceName == 'inventory' &&
+    span.resourceAttributes."telemetry.distro.name" != 'python-ebpf'
+  ]) > `0`
+expected:
+  count: 0

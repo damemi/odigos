@@ -1,0 +1,21 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test checks that control plane components (kube-apiserver and etcd) are instrumented
+  and generate traces when accessing mutatingwebhookconfigurations.
+query: |
+  length([?(
+    span.kind == 'server' &&
+    span.serviceName == 'kube-apiserver-kind-control-plane' &&
+    span.spanAttributes."url.path" == '/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations'
+  )]) > `0`
+
+  &&
+
+  length([?(
+    span.serviceName == 'etcd-kind-control-plane' &&
+    span.spanAttributes."url.path" == '/etcdserverpb.KV/Range'
+  )]) > `0`
+expected:
+  count: 1
+

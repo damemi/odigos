@@ -1,0 +1,1100 @@
+name: Build and Test
+
+on: pull_request
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_TAG: e2e-test
+  BASE_BRANCH: ${{ github.base_ref }}
+
+jobs:
+  resolve-base-branch:
+    name: Resolve OSS base branch
+    runs-on: depot-ubuntu-latest
+    outputs:
+      base_branch: ${{ steps.resolve.outputs.base_branch }}
+    steps:
+      - name: Resolve BASE_BRANCH
+        id: resolve
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          DEFAULT_BASE: ${{ github.base_ref }}
+          IS_FEATURE: ${{ contains(github.event.pull_request.labels.*.name, 'feature-branch-release') }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          BRANCH="$DEFAULT_BASE"
+          if [ "$IS_FEATURE" = "true" ]; then
+            PARSED=$(printf '%s\n' "$PR_BODY" | grep -oP '(?m)^Base OSS branch:\s*\K\S+' | head -1)
+            if [ -z "$PARSED" ]; then
+              echo "ERROR: feature PR is missing 'Base OSS branch:' in the body"
+              exit 1
+            fi
+            BRANCH="$PARSED"
+            echo "Feature PR: using base OSS branch from PR body: $BRANCH"
+          else
+            # A stacked PR targets the branch of the PR below it. Follow the open PRs down to the stack's base.
+            for _ in $(seq 1 20); do
+              if [ "$BRANCH" = "main" ] || [[ "$BRANCH" == releases/* ]]; then break; fi
+              NEXT=$(gh api -X GET "repos/$REPO/pulls" -f state=open -f head="${REPO%%/*}:$BRANCH" --jq '.[0].base.ref // empty')
+              [ -n "$NEXT" ] || break
+              echo "PR base '$BRANCH' is stacked on '$NEXT'"
+              BRANCH="$NEXT"
+            done
+            if [ "$BRANCH" != "main" ] && [[ "$BRANCH" != releases/* ]]; then
+              echo "PR base '$BRANCH' is not an OSS branch (main or releases/*); falling back to main"
+              BRANCH="main"
+            else
+              echo "Using OSS base branch: $BRANCH"
+            fi
+          fi
+          echo "base_branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+  detect-changes:
+    name: Detect Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      central: ${{ steps.filter.outputs.central }}
+      central-backend: ${{ steps.filter.outputs.central-backend }}
+      skip-enterprise-k8s: ${{ steps.connector-only.outputs.skip }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 #v3.0.2
+        id: filter
+        with:
+          list-files: json
+          filters: |
+            central:
+              - 'central-backend/**'
+              - 'central-ui/**'
+              - 'central-proxy/**'
+              - 'tests/e2e/central-infrastructure/**'
+              - 'tests/e2e/central-install/**'
+              - 'tests/e2e/central-ui/**'
+              - 'tests/e2e/central-auth-idp/**'
+              - 'tests/common/assert/odigos-central-installed.yaml'
+            # central-auth-idp exercises the backend's Keycloak integration only,
+            # so it is gated on central-backend instead of the broader central
+            # filter above.
+            central-backend:
+              - 'central-backend/**'
+              - 'tests/e2e/central-auth-idp/**'
+              - 'tests/common/assert/odigos-central-installed.yaml'
+            changed:
+              - '**'
+
+      - name: Check connector-only changes
+        id: connector-only
+        env:
+          CHANGED_FILES: ${{ steps.filter.outputs.changed_files }}
+        run: |
+          if jq -e '
+            length > 0 and all(.[];
+              startswith("connectors/") or
+              startswith("connector-postgres/") or
+              startswith("connector-runtime/")
+            )
+          ' <<< "$CHANGED_FILES" > /dev/null; then
+            echo "Skipping odigos-central, odigos-enterprise, and k8s tests - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  unit-tests:
+    name: Unit Tests (${{ matrix.module }})
+    needs: detect-changes
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. The job therefore always runs and every step below no-ops instead.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every Go module that carries its own tests. The enterprise UI + shared
+        # MCP modules live in their own go.mod, so they need explicit entries —
+        # central-backend's `go test ./...` does not reach them.
+        module: [central-backend, ui]
+    steps:
+      - name: Check if tests should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping ${{ matrix.module }} unit tests - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        if: steps.should-run.outputs.skip != 'true'
+        with:
+          persist-credentials: false
+
+      - id: sts
+        name: Get read-only token for private odigos-io modules
+        if: steps.should-run.outputs.skip != 'true'
+        uses: odigos-io/ci-core/sts@main
+        with:
+          pairs: |
+            odigos-io/odigos:enterprise-ro
+
+      - name: Set up Go
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
+        with:
+          go-version-file: "${{ matrix.module }}/go.mod"
+          cache-dependency-path: "${{ matrix.module }}/go.sum"
+
+      - name: Run unit tests
+        if: steps.should-run.outputs.skip != 'true'
+        # The ui module pins OSS at the odigos commit that carries the importable
+        # frontend/server package and McpAccessMode; -mod=mod lets the module
+        # graph resolve it (and fall back to a direct fetch) until that lands in a
+        # tagged release that the default proxy serves.
+        env:
+          GOFLAGS: -mod=mod
+          GOPRIVATE: github.com/odigos-io/*
+        run: |
+          cd ${{ matrix.module }}
+          go test ./... -race
+
+  central-ui-lint:
+    name: Central UI Lint
+    needs: detect-changes
+    if: needs.detect-changes.outputs.central == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    # Job-level so every yarn call sees it, including setup-node's `yarn cache dir`, which reads the
+    # userconfig (with its ${NODE_AUTH_TOKEN} placeholder) and fails when the variable is unset.
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        working-directory: central-ui
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 #v7.1.0
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: central-ui/yarn.lock
+          registry-url: https://npm.pkg.github.com
+          scope: '@odigos-io'
+
+      - name: Install dependencies
+        # The kit is installed as the @odigos/ui-kit alias of @odigos-io/ui-kit; yarn v1 only sends the token
+        # for the tarball when the alias scope maps to the same registry. Safe for frozen installs only.
+        run: |
+          printf '\n@odigos:registry=https://npm.pkg.github.com\n' >> "$NPM_CONFIG_USERCONFIG"
+          yarn install --frozen-lockfile
+
+      - name: Lint
+        run: yarn lint
+
+  # Separate from unit-tests: that job skips when every change is under connectors/, so connector
+  # modules would never run on the PRs that touch them. Each path is its own go.mod (root
+  # `connectors` included — it holds spec/testconnection and does not nest into base/providers).
+  connector-unit-tests:
+    name: Connector Unit Tests (${{ matrix.module }})
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - connectors
+          - connectors/base
+          - connectors/providers/aws
+          - connectors/providers/azure
+          - connectors/providers/gcp
+          - connectors/providers/mulesoft
+          # Not under connectors/, but these belong to this job rather than the central one because they
+          # depend on connectors/ through local replaces AND this job is ungated. In `unit-tests` they
+          # would be skipped whenever a change is confined to connectors/ — which is exactly when a
+          # change to a shared contract (spec.Capabilities, collectorgateway) needs them to run.
+          - connector-opamp-gateway
+          - connector-runtime
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+
+      - id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          # odigos is private: every connector module needs it (connectors/base imports odigos/common and
+          # destinations). A module whose go.sum cache is warm never fetches it, so a missing token only shows up
+          # when a go.sum changes or a new module is added.
+          pairs: |
+            odigos-io/agents-api:ro
+            odigos-io/odigos:enterprise-ro
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
+        with:
+          go-version-file: "${{ matrix.module }}/go.mod"
+          cache-dependency-path: "${{ matrix.module }}/go.sum"
+
+      - name: Run unit tests
+        env:
+          GOFLAGS: -mod=mod
+          GITHUB_TOKEN: ${{ steps.sts.outputs.token }}
+          GOPRIVATE: github.com/odigos-io/*
+        run: |
+          cd ${{ matrix.module }}
+          go test ./... -race
+
+  build-enterprise-components:
+    name: build-enterprise-components (${{ matrix.service }}${{ matrix.rhel == 'true' && ', rhel' || '' }}${{ matrix.extended == 'true' && ', extended' || '' }})
+    needs: [detect-changes, resolve-base-branch]
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. The job therefore always runs and every step below no-ops instead.
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      packages: read
+    env:
+      BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
+    strategy:
+      matrix:
+        service:
+          [
+            odiglet,
+            instrumentor,
+            central-ui,
+            ui,
+            collector,
+            central-proxy,
+            central-backend,
+            connector-opamp-gateway,
+            agents,
+            insights,
+          ]
+        rhel: ["true", "false"]
+        # extended: ['false'] is needed so that standard builds have extended=false explicitly.
+        # Without it, the include entries below (extended: 'true') would match existing
+        # rhel:false combinations and merge into them instead of creating new jobs.
+        extended: ["false"]
+        include:
+          # Extended builds (odiglet + agents with EXTENDED=true) are needed for
+          # important-customers tests that set odiglet.extended=true in their helm config.
+          # These mirror the -extended tag variants published in release-images.yml.
+          # extended: 'true' does not exist in the base matrix values, so these create new jobs.
+          - service: odiglet
+            rhel: "false"
+            extended: "true"
+          - service: agents
+            rhel: "false"
+            extended: "true"
+
+    steps:
+      - name: Check if build should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping ${{ matrix.service }} build - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Print tests run info
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          echo "Image tag: $IMAGE_TAG"
+          echo "Base OSS branch: $BASE_BRANCH"
+
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        if: steps.should-run.outputs.skip != 'true'
+        with:
+          persist-credentials: false
+      - name: Set up Docker Buildx
+        if: steps.should-run.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c #v4.2.0
+      - name: Cache Docker Layers
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: ${{ matrix.service }}-enterprise-cache
+          key: ${{ github.run_id }}-${{ matrix.service }}-docker-layers
+      - name: Write npmrc for the image build
+        if: steps.should-run.outputs.skip != 'true'
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          umask 077
+          {
+            echo "@odigos-io:registry=https://npm.pkg.github.com"
+            # yarn v1 looks up tarball auth by the dependency name, which is the @odigos alias of @odigos-io/ui-kit
+            echo "@odigos:registry=https://npm.pkg.github.com"
+            echo "//npm.pkg.github.com/:_authToken=$NPM_TOKEN"
+          } > "$RUNNER_TEMP/npmrc"
+      - name: Build Image
+        if: steps.should-run.outputs.skip != 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a #v7.3.0
+        with:
+          file: >-
+            ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile'
+            || matrix.service == 'central-ui' && 'central-ui/Dockerfile'
+            || matrix.service == 'ui' && 'ui/Dockerfile'
+            || matrix.service == 'agents' && 'odiglet/Dockerfile'
+            || matrix.service == 'collector' && 'collector/Dockerfile'
+            || 'Dockerfile' }}
+          context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
+          push: false
+          tags: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+          provenance: false
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
+          secret-files: |
+            npmrc=${{ runner.temp }}/npmrc
+          cache-to: type=local,mode=max,dest=${{ matrix.service }}-enterprise-cache
+          cache-from: type=local,src=${{ matrix.service }}-enterprise-cache
+          outputs: type=docker,dest=/tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
+          build-args: |
+            SERVICE_NAME=${{ matrix.service }}
+            RHEL=${{ matrix.rhel }}
+            EXTENDED=${{ matrix.extended || 'false' }}
+            ODIGOS_VERSION=${{ env.IMAGE_TAG }}
+            VERSION=${{ env.IMAGE_TAG }}
+            RELEASE=${{ env.IMAGE_TAG }}
+          target: >-
+            ${{ matrix.service == 'agents' && matrix.rhel == 'true' && 'agents-rhel' ||
+                matrix.service == 'agents' && 'agents' ||
+                matrix.rhel == 'true' && 'rhel' ||
+                '' }}
+      - name: Save enterprise component to cache
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
+          key: ${{ github.run_id }}-${{ matrix.service }}-enterprise-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel-certified' || 'standard') }}
+
+      - name: Load Docker image for scanning
+        if: steps.should-run.outputs.skip != 'true'
+        run: docker load -i /tmp/${{ matrix.service }}-enterprise${{ matrix.extended == 'true' && '-extended' || '' }}.tar
+
+      - name: Scan image for vulnerabilities
+        id: scan
+        if: steps.should-run.outputs.skip != 'true'
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          image: registry.odigos.io/odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}:${{ env.IMAGE_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save scan JSON results
+        if: always() && steps.should-run.outputs.skip != 'true'
+        env:
+          RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
+        run: |
+          mkdir -p /tmp/scan-results
+          IMAGE_NAME="odigos-enterprise-${{ matrix.service }}${{ matrix.rhel == 'true' && '-rhel-certified' || '' }}${{ matrix.extended == 'true' && '-extended' || '' }}"
+
+          # Create a wrapper JSON with image metadata
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+
+          # Add image name to the JSON
+          jq --arg img "$IMAGE_NAME" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/${IMAGE_NAME}.json
+
+      - name: Upload scan results JSON
+        if: always() && steps.should-run.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: vuln-scan-result-${{ matrix.service }}-${{ matrix.extended == 'true' && 'extended' || (matrix.rhel == 'true' && 'rhel' || 'standard') }}-${{ github.sha }}.json
+          path: /tmp/scan-results/*.json
+          retention-days: 30
+
+  build-oss-components-for-tests:
+    needs: [detect-changes, resolve-base-branch]
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. The job therefore always runs and every step below no-ops instead.
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
+    steps:
+      - name: Check if build should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping OSS component build - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - id: sts-odigos
+        name: Get read-only token for odigos
+        if: steps.should-run.outputs.skip != 'true'
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: enterprise-ro
+          output-git-config: 'false'
+
+      - name: Checkout Odigos OSS
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          repository: odigos-io/odigos
+          token: ${{ steps.sts-odigos.outputs.GH_TOKEN }}
+          ref: ${{ env.BASE_BRANCH }}
+          path: odigos
+          persist-credentials: false
+
+      - name: Save Odigos OSS sources for e2e jobs
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/cache/save@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: |
+            odigos/tests
+            odigos/helm
+          key: ${{ github.run_id }}-odigos-oss-src
+
+      - name: Cache built OSS components
+        id: cache-oss-components
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: |
+            /tmp/odigos-cli
+            /tmp/odigos-cli.tar
+          key: ${{ github.run_id }}-odigos-oss-components
+
+      - name: Set up Go # Needed to build the CLI
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
+        with:
+          go-version-file: "odigos/cli/go.mod"
+          cache-dependency-path: "odigos/cli/go.sum"
+
+      - name: Build Odigos CLI
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
+        run: |
+          cd odigos/cli
+          TAG=0.0.0-e2e-test
+          sed -i -E 's/0.0.0/'"${TAG#v}"'/' ../helm/odigos/Chart.yaml
+          helm package ../helm/odigos -d pkg/helm/embedded
+          go build -tags=embed_manifests \
+            -ldflags "-X github.com/odigos-io/odigos/cli/pkg/helm.OdigosChartVersion=${TAG#v}" \
+            -o /tmp/odigos-cli
+
+      - uses: ko-build/setup-ko@v0.9
+        if: steps.should-run.outputs.skip != 'true'
+      - name: Build Odigos CLI Image
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
+        run: |
+          cd odigos
+          TAG=${{ env.IMAGE_TAG }} TAG=e2e-test ORG=registry.odigos.io make build-cli-image
+
+      - name: Save Docker images as tar files
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
+        run: |
+          docker save registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }} -o /tmp/odigos-cli.tar
+
+      - name: Scan cli image for vulnerabilities
+        if: steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
+        id: scan-cli
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          image: registry.odigos.io/odigos-cli:${{ env.IMAGE_TAG }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save cli scan JSON
+        if: always() && steps.should-run.outputs.skip != 'true' && steps.cache-oss-components.outputs.cache-hit != 'true'
+        env:
+          RESULTS_FILE: ${{ steps.scan-cli.outputs.results-file }}
+        run: |
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-cli" --arg tag "${{ env.IMAGE_TAG }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-cli.json
+
+      - name: Upload OSS scan results JSON
+        if: always() && steps.should-run.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: vuln-scan-result-oss-components.json
+          path: /tmp/scan-results/*.json
+          retention-days: 30
+
+  kubernetes-tests:
+    name: kubernetes-tests (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer != '' && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled == true && ', with_wasp' || '' }})
+    needs:
+      - detect-changes
+      - resolve-base-branch
+      - build-enterprise-components
+      - build-oss-components-for-tests
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. No job-level condition here on purpose: the jobs above always run too, so
+    # the default "run when every dependency succeeded" semantics hold, and the
+    # should-run step below turns every scenario into a no-op on connector-only PRs.
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      packages: read
+    env:
+      BASE_BRANCH: ${{ needs.resolve-base-branch.outputs.base_branch }}
+    # Belt-and-suspenders cap. Individual chainsaw steps already enforce
+    # their own timeouts; this prevents any pathological hang from running
+    # out the GH job default of 6 hours.
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      # No max-parallel: readiness recheck + apply-timeout + install waits absorb
+      # control-plane load better than serializing the matrix (which stretched CI
+      # wall-clock). Reintroduce a cap only if signal:killed / OOM returns.
+      matrix:
+        kube-version:
+          - "1.21.12"
+          - "1.23"
+          - "1.32"
+        test-scenario:
+          - "multi-apps"
+          - "jvm-metrics"
+          - "helm-chart"
+          - "central-install"
+          - "central-infrastructure"
+          - "central-ui"
+          - "central-auth-idp"
+          - "mount-method"
+          - "non-root"
+        wasp-enabled: [false]
+        include:
+          - kube-version: "1.21.12"
+            # use 1.21.12 for systemd cgroups compatibility changes in kind 0.13 https://github.com/kubernetes-sigs/kind/releases/tag/v0.13.0
+            kind-image: "kindest/node:v1.21.12@sha256:ae05d44cc636ee961068399ea5123ae421790f472c309900c151a44ee35c3e3e"
+            wasp-enabled: false
+          - kube-version: "1.23"
+            kind-image: "kindest/node:v1.23.17@sha256:14d0a9a892b943866d7e6be119a06871291c517d279aedb816a4b4bc0ec0a5b3"
+            wasp-enabled: false
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            wasp-enabled: false
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            wasp-enabled: true
+            test-scenario: "helm-chart"
+          # control plane instrumentation. we test from k8s version 1.29
+          # we suppose to support go versions >=1.17 which is the case in k8s v1.25
+          # etcd go version satisfies the condition on k8s versions >= 1.26
+          # some go instrumentation features like stripped bin support with interfaces extraction
+          # and grpc context propagation do not work well enough in older go versions.
+          # Hence we set the min version to 1.29, this can be improved on the instrumentation side.
+          - kube-version: "1.29"
+            kind-image: "kindest/node:v1.29.0@sha256:eaa1450915475849a73a9227b8f201df25e55e268e5d619312131292e324d570"
+            test-scenario: "control-plane"
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "control-plane"
+          # instrumentation-rules: eBPF log capture and kernel traces are properties of the odiglet and
+          # the kernel it runs on rather than of the kubernetes version, so one version is enough and
+          # the matrix does not need three more jobs for it.
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "instrumentation-rules"
+          # python-ebpf: chosen by an instrumentation rule, attached with no restart. Like
+          # instrumentation-rules it depends on the kernel rather than the kubernetes version; the
+          # with_wasp job covers the write path lockdown kernels take.
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "python-ebpf"
+            wasp-enabled: false
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "python-ebpf"
+            wasp-enabled: true
+          # important-customers: one entry per customer, only runs on release PRs (release-bot-* → releases/*).
+          # To add a customer: duplicate an entry below and set customer to the slug defined in
+          # tests/e2e/important-customers/customers.sh (e.g. greatwall).
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "important-customers"
+            wasp-enabled: false
+            customer: "greatwall"
+          - kube-version: "1.32"
+            kind-image: "kindest/node:v1.32.0@sha256:2458b423d635d7b01637cac2d6de7e1c1dca1148a2ba2e90975e214ca849e7cb"
+            test-scenario: "important-customers"
+            wasp-enabled: false
+            customer: "kratos"
+    steps:
+      # Check if this test scenario should run based on changed files
+      - name: Check if test should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping ${{ matrix.test-scenario }} - changes are only in connector directories"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          # central-auth-idp only covers the backend's Keycloak integration
+          elif [[ "${{ matrix.test-scenario }}" == "central-auth-idp" ]]; then
+            if [[ "${{ needs.detect-changes.outputs.central-backend }}" != "true" ]]; then
+              echo "Skipping central-auth-idp - no central-backend files changed"
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "Running central-auth-idp - central-backend files changed"
+              echo "skip=false" >> $GITHUB_OUTPUT
+            fi
+          # Other central tests run if any central-related files changed
+          elif [[ "${{ matrix.test-scenario }}" == "central-install" || "${{ matrix.test-scenario }}" == "central-infrastructure" || "${{ matrix.test-scenario }}" == "central-ui" ]]; then
+            if [[ "${{ needs.detect-changes.outputs.central }}" != "true" ]]; then
+              echo "Skipping ${{ matrix.test-scenario }} - no central files changed"
+              echo "skip=true" >> $GITHUB_OUTPUT
+            else
+              echo "Running ${{ matrix.test-scenario }} - central files changed"
+              echo "skip=false" >> $GITHUB_OUTPUT
+            fi
+          # important-customers only runs on release PRs: head branch release-bot-* → base branch releases/*
+          elif [[ "${{ matrix.test-scenario }}" == "important-customers" ]]; then
+            HEAD_REF="${{ github.head_ref }}"
+            BASE_REF="${{ github.base_ref }}"
+            if [[ "$HEAD_REF" == release-bot-* && "$BASE_REF" == releases/* ]]; then
+              echo "Running important-customers - release PR detected (head: $HEAD_REF, base: $BASE_REF)"
+              echo "skip=false" >> $GITHUB_OUTPUT
+            else
+              echo "Skipping important-customers - not a release PR (head: $HEAD_REF, base: $BASE_REF)"
+              echo "skip=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "Running ${{ matrix.test-scenario }} - always runs"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      # we need the enterprise and oss to be siblings.
+      # when using the default path and try to checkout the oss to be sibling, we get this:
+      # Error: Repository path '/home/runner/work/odigos-enterprise/odigos' is not under '/home/runner/work/odigos-enterprise/odigos-enterprise'
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        if: steps.should-run.outputs.skip != 'true'
+        with:
+          path: odigos-enterprise
+          persist-credentials: false
+
+      - name: Set WASP_ENABLED environment variable
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          if [ "${{ matrix.wasp-enabled }}" = "true" ]; then
+            echo "WASP_ENABLED=true" >> "$GITHUB_ENV"
+          else
+            echo "WASP_ENABLED=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Helm
+        if: steps.should-run.outputs.skip != 'true'
+        uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 #v4.3.0
+        with:
+          version: v3.9.0
+
+      - name: Install chainsaw
+        if: steps.should-run.outputs.skip != 'true'
+        uses: kyverno/action-install-chainsaw@f2b47b97dc889c12702113753d713f01ec268de5 #v0.2.12
+
+      - name: Restore Odigos OSS sources
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: |
+            odigos/tests
+            odigos/helm
+          key: ${{ github.run_id }}-odigos-oss-src
+          fail-on-cache-miss: true
+
+      - name: Download Kind Config
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          # Most scenarios use the shared OSS kind-config. A scenario can override it
+          # by shipping its own kind-config.yaml in its test dir (e.g. mount-method
+          # ships one with extra worker nodes for its restart-heavy workload). Use that
+          # file if present, otherwise use the shared OSS config from the odigos checkout.
+          scenario_config="odigos-enterprise/tests/e2e/${{ matrix.test-scenario }}/kind-config.yaml"
+          if [ -f "$scenario_config" ]; then
+            cp "$scenario_config" kind-config.yaml
+          else
+            cp odigos/tests/common/apply/kind-config.yaml kind-config.yaml
+          fi
+
+      - name: Create Kind Cluster
+        if: steps.should-run.outputs.skip != 'true'
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc #v1.14.0
+        with:
+          node_image: ${{ matrix.kind-image }}
+          version: "v0.25.0"
+          cluster_name: kind
+          config: kind-config.yaml
+          # Ephemeral GHA runners: don't fail the job if kind/docker cleanup races
+          # (e.g. "did not receive an exit event" on docker rm). See DEVOPS-83.
+          ignore_failed_clean: true
+
+      - name: wait for cluster readiness
+        if: steps.should-run.outputs.skip != 'true'
+        # DEVOPS-84: also require stable kube-apiserver /readyz + a write probe.
+        # Node/pod Ready alone can pass while apiserver/etcd still flap under load.
+        working-directory: odigos-enterprise
+        run: bash tests/common/wait_for_kind_ready.sh
+
+      - name: Restore Odiglet Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-odiglet-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/odiglet-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-odiglet-enterprise-standard
+
+      - name: Check if Odiglet cache was restored
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-odiglet-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for Odiglet Enterprise - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-odiglet-enterprise-standard"
+          exit 1
+
+      - name: Restore Instrumentor Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-instrumentor-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/instrumentor-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-instrumentor-enterprise-standard
+
+      - name: Check if Instrumentor cache was restored
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-instrumentor-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for Instrumentor Enterprise - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-instrumentor-enterprise-standard"
+          exit 1
+
+      - name: Restore UI Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-ui-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/ui-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-ui-enterprise-standard
+
+      - name: Check if UI cache was restored
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-ui-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for UI Enterprise - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-ui-enterprise-standard"
+          exit 1
+
+      - name: Restore Collector Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-collector-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/collector-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-collector-enterprise-standard
+
+      - name: Check if Collector cache was restored
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-collector-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for Collector Enterprise - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-collector-enterprise-standard"
+          exit 1
+
+      - name: Restore Extended Odiglet from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-odiglet-extended-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/odiglet-enterprise-extended.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-odiglet-enterprise-extended
+
+      - name: Restore Extended Agents from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-agents-extended-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/agents-enterprise-extended.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-agents-enterprise-extended
+
+      # When testing the init-container mount method we need the non-extended agents image too
+      - name: Restore Agents Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-agents-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/agents-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-agents-enterprise-standard
+
+      - name: Restore Odigos OSS Components from Cache
+        if: steps.should-run.outputs.skip != 'true'
+        id: restore-oss-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: |
+            /tmp/odigos-cli
+            /tmp/odigos-cli.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-odigos-oss-components
+
+      - name: Check if OSS components cache was restored
+        if: steps.should-run.outputs.skip != 'true' && steps.restore-oss-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for OSS components - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-odigos-oss-components"
+          exit 1
+
+      - name: Restore Central Backend Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp')
+        id: restore-central-backend-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/central-backend-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-central-backend-enterprise-standard
+
+      - name: Check if Central Backend cache was restored
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp') && steps.restore-central-backend-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for Central Backend Enterprise - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-central-backend-enterprise-standard"
+          exit 1
+
+      - name: Restore Central UI Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp')
+        id: restore-central-ui-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/central-ui-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-central-ui-enterprise-standard
+
+      - name: Check if Central UI cache was restored
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp') && steps.restore-central-ui-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for Central UI Enterprise - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-central-ui-enterprise-standard"
+          exit 1
+
+      - name: Restore Central Proxy Enterprise from Cache
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp')
+        id: restore-central-proxy-cache
+        uses: actions/cache/restore@0400d5f644dc74513175e3cd8d07132dd4860809 #v4.2.4
+        with:
+          path: /tmp/central-proxy-enterprise.tar
+          fail-on-cache-miss: true
+          key: ${{ github.run_id }}-central-proxy-enterprise-standard
+
+      - name: Check if Central Proxy cache was restored
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp') && steps.restore-central-proxy-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "❌ Cache miss for Central Proxy Enterprise - this should not happen!"
+          echo "Expected cache key: ${{ github.run_id }}-central-proxy-enterprise-standard"
+          exit 1
+
+      - name: Load Odigos Components to Kind Cluster
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          kind load image-archive /tmp/odiglet-enterprise.tar
+          kind load image-archive /tmp/odiglet-enterprise-extended.tar
+          kind load image-archive /tmp/instrumentor-enterprise.tar
+          kind load image-archive /tmp/agents-enterprise.tar
+          kind load image-archive /tmp/agents-enterprise-extended.tar
+          kind load image-archive /tmp/odigos-cli.tar
+          kind load image-archive /tmp/ui-enterprise.tar
+          kind load image-archive /tmp/collector-enterprise.tar
+
+      - name: Load Central Components to Kind Cluster
+        if: steps.should-run.outputs.skip != 'true' && (matrix.test-scenario == 'central-install' || matrix.test-scenario == 'central-infrastructure' || matrix.test-scenario == 'central-ui' || matrix.test-scenario == 'central-auth-idp')
+        run: |
+          kind load image-archive /tmp/central-backend-enterprise.tar
+          kind load image-archive /tmp/central-ui-enterprise.tar
+          kind load image-archive /tmp/central-proxy-enterprise.tar
+
+      - name: Copy CLI to Expected Path
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          mkdir -p odigos/cli
+          cp /tmp/odigos-cli odigos/cli/odigos
+          chmod +x odigos/cli/odigos
+
+      - name: Get latest release tag for branch from Helm
+        id: get-latest-tag
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          echo "📦 Updating Helm repositories..."
+          helm repo add odigos https://odigos-io.github.io/odigos/ || true
+          helm repo update
+
+          BRANCH="${{ github.base_ref || github.ref_name }}"
+          # If on a release branch (e.g., releases/v1.14.0), get latest Helm version for that version line
+          # Otherwise (main), get the latest overall Helm chart version
+          if [[ "$BRANCH" == releases/* ]]; then
+            VERSION_PREFIX=$(echo "$BRANCH" | sed -E 's|releases/v([0-9]+\.[0-9]+)\..*|\1|')
+            echo "Release branch detected, looking for v${VERSION_PREFIX}.* in Helm"
+            LATEST_RELEASE_TAG=$(helm search repo odigos/odigos --versions | awk -v prefix="^v${VERSION_PREFIX}\\\\." '$1 == "odigos/odigos" && $3 ~ prefix {print $3; exit}')
+            # On the first rc of a new version line (e.g. v1.29.0-rc0 on releases/v1.29.0),
+            # no stable v1.29.* chart is published yet (and `helm search` hides prereleases),
+            # so the search above is empty. Fall back to the latest overall stable chart,
+            # which matches the latest released images used by the e2e tests.
+            if [[ -z "$LATEST_RELEASE_TAG" ]]; then
+              echo "No stable v${VERSION_PREFIX}.* chart found, falling back to latest overall Helm chart version"
+              LATEST_RELEASE_TAG=$(helm search repo odigos/odigos | awk '$1 == "odigos/odigos" {print $3}')
+            fi
+          else
+            echo "Non-release branch, using latest Helm chart version"
+            LATEST_RELEASE_TAG=$(helm search repo odigos/odigos | awk '$1 == "odigos/odigos" {print $3}')
+          fi
+          if [[ -z "$LATEST_RELEASE_TAG" ]]; then
+            echo "❌ ERROR: Failed to determine LATEST_RELEASE_TAG from Helm"
+            exit 1
+          fi
+          echo "LATEST_RELEASE_TAG=$LATEST_RELEASE_TAG" >> $GITHUB_OUTPUT
+          echo "Latest release tag for branch $BRANCH: $LATEST_RELEASE_TAG"
+
+      # Image cache restore / kind load can take ~1m; apiserver/etcd may flap in
+      # that window even after the post-create readiness gate passed.
+      - name: recheck cluster readiness before E2E
+        if: steps.should-run.outputs.skip != 'true'
+        working-directory: odigos-enterprise
+        run: bash tests/common/wait_for_kind_ready.sh
+
+      - name: Authenticate yarn for the UI Kit (GitHub Packages)
+        # The central-ui scenario runs `yarn install` on this runner (chainsaw-test.yaml), outside any image build.
+        if: steps.should-run.outputs.skip != 'true' && matrix.test-scenario == 'central-ui'
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          umask 077
+          {
+            echo "@odigos-io:registry=https://npm.pkg.github.com"
+            echo "@odigos:registry=https://npm.pkg.github.com"
+            echo "//npm.pkg.github.com/:_authToken=$NPM_TOKEN"
+          } >> "$HOME/.npmrc"
+
+      - name: Run E2E Tests
+        if: steps.should-run.outputs.skip != 'true'
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
+          BASE_BRANCH: ${{ env.BASE_BRANCH }}
+          LATEST_RELEASE_TAG: ${{ steps.get-latest-tag.outputs.LATEST_RELEASE_TAG }}
+        run: |
+
+          # Extract minor version number from the kube-version
+          MINOR_VERSION=$(echo ${{ matrix.kube-version }} | sed -E 's/^1\.([0-9]+).*$/\1/')
+
+          # Default apply timeout is 5s — too short when apiserver briefly flaps
+          # under runner load (context deadline exceeded on early APPLY).
+          chainsaw test odigos-enterprise/tests/e2e/${{ matrix.test-scenario }} \
+            --apply-timeout 30s \
+            --values - <<EOF
+          k8sMinorVersion: ${MINOR_VERSION}
+          customer: "${{ matrix.customer }}"
+          EOF
+
+      - name: Cluster diagnostics
+        if: failure() && steps.should-run.outputs.skip != 'true'
+        run: |
+          echo "==== Nodes ===="; kubectl get nodes -o wide
+          echo "==== Pods (all namespaces) ===="; kubectl get pods -A -o wide
+          echo "==== Events (last 10m) ===="; kubectl get events -A --sort-by=.lastTimestamp | tail -n 200
+          echo "==== Deployments not ready ===="; kubectl get deploy -A | awk '$4!="0/0" && $4!=$5 {print $1,$2}' | while read ns name; do
+            echo "--- describe deploy $ns/$name ---"
+            kubectl describe deploy -n "$ns" "$name" || true
+          done
+          echo "==== Runner memory ===="; free -h || true
+          echo "==== dmesg OOM / kill hints ===="
+          (sudo dmesg -T 2>/dev/null || dmesg -T 2>/dev/null || true) | \
+            grep -Ei "killed process|out of memory|oom|Memory cgroup" | tail -n 80 || true
+
+      - name: Run diagnose command
+        if: failure() && steps.should-run.outputs.skip != 'true'
+        run: |
+          odigos/cli/odigos diagnose
+        continue-on-error: true
+
+      - name: Upload diagnose artifact
+        if: failure() && steps.should-run.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: run-details-${{ matrix.test-scenario }}-${{ matrix.kube-version }}
+          path: odigos_debug*.tar.gz
+        continue-on-error: true
+
+  vulnerability-report:
+    name: Generate Vulnerability Report
+    needs:
+      [
+        detect-changes,
+        build-enterprise-components,
+        build-oss-components-for-tests,
+      ]
+    runs-on: ubuntu-latest
+    # This job is a required check, so on connector-only PRs it must report success
+    # rather than "skipped" - a skipped check does not satisfy a ruleset that names
+    # it. The job therefore always runs and every step below no-ops instead.
+    if: always()
+    steps:
+      - name: Check if report should run
+        id: should-run
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.skip-enterprise-k8s }}" == "true" ]]; then
+            echo "Skipping vulnerability report - changes are only in connector directories"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all scan JSON results
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 #v4.1.8
+        with:
+          pattern: vuln-scan-result-*
+          path: scan-results
+          merge-multiple: true
+
+      - name: Zip individual scan results
+        if: steps.should-run.outputs.skip != 'true'
+        run: |
+          if [ -d "scan-results" ] && ls scan-results/*.json 1> /dev/null 2>&1; then
+            zip -j scan-results.zip scan-results/*.json
+            echo "Created zip with $(unzip -l scan-results.zip | grep -c '\.json') JSON files"
+          else
+            echo "No scan results to zip"
+            touch scan-results.zip
+          fi
+
+      - name: Upload scan results
+        if: steps.should-run.outputs.skip != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: vulnerability-report
+          path: scan-results.zip
+          retention-days: 90

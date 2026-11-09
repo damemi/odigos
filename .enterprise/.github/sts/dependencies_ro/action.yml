@@ -1,0 +1,60 @@
+name: "Dependencies RO STS"
+description: "Action to exchange OIDC tokens with STS for GitHub private repo access"
+
+outputs:
+  GIT_CONFIG_PATH:
+    description: "Path to git config file with credentials for accessing private repositories"
+    # all steps share the same config file
+    value: ${{ steps.sts-ebpf-core.outputs.GIT_CONFIG_PATH }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get ro Token for java ebpf
+      id: sts-ebpf-java
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/ebpf-java-instrumentation
+        identity: enterprise-ro
+    - name: Get ro Token for nodejs ebpf
+      id: sts-ebpf-nodejs
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/ebpf-nodejs-instrumentation
+        identity: enterprise-ro
+    - name: Get ro Token for python ebpf
+      id: sts-ebpf-python
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/ebpf-generic-instrumentation
+        identity: enterprise-ro
+    - name: Get ro Token for golang ebpf
+      id: sts-ebpf-golang
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/enterprise-go-instrumentation
+        identity: enterprise-ro
+    - name: Get ro Token for mysql ebpf
+      id: sts-ebpf-mysql
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/mysql-instrumentation
+        identity: enterprise-ro
+    - name: Get ro Token for odigos
+      id: sts-odigos
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/odigos
+        identity: enterprise-ro
+    - name: Get ro Token for python-ebpf
+      id: sts-python-ebpf
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/python-ebpf
+        identity: enterprise-ro
+    - name: Get ro Token for ebpf-core
+      id: sts-ebpf-core
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: odigos-io/ebpf-core
+        identity: ro

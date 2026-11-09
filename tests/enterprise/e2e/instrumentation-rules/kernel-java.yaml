@@ -1,0 +1,31 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test verifies that the kernel traces rule adds spans for the frontend service (Java) under
+  the /buy server span its thread is serving: opening the return policy file, and running sha256sum.
+  ProcessBuilder usually starts the command through jspawnhelper, so sha256sum can be its child.
+query: |
+  length([?(
+    span.serviceName == 'frontend' &&
+    span.name == 'syscall openat' &&
+    span.spanAttributes."file.path" == '/etc/odigos-demo/return-policy.txt' &&
+    parent.span.kind == 'server' &&
+    parent.span.spanAttributes."url.path" == '/buy'
+  )]) > `0`
+
+  &&
+
+  length([?(
+    span.serviceName == 'frontend' &&
+    span.name == 'exec sha256sum' &&
+    (
+      (parent.span.kind == 'server' && parent.span.spanAttributes."url.path" == '/buy') ||
+      (
+        parent.span.name == 'exec jspawnhelper' &&
+        parent.parent.span.kind == 'server' &&
+        parent.parent.span.spanAttributes."url.path" == '/buy'
+      )
+    )
+  )]) > `0`
+expected:
+  minimum: 1

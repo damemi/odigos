@@ -1,0 +1,36 @@
+# Instrumentation is healthy in the hardened (non-root / noHostPathMounts / k8s-init-container) mode.
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-frontend
+status:
+  healthy: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-coupon
+status:
+  healthy: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-inventory
+status:
+  healthy: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: default
+  labels:
+    instrumented-app: deployment-membership
+status:
+  healthy: true

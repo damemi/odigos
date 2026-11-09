@@ -1,0 +1,24 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test verifies that custom instrumentation rules produce dedicated spans:
+  - Java (frontend): an internal span named 'getCurrencyInfo' with code attributes
+  - Go (membership): an internal span named 'main.checkIfMember'
+query: |
+  length([?(
+    span.serviceName == 'frontend' &&
+    span.name == 'getCurrencyInfo' &&
+    span.kind == 'internal' &&
+    span.spanAttributes."code.function" == 'getCurrencyInfo' &&
+    span.spanAttributes."code.namespace" == 'dev.keyval.kvshop.frontend.CurrencyService'
+  )]) > `0`
+
+  &&
+
+  length([?(
+    span.serviceName == 'membership' &&
+    span.name == 'main.checkIfMember' &&
+    span.kind == 'internal'
+  )]) > `0`
+expected:
+  count: 1

@@ -1,0 +1,15 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+# Waits for one complete frontend-to-backend trace. Uses `minimum` (not exact `count`)
+# because it runs in a retry loop where traces may accumulate across traffic bursts.
+description: Waits for at least one complete distributed trace across all simple-demo services.
+query: |
+  length([?span.serviceName == 'frontend']) > `0` &&
+  length([?span.serviceName == 'pricing']) > `0` &&
+  length([?span.serviceName == 'inventory']) > `0` &&
+  length([?span.serviceName == 'coupon']) > `0` &&
+  length([?span.serviceName == 'membership']) > `0` &&
+  length([?span.serviceName == 'currency']) > `0` &&
+  length([?span.serviceName == 'geolocation']) > `0`
+expected:
+  minimum: 1

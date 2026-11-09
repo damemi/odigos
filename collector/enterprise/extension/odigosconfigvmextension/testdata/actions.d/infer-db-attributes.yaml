@@ -1,0 +1,4 @@
+- name: infer-db-attributes
+  type: inferDbAttributes
+  signals:
+    - TRACES

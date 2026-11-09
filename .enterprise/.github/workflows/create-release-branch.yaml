@@ -1,0 +1,63 @@
+name: Ensure release branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Release branch (e.g. releases/v1.2.0)'
+        required: true
+  repository_dispatch:
+    types: [ensure-release-branch]
+
+permissions: read-all
+
+jobs:
+  ensure-release-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+
+      - name: Get STS token
+        id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: ${{ github.repository }}
+          identity: create-release-branch
+          output-git-config: 'true'
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ steps.sts.outputs.GH_TOKEN }}
+
+      - name: Determine BRANCH input
+        id: inputs
+        run: |
+          BRANCH="${{ github.event.inputs.branch }}"
+          if [ -z "$BRANCH" ]; then BRANCH="${{ github.event.client_payload.branch }}"; fi
+          if [ -z "$BRANCH" ]; then
+            echo "BRANCH is required (workflow_dispatch input 'branch' or repository_dispatch client_payload.branch)"
+            exit 1
+          fi
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure release branch exists
+        env:
+          BRANCH: ${{ steps.inputs.outputs.branch }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch origin +refs/heads/*:refs/remotes/origin/*
+
+          if git ls-remote --heads origin "$BRANCH" | grep -qE "refs/heads/${BRANCH}$"; then
+            echo "Branch '$BRANCH' already exists on origin."
+            exit 0
+          fi
+
+          echo "Creating '$BRANCH' from 'origin/${DEFAULT_BRANCH}'"
+          git switch --detach "origin/${DEFAULT_BRANCH}"
+          git switch -c "$BRANCH"
+          git push --set-upstream origin "$BRANCH"
+          echo "Branch '$BRANCH' created and pushed."

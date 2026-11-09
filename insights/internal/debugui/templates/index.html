@@ -1,0 +1,82 @@
+{{define "title"}}Overview{{end}}
+
+{{define "content"}}
+<h2>Overview</h2>
+
+<section class="ov-section">
+  <div class="ov-sec-head">
+    <h3>Findings</h3>
+    <div class="ov-sec-actions">
+      {{template "timeRangePicker" .TimeRange}}
+      <a class="ov-viewall" href="{{.ViewAllFindings}}">View all findings &rarr;</a>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="label">Open findings</div><div class="value">{{.OpenFindings}}</div></div>
+    <div class="stat"><div class="label">Critical / High</div><div class="value">{{.CriticalHigh}}</div></div>
+    <div class="stat"><div class="label">Policy violations</div><div class="value">{{.PolicyViolations}}</div></div>
+    <div class="stat"><div class="label">Anomalies</div><div class="value">{{.GroupedAnomalies}}</div></div>
+  </div>
+  {{if .TopFindings}}
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Type</th><th>Signal / Rule</th><th class="pv-risk">Risk</th><th>Events</th><th>Last seen</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {{range .TopFindings}}
+      <tr>
+        <td>{{.Service}}{{if .Namespace}} <span class="svc-ns">{{.Namespace}}</span>{{end}}</td>
+        <td>{{if eq .Kind "Violation"}}<span class="badge badge-warn">Violation</span>{{else}}<span class="badge badge-kind">Anomaly</span>{{end}}</td>
+        <td><div class="sig-op">{{.Detail}}</div>{{if .Chips}}{{template "sigChips" .Chips}}{{else}}{{template "offChips" .Offending}}{{end}}</td>
+        <td class="pv-risk">{{template "sevBadge" (dict "Sev" .Severity "Score" .Score)}}</td>
+        <td>{{.Events}}</td>
+        <td class="pv-when">{{.LastSeen.Format "2006-01-02 15:04:05"}}</td>
+        <td class="pv-actions"><a class="btn tip tip-end" data-tip="Open the investigation view for this finding." href="{{.Investigate}}">investigate</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <div class="empty">No open findings in {{.TimeRange.Label}}.</div>
+  {{end}}
+</section>
+
+<section class="ov-section">
+  <div class="ov-sec-head">
+    <h3>Transactions</h3>
+    <a class="ov-viewall" href="/debug/transactions?view=all">View all transactions &rarr;</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="label">Transactions</div><div class="value">{{.TransactionCount}}</div></div>
+    <div class="stat"><div class="label">Services</div><div class="value">{{.ServiceCount}}</div></div>
+    <div class="stat"><div class="label">Volume</div><div class="value">{{humanCount .VolumeTotal}}</div></div>
+    <div class="stat"><div class="label">Baselines promoted <span class="info-i tip tip-end" data-tip="Share of learned baseline classes that have finished the learning phase (graduated) and are now enforced for anomaly detection. The rest are still learning what 'normal' looks like.">i</span></div><div class="value">{{.PromotedPct}}%</div></div>
+  </div>
+  {{if .Busiest}}
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Operation</th><th>Kind</th><th>Volume</th><th>Baseline</th><th>Last seen</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {{range .Busiest}}
+      <tr>
+        <td>{{.Service}}{{if .Namespace}} <span class="svc-ns">{{.Namespace}}</span>{{end}}</td>
+        <td class="pv-off">{{template "operationDisplay" (operationDisplay .Operation)}}</td>
+        <td><span class="badge badge-kind">{{.Kind}}</span></td>
+        <td>{{humanCount .Volume}}</td>
+        <td>
+          {{if not .HasBaseline}}<span class="hint">-</span>
+          {{else if .Promoted}}<span class="badge badge-ok">&#10003; promoted</span>
+          {{else}}<span class="badge badge-pending">learning</span>{{end}}
+        </td>
+        <td class="pv-when">{{.LastSeen.Format "2006-01-02 15:04:05"}}</td>
+        <td class="pv-actions"><a class="btn tip tip-end" data-tip="Open this transaction's detail and baselines." href="/debug/transactions/{{.ID}}">open</a></td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <div class="empty">No transactions yet.</div>
+  {{end}}
+</section>
+{{end}}

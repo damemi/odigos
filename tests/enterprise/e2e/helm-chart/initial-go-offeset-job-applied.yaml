@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    job-name: odigos-go-offsets-updater-initial
+  namespace: odigos-test
+spec:
+  containers:
+  - args:
+    - pro
+    - update-offsets
+    name: odigos-cli
+status:
+  containerStatuses:
+  - name: odigos-cli
+    ready: false
+    restartCount: 0
+    started: false
+    state:
+      terminated:
+        exitCode: 0
+        reason: Completed
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  labels:
+    odigos.io/system-object: "true"
+  name: odigos-go-offsets-updater-initial
+  namespace: odigos-test
+spec:
+  template:
+    metadata:
+      labels:
+        job-name: odigos-go-offsets-updater-initial
+    spec:
+      containers:
+      - args:
+        - pro
+        - update-offsets
+        name: odigos-cli
+status:
+  succeeded: 1
+

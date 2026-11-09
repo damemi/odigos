@@ -1,0 +1,27 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: LogTest
+endpoint: /v1/logs
+description: |
+  This test verifies that a log line written by the frontend service (Java) while it was handling
+  a request is captured with the trace context of that request.
+
+  "Buying product with id" is written by ProductController.buyProduct, so it only appears on the
+  POST /buy path and never on the /rate path the warm-up traffic uses. It is written with
+  System.out.println on the Tomcat worker thread that owns the server span, through a synchronous
+  console appender, so the capture sees a write() from the thread the span is mapped to.
+
+  Java resolves trace context by linux thread id rather than by goroutine, so this exercises a
+  different half of the capture than the Go assertion does. Both are needed: they are the only two
+  distros whose eBPF SDKs provision the correlation maps.
+
+  The expression is a filter projection over all stored log records, the same shape the trace
+  queries use, and the runner counts the records it selects.
+query: |
+  [?(
+    serviceName == 'frontend' &&
+    contains(bodyText, 'Buying product with id') &&
+    traceId != null &&
+    spanId != null
+  )]
+expected:
+  minimum: 1

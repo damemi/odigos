@@ -1,0 +1,8 @@
+# This file is merged after the remote config. It preserves the two local control-plane invariants:
+# the Collector remains attached to its Supervisor and enterprise authorization cannot be disabled.
+extensions:
+  odigos_enterprise_auth:
+
+service:
+  extensions:
+    - odigos_enterprise_auth

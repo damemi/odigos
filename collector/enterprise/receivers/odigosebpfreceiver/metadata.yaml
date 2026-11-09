@@ -1,0 +1,77 @@
+type: odigosebpf
+status:
+  class: receiver
+
+  stability:
+    beta: [traces, logs]
+    deprecated: [metrics]
+  deprecation:
+    metrics:
+      date: "2026-09-17"
+      migration: "JVM runtime metrics are reported over OTLP by the Java agent and arrive on the otlp/in receiver. This receiver keeps accepting metrics as a no-op for one release; remove it from any metrics pipeline."
+  codeowners:
+    active: [tamirdavid]
+
+telemetry:
+  metrics:
+    ebpf_logs_attr_cache_size:
+      enabled: true
+      description: "Current number of entries in the logs resource-attributes cache."
+      unit: "{entries}"
+      gauge:
+        value_type: int
+      stability: development
+
+    ebpf_memory_pressure_wait_time_total:
+      enabled: true
+      description: "Total time spent waiting due to memory pressure. Can be compared with otelcol_process_uptime_seconds_total to calculate the percentage of time spent in memory pressure: (ebpf_memory_pressure_wait_time_total_milliseconds / (otelcol_process_uptime_seconds_total * 1000)) * 100"
+      unit: "ms"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development
+
+    ebpf_total_bytes_read:
+      enabled: true
+      description: "Total number of bytes read from the eBPF buffer (perf or ring)."
+      unit: "By"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development
+    
+    odigos_ebpf_accepted_spans:
+      enabled: true
+      description: "Total number of spans accepted from the eBPF buffer (perf or ring)."
+      unit: "{spans}"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development
+
+    odigos_ebpf_logs_with_context:
+      enabled: true
+      description: "Total number of captured log records emitted with trace context (trace_id/span_id) attached."
+      unit: "{logs}"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development
+
+    odigos_ebpf_logs_without_context:
+      enabled: true
+      description: "Total number of captured log records emitted without trace context (no active span for the writing thread)."
+      unit: "{logs}"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development
+
+    odigos_ebpf_lost_samples:
+      enabled: true
+      description: "The number of samples lost while reading from the eBPF perf buffer. For the ring buffer, this value is always 0."
+      unit: "{samples}"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development

@@ -1,0 +1,13 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test verifies that only the services in the kernel traces rule's scope, membership and
+  frontend, get kernel spans.
+query: |
+  length([?(
+    span.serviceName != 'membership' &&
+    span.serviceName != 'frontend' &&
+    (starts_with(span.name, 'syscall ') || starts_with(span.name, 'exec '))
+  )]) > `0`
+expected:
+  count: 0

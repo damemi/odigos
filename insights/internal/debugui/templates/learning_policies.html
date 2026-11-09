@@ -1,0 +1,261 @@
+{{define "title"}}Learning policies{{end}}
+
+{{define "polCard"}}
+<div class="pol-card {{if .Deletable}}override{{end}}">
+  <div class="pol-head">
+    {{if eq .Scope "global"}}
+      <span class="badge badge-pending">global default</span>
+    {{else if eq .Scope "service"}}
+      <span class="pol-scope">service: <code>{{.Label}}</code></span>
+    {{else}}
+      <span class="pol-scope">transaction: {{if .Link}}<a href="{{.Link}}"><code>{{.Label}}</code></a>{{else}}<code>{{.Label}}</code>{{end}}</span>
+    {{end}}
+    {{if eq .Policy.Mode "all"}}<span class="badge badge-kind">all</span>
+    {{else if eq .Policy.Mode "k_of"}}<span class="badge badge-kind">{{.Policy.MinMatches}} of</span>
+    {{else}}<span class="badge badge-kind">any</span>{{end}}
+    {{if .Deletable}}
+    <form method="POST" action="/debug/settings/learning/{{.Policy.Class}}/delete" style="margin-left:auto;"
+          onsubmit="return confirm('Delete this override? The class falls back to a broader policy.');">
+      <input type="hidden" name="scope" value="{{.Scope}}">
+      <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
+      <button type="submit" class="btn-link">delete override</button>
+    </form>
+    {{end}}
+  </div>
+  <p class="pol-summary">Currently: {{conditionsText .Policy}}</p>
+
+  <form class="policy-editor" method="POST" action="/debug/settings/learning/{{.Policy.Class}}" data-policy="{{policyEditJSON .Policy}}">
+    <input type="hidden" name="scope" value="{{.Scope}}">
+    <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
+
+    <div class="pol-controls">
+      <div class="pol-field">
+        <label>Combine</label>
+        <select name="mode" class="pol-mode">
+          <option value="any">any (OR)</option>
+          <option value="all">all (AND)</option>
+          <option value="k_of">k of</option>
+        </select>
+      </div>
+      <div class="pol-field pol-kof" style="display:none;">
+        <label>Matches needed</label>
+        <input type="number" name="min_matches" class="pol-minmatches" min="1" value="1">
+      </div>
+    </div>
+
+    <div class="cond-list"></div>
+    <button type="button" class="btn cond-add">+ add condition</button>
+
+    <div class="pol-preview">Promotes when <span class="preview-text">-</span></div>
+
+    <div class="pol-foot">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <span class="pol-field" style="color:var(--muted); font-size:12px;">A policy with no conditions falls back to the count-only default.</span>
+    </div>
+  </form>
+</div>
+{{end}}
+
+{{define "content"}}
+<style>
+  .class-group { margin-bottom:26px; }
+  .class-group > h3 { display:flex; align-items:center; gap:10px; margin:0 0 10px; font-size:15px; }
+  .class-group > h3 code { font-size:15px; font-weight:700; }
+  .pol-card { background:#fff; border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin-bottom:10px; }
+  .pol-card.override { border-left:3px solid var(--accent); }
+  .pol-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+  .pol-scope { font-size:13px; font-weight:600; }
+  .pol-scope a { color:var(--accent); text-decoration:none; }
+  .pol-scope a:hover { text-decoration:underline; }
+  .pol-summary { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .pol-controls { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:12px; }
+  .pol-field { display:flex; align-items:center; gap:8px; }
+  .pol-field label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:0.4px; }
+  select, input[type=number], input[type=text] { padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; background:#fff; color:var(--fg); }
+  input[type=number] { width:90px; }
+  .cond-list { display:flex; flex-direction:column; gap:8px; margin:8px 0 12px; }
+  .cond-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .cond-row .cond-value { width:80px; }
+  .pol-preview { font-size:13px; margin:10px 0 12px; padding:8px 12px; background:#f6f8fa; border-radius:4px; }
+  .pol-preview b { color:var(--accent); }
+  .pol-foot { display:flex; align-items:center; gap:12px; }
+  .add-override { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 12px; background:#f6f8fa; border:1px dashed var(--border); border-radius:8px; }
+  .add-override label { font-size:12px; color:var(--muted); }
+  .btn-link { background:none; border:none; color:var(--danger,#b42318); cursor:pointer; font-size:12px; padding:0; }
+</style>
+
+<div class="settings-layout">
+{{template "settingsNav" .}}
+<div class="settings-main">
+
+<h2>Learning policies</h2>
+<p class="hint" style="max-width:860px;">
+  How each deviation class decides it has learned enough to stop learning and start scoring. A policy is a list of
+  <b>conditions</b> combined by a <b>mode</b> (<code>any</code>, <code>all</code>, <code>k of</code>); conditions are
+  count-, time-, or <em>stability</em>-based. Each class has a <b>global default</b> plus optional <b>overrides</b> for a
+  single service or one specific transaction - the <em>most specific</em> policy wins (transaction &rarr; service &rarr;
+  global). Saved edits apply live, no restart.
+</p>
+
+{{if .Classes}}
+{{range .Classes}}
+<section class="class-group">
+  <h3><span class="tip" data-tip="{{classBaselineDesc .Class}}">{{classBaselineLabel .Class}}</span></h3>
+
+  {{template "polCard" (dict "Policy" .Global "Scope" "global" "ScopeKey" "" "Deletable" false)}}
+
+  {{range .Overrides}}
+  {{template "polCard" (dict "Policy" .Policy "Scope" .Scope "ScopeKey" .Policy.ScopeKey "Deletable" true "Label" .Label "Link" .Link)}}
+  {{end}}
+
+  <form class="add-override" method="POST" action="/debug/settings/learning/{{.Class}}/override">
+    <label>Add override</label>
+    <select name="scope" class="add-scope">
+      <option value="service">service (namespace/service)</option>
+      <option value="transaction">transaction (transaction id)</option>
+    </select>
+    <input type="text" name="scope_key" placeholder="e.g. billing/checkout" size="30" required>
+    <button type="submit" class="btn">+ add</button>
+  </form>
+</section>
+{{end}}
+{{else}}
+<div class="empty">No learning policies. (Defaults are seeded by a schema migration.)</div>
+{{end}}
+
+</div>
+</div>
+
+<script>
+  var COND_TYPES = [
+    { value: 'min_observations',    label: 'Min observations',          kind: 'count' },
+    { value: 'min_duration',        label: 'Min learning time',         kind: 'duration' },
+    { value: 'stable_observations', label: 'Stable for N observations',  kind: 'count' },
+    { value: 'stable_duration',     label: 'Stable for a duration',      kind: 'duration' },
+  ];
+  var UNITS = [ { value: 'min', label: 'minutes' }, { value: 'hour', label: 'hours' }, { value: 'day', label: 'days' } ];
+
+  function typeMeta(v) {
+    for (var i = 0; i < COND_TYPES.length; i++) if (COND_TYPES[i].value === v) return COND_TYPES[i];
+    return COND_TYPES[0];
+  }
+
+  function condToRow(c) {
+    switch (c.type) {
+      case 'min_observations':    return { type: c.type, value: c.minObservations || 0, unit: 'min' };
+      case 'stable_observations': return { type: c.type, value: c.stableObservations || 0, unit: 'min' };
+      case 'min_duration':        return durationRow(c.type, c.minDurationMinutes || 0);
+      case 'stable_duration':     return durationRow(c.type, c.stableMinutes || 0);
+      default: return null;
+    }
+  }
+  function durationRow(type, mins) {
+    var value = mins, unit = 'min';
+    if (mins && mins % 1440 === 0) { value = mins / 1440; unit = 'day'; }
+    else if (mins && mins % 60 === 0) { value = mins / 60; unit = 'hour'; }
+    return { type: type, value: value, unit: unit };
+  }
+
+  function makeSelect(name, cls, options, selected) {
+    var s = document.createElement('select');
+    s.name = name; s.className = cls;
+    options.forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o.value; opt.textContent = o.label;
+      if (o.value === selected) opt.selected = true;
+      s.appendChild(opt);
+    });
+    return s;
+  }
+
+  function buildRow(form, row) {
+    var wrap = document.createElement('div');
+    wrap.className = 'cond-row';
+
+    var typeSel = makeSelect('cond_type', 'cond-type', COND_TYPES, row.type);
+    var value = document.createElement('input');
+    value.type = 'number'; value.name = 'cond_value'; value.className = 'cond-value';
+    value.min = '1'; value.value = row.value || '';
+    var unitSel = makeSelect('cond_unit', 'cond-unit', UNITS, row.unit || 'min');
+
+    var remove = document.createElement('button');
+    remove.type = 'button'; remove.className = 'btn cond-remove'; remove.textContent = 'remove';
+
+    function syncUnit() { unitSel.style.display = typeMeta(typeSel.value).kind === 'duration' ? '' : 'none'; }
+    syncUnit();
+
+    typeSel.addEventListener('change', function () { syncUnit(); updatePreview(form); });
+    value.addEventListener('input', function () { updatePreview(form); });
+    unitSel.addEventListener('change', function () { updatePreview(form); });
+    remove.addEventListener('click', function () { wrap.remove(); updatePreview(form); });
+
+    wrap.appendChild(typeSel); wrap.appendChild(value); wrap.appendChild(unitSel); wrap.appendChild(remove);
+    form.querySelector('.cond-list').appendChild(wrap);
+  }
+
+  function rowText(typeVal, value, unit) {
+    var n = parseInt(value, 10) || 0;
+    var dur = function () {
+      var label = unit === 'day' ? 'day' : (unit === 'hour' ? 'hour' : 'min');
+      return n + ' ' + label + (n === 1 ? '' : 's');
+    };
+    switch (typeVal) {
+      case 'min_observations':    return '\u2265 ' + n + ' observations';
+      case 'stable_observations': return 'unchanged for ' + n + ' observations';
+      case 'min_duration':        return 'learning for ' + dur();
+      case 'stable_duration':     return 'unchanged for ' + dur();
+      default: return typeVal;
+    }
+  }
+
+  function updatePreview(form) {
+    var mode = form.querySelector('.pol-mode').value;
+    var rows = form.querySelectorAll('.cond-row');
+    var parts = [];
+    rows.forEach(function (r) {
+      var t = r.querySelector('.cond-type').value;
+      var v = r.querySelector('.cond-value').value;
+      var u = r.querySelector('.cond-unit').value;
+      if ((parseInt(v, 10) || 0) > 0) parts.push(rowText(t, v, u));
+    });
+    var out = form.querySelector('.preview-text');
+    if (!parts.length) { out.innerHTML = '<b>' + defaultText() + '</b> (no conditions \u2014 count-only default)'; return; }
+    var sep = ' <b>OR</b> ';
+    if (mode === 'all') sep = ' <b>AND</b> ';
+    else if (mode === 'k_of') { var k = parseInt(form.querySelector('.pol-minmatches').value, 10) || 1; sep = ' <b>/ any ' + k + ' of</b> '; }
+    out.innerHTML = parts.join(sep);
+  }
+  function defaultText() { return '\u2265 50 observations'; }
+
+  function initEditor(form) {
+    var data = {};
+    try { data = JSON.parse(form.dataset.policy || '{}'); } catch (e) {}
+    var modeSel = form.querySelector('.pol-mode');
+    modeSel.value = data.mode || 'any';
+    form.querySelector('.pol-minmatches').value = data.minMatches || 1;
+
+    (data.conditions || []).forEach(function (c) {
+      var row = condToRow(c);
+      if (row) buildRow(form, row);
+    });
+
+    var kof = form.querySelector('.pol-kof');
+    function syncKof() { kof.style.display = modeSel.value === 'k_of' ? '' : 'none'; }
+    syncKof();
+    modeSel.addEventListener('change', function () { syncKof(); updatePreview(form); });
+    form.querySelector('.cond-add').addEventListener('click', function () {
+      buildRow(form, { type: 'min_observations', value: '', unit: 'min' }); updatePreview(form);
+    });
+    updatePreview(form);
+  }
+
+  document.querySelectorAll('.policy-editor').forEach(initEditor);
+
+  document.querySelectorAll('.add-override').forEach(function (f) {
+    var sel = f.querySelector('.add-scope');
+    var key = f.querySelector('input[name=scope_key]');
+    function sync() { key.placeholder = sel.value === 'transaction' ? 'e.g. 125538551172483654' : 'e.g. billing/checkout'; }
+    sel.addEventListener('change', sync); sync();
+  });
+</script>
+{{end}}

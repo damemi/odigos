@@ -1,0 +1,12 @@
+# octo-sts trust policy for the on-prem token workflows: a short-lived token that
+# can keep the "On-prem tokens" org project in sync (Status, Issued, Expires).
+# organization_projects is an org permission and rides along on this repo-scoped
+# token; issues: read lets the project resolve the private tracker issues here.
+# Verified end to end by the RUN-1330 smoke test before it was wired in.
+issuer: https://token.actions.githubusercontent.com
+subject_pattern: repo:odigos-io(@84347062)?/odigos-enterprise(@683608086)?:ref:refs/heads/main
+claim_pattern:
+  job_workflow_ref: odigos-io/odigos-enterprise/\.github/workflows/onprem-token-reminders\.yml@refs/heads/main
+permissions:
+  organization_projects: write
+  issues: read

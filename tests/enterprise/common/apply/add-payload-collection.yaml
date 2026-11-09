@@ -1,0 +1,13 @@
+apiVersion:  odigos.io/v1alpha1
+kind:         InstrumentationRule
+metadata:
+  name: payload-rule
+  namespace: odigos-test
+spec:
+  ruleName: payload-rule
+  payloadCollection:
+    dbQuery: {}
+    httpRequest: {}
+    httpResponse: {}
+    messaging: {}
+  ruleName:  payload-rule

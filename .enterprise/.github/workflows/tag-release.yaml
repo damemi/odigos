@@ -1,0 +1,151 @@
+name: Tag Release
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  id-token: write  # required for STS (github-release-updater)
+
+jobs:
+  release-job:
+    runs-on: depot-ubuntu-latest
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-bot')
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+      start_sha: ${{ steps.generate-notes.outputs.start_sha }}
+    steps:
+    - name: Get STS token
+      id: sts
+      uses: odigos-io/ci-core/sts@main
+      with:
+        scope: ${{ github.repository }}
+        identity: github-release-updater
+
+    - name: Checkout code
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+      with:
+        token: ${{ secrets.RELEASE_BOT_TOKEN }}
+        ref: ${{ github.event.pull_request.base.ref }}
+
+    - name: Extract Version from PR Comment
+      env:
+        GITHUB_EVENT_PULL_REQUEST_BODY: ${{ github.event.pull_request.body }}
+      id: extract-version
+      run: |
+        PR_COMMENT="$GITHUB_EVENT_PULL_REQUEST_BODY"
+        # Extract the version from the PR comment, xargs is used to remove any leading or trailing whitespace
+        VERSION=$(echo "$PR_COMMENT" | grep -oP 'Version:\s*\Kv[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?' | xargs)
+        echo "Extracted version: $VERSION"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Configure Git
+      run: |
+        git config --global user.email "bot@keyval.dev"
+        git config --global user.name "Odigos Release Bot"
+
+    - name: Tag Current Commit
+      env:
+        GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        STEPS_EXTRACT_VERSION_OUTPUTS_VERSION: ${{ steps.extract-version.outputs.version }}
+      run: |
+          git remote set-url origin https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}
+          VERSION=${STEPS_EXTRACT_VERSION_OUTPUTS_VERSION}
+          git tag $VERSION
+          git push --tags
+
+    - name: Generate release notes
+      id: generate-notes
+      continue-on-error: true
+      uses: odigos-io/ci-core/generate-release-notes@main
+      with:
+        tag: ${{ steps.extract-version.outputs.version }}
+        release-branch: ${{ github.event.pull_request.base.ref }}
+        sts_identity: github-release-updater
+        dry-run: "true"
+
+    - name: Download release notes artifact
+      if: steps.generate-notes.outcome == 'success'
+      continue-on-error: true
+      uses: actions/download-artifact@v4
+      with:
+        name: release-notes
+
+    - name: Create or update GitHub release
+      if: steps.generate-notes.outcome == 'success'
+      continue-on-error: true
+      env:
+        GH_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+      run: |
+        TAG="${{ steps.extract-version.outputs.version }}"
+        # Artifact extracts to workspace root: release-notes.md and release-notes-gh.md (per action upload path)
+        if ! gh release create "$TAG" --notes-file release-notes-gh.md; then
+          gh release edit "$TAG" --notes-file release-notes-gh.md
+        fi
+        gh release upload "$TAG" release-notes.md --clobber
+
+    - name: Notify Slack
+      if: always()
+      uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+      with: 
+        webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+        success-description: "Tagged odigos enterprise due to release PR merge"
+        failure-description: "ERROR: failed to tag odigos enterprise due to release PR merge"
+        tag: ${{ steps.extract-version.outputs.version }}
+
+  # Records the release in Linear with the issues it shipped. Its own job so the
+  # third-party CLI never runs beside the release job's STS and bot tokens, and
+  # so a Linear problem cannot fail a release that is already tagged.
+  linear-release:
+    needs: release-job
+    if: needs.release-job.outputs.version != ''
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          ref: ${{ needs.release-job.outputs.version }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Linear only auto-generates notes from attached issues, so hand it the
+      # notes GitHub already has for this tag.
+      - name: Fetch the GitHub release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release-job.outputs.version }}
+        run: |
+          set -uo pipefail
+          if ! gh release view "${VERSION}" --repo "${GITHUB_REPOSITORY}" \
+               --json body --jq .body > release-notes.md; then
+            echo "::warning::could not read the GitHub release notes for ${VERSION}"
+          fi
+          [ -s release-notes.md ] || rm -f release-notes.md
+
+      # A sync lands the release in the pipeline's first started stage, PRE, so a
+      # -pre build needs no promotion. Only Released is a completed stage, so
+      # "Done on release" style automation fires for stable builds alone — never
+      # for a -pre, an -rc, or a v0.0.0-feat.* scratch build.
+      - name: Decide the release stage
+        id: stage
+        env:
+          VERSION: ${{ needs.release-job.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "name=Released" >> "$GITHUB_OUTPUT"
+          elif [[ "${VERSION}" =~ -rc\.?[0-9]+$ ]]; then
+            echo "name=RC" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: odigos-io/ci-core/linear-release@main
+        with:
+          access-key: ${{ secrets.LINEAR_RELEASE_ACCESS_KEY }}
+          version: ${{ needs.release-job.outputs.version }}
+          base-ref: ${{ needs.release-job.outputs.start_sha }}
+          release-notes: release-notes.md
+          stage: ${{ steps.stage.outputs.name }}

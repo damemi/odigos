@@ -1,0 +1,186 @@
+name: Release Enterprise Components to Artifact Registry (RHEL)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Docker image tag"
+        required: true
+  repository_dispatch:
+    types: [publish_images_rhel]
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        service:
+          - odiglet
+          - instrumentor
+          - ui
+          - collector
+          - central-proxy
+          - central-backend
+          - central-ui
+          - agents
+          - insights
+        extended: ['false']
+        # Required for RHEL/OpenShift label build-args (matches odigos publish-modules-rhel.yml).
+        include:
+          - service: odiglet
+            summary: "Odiglet for Odigos"
+            description: "Odiglet is the core component of Odigos managing auto-instrumentation. This image requires a root user to load and manage eBPF programs."
+          - service: instrumentor
+            summary: "Instrumentor for Odigos"
+            description: "Instrumentor manages auto-instrumentation for workloads with Odigos."
+          - service: central-proxy
+            summary: "Central Proxy for Odigos"
+            description: "Central Proxy connects Odigos in workload clusters to Odigos Central."
+          - service: central-backend
+            summary: "Central Backend for Odigos"
+            description: "Central Backend provides the API and coordination for Odigos Central multi-cluster management."
+          - service: central-ui
+            summary: "Central UI for Odigos"
+            description: "Central UI provides the web application for managing Odigos Central."
+          - service: ui
+            summary: "Enterprise UI for Odigos"
+            description: "Enterprise build of the Odigos web frontend."
+          - service: collector
+            runner: depot-ubuntu-24.04-16
+            summary: "Collector for Odigos"
+            description: "Enterprise build of the Odigos OpenTelemetry Collector."
+          - service: agents
+            summary: "Odigos Enterprise Agents"
+            description: "The Odigos Agents used to copy Odigos agent relevant files into the user workloads."
+          - service: insights
+            summary: "Insights for Odigos"
+            description: "Insights ingests distributed traces, learns per-entity baselines, and exposes anomaly queries to the UI."
+
+    runs-on: ${{ matrix.runner || 'depot-ubuntu-24.04-4' }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c #v4.2.0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
+
+      - id: gcp-auth
+        name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@b7593ed2efd1c1617e1b0254da33b86225adb2a5 #v2.1.12
+        with:
+          token_format: access_token
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          # Collector multi-arch compile can exceed 20m on smaller runners; keep headroom for push.
+          access_token_lifetime: 3600s
+
+      - name: Login to Artifact Registry
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.gcp-auth.outputs.access_token }}
+
+      - name: Configure AWS credentials for ECR Public
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::061717858829:role/ecr-pull-push-role
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR Public
+        run: |
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Quay.io
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Write npmrc for the image build
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          umask 077
+          {
+            echo "@odigos-io:registry=https://npm.pkg.github.com"
+            # yarn v1 looks up tarball auth by the dependency name, which is the @odigos alias of @odigos-io/ui-kit
+            echo "@odigos:registry=https://npm.pkg.github.com"
+            echo "//npm.pkg.github.com/:_authToken=$NPM_TOKEN"
+          } > "$RUNNER_TEMP/npmrc"
+
+      - name: Build and Push Enterprise Image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a #v7.3.0
+        env:
+          ODIGOS_TAG: ${{ github.event.inputs.tag || github.event.client_payload.tag }}
+        with:
+          file: >-
+            ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile'
+            || matrix.service == 'central-ui' && 'central-ui/Dockerfile'
+            || matrix.service == 'ui' && 'ui/Dockerfile'
+            || matrix.service == 'agents' && 'odiglet/Dockerfile'
+            || matrix.service == 'collector' && 'collector/Dockerfile'
+            || 'Dockerfile' }}
+          context: ${{ matrix.service == 'central-ui' && 'central-ui' || '.' }}
+          push: true
+          tags: |
+            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+            ghcr.io/odigos-io/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+            quay.io/odigos/odigos-enterprise-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}${{ matrix.extended == 'true' && '-extended' || '' }}
+          build-args: |
+            SERVICE_NAME=${{ matrix.service }}
+            SUMMARY=${{ matrix.summary }}
+            DESCRIPTION=${{ matrix.description }}
+            VERSION=${{ env.ODIGOS_TAG }}
+            RELEASE=${{ env.ODIGOS_TAG }}
+            LD_FLAGS=-s -w
+            RHEL=true
+            EXTENDED=${{ matrix.extended }}
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          target: >-
+            ${{ matrix.service == 'agents' && 'agents-rhel' || 'rhel' }}
+          secrets: |
+            "github_token=${{ secrets.RELEASE_BOT_TOKEN }}"
+          secret-files: |
+            npmrc=${{ runner.temp }}/npmrc
+
+  # TODO: Add a release-connectors job (connector-runtime, connector-aws, connector-gcp, connector-postgres) mirroring
+  # .github/workflows/release-images.yml. Requires UBI/`rhel` stages in the connector Dockerfiles first.
+  # connector-postgres needs extra attention — it is based on postgres:16 (Debian), not UBI, so a
+  # RHEL-certified variant is not a straight port of the standard image.
+
+  trigger-openshift-certification:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger OpenShift Preflight job
+        run: |
+          curl -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.RELEASE_BOT_TOKEN }}" \
+            https://api.github.com/repos/odigos-io/odigos/dispatches \
+            -d '{"event_type": "openshift_preflight", "client_payload": {"tag": "${{ github.event.inputs.tag || github.event.client_payload.tag }}"}}'

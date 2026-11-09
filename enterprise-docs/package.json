@@ -1,0 +1,26 @@
+{
+  "name": "@odigos/enterprise-docs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Odigos Enterprise documentation, served behind enterprise API key authentication.",
+  "scripts": {
+    "dev": "mint dev --port 3001",
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/check-docs.mjs --export",
+    "format": "prettier --config .prettierrc.json --ignore-unknown --write . ../.github/workflows/docs.yaml",
+    "format:check": "prettier --config .prettierrc.json --ignore-unknown --check . ../.github/workflows/docs.yaml"
+  },
+  "devDependencies": {
+    "adm-zip": "0.5.16",
+    "mint": "4.2.876",
+    "pagefind": "1.5.2",
+    "prettier": "3.9.6",
+    "prettier-plugin-go-template": "0.0.15",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.19.0"
+}

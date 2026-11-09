@@ -1,0 +1,105 @@
+{{define "title"}}Evidence · {{.Service}} · {{.RuleLabel}}{{end}}
+
+{{define "content"}}
+<style>
+  .ev-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .ev-sub { color: var(--muted); font-size: 13px; margin: -4px 0 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .ev-banner { background: #fdeae6; border: 1px solid #f3b6a6; border-left: 4px solid #d64027; border-radius: 6px; padding: 12px 14px; margin: 0 0 18px; font-size: 13px; }
+  .ev-banner code { background: #fff; padding: 1px 6px; border-radius: 3px; }
+  .ev-actions { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; flex-wrap: wrap; }
+  /* Tint the spans the server flagged as the offending edge. Mirrors the
+     anomaly compare view so the two evidence surfaces read the same. */
+  .trace-row-wrap.hl-high > summary { background: #fdeae6; box-shadow: inset 3px 0 0 #d64027; }
+  .trace-row-wrap.hl-medium > summary { background: #fdf4e3; box-shadow: inset 3px 0 0 #e0a020; }
+  .trace-row-wrap.hl-low > summary { background: #eaf1fc; box-shadow: inset 3px 0 0 var(--accent); }
+  .hl-tag { font-size: 11px; color: var(--warn); font-style: italic; }
+</style>
+
+<p><a href="/debug/anomalies">&larr; findings</a></p>
+
+<div class="ev-head">
+  <h2>{{.Service}}</h2>
+  {{if .Namespace}}<span class="badge badge-kind">{{.Namespace}}</span>{{end}}
+  <span class="badge badge-warn">policy violation</span>
+</div>
+<div class="ev-sub">
+  <span>{{.RuleLabel}}</span>
+  {{if .TraceID}}<code>{{.TraceID}}</code>{{end}}
+  {{if .ObservedAt}}<span>captured {{.ObservedAt.Format "2006-01-02 15:04:05"}}</span>{{end}}
+</div>
+
+<div class="ev-banner">
+  {{.Summary}}
+</div>
+
+{{template "findingDeliveries" .Deliveries}}
+
+<div class="ev-actions">
+  <form method="POST" action="/debug/guardrails/violations/accept"
+        onsubmit="return confirm('Accept {{.Offending}} on {{.Service}}? It is added to the guardrail allowlist, so this edge becomes normal and stops alerting.')">
+    <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
+    <input type="hidden" name="rule_key" value="{{.RuleKey}}">
+    <input type="hidden" name="offending" value="{{.Offending}}">
+    <button type="submit" class="btn btn-primary">Accept (add to guardrail)</button>
+  </form>
+  <form method="POST" action="/debug/guardrails/violations/dismiss"
+        onsubmit="return confirm('Dismiss this violation? It is closed without changing the guardrail, so it re-opens if the edge recurs.')">
+    <input type="hidden" name="scope_key" value="{{.ScopeKey}}">
+    <input type="hidden" name="rule_key" value="{{.RuleKey}}">
+    <input type="hidden" name="offending" value="{{.Offending}}">
+    <button type="submit" class="btn">Dismiss</button>
+  </form>
+</div>
+
+<h3>Evidence trace</h3>
+{{if .Rows}}
+<div class="trace">
+  {{range .Rows}}
+  <details class="trace-row-wrap{{if .Highlight}} hl-{{.Highlight}}{{end}}">
+    <summary class="trace-row"{{.RowStyle}}>
+      <div class="trace-label">
+        <span class="badge badge-kind">{{.Kind}}</span>
+        <code>{{.Name}}</code>
+        <span class="trace-svc">{{.Service}}</span>
+        {{if eq .StatusCode "ERROR"}}<span class="badge badge-warn">ERR</span>{{end}}
+        {{if .HighlightReason}}<span class="hl-tag">{{.HighlightReason}}</span>{{end}}
+      </div>
+      <span class="trace-dur">{{printf "%.2f" .DurationMs}} ms</span>
+    </summary>
+    {{if .HasDetails}}
+    <div class="trace-row-body">
+      {{if .StatusMsg}}<div class="kv-line"><span class="kv-key">status</span><span>{{.StatusCode}} - {{.StatusMsg}}</span></div>{{end}}
+      {{if .Scope}}<div class="kv-line"><span class="kv-key">scope</span><code>{{.Scope}}</code></div>{{end}}
+      {{if .Attrs}}
+      <div class="kv-line"><span class="kv-key">attributes</span></div>
+      <table class="kv">
+        {{range .Attrs}}<tr><td><code>{{.Key}}</code></td><td><code>{{.Value}}</code></td></tr>{{end}}
+      </table>
+      {{end}}
+      {{if .Events}}
+      <div class="kv-line"><span class="kv-key">events</span></div>
+      {{range .Events}}
+      <div class="event">
+        <span class="event-time">+{{printf "%.2f" .OffsetMs}}ms</span>
+        <span class="event-name">{{.Name}}</span>
+        {{if .Attrs}}
+        <table class="kv">
+          {{range .Attrs}}<tr><td><code>{{.Key}}</code></td><td><code>{{.Value}}</code></td></tr>{{end}}
+        </table>
+        {{end}}
+      </div>
+      {{end}}
+      {{end}}
+    </div>
+    {{end}}
+  </details>
+  {{end}}
+</div>
+{{else}}
+<div class="empty">
+  No evidence trace captured yet for this violation. A recent example is kept the
+  next time the edge breaks (sampled at most once every few minutes), or the
+  trace may have aged out under the observation retention window.
+</div>
+{{end}}
+{{end}}

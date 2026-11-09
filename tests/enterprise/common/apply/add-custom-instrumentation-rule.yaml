@@ -1,0 +1,14 @@
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationRule
+metadata:
+  name: custom-instrumentation-rule
+  namespace: odigos-test
+spec:
+  customInstrumentations:
+    golang:
+      - functionName: checkIfMember
+        packageName: main
+    java:
+      - className: dev.keyval.kvshop.frontend.CurrencyService
+        methodName: getCurrencyInfo
+  ruleName: custom-instrumentation-rule
