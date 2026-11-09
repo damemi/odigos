@@ -69,6 +69,11 @@ spec:
               containerName: data-collection
               divisor: "0"
               resource: limits.cpu
+        - name: ODIGOS_ONPREM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: odigos-onprem-token
+              name: odigos-pro
       resources:
         requests:
           (memory != null): true
@@ -143,6 +148,11 @@ spec:
               containerName: data-collection
               divisor: "0"
               resource: limits.cpu
+        - name: ODIGOS_ONPREM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: odigos-onprem-token
+              name: odigos-pro
       resources:
         requests:
           (memory != null): true

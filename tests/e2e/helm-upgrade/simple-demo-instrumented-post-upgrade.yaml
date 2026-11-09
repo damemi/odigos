@@ -10,11 +10,6 @@ metadata:
 spec:
   containers:
     - name: frontend
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: '1'
-        requests:
-          instrumentation.odigos.io/generic: '1'
 status:
   containerStatuses:
     - name: frontend

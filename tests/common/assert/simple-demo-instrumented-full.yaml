@@ -8,11 +8,6 @@ metadata:
 spec:
   containers:
     - name: frontend
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: '1'
-        requests:
-          instrumentation.odigos.io/generic: '1'
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: frontend
       (env[?name == 'ODIGOS_DISTRO_NAME']):
