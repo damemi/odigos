@@ -130,6 +130,8 @@ spec:
             timeout: 1m30s
             file: ../../common/assert/simple-demo-instrumented-full.yaml
 
+    # The first request through a freshly instrumented Java app can't propagate context: its HTTP client
+    # instrumentations load on first use. /rate only reaches currency, so the warm-up does not affect the trace assertions.
     - name: Warm Up Java Frontend
       try:
         - script:

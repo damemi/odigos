@@ -1,7 +1,0 @@
-# ocb rewrites these on every `make genodigoscol`; the rest of odigosotelcol/ is hand-written
-collector/odigosotelcol/components.go   linguist-generated=true
-collector/odigosotelcol/main.go         linguist-generated=true
-collector/odigosotelcol/main_others.go  linguist-generated=true
-collector/odigosotelcol/main_windows.go linguist-generated=true
-collector/odigosotelcol/go.mod          linguist-generated=true
-collector/odigosotelcol/go.sum          linguist-generated=true

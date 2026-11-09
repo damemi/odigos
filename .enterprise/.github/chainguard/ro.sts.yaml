@@ -1,5 +1,0 @@
-issuer: https://token.actions.githubusercontent.com
-subject_pattern: repo:odigos-io(@84347062)?/odigos-enterprise(@683608086)?:ref:.*
-
-permissions:
-  contents: read

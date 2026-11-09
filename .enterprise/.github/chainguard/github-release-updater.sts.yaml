@@ -1,8 +1,0 @@
-issuer: https://token.actions.githubusercontent.com
-subject_pattern: 'repo:odigos-io(@84347062)?/odigos-enterprise(@683608086)?:(pull_request|ref:refs/heads/main)'
-claim_pattern:
-  event_name: "(pull_request|workflow_dispatch)"
-
-permissions:
-  contents: write
-  pull_requests: read

@@ -8,36 +8,6 @@ metadata:
 spec:
   containers:
     - name: frontend
-      (env[?name == 'ODIGOS_CONTAINER_NAME']):
-        - value: frontend
-      (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: java-ebpf-instrumentations
-      (env[?name == 'ODIGOS_POD_NAME']):
-        - valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.name
-      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
-        - value: default
-      (env[?name == 'NODE_IP']):
-        - valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: status.hostIP
-      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
-        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
-      (env[?name == 'OTEL_SERVICE_NAME']):
-        - value: frontend
-      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
-        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=frontend,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=frontend,odigos\\.workload\\.kind=Deployment,odigos\\.workload\\.name=frontend,k8s\\.replicaset\\.name=frontend-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
-      (env[?name == 'LD_PRELOAD']):
-        - value: "/var/odigos/loader/loader.so"
-      (env[?name == 'OTEL_TRACES_EXPORTER']):
-        - value: otlp
-      (env[?name == 'OTEL_METRICS_EXPORTER']):
-        - value: none
-      (env[?name == 'OTEL_LOGS_EXPORTER']):
-        - value: none
 status:
   containerStatuses:
     - name: frontend
