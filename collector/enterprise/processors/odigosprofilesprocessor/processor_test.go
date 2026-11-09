@@ -19,7 +19,7 @@ type stubOdigosConfigExtension struct {
 	managed map[string]struct{}
 }
 
-func (s *stubOdigosConfigExtension) GetFromResource(pcommon.Resource) (*commonapi.ContainerCollectorConfig, bool) {
+func (s *stubOdigosConfigExtension) GetFromResource(pcommon.Resource) (*commonapi.SourceCollectorConfig, bool) {
 	return nil, false
 }
 

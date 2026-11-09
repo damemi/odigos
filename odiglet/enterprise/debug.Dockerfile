@@ -61,18 +61,24 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
 
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
-WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
-# Copy local modules required by the build
-WORKDIR ./odiglet/
+WORKDIR /go/src/github.com/odigos-io/odigos
 ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation/v2
-# Pre-copy/cache go.mod for pre-downloading dependencies and only redownloading
-COPY odiglet/go.mod odiglet/go.sum ./
+# odiglet/enterprise replaces these odigos modules with local paths.
+COPY api/ api/
+COPY common/ common/
+COPY deviceplugin/ deviceplugin/
+COPY distros/ distros/
+COPY instrumentation/ instrumentation/
+COPY k8sutils/ k8sutils/
+COPY odigosauth/ odigosauth/
+COPY opampserver/ opampserver/
+COPY procdiscovery/ procdiscovery/
+COPY odiglet/ odiglet/
+WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/go/pkg \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     go mod download
-# Copy rest of source code for odiglet
-COPY odiglet/ .
 
 ARG TARGETARCH
 ARG LD_FLAGS
@@ -140,8 +146,8 @@ RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/
 FROM ${ODIGLET_BASE_IMAGE} AS rsync-base
 
 FROM registry.fedoraproject.org/fedora-minimal:38
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
 COPY --from=builder /go/bin/dlv /root/dlv
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync

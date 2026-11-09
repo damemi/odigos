@@ -5,8 +5,11 @@
 FROM --platform=$BUILDPLATFORM golang:1.26.9-trixie AS builder
 # install the required tooling for calling `setcap` on the compiled binary
 RUN apt-get update && apt-get install -y --no-install-recommends libcap2-bin
+# The enterprise distribution replaces odigos collector components, common and odigosauth with local paths.
+COPY ./common/ /go/src/common
+COPY ./odigosauth/ /go/src/odigosauth
 COPY ./collector/ /go/src/collector
-WORKDIR /go/src/collector
+WORKDIR /go/src/collector/enterprise
 
 # download dependencies before branching out to cross-compile for better caching
 RUN --mount=type=secret,id=github_token \
@@ -56,19 +59,19 @@ LABEL "version"=$VERSION
 LABEL "release"=$RELEASE
 LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
-COPY --from=builder /go/src/collector/odigosotelcol/odigosotelcol /odigosotelcol
-COPY --from=builder /go/src/collector/cmd/odigosopampsupervisor/odigosopampsupervisor /odigosopampsupervisor
-COPY --chown=65532:65532 collector/managed/ /etc/odigos/managed-collector/
+COPY --from=builder /go/src/collector/enterprise/odigosotelcol/odigosotelcol /odigosotelcol
+COPY --from=builder /go/src/collector/enterprise/cmd/odigosopampsupervisor/odigosopampsupervisor /odigosopampsupervisor
+COPY --chown=65532:65532 collector/enterprise/managed/ /etc/odigos/managed-collector/
 COPY --from=builder --chown=65532:65532 /go/src/image-root/var/lib/odigos/collector-supervisor/ /var/lib/odigos/collector-supervisor/
-COPY --from=builder /go/src/collector/odigosotelcol/licenses /licenses
-COPY collector/LICENSE /licenses/LICENSE
+COPY --from=builder /go/src/collector/enterprise/odigosotelcol/licenses /licenses
+COPY collector/enterprise/LICENSE /licenses/LICENSE
 USER 65532:65532
 CMD ["/odigosotelcol"]
 
 FROM gcr.io/distroless/base:latest
-COPY --from=builder /go/src/collector/odigosotelcol/odigosotelcol /odigosotelcol
-COPY --from=builder /go/src/collector/cmd/odigosopampsupervisor/odigosopampsupervisor /odigosopampsupervisor
-COPY --chown=65532:65532 collector/managed/ /etc/odigos/managed-collector/
+COPY --from=builder /go/src/collector/enterprise/odigosotelcol/odigosotelcol /odigosotelcol
+COPY --from=builder /go/src/collector/enterprise/cmd/odigosopampsupervisor/odigosopampsupervisor /odigosopampsupervisor
+COPY --chown=65532:65532 collector/enterprise/managed/ /etc/odigos/managed-collector/
 COPY --from=builder --chown=65532:65532 /go/src/image-root/var/lib/odigos/collector-supervisor/ /var/lib/odigos/collector-supervisor/
 # make sure we run as non root user
 # this is required when this container is added to a pod that has runAsNonRoot: true

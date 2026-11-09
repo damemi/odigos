@@ -1,17 +1,19 @@
 FROM node:22-bookworm-slim AS docs
 RUN npm install --global pnpm@11.19.0
 WORKDIR /src/docs
-COPY docs/package.json docs/pnpm-lock.yaml docs/pnpm-workspace.yaml ./
+COPY enterprise-docs/package.json enterprise-docs/pnpm-lock.yaml enterprise-docs/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
-COPY docs/ ./
+COPY enterprise-docs/ ./
 RUN pnpm check && pnpm build
 
 FROM golang:1.26.8 AS server
-WORKDIR /src/server
-COPY docs/server/go.mod docs/server/go.sum ./
-RUN --mount=type=secret,id=gitconfig,required=false \
-    git config --global include.path /run/secrets/gitconfig && \
-    go mod download
+WORKDIR /src
+# enterprise-docs/server builds odigosauth's docs-server, which it replaces (with common) by local path.
+COPY common/ common/
+COPY odigosauth/ odigosauth/
+COPY enterprise-docs/server/go.mod enterprise-docs/server/go.sum enterprise-docs/server/
+WORKDIR /src/enterprise-docs/server
+RUN go mod download
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /docs-server github.com/odigos-io/odigos/odigosauth/cmd/docs-server
 
 FROM gcr.io/distroless/static:nonroot

@@ -125,11 +125,19 @@ RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/
 ######### Odiglet builder #########
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
-WORKDIR /go/src/github.com/odigos-io/odigos-enterprise
-# Copy local modules required by the build
-WORKDIR ./odiglet/
-# Copy rest of source code for odiglet
-COPY odiglet/ .
+WORKDIR /go/src/github.com/odigos-io/odigos
+# odiglet/enterprise replaces these odigos modules with local paths.
+COPY api/ api/
+COPY common/ common/
+COPY deviceplugin/ deviceplugin/
+COPY distros/ distros/
+COPY instrumentation/ instrumentation/
+COPY k8sutils/ k8sutils/
+COPY odigosauth/ odigosauth/
+COPY opampserver/ opampserver/
+COPY procdiscovery/ procdiscovery/
+COPY odiglet/ odiglet/
+WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
 
 ARG TARGETARCH
 ARG LD_FLAGS
@@ -203,7 +211,7 @@ LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
 WORKDIR /instrumentations/
 COPY --from=agents-builder /instrumentations/ .
-COPY odiglet/licenses /licenses
+COPY odiglet/enterprise/licenses /licenses
 
 # make sure we run as non root user
 # this is required when this container is added to a pod that has runAsNonRoot: true
@@ -222,10 +230,10 @@ LABEL "version"=$VERSION
 LABEL "release"=$RELEASE
 LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/licenses /licenses
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/licenses /licenses
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/deviceplugin /root/deviceplugin
 COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
@@ -241,9 +249,9 @@ CMD ["/root/odiglet"]
 # are static (odiglet-base builds rsync without OpenSSL); odigos-csi-driver and deviceplugin need only libc.
 # Pinned by digest; an earlier base-debian12 digest once broke rsync.
 FROM gcr.io/distroless/base-nossl-debian12@sha256:e35893f8ca1cabfbd60394af94899c20930c4615355adf97c5da660a51b61bca
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odiglet /root/odiglet
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/odigos-csi-driver /root/odigos-csi-driver
-COPY --from=builder /go/src/github.com/odigos-io/odigos-enterprise/odiglet/deviceplugin /root/deviceplugin
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/deviceplugin /root/deviceplugin
 COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
