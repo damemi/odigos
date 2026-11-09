@@ -13,7 +13,7 @@ import sys
 
 ROOT = sys.argv[1]
 IMPORTED = ["ui", "insights", "instrumentor/enterprise", "odiglet/enterprise", "collector/enterprise",
-            "enterprise-docs", "tests/enterprise", "scripts/enterprise", "tests-infrastructure"]
+            "tests/enterprise", "scripts/enterprise", "tests-infrastructure"]
 PLACEHOLDER = "v0.0.0-00010101000000-000000000000"
 RENAMES = [
     ("github.com/odigos-io/odigos-enterprise/collector/", "github.com/odigos-io/odigos/collector/enterprise/"),
@@ -21,7 +21,6 @@ RENAMES = [
     ("github.com/odigos-io/odigos-enterprise/odiglet", "github.com/odigos-io/odigos/odiglet/enterprise"),
     ("github.com/odigos-io/odigos-enterprise/insights", "github.com/odigos-io/odigos/insights"),
     ("github.com/odigos-io/odigos-enterprise/ui", "github.com/odigos-io/odigos/ui"),
-    ("github.com/odigos-io/odigos-enterprise/docs/server", "github.com/odigos-io/odigos/enterprise-docs/server"),
 ]
 BOUNDARY = r'(?=[/"\s`)]|$)'
 EDITABLE = re.compile(r'(\.go|/go\.mod|\.ya?ml)$')

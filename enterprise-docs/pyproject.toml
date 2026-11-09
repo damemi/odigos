@@ -1,3 +1,0 @@
-[tool.black]
-target-version = ["py312"]
-line-length = 88

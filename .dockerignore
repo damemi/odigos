@@ -50,9 +50,8 @@ odiglet/Dockerfile
 odiglet/base.Dockerfile
 odiglet/debug.Dockerfile
 
-# Imported from odigos-enterprise: parked repo config, the docs site (built from its own context), test infrastructure and host build outputs
+# Imported from odigos-enterprise: parked repo config, test infrastructure and host build outputs
 .enterprise/
-enterprise-docs/
 tests-infrastructure/
 **/.obi/
 insights/sendtrace

@@ -18,8 +18,8 @@ BEGIN {
   # Old enterprise copies of odigos paths, deleted from enterprise since: dropping them keeps them out of odigos path history.
   else if (!(top in ent) && (top in oss)) next
   else if (n == 1 && !(top in ent)) next
-  # The protected docs site must stay outside docs/, which the public Mintlify site publishes in full.
-  else if (p ~ /^docs\//) p = "enterprise-docs/" substr(p, 6)
+  # The protected docs site stays in odigos-enterprise.
+  else if (p ~ /^docs\//) next
   # Folders that clash with odigos folders of the same name keep their inner layout under <dir>/enterprise/.
   else if (p ~ /^(odiglet|instrumentor|collector|tests|scripts)\//) { split(p, a, "/"); p = a[1] "/enterprise/" substr(p, length(a[1]) + 2) }
   # Repo-level config is parked under .enterprise/ so enterprise workflows stay inactive until ported.
