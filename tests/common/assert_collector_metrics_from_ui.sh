@@ -122,7 +122,7 @@ fi
 grahphqlServiceGraphPayload='{
   "operationName": "GetServiceMap",
   "variables": {},
-  "query": "query GetServiceMap { getServiceMap { services { serviceName services { serviceName isVirtual requests dateTime } } } }"
+  "query": "query GetServiceMap { getServiceMap { services { serviceName services { serviceName requests dateTime } } } }"
 }'
 
 # Send the GraphQL request and store the response
@@ -163,14 +163,14 @@ if [[ "$service_count" -ne 5 ]]; then
 fi
 
 # Try to get the downstream count for 'frontend'
-# Count only instrumented downstream services: a call whose client span was not paired with a server span
-# (e.g. the first request through the enterprise Java agent, before its HTTP client instrumentation loads)
-# also shows up as a virtual node named after the server address.
-frontend_count=$(echo "$services_node" | jq '[.[] | select(.serviceName == "frontend") | .services | map(select(.isVirtual | not)) | length] | first')
+# Count distinct downstream names: a call whose client span was not paired with a server span (e.g. the first
+# request through the enterprise Java agent, before its HTTP client instrumentation loads) adds a virtual node
+# named after the peer next to the reported one.
+frontend_count=$(echo "$services_node" | jq '[.[] | select(.serviceName == "frontend") | .services | map(.serviceName | sub("-reported$"; "")) | unique | length] | first')
 
 # If not found, fallback to 'frontend-reported', e.g for the source e2e test
 if [[ -z "$frontend_count" || "$frontend_count" == "null" ]]; then
-    frontend_count=$(echo "$services_node" | jq '[.[] | select(.serviceName == "frontend-reported") | .services | map(select(.isVirtual | not)) | length] | first')
+    frontend_count=$(echo "$services_node" | jq '[.[] | select(.serviceName == "frontend-reported") | .services | map(.serviceName | sub("-reported$"; "")) | unique | length] | first')
 fi
 
 if [[ -z "$frontend_count" || "$frontend_count" == "null" ]]; then

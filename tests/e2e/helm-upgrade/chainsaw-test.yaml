@@ -111,7 +111,7 @@ spec:
             content: |
               # The pwd is the directory of this file, so we have to walk up to the project root to find the helm chart
               P="../../.."
-              helm upgrade odigos $P/helm/odigos \
+              helm upgrade odigos $P/helm/odigos --set onPremToken="$ODIGOS_API_KEY" \
                 --namespace odigos-test \
                 --set image.tag=e2e-test \
                 --set nodeSelector."kubernetes\.io/os"=linux
