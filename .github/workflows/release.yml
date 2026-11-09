@@ -141,7 +141,9 @@ jobs:
 
       - name: Verify Components Image Ready
         run: |
-          declare -a REPOS=("odigos-autoscaler" "odigos-instrumentor" "odigos-scheduler" "odigos-odiglet" "odigos-collector" "odigos-enterprise-collector" "odigos-enterprise-odiglet" "odigos-ui" "odigos-enterprise-instrumentor" "odigos-operator" "odigos-enterprise-agents" "odigos-enterprise-insights" "odigos-enterprise-central-backend" "odigos-enterprise-central-proxy" "odigos-enterprise-central-ui" "odigos-enterprise-connector-runtime" "odigos-enterprise-connector-aws" "odigos-enterprise-connector-azure" "odigos-enterprise-connector-gcp" "odigos-enterprise-connector-postgres")
+          # Community instrumentor, odiglet, collector and ui images are only built for versions released
+          # before odigos-enterprise moved here, so they are not required.
+          declare -a REPOS=("odigos-autoscaler" "odigos-scheduler" "odigos-operator" "odigos-enterprise-collector" "odigos-enterprise-odiglet" "odigos-enterprise-instrumentor" "odigos-enterprise-ui" "odigos-enterprise-agents" "odigos-enterprise-insights" "odigos-enterprise-central-backend" "odigos-enterprise-central-proxy" "odigos-enterprise-central-ui" "odigos-enterprise-connector-runtime" "odigos-enterprise-connector-aws" "odigos-enterprise-connector-azure" "odigos-enterprise-connector-gcp" "odigos-enterprise-connector-postgres")
 
           TAG_TO_CHECK=${{ env.TAG }}
 

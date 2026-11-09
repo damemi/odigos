@@ -23,11 +23,12 @@ jobs:
           echo "Latest version of opentelemetry-dotnet-instrumentation is ${dotnet_latest_version}"
       - name: Replace versions in Dockerfile
         run: |
-          cd odiglet
+          # The released odiglet image is built from odiglet/enterprise/Dockerfile.
+          cd odiglet/enterprise
           java_latest_version=${{ steps.fetch_latest_version.outputs.java_latest_version }}
-          sed -i "s/JAVA_OTEL_VERSION=.*/JAVA_OTEL_VERSION=${java_latest_version}/" Dockerfile
+          sed -i "s/^ARG JAVA_OTEL_VERSION=.*/ARG JAVA_OTEL_VERSION=${java_latest_version}/" Dockerfile
           dotnet_latest_version=${{ steps.fetch_latest_version.outputs.dotnet_latest_version }}
-          sed -i "s/DOTNET_OTEL_VERSION=.*/DOTNET_OTEL_VERSION=${dotnet_latest_version}/" Dockerfile
+          sed -i "s/^ARG DOTNET_OTEL_VERSION=.*/ARG DOTNET_OTEL_VERSION=${dotnet_latest_version}/" Dockerfile
       - name: Create pull request
         uses: peter-evans/create-pull-request@v7
         with:

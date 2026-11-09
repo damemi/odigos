@@ -17,7 +17,7 @@ jobs:
         strategy:
           fail-fast: false
           matrix:
-            service: ['autoscaler', 'instrumentor', 'scheduler', 'collector', 'odiglet', 'ui', 'operator', 'agents']
+            service: ['autoscaler', 'instrumentor', 'scheduler', 'collector', 'odiglet', 'ui', 'operator', 'agents', 'insights']
             include:
               - service: autoscaler
                 runner: depot-ubuntu-latest
@@ -51,11 +51,44 @@ jobs:
                 runner: depot-ubuntu-latest
                 summary: 'Odigos Agents'
                 description: 'The Odigos Agents used to copy Odigos agent relevant files into the user workloads.'
+              - service: insights
+                runner: depot-ubuntu-latest
+                summary: 'Insights for Odigos'
+                description: 'Insights learns per-transaction baselines from traces and scores deviations.'
         steps:
           - name: Checkout repository
             uses: actions/checkout@v5
             with:
               ref: ${{ inputs.tag }}
+
+          # This workflow runs from main for any tag, including patches of versions released before
+          # odigos-enterprise moved here. Those tags build the community images from their own layout,
+          # as they always did; newer tags build the enterprise images.
+          - name: Resolve image for this tag
+            id: image
+            env:
+              SERVICE: ${{ matrix.service }}
+            run: |
+              if [ -f odiglet/enterprise/Dockerfile ]; then enterprise=true; else enterprise=false; fi
+              skip=false
+              case "$SERVICE" in
+                autoscaler|scheduler|operator) image="odigos-$SERVICE"; file="$SERVICE/Dockerfile" ;;
+                instrumentor|collector|odiglet)
+                  if $enterprise; then image="odigos-enterprise-$SERVICE"; file="$SERVICE/enterprise/Dockerfile"
+                  else image="odigos-$SERVICE"; file="$SERVICE/Dockerfile"; fi ;;
+                agents)
+                  if $enterprise; then image="odigos-enterprise-agents"; file="odiglet/enterprise/Dockerfile"
+                  else image="odigos-agents"; file="odiglet/Dockerfile"; fi ;;
+                ui)
+                  if $enterprise; then image="odigos-enterprise-ui"; file="ui/Dockerfile"
+                  else image="odigos-ui"; file="frontend/Dockerfile"; fi ;;
+                insights)
+                  if $enterprise; then image="odigos-enterprise-insights"; file="insights/Dockerfile"
+                  else skip=true; fi ;;
+              esac
+              echo "skip=$skip" >> "$GITHUB_OUTPUT"
+              echo "image=$image" >> "$GITHUB_OUTPUT"
+              echo "file=$file" >> "$GITHUB_OUTPUT"
 
           - name: Set up QEMU
             uses: docker/setup-qemu-action@v4
@@ -118,10 +151,14 @@ jobs:
             with:
               token: ${{ secrets.GITHUB_TOKEN }}
           - name: Build and Push Docker Image for ${{ matrix.service }}
+            if: steps.image.outputs.skip != 'true'
             uses: docker/build-push-action@v7
             env:
               ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.extract_tag.outputs.tag}}
             with:
+              # github_token: odiglet and agents download private instrumentation repos.
+              secrets: |
+                github_token=${{ secrets.RELEASE_BOT_TOKEN }}
               secret-files: |
                 npmrc=${{ steps.npmrc.outputs.path }}
               # Use the checked-out files (at inputs.tag) instead of build-push-action's
@@ -131,9 +168,9 @@ jobs:
               push: true
               provenance: false
               tags: |
-                us-central1-docker.pkg.dev/odigos-cloud/components/odigos-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}
-                ghcr.io/odigos-io/odigos-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}
-                quay.io/odigos/odigos-${{ matrix.service }}-rhel-certified:${{ env.ODIGOS_TAG }}
+                us-central1-docker.pkg.dev/odigos-cloud/components/${{ steps.image.outputs.image }}-rhel-certified:${{ env.ODIGOS_TAG }}
+                ghcr.io/odigos-io/${{ steps.image.outputs.image }}-rhel-certified:${{ env.ODIGOS_TAG }}
+                quay.io/odigos/${{ steps.image.outputs.image }}-rhel-certified:${{ env.ODIGOS_TAG }}
               build-args: |
                 SERVICE_NAME=${{ matrix.service }}
                 ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
@@ -144,16 +181,7 @@ jobs:
                 LD_FLAGS=-s -w
                 RHEL=true
               platforms: linux/amd64,linux/arm64
-              file: >-
-                ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile' ||
-                    matrix.service == 'collector' && 'collector/Dockerfile' ||
-                    matrix.service == 'ui' && 'frontend/Dockerfile' ||
-                    matrix.service == 'operator' && 'operator/Dockerfile' ||
-                    matrix.service == 'agents' && 'odiglet/Dockerfile' ||
-                    matrix.service == 'scheduler' && 'scheduler/Dockerfile' ||
-                    matrix.service == 'autoscaler' && 'autoscaler/Dockerfile' ||
-                    matrix.service == 'instrumentor' && 'instrumentor/Dockerfile' ||
-                    'Dockerfile' }}
+              file: ${{ steps.image.outputs.file }}
               target: >-
                 ${{ matrix.service == 'agents' && 'agents-rhel' || 'rhel' }}
 
