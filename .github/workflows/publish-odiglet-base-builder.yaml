@@ -160,8 +160,12 @@ jobs:
 
       - name: Update Odiglet Base Builder image in dockerfiles
         run: |
-          sed -i "s|registry.odigos.io/odiglet-base:.*|registry.odigos.io/odiglet-base:${{ github.event.inputs.image_tag }}|g" odiglet/Dockerfile
-          sed -i "s|registry.odigos.io/odiglet-base:.*|registry.odigos.io/odiglet-base:${{ github.event.inputs.image_tag }}|g" odiglet/debug.Dockerfile
+          # Release branches cut before odigos-enterprise moved here still build odiglet from odiglet/Dockerfile.
+          for f in odiglet/enterprise/Dockerfile odiglet/enterprise/debug.Dockerfile odiglet/Dockerfile odiglet/debug.Dockerfile; do
+            if [ -f "$f" ]; then
+              sed -i "s|registry.odigos.io/odiglet-base:.*|registry.odigos.io/odiglet-base:${{ github.event.inputs.image_tag }}|g" "$f"
+            fi
+          done
 
       - name: Create PR token
         id: create-pr-sts
@@ -179,7 +183,7 @@ jobs:
           title: "Update Odiglet Base Builder image to ${{ github.event.inputs.image_tag }} on ${{ matrix.target.branch }}"
           body: |
             #### What this PR does / why we need it:
-            This is an automated PR generated after a new release of the odiglet base builder. It updates the base builder image reference in `odiglet/Dockerfile` and `odiglet/debug.Dockerfile` to `${{ github.event.inputs.image_tag }}`.
+            This is an automated PR generated after a new release of the odiglet base builder. It updates the base builder image reference in the odiglet Dockerfiles to `${{ github.event.inputs.image_tag }}`.
 
             #### Changelog entry: Does this PR introduce a user-facing bug fix, feature, dependency update, or breaking change??
             <!--

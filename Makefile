@@ -336,7 +336,7 @@ deploy:
 debug-odiglet:
 	@img="$(call dev_image,odiglet)"; \
 	echo "Building debug odiglet as $$img"; \
-	docker build -t $$img . -f odiglet/debug.Dockerfile; \
+	docker build -t $$img . -f odiglet/enterprise/debug.Dockerfile; \
 	kind load docker-image $$img; \
 	kubectl delete pod -n $(ODIGOS_NS) -l app.kubernetes.io/name=odiglet; \
 	kubectl wait --for=condition=ready pod -n $(ODIGOS_NS) -l app.kubernetes.io/name=odiglet --timeout=180s; \

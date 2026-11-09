@@ -26,20 +26,6 @@ generate: go-mod
 	done; \
 	exit $$fail
 
-# Compile only — no materialize / generate / go-mod. For Docker after those layers have run.
-compile-odiglet:
-	CGO_ENABLED=0 go build -ldflags="$(LD_FLAGS)" -o odiglet cmd/main.go
-
-build-odiglet:
-	$(MAKE) materialize-obi
-	$(MAKE) generate
-	$(MAKE) compile-odiglet
-
-debug-build-odiglet:
-	$(MAKE) materialize-obi
-	$(MAKE) generate
-	go build -o odiglet -gcflags "all=-N -l" cmd/main.go
-
 test: materialize-obi generate
 	go test -a -v ./...
 
