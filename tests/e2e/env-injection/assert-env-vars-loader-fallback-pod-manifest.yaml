@@ -33,5 +33,5 @@ spec:
       # the python-alpine container is running in secure-execution mode - hence we should avoid using the loader
       # and fallback to the pod-manifest env vars.
       (env[?name=='PYTHONPATH']):
-      - value: /app:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
+      - value: /app:/var/odigos/python-ebpf:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation:/var/odigos/python
       (env[?name=='LD_PRELOAD']): []

@@ -48,8 +48,6 @@ spec:
               fieldPath: status.hostIP
       (env[?name == 'ODIGOS_OPAMP_SERVER_HOST']):
         - (($values.k8sMinorVersion < `26` && value == '$(NODE_IP):4320') || value == 'odiglet-local.odigos-test:4320'): true
-      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
-        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
       (env[?name == 'LD_PRELOAD']):
         - value: "/var/odigos/loader/loader.so"
       (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
@@ -87,15 +85,8 @@ spec:
               fieldPath: metadata.name
       (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
         - value: default
-      (env[?name == 'NODE_IP']):
-        - valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: status.hostIP
       (env[?name == 'ODIGOS_OPAMP_UNIX_SOCKET']):
         - value: /var/odigos/exchange/exchange.sock
-      (env[?name == 'OTEL_EXPORTER_OTLP_ENDPOINT']):
-        - (($values.k8sMinorVersion < `26` && value == 'http://$(NODE_IP):4318') || value == 'http://odigos-data-collection-local-traffic.odigos-test:4318'): true
       (env[?name == 'LD_PRELOAD']):
         - value: "/var/odigos/loader/loader.so"
       (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
@@ -117,19 +108,6 @@ metadata:
 spec:
   containers:
     - name: membership
-      (env[?name == 'ODIGOS_CONTAINER_NAME']):
-        - value: membership
-      (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: golang-enterprise
-      (env[?name == 'ODIGOS_POD_NAME']):
-        - valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.name
-      (env[?name == 'ODIGOS_WORKLOAD_NAMESPACE']):
-        - value: default
-      (env[?name == 'OTEL_RESOURCE_ATTRIBUTES']):
-        - "(regex_match('^k8s\\.pod\\.name=\\$\\(ODIGOS_POD_NAME\\),k8s\\.container\\.name=membership,k8s\\.namespace\\.name=default,k8s\\.deployment\\.name=membership,odigos\\.workload\\.kind=Deployment,odigos\\.workload\\.name=membership,k8s\\.replicaset\\.name=membership-[A-Za-z0-9]+,k8s\\.replicaset\\.uid=[A-Za-z0-9-]+$',value))": true
 status:
   containerStatuses:
     - name: membership
