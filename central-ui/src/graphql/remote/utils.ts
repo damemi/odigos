@@ -117,6 +117,175 @@ export const lookupWorkloadRegion = (kind: string | null | undefined, name: stri
 /** Exported for tests: drop everything remembered. */
 export const clearWorkloadRegions = (): void => workloadRegions.clear();
 
+// VM PID sources.
+//
+// A VM agent has no geographic region, so it reuses `Source.region` to carry a
+// PID source: the processes it instruments and the command line it finds them
+// by again after a restart (vm-agent `pkg/components/domain/source/include_pids.go`,
+// `EncodePIDSourceRegion` / `DecodePIDSourceRegion`). The agent's WorkloadReports
+// carry no region at all, so this value is part of a source's identity only on
+// the Source side, and the report merge must not key on it.
+const PID_SOURCE_REGION_PREFIX = 'odigos.pid_source=v1';
+// Older agents wrote only the PID list; the agent still reads it.
+const LEGACY_INCLUDE_PIDS_REGION_PREFIX = 'odigos.include_pids=';
+
+// Base64url without padding over the UTF-8 bytes (Go's `base64.RawURLEncoding`).
+const toBase64Url = (value: string): string => {
+  let binary = '';
+  new TextEncoder().encode(value).forEach((byte) => (binary += String.fromCharCode(byte)));
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+const fromBase64Url = (value: string): string | undefined => {
+  try {
+    const binary = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
+    return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * A PID source's `region`, byte for byte what the agent's `EncodePIDSourceRegion`
+ * writes: `odigos.pid_source=v1;pids=41388,41390;cmdline=<base64url>`. Empty when
+ * there is neither a PID nor a command line.
+ */
+export const encodePidSourceRegion = (pids: readonly number[], cmdline = ''): string => {
+  const command = cmdline.trim();
+  if (!pids.length && !command) return '';
+  return `${PID_SOURCE_REGION_PREFIX}${pids.length ? `;pids=${pids.join(',')}` : ''}${command ? `;cmdline=${toBase64Url(command)}` : ''}`;
+};
+
+const decodePidList = (raw: string): number[] | undefined => {
+  const parts = raw
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (!parts.length || parts.some((p) => !/^-?\d+$/.test(p))) return undefined;
+  return parts.map(Number);
+};
+
+/** The agent's `DecodePIDSourceRegion`: undefined for a region that is not a PID-source encoding. */
+export const decodePidSourceRegion = (region: string | null | undefined): { pids: number[]; cmdline: string } | undefined => {
+  const value = region?.trim();
+  if (!value) return undefined;
+  if (value.startsWith(LEGACY_INCLUDE_PIDS_REGION_PREFIX)) {
+    const pids = decodePidList(value.slice(LEGACY_INCLUDE_PIDS_REGION_PREFIX.length));
+    return pids ? { pids, cmdline: '' } : undefined;
+  }
+  if (!value.startsWith(PID_SOURCE_REGION_PREFIX)) return undefined;
+  const rest = value.slice(PID_SOURCE_REGION_PREFIX.length);
+  if (rest && !rest.startsWith(';')) return undefined;
+
+  let pids: number[] = [];
+  let cmdline = '';
+  for (const part of rest.split(';')) {
+    const [key, ...val] = part.trim().split('=');
+    if (!val.length) continue;
+    if (key === 'pids') pids = decodePidList(val.join('=')) ?? [];
+    if (key === 'cmdline') {
+      const decoded = fromBase64Url(val.join('='));
+      if (decoded === undefined) return undefined;
+      cmdline = decoded;
+    }
+  }
+  return { pids, cmdline };
+};
+
+/** Whether a source's `region` is a VM PID-source encoding rather than a provider region. */
+export const isPidSourceRegion = (region: string | null | undefined): boolean => !!decodePidSourceRegion(region);
+
+// VM process side-channel.
+//
+// A PID source is made per picked process, the way `odictl` makes it, and needs
+// that process's own command line, executable and language. The kit's persist
+// payload carries only the PIDs plus the FIRST picked process's command line, so
+// remember every process while mapping the Add Sources reports and look each
+// PID up at persist time. Same mechanism as the region side-channel above.
+export interface VmProcessIdentity {
+  cmdline: string | null;
+  exe: string | null;
+  /** As the agent reported it (`cplusplus`, `java`, …). */
+  language: string | null;
+}
+
+const vmProcesses = new Map<string, VmProcessIdentity>();
+
+const vmProcessKey = (kind: string, name: string, pid: number): string => `${kind}\0${name}\0${pid}`;
+
+/** Remember one process of a discovered VM workload so persist can make its PID source. */
+export const rememberVmProcess = (kind: string | null | undefined, name: string | null | undefined, pid: number, identity: VmProcessIdentity): void => {
+  if (!kind || !name) return;
+  vmProcesses.set(vmProcessKey(kind, name, pid), identity);
+};
+
+export const lookupVmProcess = (kind: string | null | undefined, name: string | null | undefined, pid: number): VmProcessIdentity | undefined => {
+  if (!kind || !name) return undefined;
+  return vmProcesses.get(vmProcessKey(kind, name, pid));
+};
+
+// The configured sources, by kind+name, with their region. A new PID source must
+// never take the name of one that exists: the agent saves a create whose name+kind
+// it already has as an update of that source, silently replacing it. And a PID
+// source is found again by the PIDs in its region, never by re-deriving its name.
+const vmSources = new Map<string, { kind: string; name: string; region: string | null }>();
+
+export const rememberVmSource = (kind: string | null | undefined, name: string | null | undefined, region: string | null | undefined): void => {
+  if (kind && name) vmSources.set(regionKey(kind, name), { kind, name, region: region ?? null });
+};
+
+export const isKnownVmSourceName = (kind: string, name: string): boolean => vmSources.has(regionKey(kind, name));
+
+/** The configured PID sources of `kind` whose region holds `pid`, with their real name and region. */
+export const findVmPidSources = (kind: string, pid: number): { name: string; region: string }[] =>
+  Array.from(vmSources.values()).flatMap((source) => {
+    if (source.kind !== kind || !source.region) return [];
+    return decodePidSourceRegion(source.region)?.pids.includes(pid) ? [{ name: source.name, region: source.region }] : [];
+  });
+
+/** Exported for tests: drop everything remembered. */
+export const clearVmProcesses = (): void => {
+  vmProcesses.clear();
+  vmSources.clear();
+};
+
+// Go's `strconv.Atoi`: an optionally signed decimal that fits in an int64.
+const INT64_MIN = BigInt('-9223372036854775808');
+const INT64_MAX = BigInt('9223372036854775807');
+const isGoInt = (token: string): boolean => {
+  if (!/^[+-]?\d+$/.test(token)) return false;
+  const value = BigInt(token);
+  return value >= INT64_MIN && value <= INT64_MAX;
+};
+
+// Go's `filepath.Base` for the absolute paths the agent reports.
+const pathBase = (path: string): string => {
+  const trimmed = path.replace(/\/+$/, '');
+  if (!trimmed) return path ? '/' : '.';
+  return trimmed.slice(trimmed.lastIndexOf('/') + 1);
+};
+
+/**
+ * The source name `odictl` suggests for one process (vm-agent
+ * `cmd/odictl/workload_selector.go` `suggestProcessName`): the last argv token
+ * that looks like a label (not a flag, path or number), else the executable's
+ * base name, else `pid-<pid>`.
+ */
+export const suggestVmProcessName = (pid: number, cmdline?: string | null, exe?: string | null): string => {
+  const fields = (cmdline?.trim() || exe?.trim() || '').split(/\s+/).filter(Boolean);
+  for (let i = fields.length - 1; i >= 0; i--) {
+    const token = fields[i];
+    if (token.startsWith('-') || token.includes('/') || isGoInt(token)) continue;
+    return token;
+  }
+  if (exe) return pathBase(exe);
+  if (pid > 0) return `pid-${pid}`;
+  return '';
+};
+
+/** The restart fingerprint `odictl` saves for one process (`matchCmdlineForPIDs`): its command line, else its executable. */
+export const vmProcessMatchCmdline = (cmdline?: string | null, exe?: string | null): string => cmdline?.trim() || exe?.trim() || '';
+
 // ---------------------------------------------------------------------------
 // Patching selections into a frozen dialect snapshot.
 //

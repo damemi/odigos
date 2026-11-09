@@ -3,11 +3,19 @@ import type { GetNamespacesWithWorkloadsData, GetWorkloadsData, OperationContext
 import type { K8sResourceKind, Workload } from '@odigos/ui-kit/types';
 import {
   configBranchForKind,
+  encodePidSourceRegion,
+  findVmPidSources,
+  isKnownVmSourceName,
   lookupSourceConfig,
+  lookupVmProcess,
   lookupWorkloadRegion,
   rememberSourceConfig,
+  rememberVmProcess,
+  rememberVmSource,
   rememberWorkloadRegion,
+  suggestVmProcessName,
   supportsTypedContainerDetails,
+  vmProcessMatchCmdline,
   withFieldSelections,
   type VmContainerOverride,
   type VmSourceConfig,
@@ -83,6 +91,9 @@ export const mapVmSourceToWorkload = (s: VmSource): Workload => {
   // The kit drops region from the persist payload; remember it so a source
   // disabled from this list can still be identified (see utils.ts).
   rememberWorkloadRegion(s.kind, s.name, region);
+  // A new PID source must not take this name, and a PID source is found again by
+  // its region (see the side-channel in utils.ts).
+  rememberVmSource(s.kind, s.name, region);
   return {
     id: {
       namespace: VM_NAMESPACE,
@@ -118,6 +129,31 @@ export const mapVmSourceResult = (data: unknown): { source?: Workload } => {
   return { source: source ? mapVmSourceToWorkload(source) : undefined };
 };
 
+/**
+ * The kit's three states for a discovered workload: `true` is an enabled source,
+ * `false` an explicitly disabled one, `null` no source. `false` is not "not
+ * instrumented": the kit badges it Disabled and won't make PID sources from its
+ * processes, so a workload without a source (or an agent that doesn't say
+ * whether one matched) must be `null`.
+ */
+const vmWorkloadMarked = (report: VmWorkloadReport): boolean | null => {
+  if (report.desired?.sourceEnabled ?? report.desired?.enabled) return true;
+  return report.desired?.sourceMatched ? false : null;
+};
+
+/** Each reported process's command line, executable and agent language, by PID. */
+const rememberReportProcesses = (kind: string, report: VmWorkloadReport): void => {
+  const instanceByPid = new Map((report.instances ?? []).map((inst) => [inst.pid, inst]));
+  const metadata = report.processMetadata ?? [];
+  for (const meta of metadata) {
+    rememberVmProcess(kind, report.serviceName, meta.pid, {
+      cmdline: meta.cmdline ?? null,
+      exe: meta.exe ?? null,
+      language: meta.runtime?.detected?.language || instanceByPid.get(meta.pid)?.runtimeName || null,
+    });
+  }
+};
+
 // The "Add Sources" drawer is a discovery view, so it lists discoverable
 // workloads (`workloadReports`), not already-configured sources. VM has no
 // namespaces; the kit relabels the left column "Kinds", so we group the flat
@@ -136,6 +172,9 @@ export const mapVmWorkloadReportsToNamespaces = (data: unknown): GetNamespacesWi
     // The kit drops region from the persist payload; remember it here so
     // `buildVmPersistSources` can put it back (see the region side-channel in utils.ts).
     rememberWorkloadRegion(kind, report.serviceName, report.region);
+    // The kit sends picked processes as PIDs only; remember what `buildVmPersistSources`
+    // needs to make each one its own source (see the side-channel in utils.ts).
+    rememberReportProcesses(kind, report);
     const bucket = byKind.get(kind);
     if (bucket) bucket.push(report);
     else byKind.set(kind, [report]);
@@ -157,7 +196,7 @@ export const mapVmWorkloadReportsToNamespaces = (data: unknown): GetNamespacesWi
             kind: (kind as K8sResourceKind) ?? '',
             ...(report.region ? { region: report.region } : {}),
           },
-          markedForInstrumentation: { markedForInstrumentation: !!(report.desired?.sourceEnabled ?? report.desired?.enabled) },
+          markedForInstrumentation: { markedForInstrumentation: vmWorkloadMarked(report) },
           dataStreamNames: [VM_DATA_STREAM],
           numberOfInstances: null,
           ...(processes ? { processes } : {}),
@@ -291,6 +330,42 @@ export const vmUpdateSourceVariables = (vars: UpdateSourceVars, ctx?: OperationC
   return { input };
 };
 
+// A VM PID source is one picked process, made exactly as `odictl` makes it (vm-agent
+// `cmd/odictl/workload_selector.go` `checkedPIDSelections`, `app.go`
+// `initialSourceFromPIDSelection`): a `process` source named for the process, holding
+// its one PID, its command line as the restart fingerprint, and its language as the
+// runtime override. One source per process, not per language group, because the agent
+// treats the fingerprint as authoritative: a sibling whose command line differs (a
+// worker number, a port) scores below its match threshold against another's and would
+// not be instrumented.
+//
+// The agent also saves a create whose name+kind it already has as an update of that
+// source. Sibling workers often get the same suggested name (`cpp-worker`, `Worker`),
+// so a name another pick in this save or an existing source already uses gets
+// `-<pid>`; a name that is free stays exactly what `odictl` would choose.
+export const VM_PID_SOURCE_KIND = 'process';
+
+interface VmPidSourceIntent {
+  pid: number;
+  suggestedName: string;
+  matchCmdline: string;
+  language: string | null;
+}
+
+/** One intent per picked process. The kit's `cmdline` is its first PID's, so it fills in for that PID only. */
+const vmPidSourceIntents = (s: PersistSourcesVars['sources'][number]): VmPidSourceIntent[] =>
+  (s.pids ?? []).map((pid, index) => {
+    const known = lookupVmProcess(s.kind || s.namespace, s.name, pid);
+    const cmdline = known?.cmdline ?? (index === 0 ? (s.cmdline ?? null) : null);
+    const exe = known?.exe ?? null;
+    return {
+      pid,
+      suggestedName: suggestVmProcessName(pid, cmdline, exe),
+      matchCmdline: vmProcessMatchCmdline(cmdline, exe),
+      language: known?.language || s.language || null,
+    };
+  });
+
 // `PERSIST_SOURCES` is a single bulk mutation in central-ui, but agents-api only
 // exposes per-source `createSource`/`deleteSource`. There's no single VM
 // document for it, so we fan out into one combined, aliased mutation (a single
@@ -300,37 +375,79 @@ export const vmUpdateSourceVariables = (vars: UpdateSourceVars, ctx?: OperationC
 //
 // Cloud connectors require `region` on create/delete (source identity is
 // name+kind+region); VM agents leave it unset and the connector/VM ignores it.
+// The exception is a VM PID entry (one carrying `pids`): selecting it creates one
+// PID source per process, whose region is the agent's PID encoding (see above),
+// and un-selecting it deletes the configured PID sources that hold its PIDs.
 export const buildVmPersistSources = (vars: PersistSourcesVars): { query: string; variables: Record<string, unknown> } => {
   const sources = vars?.sources ?? [];
   const varDefs: string[] = [];
   const selections: string[] = [];
   const variables: Record<string, unknown> = {};
 
-  sources.forEach((s, i) => {
+  const add = (selected: boolean, input: { name: string; kind: string; region?: string; config?: CreateSourceInput['config'] }) => {
+    const i = selections.length;
     const key = `input${i}`;
-    const kind = s.kind || '';
-    // `s.region` is always undefined in practice — the kit's payload has no such
-    // field — so fall back to the region remembered when the workload was
-    // discovered. Kept as a first choice in case a future kit version carries it.
-    const region = (s as typeof s & { region?: string }).region ?? lookupWorkloadRegion(kind || s.namespace, s.name);
-    if (s.selected) {
+    const { name, kind, region, config } = input;
+    if (selected) {
       varDefs.push(`$${key}: CreateSourceInput!`);
       selections.push(`s${i}: createSource(input: $${key}) { name }`);
       variables[key] = {
-        name: s.name,
+        name,
         kind,
         enabled: true,
         ...(region ? { region } : {}),
+        ...(config ? { config } : {}),
       } as CreateSourceInput;
     } else {
       varDefs.push(`$${key}: DeleteSourceInput!`);
       selections.push(`s${i}: deleteSource(input: $${key}) { name deleted }`);
       variables[key] = {
-        name: s.name,
-        ...(s.kind ? { kind: s.kind } : {}),
+        name,
+        ...(kind ? { kind } : {}),
         ...(region ? { region } : {}),
       } as DeleteSourceInput;
     }
+  };
+
+  const pidIntents = sources.map((s) => (s.pids?.length && s.selected ? vmPidSourceIntents(s) : []));
+  const suggestedCount = new Map<string, number>();
+  pidIntents.flat().forEach((p) => suggestedCount.set(p.suggestedName, (suggestedCount.get(p.suggestedName) ?? 0) + 1));
+  const pidSourceName = (p: VmPidSourceIntent): string =>
+    (suggestedCount.get(p.suggestedName) ?? 0) > 1 || isKnownVmSourceName(VM_PID_SOURCE_KIND, p.suggestedName) ? `${p.suggestedName}-${p.pid}` : p.suggestedName;
+
+  sources.forEach((s, i) => {
+    if (s.pids?.length && !s.selected) {
+      // Delete what exists: the configured PID sources holding these PIDs, by their
+      // real name and region. A name re-derived now can differ from the one the
+      // source was created with (the `-<pid>` suffix depends on what else was known
+      // then), and a PID no known source holds has nothing to delete.
+      const seen = new Set<string>();
+      for (const pid of s.pids) {
+        for (const existing of findVmPidSources(VM_PID_SOURCE_KIND, pid)) {
+          if (seen.has(existing.name)) continue;
+          seen.add(existing.name);
+          add(false, { name: existing.name, kind: VM_PID_SOURCE_KIND, region: existing.region });
+        }
+      }
+      return;
+    }
+    if (s.pids?.length) {
+      for (const p of pidIntents[i]) {
+        add(true, {
+          name: pidSourceName(p),
+          kind: VM_PID_SOURCE_KIND,
+          region: encodePidSourceRegion([p.pid], p.matchCmdline),
+          ...(p.language ? { config: { runtimeOverride: { language: p.language } } } : {}),
+        });
+      }
+      return;
+    }
+
+    const kind = s.kind || '';
+    // `s.region` is always undefined in practice — the kit's payload has no such
+    // field — so fall back to the region remembered when the workload was
+    // discovered. Kept as a first choice in case a future kit version carries it.
+    add(s.selected, { name: s.name, kind, region: s.region ?? lookupWorkloadRegion(kind || s.namespace, s.name) });
   });
 
   // An empty bulk persist still needs a valid mutation document.

@@ -3,7 +3,7 @@ import type { GetWorkloadReportsQuery } from '@odigos/vmagent-api-apollo-client'
 import type { OperationContext } from '@odigos/ui-kit/contexts';
 import { DesiredStateProgress, ProgrammingLanguages, type InstrumentationReport, type OtelDistroName, type Workload } from '@odigos/ui-kit/types';
 import { dialectVersion, vmQuery } from '@/graphql/remote/vm-dialect';
-import { rememberWorkloadRegion, supportsTypedContainerDetails, supportsInstrumentationDistributions, supportsWorkloadReportRegion, withFragmentSelections, withFieldSelections, type VmContainerOverride, type VmSourceConfig } from '@/graphql/remote/utils';
+import { isPidSourceRegion, rememberWorkloadRegion, supportsTypedContainerDetails, supportsInstrumentationDistributions, supportsWorkloadReportRegion, withFragmentSelections, withFieldSelections, type VmContainerOverride, type VmSourceConfig } from '@/graphql/remote/utils';
 
 /** One `WorkloadReport.details.containers` row (agents-api v0.18.0+). */
 interface VmWorkloadDetailsContainer {
@@ -112,7 +112,11 @@ const MANUAL_HEALTH_MESSAGE: Partial<Record<WorkloadReportState, string>> = {
 const healthMessageFor = (state: WorkloadReportState, mode?: string | null): string =>
   (isManualMode(mode) ? MANUAL_HEALTH_MESSAGE[state] : undefined) ?? HEALTH_MESSAGE[state as keyof typeof HEALTH_MESSAGE] ?? '';
 
-const reportKey = (serviceName: string, kind: string, region?: string | null) => `${serviceName}\0${kind}\0${region ?? ''}`;
+// A VM PID source's region is its PID encoding, not a provider region, and the
+// agent reports it under the source's own name+kind with no region: drop it from
+// the key so both sides meet. The agent rejects a second source with the same
+// name+kind, so two PID sources of one unit still get a report each.
+const reportKey = (serviceName: string, kind: string, region?: string | null) => `${serviceName}\0${kind}\0${isPidSourceRegion(region) ? '' : (region ?? '')}`;
 
 /**
  * VM agent emits lowercase/snake_case stages (e.g. "instrumented", "waiting_for_rollout").
@@ -495,7 +499,7 @@ const applyReportToWorkload = (workload: Workload, report: VmWorkloadReport): Wo
   };
 };
 
-/** Merge agents-api WorkloadReports onto Source-mapped Workloads by name+kind+region. */
+/** Merge agents-api WorkloadReports onto Source-mapped Workloads by name+kind+region (a PID source's region aside, see `reportKey`). */
 export const mergeVmWorkloadReports = (workloads: Workload[], reports: VmWorkloadReport[]): Workload[] => {
   if (!reports.length) return workloads;
 
