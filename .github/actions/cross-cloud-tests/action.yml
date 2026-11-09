@@ -1,0 +1,199 @@
+name: "Cross-Cloud Tests"
+description: "Provision a cloud cluster, run an e2e scenario on it, and tear it down"
+
+inputs:
+  provider:
+    description: "Cloud provider to test against (eks or aks)"
+    required: true
+  test_scenario:
+    description: "Scenario under tests/e2e, or enterprise/<name> for tests/enterprise/e2e/<name>"
+    required: true
+  platform:
+    description: "The platform to use [arm/amd]"
+    required: true
+  image_registry:
+    description: "Registry holding the images built for this run"
+    required: true
+  image_tag:
+    description: "Tag of the images built for this run"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Skip - ARM on AKS not yet supported
+      if: ${{ inputs.platform == 'arm' && inputs.provider == 'aks' }}
+      shell: bash
+      run: |
+        echo "ARM platform on AKS is not supported; skipping workflow."
+        exit 78
+
+    - name: Set cluster env
+      shell: bash
+      run: |
+        TF_DIR="tests-infrastructure/terraform/${{ inputs.provider }}"
+        if [ ! -d "$TF_DIR" ]; then
+          echo "❌ Error: Unknown provider '${{ inputs.provider }}' or missing Terraform directory '$TF_DIR'"
+          exit 1
+        fi
+        SCENARIO="${{ inputs.test_scenario }}"
+        case "$SCENARIO" in
+          enterprise/*) TEST_DIR="tests/enterprise/e2e/${SCENARIO#enterprise/}" ;;
+          *) TEST_DIR="tests/e2e/$SCENARIO" ;;
+        esac
+        SCENARIO_SLUG="${SCENARIO//\//-}"
+        CLUSTER_NAME="${SCENARIO_SLUG}-${{ inputs.platform }}-${GITHUB_RUN_ID}"
+        echo "TF_DIR=$TF_DIR" >> "$GITHUB_ENV"
+        echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
+        echo "SCENARIO_SLUG=$SCENARIO_SLUG" >> "$GITHUB_ENV"
+        echo "CLUSTER_NAME=$CLUSTER_NAME" >> "$GITHUB_ENV"
+        echo "TF_VAR_cluster_name=$CLUSTER_NAME" >> "$GITHUB_ENV"
+        echo "TF_VAR_resource_group_name=$CLUSTER_NAME" >> "$GITHUB_ENV"
+        echo "TF_VAR_run_id=$GITHUB_RUN_ID" >> "$GITHUB_ENV"
+        echo "TF_VAR_platform=${{ inputs.platform }}" >> "$GITHUB_ENV"
+
+    - name: Set up Go
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
+      with:
+        go-version-file: "cli/go.mod"
+        cache-dependency-path: "cli/go.sum"
+
+    - name: Set up Helm
+      uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 #v4.3.0
+      with:
+        version: v3.15.2
+
+    - name: Build Odigos CLI
+      shell: bash
+      working-directory: cli
+      run: |
+        TAG=0.0.0-e2e-test
+        sed -i -E 's/0.0.0/'"${TAG#v}"'/' ../helm/odigos/Chart.yaml
+        helm package ../helm/odigos -d pkg/helm/embedded
+        go build -tags=embed_manifests \
+          -ldflags "-X github.com/odigos-io/odigos/cli/pkg/helm.OdigosChartVersion=${TAG#v}" \
+          -o odigos
+
+    - name: Init tofu (OpenTofu)
+      uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f #v1.0.8
+      with:
+        tofu_wrapper: false
+        tofu_version: "1.9.0"
+
+    - name: Configure AWS Credentials for EKS
+      if: ${{ inputs.provider == 'eks' }}
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+      with:
+        role-to-assume: arn:aws:iam::061717858829:role/GitHubActionsEKSCreatorRole
+        aws-region: us-east-1
+
+    - name: Configure Azure Credentials for AKS
+      if: ${{ inputs.provider == 'aks' }}
+      shell: bash
+      run: |
+        echo "ARM_CLIENT_ID=$AZURE_CLIENT_ID" >> $GITHUB_ENV
+        echo "ARM_CLIENT_SECRET=$AZURE_CLIENT_SECRET" >> $GITHUB_ENV
+        echo "ARM_TENANT_ID=$AZURE_TENANT_ID" >> $GITHUB_ENV
+        echo "ARM_SUBSCRIPTION_ID=$AZURE_SUBSCRIPTION_ID" >> $GITHUB_ENV
+
+        az login --service-principal \
+          -u "$AZURE_CLIENT_ID" \
+          -p "$AZURE_CLIENT_SECRET" \
+          --tenant "$AZURE_TENANT_ID"
+
+        az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+
+    - name: Tofu Init
+      shell: bash
+      run: tofu -chdir="$TF_DIR" init
+
+    - name: Tofu Plan
+      shell: bash
+      run: tofu -chdir="$TF_DIR" plan
+
+    - name: Apply OpenTofu Configuration
+      shell: bash
+      run: tofu -chdir="$TF_DIR" apply -auto-approve
+
+    - name: Get kubeconfig for AKS
+      if: ${{ inputs.provider == 'aks' }}
+      shell: bash
+      run: |
+        az aks get-credentials \
+          --resource-group "$CLUSTER_NAME" \
+          --name "$CLUSTER_NAME"
+
+    - name: Get kubeconfig for EKS
+      if: ${{ inputs.provider == 'eks' }}
+      shell: bash
+      run: aws eks update-kubeconfig --region "us-east-1" --name "$CLUSTER_NAME"
+
+    - name: Verify Cluster Access
+      shell: bash
+      run: |
+        kubectl get nodes || exit 1
+
+    # EKS nodes pull from the private ECR registry with their node role. AKS nodes have no AWS
+    # identity, so they get a pull secret that the install passes to the Odigos workloads.
+    - name: Configure AWS Credentials for ECR pull secret
+      if: ${{ inputs.provider == 'aks' }}
+      uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # v6.0.0
+      with:
+        role-to-assume: arn:aws:iam::061717858829:role/ecr-pull-push-role
+        aws-region: us-east-1
+
+    - name: Set Odigos install flags
+      shell: bash
+      run: |
+        INSTALL_FLAGS="--set imagePrefix=${{ inputs.image_registry }}"
+        if [ "${{ inputs.provider }}" = "aks" ]; then
+          kubectl create namespace odigos-test
+          kubectl create secret docker-registry odigos-ecr-pull \
+            --namespace odigos-test \
+            --docker-server="${{ inputs.image_registry }}" \
+            --docker-username=AWS \
+            --docker-password="$(aws ecr get-login-password --region us-east-1)"
+          INSTALL_FLAGS="$INSTALL_FLAGS --set imagePullSecrets={odigos-ecr-pull}"
+        fi
+        echo "ODIGOS_INSTALL_FLAGS=$INSTALL_FLAGS" >> "$GITHUB_ENV"
+
+    - name: Install Chainsaw
+      uses: kyverno/action-install-chainsaw@f2b47b97dc889c12702113753d713f01ec268de5 #v0.2.12
+
+    - name: Run E2E Tests
+      shell: bash
+      env:
+        IMAGE_TAG: ${{ inputs.image_tag }}
+      run: |
+        chainsaw test "$TEST_DIR"
+
+    - name: Cluster diagnostics
+      if: failure()
+      shell: bash
+      run: |
+        echo "==== Nodes ===="; kubectl get nodes -o wide
+        echo "==== Pods (all namespaces) ===="; kubectl get pods -A -o wide
+        echo "==== Events (last 10m) ===="; kubectl get events -A --sort-by=.lastTimestamp | tail -n 200
+        echo "==== Deployments not ready ===="; kubectl get deploy -A | awk '$4!="0/0" && $4!=$5 {print $1,$2}' | while read ns name; do
+          echo "--- describe deploy $ns/$name ---"
+          kubectl describe deploy -n "$ns" "$name" || true
+        done
+
+    - name: Run Diagnose Command
+      if: failure()
+      shell: bash
+      run: cli/odigos diagnose
+      continue-on-error: true
+
+    - name: Upload Run Details Artifact
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+      with:
+        name: run-details-${{ inputs.provider }}-${{ env.SCENARIO_SLUG }}-${{ inputs.platform }}
+        path: odigos_debug*.tar.gz
+      continue-on-error: true
+
+    - name: Destroy Resources
+      if: always()
+      shell: bash
+      run: tofu -chdir="$TF_DIR" destroy -auto-approve

@@ -1,0 +1,72 @@
+name: Publish JavaBuilder Base Builder
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "The new image tag for the base builder docker image (e.g. v1.0)"
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  DOCKERHUB_ORG: "keyval"
+
+jobs:
+  publish-javabuilder-base-builder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate New Version
+        env:
+          GITHUB_EVENT_INPUTS_IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          # Fetch tags from Docker Hub
+          TAGS=$(curl -s "https://hub.docker.com/v2/repositories/${{ env.DOCKERHUB_ORG }}/javabuilder-base/tags/" | jq -r '.results[].name' | sort -Vr)
+
+          # Extract the latest version
+          LATEST_VERSION=$(echo "$TAGS" | head -n 1)
+
+          # New version from workflow input
+          NEW_VERSION=${GITHUB_EVENT_INPUTS_IMAGE_TAG}
+
+          # Parse major and minor from latest and new versions
+          LATEST_MAJOR=$(echo $LATEST_VERSION | cut -d. -f1)
+          LATEST_MINOR=$(echo $LATEST_VERSION | cut -d. -f2)
+          NEW_MAJOR=$(echo $NEW_VERSION | cut -d. -f1)
+          NEW_MINOR=$(echo $NEW_VERSION | cut -d. -f2)
+
+          # Compare versions
+          if [[ $NEW_MAJOR -eq $((LATEST_MAJOR + 1)) && $NEW_MINOR -eq 0 ]]; then
+            echo "New version is a valid major version increment."
+          elif [[ $NEW_MAJOR -eq $LATEST_MAJOR && $NEW_MINOR -eq $((LATEST_MINOR + 1)) ]]; then
+            echo "New version is a valid minor version increment."
+          else
+            echo "Error: New version $NEW_VERSION does not follow the versioning rules."
+            exit 1
+          fi
+
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+        with:
+          persist-credentials: false
+      - name: Login to Docker Hub
+        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 #v3.5.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c #v4.2.0
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 #v3.6.0
+      - name: Publish JavaBuilder Base Builder
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a #v7.3.0
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          file: ./odiglet/enterprise/javabuilder-base.Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKERHUB_ORG }}/javabuiler-base:${{ github.event.inputs.image_tag }}
+            ${{ env.DOCKERHUB_ORG }}/javabuiler-base:latest
