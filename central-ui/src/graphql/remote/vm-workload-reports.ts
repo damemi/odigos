@@ -414,6 +414,30 @@ const mapReportContainers = (report: VmWorkloadReport, containerOverrides: VmCon
 };
 
 /**
+ * `WorkloadReport.libraries` -> the kit's `instrumentationReport.libraries`.
+ *
+ * The report aggregates Go/Java instrumentation libraries across the workload's PIDs; it
+ * has no per-container split, and `WorkloadContainer` carries no libraries of its own. The
+ * kit's Libraries tab reads this list only for a source WITHOUT containers (systemd,
+ * process) and renders container rows from `containers[].instrumentations` otherwise, so a
+ * container-shaped workload is left unset rather than guessing which container each
+ * library belongs to.
+ *
+ * Older agents do not select the field, and an agent whose SDK reports no per-library
+ * status returns an empty list. Both stay unset: the kit words that case itself
+ * (`getWorkloadLibrariesEmptyText`), and an empty list here would claim "none loaded".
+ */
+const mapReportLibraries = (report: VmWorkloadReport, hasContainers: boolean): InstrumentationReport['libraries'] => {
+  if (hasContainers || !report.libraries?.length) return null;
+
+  return report.libraries.map((library) => ({
+    name: library.name,
+    healthy: library.healthy ?? null,
+    message: library.message ?? null,
+  }));
+};
+
+/**
  * Map WorkloadReport state into the same Condition shape HealthCard expects
  * (reasonEnum + message), so connector/VM Overview matches the K8s banner.
  */
@@ -478,10 +502,11 @@ const applyReportToWorkload = (workload: Workload, report: VmWorkloadReport): Wo
   // The Source carries the customer's per-container intent, the report carries what
   // was applied; the container rows need both, and the Source mapping already ran.
   const containers = mapReportContainers(report, (workload.sourceConfig as VmSourceConfig | null | undefined)?.containerOverrides ?? []);
+  const libraries = mapReportLibraries(report, !!containers);
 
   return {
     ...workload,
-    instrumentationReport,
+    instrumentationReport: libraries ? { ...instrumentationReport, libraries } : instrumentationReport,
     workloadOdigosHealthStatus: {
       name: WORKLOAD_ODIGOS_HEALTH_NAME,
       status: progress,
