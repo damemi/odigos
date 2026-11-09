@@ -8,6 +8,9 @@ inputs:
   test-scenario:
     description: "Name of the test scenario under tests/e2e"
     required: true
+  github-token:
+    description: "Token with packages: read (the GITHUB_TOKEN), written to ~/.npmrc so the UI test's yarn install can fetch the UI Kit from GitHub Packages"
+    required: true
   supported-versions:
     description: >-
       JSON map of every supported Kubernetes version to its kind node image and minor version.
@@ -38,6 +41,12 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Write npm auth
+      uses: ./.github/actions/npm-auth
+      with:
+        token: ${{ inputs.github-token }}
+        path: ~/.npmrc
+
     - name: Validate inputs
       shell: bash
       env:

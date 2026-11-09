@@ -252,6 +252,12 @@ jobs:
   build-frontend:
     name: build-frontend
     runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+      packages: read
+    # setup-node's .npmrc reads this for every yarn command in the job, not just the install.
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
       # webapp is scanned separately because it runs with yarn, while the rest of the frontend runs with golang.
@@ -259,6 +265,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@odigos-io'
       - name: Install webapp dependencies
         run: yarn install --frozen-lockfile
         working-directory: frontend/webapp
@@ -290,9 +298,16 @@ jobs:
       # build the frontend image and scan the golang code.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+      - name: Write npm auth
+        id: npmrc
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Frontend Image
         uses: docker/build-push-action@v7
         with:
+          secret-files: |
+            npmrc=${{ steps.npmrc.outputs.path }}
           platforms: linux/amd64
           file: frontend/Dockerfile
           context: .

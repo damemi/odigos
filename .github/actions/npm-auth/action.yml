@@ -1,0 +1,33 @@
+name: "npm auth"
+description: >-
+  Write an .npmrc that authenticates to GitHub Packages (npm.pkg.github.com) so the private @odigos-io/ui-kit
+  package can be installed. The file is for Docker builds (build-push-action `secret-files: npmrc=<path>`) and
+  `make` image targets (read through NPMRC). The @odigos-io registry mapping is committed in frontend/webapp/.npmrc.
+
+inputs:
+  token:
+    description: "Token with packages: read (the workflow's GITHUB_TOKEN)"
+    required: true
+  path:
+    description: "Where to write the .npmrc (a leading ~ is the runner's home, where yarn and npm read it)"
+    required: false
+    default: ${{ runner.temp }}/npmrc
+
+outputs:
+  path:
+    description: "Path of the written .npmrc"
+    value: ${{ inputs.path }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Write .npmrc
+      shell: bash
+      env:
+        NPM_TOKEN: ${{ inputs.token }}
+        NPMRC_PATH: ${{ inputs.path }}
+      run: |
+        umask 077
+        NPMRC_PATH="${NPMRC_PATH/#\~/$HOME}"
+        printf '//npm.pkg.github.com/:_authToken=%s\n' "$NPM_TOKEN" > "$NPMRC_PATH"
+        echo "NPMRC=$NPMRC_PATH" >> "$GITHUB_ENV"

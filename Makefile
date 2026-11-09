@@ -93,10 +93,16 @@ $(HELM_SCHEMA_BIN):
 helm-schema-clean:
 	rm -f $(HELM_SCHEMA_BIN)
 
+# The ui image reads the private UI Kit from GitHub Packages with the token in ~/.npmrc (see frontend/webapp/README.md).
+# Override NPMRC to point at another .npmrc (CI does).
+NPMRC ?= $(HOME)/.npmrc
+NPMRC_SECRET_FLAG = --secret id=npmrc,src=$(NPMRC)
+NPMRC_SECRET = $(if $(wildcard $(NPMRC)),$(NPMRC_SECRET_FLAG))
+
 # Pass DOCKER_BUILD_OPTS=--no-cache to force a clean build (e.g. when go.mod replace changes and cache is stale).
 # IMAGE= overrides the default $(ORG)/odigos-$*$(IMG_SUFFIX):$(TAG) tag (used by deploy-*).
 build-image/%:
-	docker build $(DOCKER_BUILD_OPTS) $(TARGET_FLAG) \
+	docker build $(DOCKER_BUILD_OPTS) $(TARGET_FLAG) $(if $(filter ui,$*),$(NPMRC_SECRET)) \
 	-t $(or $(IMAGE),$(ORG)/odigos-$*$(IMG_SUFFIX):$(TAG)) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--build-arg SERVICE_NAME="$*" \
 	--build-arg ODIGOS_VERSION=$(TAG) \
@@ -165,7 +171,7 @@ build-images-rhel:
 	$(MAKE) build-images RHEL=true TAG=$(TAG) ORG=$(ORG)
 
 push-image/%:
-	docker buildx build $(DOCKER_BUILD_OPTS) $(TARGET_FLAG) \
+	docker buildx build $(DOCKER_BUILD_OPTS) $(TARGET_FLAG) $(if $(filter ui,$*),$(NPMRC_SECRET)) \
 	--platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
 	$(if $(filter true,$(PUSH_IMAGE)),--push,) \
 	$(if $(filter true,$(GCP_MARKETPLACE)),--annotation="index:com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog",) \

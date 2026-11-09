@@ -1,0 +1,41 @@
+apiVersion: internal.odigos.io/v1beta1
+kind: OtelDistribution
+metadata:
+  name: python-enterprise
+spec:
+  name: python-enterprise
+  language: python
+  runtimeEnvironments:
+    - name: python-runtime
+      supportedVersions: '>= 3.9'
+  fallbackDistro: python-enterprise3.8
+  displayName: Python Enterprise eBPF Processing
+  description: |
+    This distribution is for Python applications using OpenTelemetry native instrumentation libraries and eBPF SDK with enterprise features and capabilities.
+  isEbpf: true
+  environmentVariables:
+    opAmpClientEnvironments: true
+    staticVariables:
+      - envName: OTEL_PYTHON_CONFIGURATOR
+        envValue: 'ebpf'
+    appendOdigosVariables:
+      - envName: PYTHONPATH
+        replacePattern: "{{ORIGINAL_ENV_VALUE}}:{{ODIGOS_AGENTS_DIR}}/python-ebpf:{{ODIGOS_AGENTS_DIR}}/python/opentelemetry/instrumentation/auto_instrumentation:{{ODIGOS_AGENTS_DIR}}/python"
+  runtimeAgent:
+    directoryNames:
+      - "{{ODIGOS_AGENTS_DIR}}/python"
+      - "{{ODIGOS_AGENTS_DIR}}/python-ebpf"
+    device: 'instrumentation.odigos.io/generic'
+    fileOpenTriggers:
+      - "{{ODIGOS_AGENTS_DIR}}/python-ebpf/pythonUSDT.abi3.so"
+    k8sAttrsViaEnvVars: true
+    ldPreloadInjectionSupported: true
+    opAmpTransportsSupported: [unix, http]
+  traces:
+    codeAttributes:
+      supported: true
+    headSampling:
+      supported: true
+  ownDiagnostics:
+    odigosAgentOwnLogerSupported: true
+    openTelemetryComponentsLoggerSupported: true

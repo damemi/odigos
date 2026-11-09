@@ -1,0 +1,46 @@
+apiVersion: internal.odigos.io/v1beta1
+kind: OtelDistribution
+metadata:
+  name: java-ebpf-instrumentations
+spec:
+  name: java-ebpf-instrumentations
+  language: java
+  runtimeEnvironments:
+    - name: java-virtual-machine
+      supportedVersions: '>= 8'
+  displayName: Java Enterprise eBPF Instrumentation
+  environmentVariables:
+    appendOdigosVariables:
+      - envName: JAVA_TOOL_OPTIONS
+        replacePattern: "{{ORIGINAL_ENV_VALUE}} -javaagent:{{ODIGOS_AGENTS_DIR}}/java-ebpf/dtrace-injector.jar"
+  description: |
+    This distribution is for JVM-based applications (Java, Scala, Kotlin, etc.) using eBPF based SDK and eBPF enterprise instrumentation libraries.
+  isEbpf: true
+  runtimeAgent:
+    directoryNames:
+      - "{{ODIGOS_AGENTS_DIR}}/java-ebpf"
+    fileOpenTriggers:
+      - "{{ODIGOS_AGENTS_DIR}}/java-ebpf/tracing_probes.so"
+    options:
+     - name: agentJarName
+       value: "dtrace-injector.jar"
+    device: 'instrumentation.odigos.io/generic'
+    ldPreloadInjectionSupported: true
+    k8sAttrsViaEnvVars: true
+    noRestartRequired: true
+    waspSupported: true
+  agentMetrics:
+    runtimeMetrics:
+      supported: true
+  logs:
+    ebpfLogCapture:
+      traceCorrelation: true
+  traces:
+    customInstrumentations:
+      supported: true
+    headersCollection:
+      supported: true
+    payloadCollection:
+      supported: true
+    headSampling:
+      supported: true

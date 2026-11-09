@@ -15,6 +15,10 @@
 /out/*
 !/out/.keep
 
+.npmrc
+.yalc
+yalc.lock
+
 # production
 /build
 
