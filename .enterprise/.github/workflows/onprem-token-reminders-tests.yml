@@ -9,7 +9,6 @@ on:
     paths: &paths
       - "onprem-token-reminders/**"
       - ".github/workflows/onprem-token-reminders.yml"
-      - ".github/workflows/generate-onprem-token.yml"
       - ".github/workflows/onprem-token-reminders-tests.yml"
   push:
     branches: [main]

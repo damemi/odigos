@@ -37,7 +37,7 @@ CLI, CRD, destination, instrumentation, and RBAC snippets are generated in the p
 
 ## Authentication
 
-The password is the **generated on-prem enterprise API key** from `onprem-token-generator`. `odigosauth.VerifyOnpremTokenWithExpiry` reuses the production RSA public key and claim validation: RS256 signature, issuer `https://odigos.io`, subject `https://odigos.io/onprem`, nonempty customer audience, required future expiration, and `nbf` when supplied. Any customer/profile is accepted. Opaque legacy cloud tokens are not generated enterprise license keys and are not accepted.
+The password is the **generated on-prem enterprise API key** from `onprem-token-generator` in the odigos repo. `odigosauth.VerifyOnpremTokenWithExpiry` reuses the production RSA public key and claim validation: RS256 signature, issuer `https://odigos.io`, subject `https://odigos.io/onprem`, nonempty customer audience, required future expiration, and `nbf` when supplied. Any customer/profile is accepted. Opaque legacy cloud tokens are not generated enterprise license keys and are not accepted.
 
 The server exchanges a valid key for a separate signed session cookie. The API key is not placed in cookies, URLs, browser storage, or application logs. `__Host-odigos-docs` is Secure, HttpOnly, host-only, and SameSite=Lax. Login and logout require a same-origin POST. Sessions last at most 24 hours and **never beyond the key's expiration**. Every page, script, image, search fragment, and redirect is authenticated. CloudFront caching is disabled, and every response has `private, no-store`. The browser also returns an open page to login when its session expires.
 

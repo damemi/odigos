@@ -3,7 +3,6 @@ on:
   pull_request:
     paths: &docs-paths
       - 'docs/**'
-      - 'onprem-token-generator/**'
       - '.github/workflows/docs.yaml'
   push:
     branches: [main]
@@ -117,7 +116,7 @@ jobs:
         id: revision
         run: |
           git fetch --no-tags --depth=1 origin main
-          if git diff --quiet HEAD FETCH_HEAD -- docs onprem-token-generator .github/workflows/docs.yaml; then
+          if git diff --quiet HEAD FETCH_HEAD -- docs .github/workflows/docs.yaml; then
             echo "current=true" >> "$GITHUB_OUTPUT"
           else
             echo "current=false" >> "$GITHUB_OUTPUT"

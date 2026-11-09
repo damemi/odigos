@@ -139,7 +139,6 @@ use (
   ./instrumentor
   ./odiglet
   ./odiglet/licenses/github.com/hashicorp/go-version
-  ./onprem-token-generator
 )
 
 replace github.com/odigos-io/odigos/common => ../odigos/common
