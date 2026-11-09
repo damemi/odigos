@@ -87,7 +87,7 @@ Work through these in order.
   </Accordion>
 
   <Accordion title="The daemon task is not running on every instance">
-    Run the following:
+    Inspect the daemon service's recent placement events:
 
     ```bash
     aws ecs describe-services --cluster "$CLUSTER" --services odigos-ecs-agent \

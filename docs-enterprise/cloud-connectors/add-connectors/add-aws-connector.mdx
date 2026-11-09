@@ -15,15 +15,19 @@ Add an AWS Cloud Connector to manage AWS accounts. The connector runs in the Cen
 
 | Type | Domain | Discovery | Instrumentation |
 | --- | --- | --- | --- |
-| `aws.lambda` | Workload | Yes | Yes (OpenTelemetry Lambda layer) |
+| `aws.lambda` | Workload | Yes | Yes (OpenTelemetry Lambda layer; [choose a distro](/cloud-connectors/aws/workloads/lambda/distros)) |
 | `aws.fargate-task` | Workload | Yes | Yes (agent-staging sidecar in the task definition) |
-| `aws.ecs-cluster` | Compute platform | Yes | Coming soon |
-| `aws.fargate-cluster` | Compute platform | Yes | Coming soon |
+| `aws.fargate-collector` | Collector | Observes a Collector you deploy (manual mode) | Installs and manages the [regional Collector](/cloud-connectors/aws/regional-collector) (automatic mode). Shown as "Odigos Collector (ECS Fargate)". |
+| `aws.ecs-cluster` | Compute platform | Yes | n/a — ECS on EC2 uses the [Odigos ECS Agent](/vmagent/ecs/overview) |
+| `aws.fargate-cluster` | Compute platform | Yes | n/a (coverage only) |
 
 <Info>
-  `aws.ecs-cluster` and `aws.fargate-cluster` are discovered for coverage today;
-  Odigos does not yet install a separate agent onto them. `aws.fargate-task` — an
-  individual Fargate **service** — is the ECS resource Odigos instruments directly.
+  `aws.ecs-cluster` and `aws.fargate-cluster` are compute platforms, reported for
+  coverage only; the connector does not install an agent onto them. They are not offered
+  by any access level in the Create Cloud Connector UI. `aws.fargate-task` — an
+  individual Fargate **service** — is the ECS resource the connector instruments directly.
+  To instrument ECS tasks running on **EC2** container instances, deploy the
+  [Odigos ECS Agent](/vmagent/ecs/overview).
 </Info>
 
 aws.lambda and aws.fargate-task support two instrumentation approaches:
@@ -35,72 +39,74 @@ aws.lambda and aws.fargate-task support two instrumentation approaches:
 For the self-managed path, artifact preloading, and per-language CDK/CloudFormation snippets, see the
 [AWS Connector](/cloud-connectors/aws/overview) section.
 
+<Note>
+  For Lambda, Odigos picks a default OpenTelemetry distro per language. You can
+  override it per function, for example to use a lightweight Java handler wrapper
+  or AWS ADOT. See [Lambda distros](/cloud-connectors/aws/workloads/lambda/distros).
+</Note>
+
 ## Add the connector
 
 <Steps>
-  <Step title="Open Add connector and choose AWS">
-    In the Central UI, open Connections / Connectors and start **Add connector**. Choose **AWS**.
+  <Step title="Open Create Cloud Connector and choose AWS">
+    In the Central UI, open **Connections**, click **Create new**, and choose **Cloud Connector**. In the **Create Cloud Connector** drawer, choose **AWS**.
   </Step>
 
   <Step title="Choose access level">
-    Choose how much access this connector should have. The UI shows an **example IAM permissions policy** for the level you pick. You will attach that policy when you create the IAM role or user in the next step.
+    Choose how much access this connector should have. The UI shows a **Policy preview** of the IAM policy for the level you pick. The setup templates in the next step embed the final version of this policy, with your account and role scoping filled in.
 
     <img
       src="/images/cloud-connectors/aws-access-level.png"
       alt="Create Cloud Connector dialog with AWS selected and the Discovery + instrumentation access level showing an IAM policy preview"
     />
 
+    The UI offers four access levels:
+
     <Tabs defaultTabIndex="1">
       <Tab title="Discovery only">
         The connector can list and discover resources (e.g. Lambda functions and ECS/Fargate resources) but cannot change them or attach instrumentation.
 
         Use this when you want inventory and visibility first, or if you are managing the environment with Infrastructure as code (IaC).
-
-        Typical policy actions include:
-
-        | Purpose | Actions |
-        | --- | --- |
-        | Authentication | `sts:GetCallerIdentity` |
-        | Region enumeration | `ec2:DescribeRegions` |
-        | Lambda discovery | `lambda:ListFunctions`, `lambda:ListTags` |
-        | ECS / Fargate discovery | `ecs:ListClusters`, `ecs:DescribeClusters`, `ecs:ListServices`, `ecs:DescribeServices`, `ecs:ListTasks`, `ecs:DescribeTasks`, `ecs:DescribeTaskDefinition` |
-        | Bedrock AgentCore discovery | `bedrock-agentcore:ListAgentRuntimes`, `bedrock-agentcore:GetAgentRuntime`, `bedrock-agentcore:ListAgentRuntimeEndpoints`, `bedrock-agentcore:GetAgentRuntimeEndpoint`, `bedrock-agentcore:ListTagsForResource` |
-
-        <Info>
-          `ecs:DescribeTaskDefinition` is a discovery permission, not only an
-          instrumentation one — it's what lets Odigos see whether a self-managed
-          Fargate service already carries your own instrumentation, so grant it
-          even if you only ever plan to self-manage instrumentation.
-        </Info>
       </Tab>
       <Tab title="Discovery + instrumentation">
         The connector can discover resources and instrument supported workloads. Prefer this for a full setup in one step.
 
-        Includes all discovery actions, plus Odigos-managed instrumentation for Lambda, Fargate and existing AgentCore runtimes:
-
-        | Purpose | Actions |
-        | --- | --- |
-        | Read and update function config | `lambda:GetFunctionConfiguration`, `lambda:UpdateFunctionConfiguration` |
-        | Manage OTel layers | `lambda:GetLayerVersion`, `lambda:ListLayers`, `lambda:PublishLayerVersion`, `lambda:DeleteLayerVersion` |
-        | Manage Fargate task definitions | `ecs:RegisterTaskDefinition`, `ecs:UpdateService` |
-        | Pass task/execution roles when registering a task definition | `iam:PassRole` (scope with condition `iam:PassedToService=ecs-tasks.amazonaws.com`) |
-        | Update AgentCore runtime configuration | `bedrock-agentcore:UpdateAgentRuntime`, `iam:PassRole` on its existing execution role with `iam:PassedToService=bedrock-agentcore.amazonaws.com` |
-
-        Automatic AgentCore instrumentation also needs read access to the source artifact (S3 read and
-        version-read, or ECR image and layer reads). It never writes to your bucket or repository. The connector does not modify execution-role policies.
-
-        AgentCore initially supports existing Python 3.12/CommonJS Node.js 22 artifacts and requires a global
-        `otlphttp` destination. Include its existing execution role in the setup's supplied role-ARN list.
-        See [AgentCore instrumentation](/cloud-connectors/aws/workloads/agentcore/instrument).
+        Includes all discovery actions, plus Odigos-managed instrumentation for Lambda, Fargate and existing AgentCore runtimes, with optional IAM setup for the ADOT + Application Signals Lambda distro; see [IAM permissions](#iam-permissions).
 
         Odigos-managed instrumentation also requires an [OTLP destination](/cloud-connectors/instrument-workloads#add-an-otlp-destination) after the connector is online.
       </Tab>
-      <Tab title="Custom">
-        Pick which resource types may be discovered and which may be instrumented. The UI updates the **policy preview** to match your selections so the IAM policy stays aligned with what verification will validate.
+      <Tab title="Discovery + instrumentation + collector">
+        Odigos detects and instruments workloads, and installs and manages the regional Collector in your account automatically.
 
-        Use Custom when you need a narrower or broader mix than the presets (e.g. discover ECS clusters but only instrument Lambda).
+        Includes everything in **Discovery + instrumentation**, plus the permissions Odigos needs to deploy and manage the [regional Collector](/cloud-connectors/aws/regional-collector). The regional Collector also requires [Managed Collectors](/cloud-connectors/enable#managed-collectors) to be enabled on Central.
+      </Tab>
+      <Tab title="Custom">
+        Pick which resource types may be discovered and which may be instrumented, and whether Odigos manages or installs the regional Collector. The UI updates the **Policy preview** to match your selections.
+
+        Use Custom when you need a different mix than the presets (e.g. discover Fargate services but only instrument Lambda).
+
+        <img
+          src="/images/cloud-connectors/aws-custom-access.png"
+          alt="Custom access level showing the Instrumentation and Collector tables"
+        />
+
+        The **Instrumentation** table has a row for **AWS Lambda** and **Amazon ECS (Fargate task)**:
+
+        | Column | Meaning |
+        | --- | --- |
+        | **Enabled** | Whether Odigos discovers this resource type |
+        | **Instrumentation mode** | **Managed by Odigos** (Odigos applies instrumentation automatically) or **Self-managed (IaC)** (you apply the instrumentation through your own pipeline; Odigos does not modify these workloads). Turning on **Managed by Odigos** also turns on **Enabled** |
+
+        The **Collector** table has a row for **Odigos Collector (ECS Fargate)**:
+
+        | Column | Meaning |
+        | --- | --- |
+        | **Management** | On: Odigos owns the Collector configuration, pushes it over OpAMP, and reports its health. Off: Odigos does not manage a Collector in this account |
+        | **Installation** | **Automatic** (Odigos creates and updates the Collector resources in your account) or **Self-managed (IaC)** (you deploy them yourself from the templates Odigos generates). **Automatic** also turns on **Management** |
       </Tab>
     </Tabs>
+
+    For the exact actions each level requires, see [IAM permissions](#iam-permissions).
 
     <Info>
       Use the policy preview as the source of truth for the permissions policy.
@@ -112,126 +118,201 @@ For the self-managed path, artifact preloading, and per-language CDK/CloudFormat
   </Step>
 
   <Step title="Setup credentials">
-    On the **Setup credentials** screen, apply the IAM policy from the previous step in your AWS account and enter the credentials Odigos will use.
+    Use your already-authenticated AWS CLI, Console, or IaC workspace to run the setup. That session needs permission to manage the IAM resources shown. It is separate from the credentials the connector uses at runtime.
 
-    <img
-      src="/images/cloud-connectors/aws-setup-credentials.png"
-      alt="Setup credentials screen for an AWS connector with the authentication method set to Assume Role and CloudFormation selected as the setup method"
-    />
+    #### 1. Enter account details
 
-    #### 1. Choose authentication method
+    <ParamField path="Connector name" type="string">
+      Optional display name for the connector. It also seeds the default IAM role and user names in the setup templates (`OdigosConnector-<name>`, or the account ID when empty).
+    </ParamField>
+
+    <ParamField path="AWS Account ID" type="string" required>
+      The 12-digit ID of the AWS account Odigos will manage. For Assume IAM role, this is the account containing the connector role; the caller credentials can belong to a different account.
+    </ParamField>
+
+    #### 2. Choose authentication method
+
+    - **Assume IAM role** (the default): provision a connector role with the selected permissions, and caller credentials permitted to assume that role.
+    - **Access keys**: provision an IAM user with the selected permissions and use its access keys directly.
+
+    Each method is a complete, independent setup guide. Both offer **CloudFormation**, **Terraform / OpenTofu**, **AWS CLI**, and **AWS Console** instructions. You do not need to complete the Access keys guide before using Assume IAM role.
+
+    #### 3. Configure the setup and permission scopes
+
+    Choose a distinct **New connector IAM role name** or **IAM user name**, depending on the authentication method. The UI fills the account-specific names and policy into every template. Snippets remain visible with named placeholders until the required inputs are filled; replace all remaining placeholders before running them. The CLI scripts and Terraform templates stop before making changes if your session is not in the expected account.
+
+    Under **Permission scopes and optional integrations**:
+
+    - **Limit task and execution roles (optional):** for Fargate instrumentation or automatic Collector installation, enter one exact task/execution role ARN per line to restrict `iam:PassRole`. If empty, the policy allows roles in the target account only. In both cases, roles can be passed only to `ecs-tasks.amazonaws.com`. Include the Collector task execution role if Odigos will install the Collector.
+    - **Let Odigos configure Application Signals IAM:** disabled by default. Enable it only for an ADOT + Application Signals distro when the connector should attach the AWS-managed Application Signals policy and enable account discovery. **Limit Lambda execution roles (optional)** restricts which execution roles it can modify; if empty, only roles in the target account are allowed. Otherwise, configure those execution roles and account discovery yourself before selecting that distro.
+
+    Use the final **Permissions policy** in this step when configuring an existing identity or using the Console. It includes the inputs and integrations you selected. The earlier access-level preview contains account placeholders.
+
+    #### 4. Provision and enter credentials
 
     <Tabs>
-      <Tab title="Assume Role">
-        Odigos assumes a scoped IAM role. Prefer this for production: you attach the permissions policy to the role, and Odigos does not rely on long-lived admin credentials in the connector.
+      <Tab title="Assume IAM role">
+        The connector uses the caller credentials to obtain a temporary session for the connector role. The role receives the selected discovery, instrumentation, and Collector permissions. The new caller receives only `sts:AssumeRole` on that exact role ARN, with the matching External ID.
 
-        You still provide base access keys that are allowed to call `sts:AssumeRole` on that role (plus the Role ARN and External ID).
+        Under **Credentials for assuming the role**, choose:
 
-        #### 2. Choose setup method
+        - **Create caller credentials:** enter **Caller AWS account ID** and a distinct **Caller IAM user name**. The guide creates the user and derives its trusted principal ARN from those values. No existing user or role ARN is required.
+        - **Use existing caller credentials:** enter **Existing source IAM principal ARN**, the actual IAM user or role associated with those credentials. The guide grants that identity permission to assume the connector role. Existing permissions on that identity remain in place.
 
-        Use the tool that best fits your workflow — **CloudFormation**, **Terraform**, **AWS CLI**, or **Manual**. Each path ends with the same role (trust policy + access-level permissions) and a Role ARN to paste back into Odigos.
+        The trusted principal is a real IAM identity, not a random value or the new connector role. For example, `arn:aws:iam::123456789012:user/OdigosConnectorCaller` identifies a user in the caller account. If your authenticated session uses an assumed role, copy its **IAM role ARN** from IAM; an STS session ARN such as `arn:aws:sts::123456789012:assumed-role/RoleName/SessionName` is not the IAM role ARN this field expects.
 
-        #### 3. Create IAM role
+        The wizard generates a customer-specific **External ID**. Keep that value in both the caller permission and the target trust policy. Set it before copying templates, and do not change it after provisioning unless you update both policies. New-role templates require a non-empty value of 2–1224 valid characters without whitespace.
 
-        Follow the instructions the UI shows for the method you picked, then copy the **Role ARN**.
+        Complete the caller setup first, then the connector-role setup. Run each panel in the account it specifies. They can use the same AWS account; for cross-account setup, authenticate your provisioning tool to the appropriate account for each panel.
 
         <Tabs>
           <Tab title="CloudFormation">
-            1. Open the CloudFormation instructions in the UI.
-            2. Deploy the provided template (or stack) in the target AWS account.
-            3. Confirm the stack created the IAM role with the UI trust policy and the permissions policy from the access level step.
-            4. Copy the **Role ARN** from the stack outputs or the IAM console.
+            1. For a new caller, deploy the source-user template from the first panel in the caller account. For an existing caller, use the provided permission-attachment template instead.
+            2. For a new caller, follow the explicit CLI or Console step after stack creation to issue its access key. The secret is not placed in CloudFormation outputs.
+            3. Save the connector-role template as `odigos-connector.yaml` and deploy it in the target account using the command shown in the UI. It includes `CAPABILITY_NAMED_IAM` and the matching `OdigosExternalId` parameter. The role name comes from your setup input.
+            4. Copy the **RoleArn** stack output. Confirm the stack created the trust policy and final scoped permissions policy. To query the ARN from your terminal, run this in the same AWS account and stack region used for deployment:
+
+               ```bash
+               aws cloudformation describe-stacks \
+                 --stack-name "<STACK_NAME>" \
+                 --query "Stacks[0].Outputs[?OutputKey=='RoleArn'].OutputValue | [0]" \
+                 --output text
+               ```
           </Tab>
-          <Tab title="Terraform">
-            1. Open the Terraform snippet in the UI.
-            2. Apply it in the target account or module.
-            3. Confirm the role was created with the UI trust policy and the permissions policy from the access level step.
-            4. Copy the **Role ARN** from the Terraform output or the IAM console.
+          <Tab title="Terraform / OpenTofu">
+            1. Apply the caller template in a separate caller-account workspace. It creates the caller and access key, or grants an existing caller permission to assume the role.
+            2. Apply the connector-role template in the target-account workspace. It creates the trust policy and final scoped permissions policy.
+            3. Copy the Role ARN and, for a new caller, read the sensitive access-key outputs using the commands in the UI.
+            4. Protect the state backend: marking an output sensitive does not remove the secret from state.
+
+            From the **target-role workspace**, query the ARN with the tool used to apply it:
+
+            ```bash
+            tofu output -raw role_arn
+            # Terraform: terraform output -raw role_arn
+            ```
+
+            `role_arn` is the output declared by the connector-role template. Run this in that workspace, not the caller-user workspace. CloudFormation deployments use the stack-output command in the CloudFormation tab instead.
           </Tab>
           <Tab title="AWS CLI">
-            1. Open the AWS CLI commands in the UI.
-            2. Run them against the target account (creates the role, trust policy, and attaches permissions).
-            3. Confirm the commands completed successfully.
-            4. Copy the **Role ARN** from the command output or the IAM console.
+            1. Run the caller script in the caller account. It writes its scoped policy file before attaching the permission, and creates an access key only for a new caller. For a new caller, the script stops if a user with that name already exists; choose **Use existing caller credentials** or a different name.
+            2. Run the connector-role script in the target account. It writes `odigos-trust-policy.json` and `odigos-policy.json` before creating or updating the role and attaching its permissions. No separate policy file is required.
+            3. Confirm all commands succeeded, then copy the Role ARN from the output and the new caller key pair if you created one.
+
+            To retrieve the target role ARN again, use the role name entered in the wizard, running in the target account:
+
+            ```bash
+            aws iam get-role \
+              --role-name "<CONNECTOR_ROLE_NAME>" \
+              --query Role.Arn \
+              --output text
+            ```
+
+            Paste that ARN into **IAM Role ARN**. The caller user ARN identifies the trusted source and belongs to a different part of the setup. Existing secret access keys cannot be queried again; save the key pair when it is issued.
           </Tab>
-          <Tab title="Manual">
-            1. Open the AWS Console → IAM → Roles → Create role.
-            2. Select **Custom trust policy**.
-            3. Paste the trust policy from the UI (includes the External ID condition when present).
-            4. Attach the **permissions policy from the access level step**.
-            5. Name the role and create it.
-            6. Open the role summary and copy the **Role ARN**.
+          <Tab title="AWS Console">
+            1. Follow the first panel to create the caller user and access key, or attach the scoped AssumeRole permission to the existing caller identity.
+            2. In the target account, create a customer-managed policy from the final **Permissions policy** JSON.
+            3. Open **IAM → Roles → Create role**, select **Custom trust policy**, and paste the target trust policy from the UI. It names the chosen caller principal and requires the matching External ID.
+            4. Select the customer-managed permissions policy, use the connector role name entered in the wizard, and create the role.
+            5. Copy the Role ARN from its IAM summary.
           </Tab>
         </Tabs>
 
-        <img
-          src="/images/cloud-connectors/aws-create-iam-role.png"
-          alt="Create IAM role step showing CloudFormation instructions and the Enter Role ARN form with account ID, access keys, Role ARN, and External ID fields"
-        />
+        In **Enter connector credentials**, fill both groups:
 
-        #### 4. Enter Role ARN
+        <ParamField path="Caller credentials: Access Key ID" type="string" required>
+          Access key ID for the caller user or role selected above.
+        </ParamField>
+        <ParamField path="Caller credentials: Secret Access Key" type="string" required>
+          The secret paired with the caller Access Key ID.
+        </ParamField>
+        <ParamField path="Role credentials: IAM Role ARN" type="string" required>
+          ARN of the connector role created in the target account.
+        </ParamField>
+        <ParamField path="Role credentials: External ID" type="string">
+          The same value used in the target trust policy and caller permission. Required by the generated setup; it can be omitted only when connecting an existing role whose policies do not require it.
+        </ParamField>
 
-        Paste the values from the previous step into the form — account ID, base access keys, the Role ARN you copied, and the External ID from the UI trust policy.
-
-        <ParamField path="AWS Account ID" type="string" required>
-          The 12-digit account ID where the IAM role lives.
-        </ParamField>
-        <ParamField path="Access Key ID" type="string" required>
-          Access key for an identity that can assume the role.
-        </ParamField>
-        <ParamField path="Secret Access Key" type="string" required>
-          Secret access key for that identity.
-        </ParamField>
-        <ParamField path="Session Token" type="string">
-          Required only for temporary access keys.
-        </ParamField>
-        <ParamField path="IAM Role ARN" type="string" required>
-          ARN of the cross-account role Odigos assumes.
-        </ParamField>
-        <ParamField path="External ID" type="string">
-          Must match the External ID in the role trust policy (shown in the UI, e.g. `odigos-connector`).
-        </ParamField>
+        Temporary caller credentials also require their **Session Token**, available under **Show advanced credential fields**.
       </Tab>
+      <Tab title="Access keys">
+        The connector authenticates directly as the IAM user carrying the final scoped permissions policy. There is no connector role to assume and no Role ARN or External ID to enter.
 
-      <Tab title="Static keys">
-        Use IAM user access keys that already have the permissions policy from the access level step attached. There is no separate role setup flow in the UI for this method.
+        <Tabs>
+          <Tab title="AWS CLI">
+            Run the script in the target account. It writes `odigos-policy.json`, creates or selects the named IAM user, creates a customer-managed permissions policy, attaches it, and creates an access key pair. If a policy with that name already exists, the script stops so you can review it and create a new default policy version before issuing credentials.
+          </Tab>
+          <Tab title="CloudFormation">
+            Deploy the template in the target account. It creates the IAM user and customer-managed permissions policy. After the stack succeeds, follow the provided CLI or Console step to issue an access key; the secret is not stored in stack outputs.
+          </Tab>
+          <Tab title="Terraform / OpenTofu">
+            Apply the snippet in the target account to create the IAM user, customer-managed policy, and access key. Read the sensitive key outputs using the UI instructions. Protect the state backend because state retains the secret.
+          </Tab>
+          <Tab title="AWS Console">
+            Create or select an IAM user, create a customer-managed policy from the final policy preview, attach it, and create an access key. Use a customer-managed policy rather than an inline user policy: the Collector policy can exceed the IAM user's aggregate inline-policy size limit.
+          </Tab>
+        </Tabs>
 
-        1. In AWS, create or select an IAM user.
-        2. Attach the **permissions policy from the access level step**.
-        3. Create an access key for that user.
-        4. Enter the credentials in Odigos:
+        You can also enter existing credentials for an identity with the final scoped permissions policy. In **Enter connector credentials**, provide:
 
-        <ParamField path="AWS Account ID" type="string" required>
-          The 12-digit account ID where the IAM user lives.
-        </ParamField>
         <ParamField path="Access Key ID" type="string" required>
-          IAM user access key ID.
+          The access key ID for that identity.
         </ParamField>
         <ParamField path="Secret Access Key" type="string" required>
-          IAM user secret access key.
+          The matching secret access key. AWS shows a newly created secret only once.
         </ParamField>
-        <ParamField path="Session Token" type="string">
-          Required only for temporary access keys.
-        </ParamField>
+
+        For temporary access keys, also enter the matching **Session Token** under **Show advanced credential fields**.
       </Tab>
     </Tabs>
 
     Credentials are stored in a Kubernetes Secret in the Central cluster — never in the connector spec.
+
+    ### Bootstrap region (advanced)
+
+    Select **Show advanced credential fields** to reveal **Bootstrap region** (default `us-east-1`) and the optional **Session Token**. The session token is required whenever the direct or caller access keys are temporary.
+
+    <ParamField path="Bootstrap region" type="string" default="us-east-1">
+      Region used for initial API calls. This does not limit discovery. The dropdown lists commercial AWS regions only.
+    </ParamField>
+
+    The bootstrap region is used for the initial identity check through STS and for listing enabled AWS regions. Change it when your role or organization restricts `us-east-1` for those calls.
+
+    <Warning>
+      Odigos checks the selected workload types in every enabled region. Any
+      failed discovery probe prevents creation and reports the region and provider
+      diagnostic. Your policy and network access must allow discovery in all
+      enabled regions; changing Bootstrap region does not narrow that scope.
+    </Warning>
+
+    To change the bootstrap region after creation, edit `spec.bootstrapRegion` on the `OdigosCloudConnector` resource.
   </Step>
 
   <Step title="Verify and create">
-    Click **Verify & Create Connector**. Central runs connection checks, then creates the credentials Secret and `OdigosCloudConnector` resource when verification succeeds.
+    Click **Verify & Create Connector**. Central runs connection checks, then creates the credentials Secret and `OdigosCloudConnector` resource when verification succeeds. Creating a connector requires an Admin role in Central.
+
+    Connectors are keyed by provider and account ID. Submitting an account that already has a connector updates that connector and its credentials Secret instead of creating a second one.
 
     <Info>
-      Verification covers authentication and discovery permissions for the access
-      level you selected. For **Discovery + instrumentation**, also ensure the
-      instrumentation actions from the policy preview are on the role before you
-      create Sources.
+      Verification checks authentication, that the assumed role or direct identity
+      belongs to the configured AWS account, region enumeration, and representative
+      discovery reads for the selected workload types in every enabled region.
+      Where resources exist, probes also check Lambda tags, aliases and configuration,
+      and ECS service, task and task-definition reads. Empty inventories cannot prove
+      resource-scoped permissions.
+
+      These read-only checks do not validate instrumentation writes, `iam:PassRole`,
+      Collector deployment permissions, task execution roles, or workload-to-endpoint
+      connectivity. Apply the complete selected policy and verify the first real
+      workload and Collector deployment before expanding rollout.
     </Info>
+
+    Failed checks show the provider diagnostic and remediation. Central backend logs record failed checks and request IDs without supplied secret values. Verification times out after 90 seconds; if it does, check connectivity from Central to the provider APIs and retry.
   </Step>
 
   <Step title="Wait for Connected">
-    After create succeeds, wait until the connector status is **Connected** and initial discovery has completed.
+    After create succeeds, wait until the connector status is **Connected** and initial discovery has completed. The **Connections** table shows **Pending** while the connector runtime is still starting.
   </Step>
 </Steps>
 
@@ -239,6 +320,211 @@ For the self-managed path, artifact preloading, and per-language CDK/CloudFormat
   When the connector shows Connected, you can browse discovered workloads and
   start [instrumenting](/cloud-connectors/instrument-workloads).
 </Check>
+
+## IAM permissions
+
+Each access level includes the actions of the level before it. The UI policy preview is the source of truth; the tables below list what each level adds.
+
+### Discovery
+
+| Purpose | Actions |
+| --- | --- |
+| Authentication | `sts:GetCallerIdentity` |
+| Region enumeration | `ec2:DescribeRegions` |
+| Lambda discovery | `lambda:ListFunctions`, `lambda:ListAliases`, `lambda:GetFunctionConfiguration`, `lambda:ListTags` |
+| ECS / Fargate discovery | `ecs:ListClusters`, `ecs:ListServices`, `ecs:DescribeServices`, `ecs:ListTasks`, `ecs:DescribeTasks`, `ecs:DescribeTaskDefinition` |
+| Bedrock AgentCore discovery | `bedrock-agentcore:ListAgentRuntimes`, `bedrock-agentcore:GetAgentRuntime`, `bedrock-agentcore:ListAgentRuntimeEndpoints`, `bedrock-agentcore:GetAgentRuntimeEndpoint`, `bedrock-agentcore:ListTagsForResource` |
+
+<Info>
+  `ecs:DescribeTaskDefinition` is a discovery permission, not only an
+  instrumentation one — it's what lets Odigos see whether a self-managed
+  Fargate service already carries your own instrumentation, so grant it
+  even if you only ever plan to self-manage instrumentation.
+</Info>
+
+### Discovery + instrumentation
+
+Adds Odigos-managed instrumentation for Lambda, Fargate and existing AgentCore runtimes:
+
+| Purpose | Actions |
+| --- | --- |
+| Read and update function config | `lambda:GetFunctionConfiguration`, `lambda:UpdateFunctionConfiguration` |
+| Tag and untag instrumented functions | `lambda:TagResource`, `lambda:UntagResource` |
+| Manage OTel layers | `lambda:GetLayerVersion`, `lambda:ListLayers`, `lambda:PublishLayerVersion`, `lambda:DeleteLayerVersion` |
+| Manage Fargate task definitions | `ecs:RegisterTaskDefinition`, `ecs:UpdateService`, `ecs:TagResource` |
+| Pass task/execution roles when registering a task definition | `iam:PassRole` |
+| Update AgentCore runtime configuration | `bedrock-agentcore:UpdateAgentRuntime`, plus `iam:PassRole` on the runtime's existing execution role |
+| Read AgentCore source artifacts | `s3:GetObject`, `s3:GetObjectVersion` (ZIP artifacts), or the ECR actions below plus `ecr:BatchCheckLayerAvailability` (container artifacts) |
+| Access container images in Amazon ECR | `ecr:GetAuthorizationToken`, `ecr:BatchGetImage`, `ecr:GetDownloadUrlForLayer` |
+| Set up CloudWatch Application Signals (ADOT + Application Signals distros only) | `iam:GetPolicy`, `iam:ListAttachedRolePolicies`, `iam:AttachRolePolicy`, `iam:GetRole`, `application-signals:StartDiscovery`, `iam:CreateServiceLinkedRole`, `cloudtrail:CreateServiceLinkedChannel` |
+
+The ECR actions are optional for Fargate: the connector uses them only to read a Fargate container's image configuration for language detection. The regional Collector's image is pulled by the Collector task execution role, not by the connector, and a Collector image from ECR Public needs no ECR permissions.
+
+Automatic AgentCore instrumentation reads the source artifact (the S3 ZIP or the ECR image) only to detect which SDK it carries. It never writes to your bucket or repository, and the connector does not modify execution-role policies. AgentCore initially supports existing Python 3.12/CommonJS Node.js 22 artifacts and requires a global `otlphttp` destination. Include the runtime's existing execution role in the setup's supplied role-ARN list. See [AgentCore instrumentation](/cloud-connectors/aws/workloads/agentcore/instrument).
+
+<Warning>
+  The generated policy restricts `iam:PassRole` to roles in the target account and
+  to `ecs-tasks.amazonaws.com` and `bedrock-agentcore.amazonaws.com`. Use **Limit task and execution roles (optional)**
+  to narrow this further to exact role ARNs. Include the task execution role for an
+  automatically installed Collector.
+</Warning>
+
+#### Application Signals actions
+
+The Application Signals actions are only included in the setup policy when **Let Odigos configure Application Signals IAM** is enabled, and are exercised when a Lambda source uses the [ADOT with Application Signals](/cloud-connectors/aws/workloads/lambda/distros#adot-with-application-signals) distro. In that case the connector attaches the AWS-managed `CloudWatchLambdaApplicationSignalsExecutionRolePolicy` policy to the function's execution role and enables Application Signals discovery for the account. It never creates or edits IAM policies.
+
+The generated policy (the UI preview, CloudFormation, Terraform and CLI) contains five `Deny` statements at every access level, whether or not Application Signals is enabled:
+
+- `RestrictPassRoleService` and `RestrictPassRoleResources` limit `iam:PassRole` to `ecs-tasks.amazonaws.com` and `bedrock-agentcore.amazonaws.com`, and to the roles you list (or roles in the target account).
+- `RestrictApplicationSignalsRoles` limits `iam:AttachRolePolicy` to the **Limit Lambda execution roles** you list (or roles in the target account).
+- `DenyUnrelatedPolicyAttachments` and `DenyUnrelatedServiceLinkedRoles`, shown below, limit the Application Signals actions to that managed policy and to the Application Signals service-linked role:
+
+```json
+{
+  "Sid": "DenyUnrelatedPolicyAttachments",
+  "Effect": "Deny",
+  "Action": "iam:AttachRolePolicy",
+  "Resource": "*",
+  "Condition": {
+    "ArnNotLike": { "iam:PolicyARN": "arn:*:iam::aws:policy/CloudWatchLambdaApplicationSignalsExecutionRolePolicy" }
+  }
+}
+```
+
+```json
+{
+  "Sid": "DenyUnrelatedServiceLinkedRoles",
+  "Effect": "Deny",
+  "Action": "iam:CreateServiceLinkedRole",
+  "Resource": "*",
+  "Condition": {
+    "StringNotEquals": { "iam:AWSServiceName": "application-signals.cloudwatch.amazonaws.com" }
+  }
+}
+```
+
+<Note>
+  If you build the policy yourself, keep all of the `Deny` statements. If you already
+  have a connector role, either grant these scoped actions or configure the Lambda
+  execution-role policy and account discovery yourself before selecting the ADOT
+  with Application Signals distro on an Odigos-managed Lambda function.
+</Note>
+
+### Collector management (read-only)
+
+Added when Odigos manages a [regional Collector](/cloud-connectors/aws/regional-collector), whether you deploy it yourself (Custom, with **Management** on) or Odigos installs it. These actions only read your infrastructure.
+
+| Purpose | Actions |
+| --- | --- |
+| ECS cluster details | `ecs:DescribeClusters` |
+| Load balancers | `elasticloadbalancing:DescribeLoadBalancers`, `elasticloadbalancing:DescribeListeners`, `elasticloadbalancing:DescribeTargetGroups`, `elasticloadbalancing:DescribeTargetHealth` |
+| Networking | `ec2:DescribeVpcs`, `ec2:DescribeSubnets`, `ec2:DescribeSecurityGroups`, `ec2:DescribeRouteTables`, `ec2:DescribeVpcPeeringConnections`, `ec2:DescribeNetworkAcls`, `ec2:DescribeVpcAttribute` |
+
+### Collector deployment
+
+Added when Odigos installs the regional Collector in your account (**Discovery + instrumentation + collector**, or Custom with **Installation** set to **Automatic**).
+
+Collector deployment also uses `ecs:DescribeClusters` (from Collector management), `ecs:RegisterTaskDefinition`, `ecs:UpdateService`, `ecs:TagResource`, and `iam:PassRole`. **Discovery + instrumentation** already includes the last four; with Custom they are added by the Collector itself.
+
+| Purpose | Actions |
+| --- | --- |
+| ECS service | `ecs:CreateService`, `ecs:DeleteService`, `ecs:StopTask` |
+| Load balancer | `elasticloadbalancing:CreateLoadBalancer`, `elasticloadbalancing:DeleteLoadBalancer`, `elasticloadbalancing:CreateTargetGroup`, `elasticloadbalancing:DeleteTargetGroup`, `elasticloadbalancing:ModifyTargetGroupAttributes`, `elasticloadbalancing:CreateListener`, `elasticloadbalancing:ModifyListener`, `elasticloadbalancing:SetSecurityGroups`, `elasticloadbalancing:AddTags`, `elasticloadbalancing:DescribeTags` |
+| Security groups | `ec2:CreateSecurityGroup`, `ec2:DeleteSecurityGroup`, `ec2:AuthorizeSecurityGroupIngress`, `ec2:RevokeSecurityGroupIngress`, `ec2:AuthorizeSecurityGroupEgress`, `ec2:CreateTags` |
+| Logs | `logs:CreateLogGroup`, `logs:DeleteLogGroup`, `logs:PutRetentionPolicy`, `logs:TagResource`, `logs:ListTagsForResource` |
+| Secrets | `secretsmanager:CreateSecret`, `secretsmanager:PutSecretValue`, `secretsmanager:DescribeSecret`, `secretsmanager:DeleteSecret`, `secretsmanager:TagResource`, `secretsmanager:RestoreSecret` |
+| Autoscaling | `application-autoscaling:RegisterScalableTarget`, `application-autoscaling:DeregisterScalableTarget`, `application-autoscaling:PutScalingPolicy`, `application-autoscaling:DescribeScalableTargets`, `application-autoscaling:DescribeScalingPolicies`, `application-autoscaling:ListTagsForResource`, `application-autoscaling:TagResource` |
+| Alarms | `cloudwatch:PutMetricAlarm`, `cloudwatch:DeleteAlarms`, `cloudwatch:DescribeAlarms` |
+
+<Warning>
+  For the Collector, scope `iam:PassRole` to the Collector task execution role
+  ARN, with the condition `iam:PassedToService=ecs-tasks.amazonaws.com`. Odigos
+  never creates this role, so do not grant `iam:CreateRole`, `iam:PutRolePolicy`,
+  `iam:TagRole`, or `iam:DeleteRole`.
+</Warning>
+
+## Bill of materials and uninstall
+
+Revoke these credentials last. First uninstrument workloads, uninstall every regional Collector and delete the
+connector, in the order given in [Remove a complete AWS setup](/cloud-connectors/aws/uninstall#remove-a-complete-aws-setup).
+Run the cleanup with your own admin identity, not the connector's.
+
+| Flow | What setup creates |
+| --- | --- |
+| **Access keys**, new user | IAM user, an attached customer-managed policy, and an access key |
+| **Access keys**, existing identity | The policy attachment, and any key you issued for the connector |
+| **Assume IAM role**, new caller | Target role (trust policy plus inline `OdigosCloudConnector` policy), caller IAM user with a scoped inline AssumeRole policy, and an access key |
+| **Assume IAM role**, existing caller | Target role, plus the AssumeRole permission on your caller: a managed policy with CloudFormation, an inline policy with CLI, Terraform or Console |
+| Central | The `OdigosCloudConnector` resource, its credentials Secret and runtime pods. Deleting the connector in the UI removes them. |
+
+Deleting the connector leaves every AWS object in the table. The setup templates don't create the Collector
+execution role, workloads or networking; those are covered in their own guides.
+
+Remove the objects with the tool that created them (see
+[Use the tool that owns the resource](/cloud-connectors/aws/uninstall#use-the-tool-that-owns-the-resource)):
+
+- **CloudFormation:** delete any access keys issued outside the stack first, or the user's deletion leaves the
+  stack in `DELETE_FAILED`. Then delete the target stack and, for Assume IAM role, the caller stack in its own
+  account.
+- **Terraform / OpenTofu:** destroy the dedicated resources from the original state, in both the target and
+  caller workspaces. State and its history can still hold the access key secret afterwards.
+- **AWS CLI or Console:** use the commands below. Run target-role commands in the target account and caller
+  commands in the caller account.
+
+On an existing identity, remove only what setup added and restore any trust or policy you changed. Don't delete
+the identity itself.
+
+### Access keys and caller permission
+
+Delete each key created for the connector, including rotated ones:
+
+```bash
+USER_NAME="<DEDICATED_CALLER_OR_ACCESS_KEYS_USER>"
+aws iam list-access-keys --user-name "$USER_NAME"
+aws iam delete-access-key --user-name "$USER_NAME" --access-key-id "<KEY_ID_TO_REMOVE>"
+```
+
+For Assume IAM role, remove the AssumeRole policy from the caller:
+
+```bash
+ASSUME_POLICY="<EXACT_SOURCE_POLICY_NAME_FROM_SETUP>"
+aws iam delete-user-policy --user-name "$USER_NAME" --policy-name "$ASSUME_POLICY"
+# For a role caller instead:
+# aws iam delete-role-policy --role-name "<EXISTING_CALLER_ROLE_NAME>" --policy-name "$ASSUME_POLICY"
+```
+
+If the caller user was created only for this connector, delete it with
+`aws iam delete-user --user-name "$USER_NAME"`.
+
+### Target connector role
+
+```bash
+CONNECTOR_ROLE="<TARGET_CONNECTOR_ROLE_NAME>"
+aws iam list-attached-role-policies --role-name "$CONNECTOR_ROLE"
+aws iam delete-role-policy --role-name "$CONNECTOR_ROLE" --policy-name OdigosCloudConnector
+aws iam delete-role --role-name "$CONNECTOR_ROLE"
+```
+
+If you attached a managed policy to the role in the Console, detach it with `aws iam detach-role-policy` before
+deleting the role.
+
+### Access keys user and policy
+
+After deleting the user's keys:
+
+```bash
+POLICY_ARN="<EXACT_CUSTOMER_MANAGED_POLICY_ARN>"
+aws iam list-entities-for-policy --policy-arn "$POLICY_ARN"
+aws iam detach-user-policy --user-name "$USER_NAME" --policy-arn "$POLICY_ARN"
+aws iam list-policy-versions --policy-arn "$POLICY_ARN"
+# Delete each non-default version first:
+# aws iam delete-policy-version --policy-arn "$POLICY_ARN" --version-id "<VERSION_ID>"
+aws iam delete-policy --policy-arn "$POLICY_ARN"
+aws iam delete-user --user-name "$USER_NAME"
+```
+
+Skip `delete-policy` if another identity still uses the policy. Revoking credentials doesn't remove local copies:
+delete the generated `odigos-*.json` policy files and any saved key output yourself.
 
 ## Next steps
 
@@ -249,6 +535,20 @@ For the self-managed path, artifact preloading, and per-language CDK/CloudFormat
     href="/cloud-connectors/instrument-workloads#add-an-otlp-destination"
   >
     Add an OTLP destination, create Sources for discovered Lambdas and Fargate services, and track instrumentation.
+  </Card>
+  <Card
+    title="Lambda distros"
+    icon="layer-group"
+    href="/cloud-connectors/aws/workloads/lambda/distros"
+  >
+    Choose the OpenTelemetry distro for each Lambda function.
+  </Card>
+  <Card
+    title="Regional Collector"
+    icon="server"
+    href="/cloud-connectors/aws/regional-collector"
+  >
+    Install an Odigos Collector in your AWS account.
   </Card>
   <Card
     title="AWS Connector"

@@ -4,23 +4,25 @@ description: 'Mirror the Fargate agents image into a private registry instead of
 sidebarTitle: 'Preload'
 ---
 
-Every instrumented Fargate task pulls the same agents bundle at task-start time — it isn't baked into your
-task image, so the pull happens on every new task launch, and a failed pull blocks the whole task (the
-application container waits on the stager with a `SUCCESS` dependency).
+Every instrumented Fargate task pulls the same agents bundle each time it starts. It isn't baked into your task
+image, and a failed pull blocks the whole task, because the application container waits for the `odigos-agent`
+container to finish (`SUCCESS` dependency).
 
-Most accounts need none of this — with Odigos-managed instrumentation, the connector pulls the image from
-Odigos' own registry on your behalf. Preloading matters if your Fargate tasks run in a network that cannot
-reach that public registry, or your organization requires every image your tasks pull to live in a registry
-you own.
+Most accounts need none of this. Preload the image only if your Fargate tasks run in a network that can't reach
+the Odigos registry, or your organization requires every image your tasks pull to live in a registry you own.
+
+<Info>
+  The current release is **`v0.0.27`**. Use it as `<version>` below. The CDK package's version is the same
+  as the image tag it uses by default (`@odigos/aws-cdk@0.0.27` stages `odigos-fargate-agents:v0.0.27`).
+</Info>
 
 <Tabs>
   <Tab title="Odigos registry (default)">
-    By default, tasks pull `registry.odigos.io/odigos-fargate-agents:<version>` — a public, multi-arch
-    (amd64 + arm64/Graviton) image. This needs egress from the task's subnet to the public internet (a
-    public IP, or NAT).
+    By default, tasks pull `registry.odigos.io/odigos-fargate-agents:<version>`, a public multi-arch
+    (amd64 and arm64/Graviton) image. The task's subnet needs outbound internet access (a public IP or NAT).
 
-    Nothing to configure — this is what Odigos-managed instrumentation uses, and it's also the default a
-    self-managed CloudFormation task definition references unless you override it.
+    There's nothing to configure. Odigos-managed instrumentation and the CDK construct use this image unless you
+    override it, and CloudFormation snippets reference it until you change the `Image`.
   </Tab>
 
   <Tab title="Your own private registry">
@@ -42,9 +44,8 @@ you own.
       </Step>
 
       <Step title="Copy the image, preserving the multi-arch manifest">
-        Use `docker buildx imagetools create` rather than `pull` + `push` — a plain pull only fetches the
-        image for your local machine's architecture, and pushing that back would give Graviton (arm64)
-        Fargate tasks an amd64 image that fails to start.
+        Use `docker buildx imagetools create` rather than `pull` and `push`. A plain pull fetches only your
+        machine's architecture, so pushing it back would give Graviton (arm64) tasks an amd64 image that fails to start.
 
         ```bash
         docker buildx imagetools create \
@@ -53,9 +54,9 @@ you own.
         ```
 
         <Tip>
-          Pin `<version>` to a specific released tag rather than mirroring on a
-          schedule — an unpinned mirror can drift from what the connector expects
-          if Odigos ships a newer bundle later.
+          Pin `<version>` to a released tag instead of mirroring on a schedule. A mirror that follows a newer
+          bundle changes what your tasks stage without a deploy, and with Odigos-managed instrumentation the
+          connector expects the exact image it is configured with.
         </Tip>
       </Step>
 
@@ -63,7 +64,8 @@ you own.
         <Tabs>
           <Tab title="CloudFormation">
             Replace the `Image` on the `odigos-agent` container in your task definition with your mirrored
-            tag — see [Instrument Fargate](/cloud-connectors/aws/workloads/fargate/instrument).
+            tag, and put the same value in the `image` field of each container's `ODIGOS_IAC` — see
+            [Instrument Fargate](/cloud-connectors/aws/workloads/fargate/instrument).
           </Tab>
 
           <Tab title="CDK">
@@ -80,10 +82,9 @@ you own.
           </Tab>
 
           <Tab title="Odigos-managed">
-            The connector's default Fargate agents image is controlled by the `connector-runtime`
-            controller (`CONNECTOR_AWS_FARGATE_AGENTS_IMAGE`), which stamps `ODIGOS_FARGATE_AGENTS_IMAGE`
-            onto every AWS connector pod it creates. This isn't yet a `values.yaml` setting — set it on the
-            controller directly:
+            The `connector-runtime` controller reads `CONNECTOR_AWS_FARGATE_AGENTS_IMAGE` and sets
+            `ODIGOS_FARGATE_AGENTS_IMAGE` on every AWS connector it manages. The Central Helm chart has no value for
+            it, so set it on the controller directly:
 
             ```bash
             kubectl set env deployment/connector-runtime -n odigos-central \
@@ -91,12 +92,10 @@ you own.
             ```
 
             <Warning>
-              This overrides the Fargate agents bundle for **every** AWS connector the
-              controller manages. Confirm the version and IAM access (the task
-              execution role needs `ecr:GetDownloadUrlForLayer` / `ecr:BatchGetImage`
-              on the repository) with Odigos support before changing this in
-              production — a mismatched or unreachable override affects every
-              Fargate service across every AWS connector at once.
+              This overrides the agents image for **every** AWS connector the controller manages, so an image
+              that is wrong or unreachable affects every instrumented Fargate service at once. The task
+              execution role of each service needs `ecr:GetAuthorizationToken` plus
+              `ecr:BatchCheckLayerAvailability`, `ecr:BatchGetImage`, and `ecr:GetDownloadUrlForLayer` on the repository.
             </Warning>
           </Tab>
         </Tabs>
@@ -104,6 +103,40 @@ you own.
     </Steps>
   </Tab>
 </Tabs>
+
+## Bill of materials and uninstall
+
+| Flow | What exists | What remains after uninstrumenting |
+| --- | --- | --- |
+| Odigos registry (default) | An image reference in the task definition | Nothing of yours. Old task-definition revisions still reference the image. |
+| Private ECR mirror | The repository, the image index and layers, and optionally a repository policy and execution-role pull permissions | All of it, until you remove it. |
+| CDK or CloudFormation `agentsImage` override | The mirror's image reference in your IaC and task definition | The reference stays until you change the IaC and deploy. |
+| Odigos-managed controller override | `CONNECTOR_AWS_FARGATE_AGENTS_IMAGE` on `connector-runtime` | The variable stays, even if you delete one Source or connector, until you remove it. |
+
+### Uninstall a mirror
+
+1. [Uninstrument or redeploy](/cloud-connectors/aws/workloads/fargate/instrument#bill-of-materials-and-uninstall) every service that
+   uses the mirror, or point it at an image that will stay available. Update scheduled and standalone tasks and
+   deployment pipelines too.
+2. Remove the `agentsImage` override from your IaC and deploy. If you set the controller override only for this mirror,
+   restore its previous value, or remove it if there was none:
+
+   ```bash
+   kubectl set env deployment/connector-runtime -n odigos-central \
+     CONNECTOR_AWS_FARGATE_AGENTS_IMAGE-
+   ```
+
+   This affects **all** AWS connectors on that controller. Keep the override while any of them still uses it, and check
+   the resulting task definitions before you delete the image.
+3. In ECR, delete the image with `aws ecr batch-delete-image` or the console. If the repository is shared, delete only
+   this mirror's tag. If you created the repository only for this mirror and nothing else uses it, delete the repository
+   instead (with ECR or the IaC that created it).
+4. Remove the repository-policy statements and execution-role pull permissions you added for it, keeping any that other
+   images need.
+
+Running tasks keep the image they already downloaded, so a healthy task doesn't prove the cleanup is safe. A later
+launch or scale-out fails if it still references the deleted image. Old task-definition revisions are separate; see
+[Remove unused task-definition revisions](/cloud-connectors/aws/workloads/fargate/instrument#remove-unused-task-definition-revisions).
 
 ## Next steps
 

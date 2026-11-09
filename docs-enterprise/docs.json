@@ -537,6 +537,8 @@
             "icon": "aws",
             "pages": [
               "cloud-connectors/aws/overview",
+              "cloud-connectors/aws/regional-collector",
+              "cloud-connectors/aws/uninstall",
               {
                 "group": "Workloads",
                 "pages": [
@@ -544,7 +546,8 @@
                     "group": "Lambda",
                     "pages": [
                       "cloud-connectors/aws/workloads/lambda/preload",
-                      "cloud-connectors/aws/workloads/lambda/instrument"
+                      "cloud-connectors/aws/workloads/lambda/instrument",
+                      "cloud-connectors/aws/workloads/lambda/distros"
                     ]
                   },
                   {

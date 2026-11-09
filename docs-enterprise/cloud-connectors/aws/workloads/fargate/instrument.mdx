@@ -8,7 +8,13 @@ This page shows how to instrument an ECS **service** running on Fargate yourself
 definition directly — no changes made by the connector on your behalf. Odigos still discovers the service
 and reports its status once your changes are in place; see
 [Odigos-managed vs. self-managed instrumentation](/cloud-connectors/overview#odigos-managed-vs-self-managed-instrumentation)
-for how that works. 
+for how that works.
+
+<Tip>
+  You don't have to assemble these values by hand. In Central, open the service's drawer and use the
+  **How to instrument this workload** panel — it generates these snippets for the selected service,
+  with your destination's endpoint, protocol, and signals filled in.
+</Tip>
 
 <Info>
   Prefer the Odigos CDK construct? See
@@ -32,8 +38,9 @@ environment variables on your application container. Here's what happens each ti
 
 <Info>
   There's no intermediate collector inside the task — each Fargate task sends
-  telemetry **directly** to your OTLP destination, so that destination's endpoint
-  must be reachable from the task's network. See
+  telemetry **directly** to its OTLP endpoint (your destination, or the regional
+  Collector when one serves the service), so that endpoint must be reachable from
+  the task's network. See
   [Telemetry export](/cloud-connectors/aws/overview#telemetry-export).
 </Info>
 
@@ -66,7 +73,7 @@ Merge these properties into your task definition. Only the exact agent path, act
             Condition: SUCCESS
         Environment:
           - Name: ODIGOS_IAC
-            Value: '{"v":1,"lang":"java"}'
+            Value: '{"v":1,"lang":"java","image":"registry.odigos.io/odigos-fargate-agents:<version>"}'
           - Name: OTEL_SERVICE_NAME
             Value: "<YOUR_SERVICE_NAME>"
           - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -75,6 +82,9 @@ Merge these properties into your task definition. Only the exact agent path, act
             Value: "<OTLP_ENDPOINT_URL>"
           - Name: OTEL_EXPORTER_OTLP_PROTOCOL
             Value: "http/protobuf"   # or "grpc" — must match your destination; see note below
+          - Name: OTEL_SDK_DISABLED
+            Value: "false"
+          # "otlp" for each signal the destination enables, "none" for each it doesn't
           - Name: OTEL_TRACES_EXPORTER
             Value: "otlp"
           - Name: OTEL_METRICS_EXPORTER
@@ -111,7 +121,7 @@ Merge these properties into your task definition. Only the exact agent path, act
             Condition: SUCCESS
         Environment:
           - Name: ODIGOS_IAC
-            Value: '{"v":1,"lang":"python"}'
+            Value: '{"v":1,"lang":"python","image":"registry.odigos.io/odigos-fargate-agents:<version>"}'
           - Name: OTEL_SERVICE_NAME
             Value: "<YOUR_SERVICE_NAME>"
           - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -120,6 +130,9 @@ Merge these properties into your task definition. Only the exact agent path, act
             Value: "<OTLP_ENDPOINT_URL>"
           - Name: OTEL_EXPORTER_OTLP_PROTOCOL
             Value: "http/protobuf"
+          - Name: OTEL_SDK_DISABLED
+            Value: "false"
+          # "otlp" for each signal the destination enables, "none" for each it doesn't
           - Name: OTEL_TRACES_EXPORTER
             Value: "otlp"
           - Name: OTEL_METRICS_EXPORTER
@@ -128,6 +141,9 @@ Merge these properties into your task definition. Only the exact agent path, act
             Value: "otlp"
           - Name: OTEL_PYTHON_CONFIGURATOR
             Value: "odigos-python-configurator"
+          # "true" if the destination enables logs, otherwise "false"
+          - Name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED
+            Value: "true"
           # APPEND after any existing value, joined by ":" — assigning discards yours.
           - Name: PYTHONPATH
             Value: "<YOUR_EXISTING_VALUE>:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation"
@@ -158,7 +174,7 @@ Merge these properties into your task definition. Only the exact agent path, act
             Condition: SUCCESS
         Environment:
           - Name: ODIGOS_IAC
-            Value: '{"v":1,"lang":"nodejs"}'
+            Value: '{"v":1,"lang":"nodejs","image":"registry.odigos.io/odigos-fargate-agents:<version>"}'
           - Name: OTEL_SERVICE_NAME
             Value: "<YOUR_SERVICE_NAME>"
           - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -167,6 +183,9 @@ Merge these properties into your task definition. Only the exact agent path, act
             Value: "<OTLP_ENDPOINT_URL>"
           - Name: OTEL_EXPORTER_OTLP_PROTOCOL
             Value: "http/protobuf"
+          - Name: OTEL_SDK_DISABLED
+            Value: "false"
+          # "otlp" for each signal the destination enables, "none" for each it doesn't
           - Name: OTEL_TRACES_EXPORTER
             Value: "otlp"
           - Name: OTEL_METRICS_EXPORTER
@@ -203,7 +222,7 @@ Merge these properties into your task definition. Only the exact agent path, act
             Condition: SUCCESS
         Environment:
           - Name: ODIGOS_IAC
-            Value: '{"v":1,"lang":"dotnet"}'
+            Value: '{"v":1,"lang":"dotnet","image":"registry.odigos.io/odigos-fargate-agents:<version>"}'
           - Name: OTEL_SERVICE_NAME
             Value: "<YOUR_SERVICE_NAME>"
           - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -212,6 +231,9 @@ Merge these properties into your task definition. Only the exact agent path, act
             Value: "<OTLP_ENDPOINT_URL>"
           - Name: OTEL_EXPORTER_OTLP_PROTOCOL
             Value: "http/protobuf"
+          - Name: OTEL_SDK_DISABLED
+            Value: "false"
+          # "otlp" for each signal the destination enables, "none" for each it doesn't
           - Name: OTEL_TRACES_EXPORTER
             Value: "otlp"
           - Name: OTEL_METRICS_EXPORTER
@@ -229,17 +251,17 @@ Merge these properties into your task definition. Only the exact agent path, act
             Value: "/var/odigos/dotnet"
           - Name: DOTNET_STARTUP_HOOKS
             Value: "/var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll"
-          - Name: DOTNET_ADDITIONAL_DEPS
-            Value: "/var/odigos/dotnet/AdditionalDeps"
-          - Name: DOTNET_SHARED_STORE
-            Value: "/var/odigos/dotnet/store"
     ```
 
     <Warning>
-      The .NET agent is **glibc-only**. A musl-based image (Alpine) can't be
-      instrumented this way — the profiler shared object won't load, and the
-      container starts uninstrumented with no error.
+      The agents bundle ships only the **glibc** .NET profiler, so a musl-based image (Alpine) can't be
+      instrumented this way.
     </Warning>
+
+    <Note>
+      Don't set `DOTNET_ADDITIONAL_DEPS` or `DOTNET_SHARED_STORE`. The bundled agent doesn't ship the files
+      they point to, so remove both if an earlier setup added them.
+    </Note>
   </Tab>
 
   <Tab title="PHP">
@@ -266,7 +288,7 @@ Merge these properties into your task definition. Only the exact agent path, act
             Condition: SUCCESS
         Environment:
           - Name: ODIGOS_IAC
-            Value: '{"v":1,"lang":"php"}'
+            Value: '{"v":1,"lang":"php","image":"registry.odigos.io/odigos-fargate-agents:<version>"}'
           - Name: OTEL_SERVICE_NAME
             Value: "<YOUR_SERVICE_NAME>"
           - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -275,6 +297,9 @@ Merge these properties into your task definition. Only the exact agent path, act
             Value: "<OTLP_ENDPOINT_URL>"     # must be an OTLP/HTTP endpoint — see note below
           - Name: OTEL_EXPORTER_OTLP_PROTOCOL
             Value: "http/protobuf"
+          - Name: OTEL_SDK_DISABLED
+            Value: "false"
+          # "otlp" for each signal the destination enables, "none" for each it doesn't
           - Name: OTEL_TRACES_EXPORTER
             Value: "otlp"
           - Name: OTEL_METRICS_EXPORTER
@@ -323,7 +348,7 @@ Merge these properties into your task definition. Only the exact agent path, act
             Condition: SUCCESS
         Environment:
           - Name: ODIGOS_IAC
-            Value: '{"v":1,"lang":"ruby"}'
+            Value: '{"v":1,"lang":"ruby","image":"registry.odigos.io/odigos-fargate-agents:<version>"}'
           - Name: OTEL_SERVICE_NAME
             Value: "<YOUR_SERVICE_NAME>"
           - Name: OTEL_RESOURCE_ATTRIBUTES
@@ -332,6 +357,9 @@ Merge these properties into your task definition. Only the exact agent path, act
             Value: "<OTLP_ENDPOINT_URL>"     # must be an OTLP/HTTP endpoint — see note below
           - Name: OTEL_EXPORTER_OTLP_PROTOCOL
             Value: "http/protobuf"
+          - Name: OTEL_SDK_DISABLED
+            Value: "false"
+          # "otlp" for each signal the destination enables, "none" for each it doesn't
           - Name: OTEL_TRACES_EXPORTER
             Value: "otlp"
           - Name: OTEL_METRICS_EXPORTER
@@ -354,6 +382,11 @@ Merge these properties into your task definition. Only the exact agent path, act
       override on the Source so Odigos judges the container against the path you
       actually mounted.
     </Warning>
+
+    <Info>
+      The Ruby agent produces **traces only**. Keep `OTEL_METRICS_EXPORTER` and `OTEL_LOGS_EXPORTER` matched to
+      your destination as described under **Signals** in the rules below — Ruby just won't emit metrics or logs.
+    </Info>
   </Tab>
 </Tabs>
 
@@ -361,23 +394,64 @@ Merge these properties into your task definition. Only the exact agent path, act
 
 <AccordionGroup>
   <Accordion title="ODIGOS_IAC is per container">
-    It's the only thing marking a container as instrumented, and its recorded language is what the
-    activation environment is checked against. Never set `ODIGOS_MANAGED` — that's the connector's own
-    rollback record, written only when you hand the workload to Odigos-managed instrumentation instead.
+    It's what marks a container as instrumented: it must be present and hold valid JSON. Odigos reads two fields.
+
+    - `lang` is the agent you staged: `java`, `python`, `nodejs`, `dotnet`, `php`, or `ruby`. Odigos compares it with
+      the language it resolves for the container, where a runtime override on the Source takes precedence, and
+      reports a mismatch as drift. If you leave it out, Odigos detects the language from the container itself.
+    - `image` is the agents image you staged from, and must equal the `odigos-agent` container's `Image`. Odigos
+      holds the task to *that* image, so a pinned or mirrored image isn't reported as out of date. If you leave
+      it out, Odigos only checks that the `odigos-agent` container is present, non-essential, and staging the
+      right agents, whatever its tag. Marked containers in one task definition must all record the same `image`.
+
+    `v` is the schema version (`1`). Never set `ODIGOS_MANAGED`: it's the connector's own rollback record,
+    written only when Odigos instruments the workload for you.
+  </Accordion>
+
+  <Accordion title="Signals">
+    Odigos compares the three `OTEL_*_EXPORTER` variables with the signals your destination has enabled, and
+    expects each to be exactly `otlp` (enabled) or `none` (disabled). A missing signal and an extra one are
+    both reported as drift, so always set all three. `OTEL_SDK_DISABLED` must be `false`, and Python's
+    `OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED` must be `true` when logs are enabled and `false`
+    otherwise. Ruby produces traces only, and no Fargate agent produces profiles.
+  </Accordion>
+
+  <Accordion title="Never set per-signal exporter variables">
+    Don't set `OTEL_EXPORTER_OTLP_TRACES_*`, `OTEL_EXPORTER_OTLP_METRICS_*`, or `OTEL_EXPORTER_OTLP_LOGS_*`
+    variables (`ENDPOINT`, `PROTOCOL`, `HEADERS`, or `INSECURE`) on an instrumented container. They override the
+    destination, and Odigos reports their presence as drift. Use the shared `OTEL_EXPORTER_OTLP_ENDPOINT` and
+    `OTEL_EXPORTER_OTLP_PROTOCOL` shown above.
   </Accordion>
 
   <Accordion title="Endpoint and protocol are one decision">
-    Both are compared exactly against what your OTLP destination resolves to on this connector. If it only
-    offers OTLP/gRPC, use the gRPC endpoint (standard port 4317) and `OTEL_EXPORTER_OTLP_PROTOCOL=grpc`
-    instead of the `http/protobuf` shown above (except PHP and Ruby, which support HTTP only — see their
-    tabs). Pairing an endpoint with the wrong transport fails at runtime as an opaque connection reset.
+    Both are compared exactly against what your OTLP destination resolves to on this connector. If the
+    destination offers OTLP/HTTP, every language is expected to use it with `http/protobuf`. If it only
+    offers OTLP/gRPC, use the gRPC endpoint written as a URL (`https://<host>:4317`, or `http://` for an insecure
+    destination) with `OTEL_EXPORTER_OTLP_PROTOCOL=grpc`. PHP and Ruby support HTTP only. Pairing an endpoint with
+    the wrong transport fails at runtime as an opaque connection reset. Copy the exact endpoint from the
+    **How to instrument this workload** panel.
+
+    If your destination needs headers (for example an API key), set `OTEL_EXPORTER_OTLP_HEADERS` to a
+    comma-separated `key=value` list, sorted by key, with both names and values URL-encoded (a space becomes
+    `+`). It's compared exactly like the endpoint. If the destination has no headers, don't set the variable.
   </Accordion>
 
   <Accordion title="One odigos-agent container serves the whole task">
-    Its `Command` is per task, not per language. A task definition with application containers in more than
-    one language needs a chained `&& cp -r /instrumentations/<lang> /var/odigos/<lang>` for each, in
-    alphabetical order — Odigos compares the command exactly against the union of every marked container's
-    language.
+    Its `Command` is per task, not per language. With application containers in more than one language, chain a
+    `&& cp -r /instrumentations/<lang> /var/odigos/<lang>` for each language after `mkdir -p /var/odigos`, in
+    alphabetical order. Odigos compares the command exactly against the union of every marked container's
+    language, and instrumented containers in all languages share the one `odigos-agent` container and volume.
+  </Accordion>
+
+  <Accordion title="OTEL_SERVICE_NAME is the ECS service name">
+    Set `<YOUR_SERVICE_NAME>` to your ECS service's name — not the task definition family, the container name, or
+    the cluster-prefixed name the source is listed under in Odigos. If you've set a reported service name on the
+    source, use that. A different value is reported as drift.
+  </Accordion>
+
+  <Accordion title="Debug logging">
+    Leave `OTEL_LOG_LEVEL` unset. Odigos expects it absent, and reports it as drift, unless debug telemetry is
+    enabled on the connector — in which case it expects `OTEL_LOG_LEVEL=debug`.
   </Accordion>
 
   <Accordion title="Roll the service, not just the revision">
@@ -386,17 +460,123 @@ Merge these properties into your task definition. Only the exact agent path, act
   </Accordion>
 
   <Accordion title="Constraints">
-    A 10-container task-definition limit, Linux-only agents bundle (no Windows tasks), and the
-    `odigos-agent` container must stay non-essential — ECS only accepts a `SUCCESS` dependency against a
-    non-essential container.
+    ECS allows 10 containers per task definition, and `odigos-agent` takes one. The agents bundle is Linux-only, so
+    Windows task definitions can't be instrumented. `odigos-agent` must stay non-essential, because ECS only accepts
+    a `SUCCESS` dependency against a non-essential container.
   </Accordion>
 
   <Accordion title="Registry reachability">
-    The image is pulled by the task's execution role at every task start. If your task's subnet can't reach
+    The image is pulled at every task start. If your task's subnet can't reach
     `registry.odigos.io`, mirror the image into a registry it can — see
     [Preload artifacts](/cloud-connectors/aws/workloads/fargate/preload).
   </Accordion>
 </AccordionGroup>
+
+## If Odigos instruments the task for you
+
+With Odigos-managed instrumentation the connector makes the same change itself, so none of the CloudFormation
+above applies. It has these requirements:
+
+- The service must use the ECS rolling-update deployment controller. `CODE_DEPLOY` and `EXTERNAL` services, standalone
+  tasks, and Windows task definitions are reported as unsupported. Self-managed instrumentation has no controller
+  restriction.
+- Inline any `environmentFiles` values into the task definition and remove `environmentFiles`, because Odigos
+  can't verify loader or per-signal settings it can't read. Also remove per-signal `OTEL_EXPORTER_OTLP_<SIGNAL>_*`
+  overrides from the container and from its image `ENV`.
+- Don't deliver a variable Odigos sets, such as a loader variable, through ECS `secrets`. Remove the secret-sourced value first.
+- Loader values from the task definition and from the image `ENV` (when the connector can read the image config) are
+  preserved and extended, not replaced.
+- A runtime override on the Source takes effect before automatic detection. For a task with several application
+  containers, use per-container overrides.
+- Alpine/musl .NET containers are excluded when detected.
+
+## Bill of materials and uninstall
+
+| Added by instrumentation | After you remove it |
+| --- | --- |
+| A new task-definition revision, and the service updated to it | The service runs a clean revision. Earlier revisions stay until you [deregister them](#remove-unused-task-definition-revisions). |
+| `odigos-agent` container, `odigos-agent` task volume, `/var/odigos` mount, and the `SUCCESS` dependency | Removed with the instrumentation. The staged files sit on the task's ephemeral storage and disappear with the old tasks. |
+| On each instrumented container: loader variables, OTLP endpoint, protocol and headers, signal and resource variables, `ODIGOS_IAC` | Restore the previous values. Old revisions can still contain the OTLP headers. |
+| A mirrored agents image and its pull permissions, if you created them | Stay until you remove them: see [Preload](/cloud-connectors/aws/workloads/fargate/preload#bill-of-materials-and-uninstall). |
+
+Uninstrumenting never deletes the cluster, service, application image, roles, log groups, or networking. A
+regional Collector is a separate deployment with its own [uninstall](/cloud-connectors/aws/regional-collector#uninstall).
+
+### Uninstall self-managed instrumentation
+
+1. Disable the Source in Odigos, then remove the instrumentation through the same IaC that added it. Odigos doesn't undo
+   customer-owned changes.
+2. On every instrumented container, remove `ODIGOS_IAC` and the other variables from the tabs above. For
+   `JAVA_TOOL_OPTIONS`, `NODE_OPTIONS`, and `PYTHONPATH`, remove only the Odigos fragment and keep your own value. Restore anything
+   Odigos replaced, such as `RUBYOPT` or `PHP_INI_SCAN_DIR`. Also remove the `/var/odigos` mount and the `odigos-agent` dependency.
+3. Remove the `odigos-agent` container and volume once no container still needs them. Don't delete a container or
+   volume of your own that happens to have a similar name.
+4. Register the clean revision and update the service to it. Wait for the rollout, then confirm no instrumented service tasks remain.
+   Scheduled tasks, EventBridge targets, standalone tasks, and other services can still reference older revisions, so
+   update those separately.
+5. Delete the disabled Source if you're retiring it.
+
+<Tabs>
+  <Tab title="CloudFormation">
+    Edit the task definition in the stack template and deploy the change set. Don't delete the stack.
+  </Tab>
+  <Tab title="Terraform / OpenTofu">
+    Edit the container definitions and volume in your configuration, then check that `plan` shows a new task-definition
+    revision and a service update, not a replacement of the application.
+  </Tab>
+  <Tab title="AWS CDK">
+    Remove the `instrument()` or `instrumentAll()` calls for the task definition (and any `targets` passed to the
+    construct), review `cdk diff`, and deploy. See [CDK: Fargate](/cloud-connectors/aws/cdk/fargate#bill-of-materials-and-uninstall).
+  </Tab>
+  <Tab title="Raw ECS / AWS CLI">
+    Build a complete `RegisterTaskDefinition` input with the rollback applied. `describe-task-definition` output
+    includes read-only fields and can't be passed to `register-task-definition` unchanged.
+
+    ```bash
+    REGION="<SERVICE_REGION>"
+    CLUSTER="<CLUSTER_NAME_OR_ARN>"
+    SERVICE="<APPLICATION_SERVICE_NAME>"
+    CLEAN_REVISION=$(aws ecs register-task-definition --region "$REGION" \
+      --cli-input-json file://rollback-task-definition.json \
+      --query 'taskDefinition.taskDefinitionArn' --output text)
+    aws ecs update-service --region "$REGION" --cluster "$CLUSTER" \
+      --service "$SERVICE" --task-definition "$CLEAN_REVISION"
+    aws ecs wait services-stable --region "$REGION" --cluster "$CLUSTER" --services "$SERVICE"
+    aws ecs describe-services --region "$REGION" --cluster "$CLUSTER" --services "$SERVICE" \
+      --query 'services[0].taskDefinition' --output text
+    ```
+
+    The last command must print `$CLEAN_REVISION`. A stable service can still be running the old revision if the
+    deployment rolled back.
+  </Tab>
+</Tabs>
+
+### If Odigos instrumented the task
+
+In Central, select the Source and choose **Uninstrument**. The connector restores each container from the snapshot in
+its `ODIGOS_MANAGED` variable, removes the `odigos-agent` container and volume once no container in the task still carries an
+Odigos marker, registers a clean revision, and updates the service. If a rollout is in progress, it waits. Keep the
+connector online and don't remove `ODIGOS_MANAGED` yourself before rollback finishes. See
+[Uninstrument workloads](/cloud-connectors/instrument-workloads#uninstrument-workloads).
+
+The connector never deregisters old revisions or deletes your services, and a task definition without `ODIGOS_MANAGED` is
+left untouched.
+
+### Remove unused task-definition revisions
+
+The connector's IAM permissions don't include `ecs:DeregisterTaskDefinition` or `ecs:DeleteTaskDefinitions`, so run this
+with your own admin identity. First confirm that no service, task set, scheduled task, or running task still uses a revision.
+Then, for each instrumented revision you no longer need:
+
+```bash
+TASK_DEFINITION_ARN="<UNUSED_INSTRUMENTED_REVISION_ARN>"
+aws ecs deregister-task-definition --region "$REGION" --task-definition "$TASK_DEFINITION_ARN"
+aws ecs delete-task-definitions --region "$REGION" --task-definitions "$TASK_DEFINITION_ARN"
+```
+
+Deregistering makes a revision `INACTIVE` but keeps it and doesn't stop its tasks. Deleting works only on inactive
+revisions, and AWS keeps a revision pending deletion while tasks or deployments still reference it. See
+[ECS task definition states](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-definition-state.html).
 
 ## Next steps
 

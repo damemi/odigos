@@ -35,29 +35,28 @@ Pick Odigos-managed when you'd rather not touch your infrastructure code at all.
   Don't do both to the same workload. If a function or service is instrumented by
   your CDK app **and** also enabled as an Odigos-managed source, each side keeps
   reasserting its own configuration — every deploy fights every reconcile, and each
-  round trip creates a new Lambda version or ECS task revision. Pick one per
-  workload.
+  round trip rewrites the Lambda function's configuration or registers a new ECS task
+  definition revision. Pick one per workload.
 </Warning>
 
 ## Install
 
 ```bash
-npm install @odigos/aws-cdk
+npm install --save-exact @odigos/aws-cdk@0.0.27
 ```
+
+The package needs `aws-cdk-lib` `^2.150.0`, `constructs` `^10.0.5`, and Node.js 18.12 or later.
 
 <Info>
   **TypeScript and JavaScript only, for now.** A Python distribution
-  (`odigos-aws-cdk`) is built but not yet published — it's waiting on package-index
-  approval. Until it's out, Python CDK apps should use the
+  (`odigos-aws-cdk`) is built but not yet published. Until it's out, Python CDK apps should use the
   [CloudFormation instructions](/cloud-connectors/aws/workloads/lambda/instrument#using-cloudformation-directly)
   instead.
 </Info>
 
-Pin an exact version. **The package version *is* the instrumentation version** — `@odigos/aws-cdk@0.0.27`
-installs the OpenTelemetry layer and agents bundle built by Odigos release `v0.0.27`, and nothing resolves
-or moves at deploy time. Upgrading is a deliberate `npm update` followed by a `cdk diff` that shows you
-exactly what changes. An instrumentation agent that silently updated itself under a deployment that changed
-nothing is not a property you want.
+**The package version *is* the instrumentation version.** `@odigos/aws-cdk@0.0.27` uses the OpenTelemetry layers and
+agents bundle built by Odigos release `v0.0.27`, and nothing resolves or moves at deploy time. Upgrading is a
+deliberate `npm update` followed by a `cdk diff` that shows exactly what changes.
 
 ## The two constructs
 
@@ -65,7 +64,7 @@ nothing is not a property you want.
 | --- | --- | --- |
 | Construct | `OdigosLambdaInstrumentation` | `OdigosFargateInstrumentation` |
 | How the agent gets there | A Lambda layer attached to the function | Copied into the task by an extra short-lived container |
-| Languages | Python, Node.js, Java, Ruby | Java, Python, Node.js, .NET, PHP, Ruby |
+| Languages | Java, Python, Node.js, Ruby — with a [choice of distro](/cloud-connectors/aws/workloads/lambda/distros) per language | Java, Python, Node.js, .NET, PHP, Ruby — one agent per language |
 | Where telemetry goes | To a collector inside the same Lambda sandbox, which forwards it on after your handler returns | Straight from your application to your destination |
 | How the language is determined | Automatically, from the function's runtime | You state it explicitly |
 
@@ -85,19 +84,49 @@ options.
 
 ## How Odigos recognizes your workload
 
-Both constructs write an environment variable called **`ODIGOS_IAC`** onto everything they instrument. This
-is the one thing that tells Odigos "this workload is instrumented, and here's what with."
+Both constructs mark everything they instrument, so Odigos can tell "this workload is instrumented, and here's
+what with." The marker differs by service:
+
+| | Lambda | ECS Fargate |
+| --- | --- | --- |
+| Where the marker lives | Function **tags** | The **`ODIGOS_IAC`** environment variable on the container |
+| What it records | `odigos:iac=v1`, `odigos:sdk-layer` (the exact SDK layer ARN), and `odigos:collector-layer` (ADOT only) | The package version, the language, and the agents image |
 
 <Warning>
-  Without that marker, Odigos reports the workload as **awaiting your deployment** —
+  Without that marker, Odigos reports the workload as **Waiting for you to apply the instrumentation** —
   no matter how completely everything else was applied. The constructs write it for
   you, so there's nothing to switch on; it matters mainly because you'll see it in
   a `cdk diff`, and because hand-written instrumentation has to include it too.
 </Warning>
 
-The marker also records *which version* of instrumentation you deployed — the layer ARN on Lambda, the
+The marker also records *which version* of instrumentation you deployed — the layer ARNs on Lambda, the
 agents image on Fargate. That's what lets you pin a version and have Odigos respect it, rather than
 reporting your deliberately-pinned workload as out of date the day Odigos publishes something newer.
+
+### Lambda: tags
+
+The Lambda construct adds the tags with `Tags.of(fn)`. CDK applies a tag to every taggable resource under the
+function, so the function's **auto-created execution role is tagged too**. That's normal CDK behavior, not
+something to fix.
+
+The construct also removes any `ODIGOS_IAC` or `ODIGOS_MANAGED` environment variables from the function's
+definition, such as ones written by an earlier package version. The only environment variables it writes are
+`AWS_LAMBDA_EXEC_WRAPPER` and `ODIGOS_LAMBDA_CONFIG`, plus your loader variable when you pass `existingLoaderValue`. See [CDK: Lambda](/cloud-connectors/aws/cdk/lambda).
+
+<Note>
+  The deploying identity needs `lambda:TagResource` for the tags to be applied. A function
+  with no `odigos:iac` tag is treated as not instrumented.
+</Note>
+
+### Fargate: the `ODIGOS_IAC` variable
+
+Fargate still uses the environment variable, with this shape:
+
+```json
+{"v":1,"source":"cdk","version":"v0.0.27","lang":"java","image":"registry.odigos.io/odigos-fargate-agents:v0.0.27"}
+```
+
+Odigos reads `lang` and `image`; `v`, `source`, and `version` are informational.
 
 <Warning>
   There's a second marker, **`ODIGOS_MANAGED`**, that these constructs never write —
@@ -110,7 +139,9 @@ reporting your deliberately-pinned workload as out of date the day Odigos publis
 
 <ParamField path="debug" type="boolean" default="false">
   Makes the OpenTelemetry agent log verbosely, which helps when telemetry isn't arriving and you need to
-  see why. Available on both constructs.
+  see why. Available on both constructs. On Lambda it sets `"debug": true` in `ODIGOS_LAMBDA_CONFIG` (and has no
+  effect for functions in web-server mode); on Fargate it sets `OTEL_LOG_LEVEL=debug` on every instrumented
+  container.
 
   <Warning>
     Leave it off once you're done. It's expensive at volume, and Odigos expects it
@@ -118,6 +149,26 @@ reporting your deliberately-pinned workload as out of date the day Odigos publis
     on can itself be reported as drift.
   </Warning>
 </ParamField>
+
+## Bill of materials and uninstall
+
+| Stage | What exists | Removal |
+| --- | --- | --- |
+| `npm install @odigos/aws-cdk` | A dependency and lockfile entry | Remove after the workloads are rolled back |
+| Synth and deploy | Changes to existing Lambda functions and task definitions, plus optional SAR layer stacks and role-policy attachments | See the [Lambda](/cloud-connectors/aws/cdk/lambda#bill-of-materials-and-uninstall) and [Fargate](/cloud-connectors/aws/cdk/fargate#bill-of-materials-and-uninstall) inventories |
+| CDK bootstrap | The shared `CDKToolkit` stack, its asset bucket and ECR repository, and `cdk.out` | Keep these. They're shared with the rest of your CDK apps. |
+
+1. Disable the affected self-managed Sources. Remove the instrumentation calls and aspects from your CDK app, restore the original properties, review `cdk diff`, and deploy. Removing the npm package alone doesn't change AWS.
+2. Verify the clean Lambda versions and aliases and the Fargate rollouts, then clean up retained layers, old task revisions, and private mirrors using the guides linked above.
+3. Once no code imports the package, remove it:
+
+   ```bash
+   npm uninstall @odigos/aws-cdk
+   ```
+
+4. Remove leftover imports and configuration. Generated templates, lockfiles, and backups can retain copies of destination headers. Don't run `cdk destroy` on the application stack or delete `CDKToolkit` to remove instrumentation.
+
+The application and your shared deployment infrastructure stay. For retained artifacts and external resources, see the [AWS uninstall inventory](/cloud-connectors/aws/uninstall).
 
 ## Next steps
 
@@ -127,7 +178,7 @@ reporting your deliberately-pinned workload as out of date the day Odigos publis
   </Card>
 
   <Card title="Lambda construct" icon="bolt" href="/cloud-connectors/aws/cdk/lambda">
-    Layer sources, web-server mode, Java handler interfaces.
+    Distros, ADOT, layer sources, web-server mode.
   </Card>
 
   <Card title="Fargate construct" icon="cubes" href="/cloud-connectors/aws/cdk/fargate">
