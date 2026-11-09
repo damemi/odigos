@@ -61,7 +61,11 @@ jobs:
 
       - name: Write npm auth
         id: npmrc
-        uses: ./.github      - name: Build Docker Images
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker Images
         env:
           COMMIT_HASH: ${{ github.sha }}
           # odiglet and agents download private instrumentation repos.
