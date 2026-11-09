@@ -26,6 +26,9 @@ interface VmWorkloadDetailsContainer {
   excludedReason?: string | null;
 }
 
+type VmProcessInstance = NonNullable<GetWorkloadReportsQuery['workloadReports'][number]['instances']>[number];
+type VmProcessMetadata = NonNullable<GetWorkloadReportsQuery['workloadReports'][number]['processMetadata']>[number];
+
 export type VmWorkloadReport = GetWorkloadReportsQuery['workloadReports'][number] & {
   desired?: Pick<InstrumentationReport, 'otelDistroName' | 'instrumentationVersion' | 'availableDistros'> | null;
 };
@@ -174,6 +177,9 @@ const mapReportStateToProgress = (state: string, enabled?: boolean | null): Desi
 const mapLanguage = (language?: string | null): ProgrammingLanguages | null => {
   if (!language) return null;
   const normalized = language.trim().toLowerCase();
+  // The agent reports `ProgrammingLanguages` values as-is (`cplusplus`, `nginx`, ...).
+  const exact = Object.values(ProgrammingLanguages).find((value) => value === normalized);
+  if (exact) return exact;
   const aliases: Record<string, ProgrammingLanguages> = {
     go: ProgrammingLanguages.Go,
     golang: ProgrammingLanguages.Go,
@@ -195,6 +201,8 @@ const mapLanguage = (language?: string | null): ProgrammingLanguages | null => {
     elixir: ProgrammingLanguages.Elixir,
     // MuleSoft applications. Not Java: the version reported beside it is the Mule runtime's.
     mule: ProgrammingLanguages.Mule,
+    'c++': ProgrammingLanguages.CPlusPlus,
+    cpp: ProgrammingLanguages.CPlusPlus,
   };
   return aliases[normalized] ?? ProgrammingLanguages.Unknown;
 };
@@ -246,8 +254,33 @@ const mapReportToInstrumentation = (report: VmWorkloadReport): InstrumentationRe
   };
 };
 
-/** Join WorkloadReport.instances + processMetadata by pid for the VM process list. */
-const mapReportProcesses = (report: VmWorkloadReport): InstrumentationReport['processes'] => {
+/**
+ * The language and version the agent detected for one process, as the kit's
+ * `InstrumentationReportProcess` carries them (`ProgrammingLanguages` values).
+ *
+ * Reads `processMetadata.runtime.detected`, falling back to the instance row's
+ * `runtimeName` / `runtimeVersion` for agents that only report the runtime there.
+ * A process the agent reported nothing for stays `null`; a guessed value would put
+ * it in the wrong language group on the Add Sources pane. A language string the kit
+ * has no value for maps to `unknown`, the kit's "detected, nothing supported" value.
+ */
+const mapProcessRuntime = (meta?: VmProcessMetadata, inst?: VmProcessInstance): Pick<NonNullable<InstrumentationReport['processes']>[number], 'language' | 'languageVersion'> => {
+  const language = meta?.runtime?.detected?.language || inst?.runtimeName || null;
+  const version = meta?.runtime?.detected?.version || inst?.runtimeVersion || null;
+  return {
+    language: mapLanguage(language),
+    languageVersion: version,
+  };
+};
+
+/**
+ * Join WorkloadReport.instances + processMetadata by pid for the VM process list.
+ *
+ * Feeds the source drawer (`InstrumentationReport.processes`) and the Add Sources
+ * panes (`NamespaceWorkload.processes`) from the same rows. Every field the agent
+ * did not send is `null`; nothing is defaulted or inferred.
+ */
+export const mapReportProcesses = (report: VmWorkloadReport): InstrumentationReport['processes'] => {
   const instances = report.instances ?? [];
   const metadata = report.processMetadata ?? [];
   if (!instances.length && !metadata.length) return null;
@@ -264,6 +297,7 @@ const mapReportProcesses = (report: VmWorkloadReport): InstrumentationReport['pr
       alive: inst.alive,
       exe: meta?.exe ?? null,
       cmdline: meta?.cmdline ?? null,
+      ...mapProcessRuntime(meta, inst),
       instrumented: inst.instrumented,
       probesAttached: inst.probesAttached,
       message: inst.message ?? null,
@@ -281,6 +315,7 @@ const mapReportProcesses = (report: VmWorkloadReport): InstrumentationReport['pr
       alive: true,
       exe: meta.exe ?? null,
       cmdline: meta.cmdline ?? null,
+      ...mapProcessRuntime(meta),
       instrumented: meta.instrumented,
       probesAttached: meta.probesAttached ?? null,
       message: null,

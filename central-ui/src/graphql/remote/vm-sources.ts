@@ -13,7 +13,7 @@ import {
   type VmSourceConfig,
 } from '@/graphql/remote/utils';
 import { dialectVersion } from '@/graphql/remote/vm-dialect';
-import { mergeVmWorkloadReports, withWorkloadReportDetails, type VmWorkloadReport } from '@/graphql/remote/vm-workload-reports';
+import { mapReportProcesses, mergeVmWorkloadReports, withWorkloadReportDetails, type VmWorkloadReport } from '@/graphql/remote/vm-workload-reports';
 
 export type { VmWorkloadReport };
 export { buildVmSourcesWithReportsQuery, mergeVmWorkloadReports, withWorkloadReportDetails, withWorkloadReportRegion } from '@/graphql/remote/vm-workload-reports';
@@ -146,17 +146,23 @@ export const mapVmWorkloadReportsToNamespaces = (data: unknown): GetNamespacesWi
       name: kind,
       markedForInstrumentation: false,
       dataStreamNames: [VM_DATA_STREAM],
-      workloads: kindReports.map((report) => ({
-        id: {
-          namespace: kind,
-          name: report.serviceName,
-          kind: (kind as K8sResourceKind) ?? '',
-          ...(report.region ? { region: report.region } : {}),
-        },
-        markedForInstrumentation: { markedForInstrumentation: !!(report.desired?.sourceEnabled ?? report.desired?.enabled) },
-        dataStreamNames: [VM_DATA_STREAM],
-        numberOfInstances: null,
-      })),
+      workloads: kindReports.map((report) => {
+        // The live processes behind the workload, so the pane can group them by language.
+        // Left off (not `null`) for an agent that reports none.
+        const processes = mapReportProcesses(report);
+        return {
+          id: {
+            namespace: kind,
+            name: report.serviceName,
+            kind: (kind as K8sResourceKind) ?? '',
+            ...(report.region ? { region: report.region } : {}),
+          },
+          markedForInstrumentation: { markedForInstrumentation: !!(report.desired?.sourceEnabled ?? report.desired?.enabled) },
+          dataStreamNames: [VM_DATA_STREAM],
+          numberOfInstances: null,
+          ...(processes ? { processes } : {}),
+        };
+      }),
     })),
   };
 };
