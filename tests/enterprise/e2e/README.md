@@ -26,7 +26,7 @@ brew install jq
 
 ## Assumptions
 
-- The test relies on the `odigos` OSS project to be cloned in a directory named `odigos` in the same directory as the `odigos-enterprise` repository. The scenarios read their shared test files from `../../../../odigos/tests/common`, so check out the odigos branch you want to test against.
+- The test relies on the `odigos` OSS project to be cloned in a directory named `odigos` in the same directory as the `odigos-enterprise` repository. The scenarios read their shared test files from `../../../../tests/common`, so check out the odigos branch you want to test against.
 
 ## Running e2e locally
 

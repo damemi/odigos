@@ -14,12 +14,12 @@ spec:
     - name: Prepare destination
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/simple-trace-db-deployment.yaml
+            file: ../../../../tests/common/apply/simple-trace-db-deployment.yaml
 
     - name: Install - Simple Demo Apps
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/install-simple-demo.yaml
+            file: ../../../../tests/common/apply/install-simple-demo.yaml
 
     - name: Install Odigos (non-root / unprivileged)
       try:
@@ -29,7 +29,7 @@ spec:
               echo "Installing Odigos (non-root) with tag $IMAGE_TAG"
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
               helm upgrade --install odigos \
-                ../../../../odigos/helm/odigos \
+                ../../../../helm/odigos \
                 --create-namespace \
                 --namespace odigos-test \
                 --set image.tag=$IMAGE_TAG \
@@ -39,7 +39,7 @@ spec:
                 --set instrumentor.mountMethod=k8s-init-container \
                 --set signals="{traces}"
               kubectl label namespace odigos-test odigos.io/system-object="true"
-              bash ../../../../odigos/tests/common/verify_odigos_installation.sh odigos-test
+              bash ../../../../tests/common/verify_odigos_installation.sh odigos-test
       catch:
         - script:
             content: |
@@ -65,29 +65,29 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: bash ../../../../odigos/tests/common/assert_config_value.sh -k mountMethod -v k8s-init-container
+            content: bash ../../../../tests/common/assert_config_value.sh -k mountMethod -v k8s-init-container
 
     - name: Assert Trace DB is up
       try:
         - assert:
             timeout: 1m10s
-            file: ../../../../odigos/tests/common/assert/simple-trace-db-running.yaml
+            file: ../../../../tests/common/assert/simple-trace-db-running.yaml
 
     - name: Add Destination
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/add-simple-trace-db-destination.yaml
+            file: ../../../../tests/common/apply/add-simple-trace-db-destination.yaml
 
     - name: Assert - Simple Demo Apps Installed
       try:
         - assert:
             timeout: 1m10s
-            file: ../../../../odigos/tests/common/assert/simple-demo-installed.yaml
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
 
     - name: Instrument Namespace
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/instrument-default-ns.yaml
+            file: ../../../../tests/common/apply/instrument-default-ns.yaml
 
     # Assert only the detected language per container (not envFromContainerRuntime): as non-root
     # without host mounts the odiglet can't reach the CRI runtime, so detection falls back to
@@ -109,7 +109,7 @@ spec:
         - script:
             timeout: 2m
             content: |
-              bash ../../../../odigos/tests/common/wait_for_rollout.sh
+              bash ../../../../tests/common/wait_for_rollout.sh
               kubectl rollout status deployment -l app=currency
               kubectl rollout status deployment -l app=geolocation
         # We intentionally do NOT reuse the shared instrumented-and-pipeline.yaml here: that assert is written
@@ -174,13 +174,13 @@ spec:
     - name: Generate Traffic
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/generate-traffic-job.yaml
+            file: ../../../../tests/common/apply/generate-traffic-job.yaml
         - script:
             timeout: 2m30s
             content: |
-              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../../odigos/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../../tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
-            file: ../../../../odigos/tests/common/apply/generate-traffic-job.yaml
+            file: ../../../../tests/common/apply/generate-traffic-job.yaml
 
     - name: Wait For Trace
       try:
@@ -189,8 +189,8 @@ spec:
             content: |
               yaml=$(mktemp)
               script=$(mktemp)
-              cp ../../../../odigos/tests/common/queries/wait-for-trace.yaml "$yaml"
-              cp ../../../../odigos/tests/common/simple_trace_db_query_runner.sh "$script"
+              cp ../../../../tests/common/queries/wait-for-trace.yaml "$yaml"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
 
               while true; do
                 bash "$script" "$yaml"
@@ -236,8 +236,8 @@ spec:
             content: |
               yaml=$(mktemp)
               script=$(mktemp)
-              cp ../../../../odigos/tests/common/queries/context-propagation.yaml "$yaml"
-              cp ../../../../odigos/tests/common/simple_trace_db_query_runner.sh "$script"
+              cp ../../../../tests/common/queries/context-propagation.yaml "$yaml"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
 
               while true; do
                 bash "$script" "$yaml"

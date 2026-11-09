@@ -5,7 +5,7 @@
 set -uo pipefail
 
 # Runs from the scenario directory; the odigos checkout is a sibling of odigos-enterprise.
-common="../../../../odigos/tests/common"
+common="../../../../tests/common"
 job_url="${common}/apply/generate-traffic-job.yaml"
 query_runner="${common}/simple_trace_db_query_runner.sh"
 

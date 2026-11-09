@@ -9,7 +9,7 @@
 set -e
 
 helm upgrade --install odigos \
-  ../../../../odigos/helm/odigos \
+  ../../../../helm/odigos \
   --create-namespace \
   --namespace odigos-test \
   --set image.tag="$IMAGE_TAG" \

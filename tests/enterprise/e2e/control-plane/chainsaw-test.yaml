@@ -9,7 +9,7 @@ spec:
     - name: Prepare destination
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/simple-trace-db-deployment.yaml
+            file: ../../../../tests/common/apply/simple-trace-db-deployment.yaml
 
     - name: Install Odigos
       try:
@@ -18,7 +18,7 @@ spec:
             content: |
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
               helm upgrade --install odigos \
-                ../../../../odigos/helm/odigos \
+                ../../../../helm/odigos \
                 --create-namespace \
                 --namespace odigos-test \
                 --set image.tag=$IMAGE_TAG \
@@ -31,7 +31,7 @@ spec:
             timeout: 2m
             content: |
               echo "Starting Odigos version check..."
-              export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
+              export ACTUAL_VERSION=$(../../../../cli/odigos version --cluster)
               echo "Actual Version: $ACTUAL_VERSION"
               echo "Expected Version: $IMAGE_TAG"
 
@@ -58,12 +58,12 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: ../../../../odigos/tests/common/assert/simple-trace-db-running.yaml
+            file: ../../../../tests/common/assert/simple-trace-db-running.yaml
 
     - name: Add Destination
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/add-simple-trace-db-destination.yaml
+            file: ../../../../tests/common/apply/add-simple-trace-db-destination.yaml
 
     - name: Assert Control Plane Components Ready
       try:
@@ -101,7 +101,7 @@ spec:
             timeout: 1m10s
             content: |
               script=$(mktemp)
-              cp ../../../../odigos/tests/common/simple_trace_db_query_runner.sh "$script"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
 
               while true; do
                 bash "$script" ../../common/queries/control-plane-traces.yaml

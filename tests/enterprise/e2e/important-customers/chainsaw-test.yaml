@@ -13,12 +13,12 @@ spec:
     - name: Prepare destination
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/simple-trace-db-deployment.yaml
+            file: ../../../../tests/common/apply/simple-trace-db-deployment.yaml
 
     - name: Install - Simple Demo Apps
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/install-simple-demo.yaml
+            file: ../../../../tests/common/apply/install-simple-demo.yaml
 
     - name: Install Odigos
       try:
@@ -41,7 +41,7 @@ spec:
             timeout: 2m
             content: |
               echo "Starting Odigos version check..."
-              export ACTUAL_VERSION=$(../../../../odigos/cli/odigos version --cluster)
+              export ACTUAL_VERSION=$(../../../../cli/odigos version --cluster)
               echo "Actual Version: $ACTUAL_VERSION"
               echo "Expected Version: $IMAGE_TAG"
 
@@ -73,29 +73,29 @@ spec:
       try:
         - assert:
             timeout: 1m10s
-            file: ../../../../odigos/tests/common/assert/simple-trace-db-running.yaml
+            file: ../../../../tests/common/assert/simple-trace-db-running.yaml
 
     - name: Add Destination
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/add-simple-trace-db-destination.yaml
+            file: ../../../../tests/common/apply/add-simple-trace-db-destination.yaml
 
     - name: Assert - Simple Demo Apps Installed
       try:
         - assert:
             timeout: 1m10s
-            file: ../../../../odigos/tests/common/assert/simple-demo-installed.yaml
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
 
     - name: Instrument Namespace
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/instrument-default-ns.yaml
+            file: ../../../../tests/common/apply/instrument-default-ns.yaml
 
     - name: Assert Runtime Detected
       try:
         - assert:
             timeout: 1m10s
-            file: ../../../../odigos/tests/common/assert/simple-demo-runtime-detected.yaml
+            file: ../../../../tests/common/assert/simple-demo-runtime-detected.yaml
 
     - name: Odigos pipeline ready
       try:
@@ -138,21 +138,21 @@ spec:
                 echo "Skipping java lazy-client-probes warmup for customer=${CUSTOMER}"
                 exit 0
               fi
-              kubectl apply -f ../../../../odigos/tests/common/apply/generate-traffic-job.yaml
-              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../../odigos/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
-              kubectl delete -f ../../../../odigos/tests/common/apply/generate-traffic-job.yaml
+              kubectl apply -f ../../../../tests/common/apply/generate-traffic-job.yaml
+              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../../tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+              kubectl delete -f ../../../../tests/common/apply/generate-traffic-job.yaml
               BASH_EOF
 
     - name: Generate Traffic
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/generate-traffic-job.yaml
+            file: ../../../../tests/common/apply/generate-traffic-job.yaml
         - script:
             timeout: 1m10s
             content: |
-              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../../odigos/tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../../tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
         - delete:
-            file: ../../../../odigos/tests/common/apply/generate-traffic-job.yaml
+            file: ../../../../tests/common/apply/generate-traffic-job.yaml
 
     - name: Wait For Trace
       try:
@@ -161,8 +161,8 @@ spec:
             content: |
               yaml=$(mktemp)
               script=$(mktemp)
-              cp ../../../../odigos/tests/common/queries/wait-for-trace.yaml "$yaml"
-              cp ../../../../odigos/tests/common/simple_trace_db_query_runner.sh "$script"
+              cp ../../../../tests/common/queries/wait-for-trace.yaml "$yaml"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
 
               while true; do
                 bash "$script" "$yaml"
@@ -187,8 +187,8 @@ spec:
               yaml=$(mktemp)
               script=$(mktemp)
 
-              cp ../../../../odigos/tests/common/queries/context-propagation.yaml "$yaml"
-              cp ../../../../odigos/tests/common/simple_trace_db_query_runner.sh "$script"
+              cp ../../../../tests/common/queries/context-propagation.yaml "$yaml"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
 
               while true; do
                 bash "$script" "$yaml"

@@ -22,7 +22,7 @@ spec:
             timeout: 5m
             content: |
               echo "Installing Odigos with tag $IMAGE_TAG"
-              ../../../../odigos/cli/odigos install --ns odigos-test \
+              ../../../../cli/odigos install --ns odigos-test \
                 --set image.tag=$IMAGE_TAG \
                 --set onPremToken=$ODIGOS_API_KEY \
                 --set metricsSources.agentMetrics.runtimeMetrics.java.disabled=false
@@ -57,7 +57,7 @@ spec:
     - name: Instrument Namespace
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/instrument-default-ns.yaml
+            file: ../../../../tests/common/apply/instrument-default-ns.yaml
 
     - name: Assert Runtime Detected
       try:
