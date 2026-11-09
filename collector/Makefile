@@ -88,7 +88,8 @@ generate: install-tools
 	done
 	$(MAKE) fmt
 
-ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -E '^./' | grep -v "licenses")
+# enterprise/ holds the collector imported from odigos-enterprise, which has its own build until the two are merged.
+ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -E '^./' | grep -v "licenses" | grep -v '^./enterprise/')
 .PHONY: fmt
 fmt: $(ALL_GO_MOD_DIRS:%=fmt/%)
 fmt/%: install-tools
