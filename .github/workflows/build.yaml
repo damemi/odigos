@@ -348,10 +348,6 @@ jobs:
       - name: Build webapp
         run: yarn build
         working-directory: frontend/webapp
-      # Note: frontend Go tests (`make test` in ./frontend) now run as a
-      # chainsaw Test under tests/e2e/ui/frontend-go-tests/ in parallel with the
-      # sibling tests/e2e/ui/frontend-cypress-tests/ Test, so they no longer
-      # block this build job. See PLAT-1214.
 
   build-operator:
     name: build-operator
@@ -506,6 +502,7 @@ jobs:
       fail-fast: false
       matrix:
         module:
+          - frontend
           - ui
           - insights
           - instrumentor/enterprise

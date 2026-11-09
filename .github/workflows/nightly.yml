@@ -145,26 +145,14 @@ jobs:
       matrix:
         kubernetes-version: ["1.21.12", "1.37"]
         test-scenario:
-          - "ui"
-          - "helm-chart"
-          - "helm-upgrade"
-          - "runtime-detection"
-          - "instrumentation-lifecycle"
-          - "instrumentation-rollback"
-          - "instrumentation-rollback-stability-window"
-          - "environment-variables"
-          - "trace-collection"
-          - "log-collection"
-          - "source"
-          - "webhooks"
-          - "env-injection"
-          - "data-streams"
-          - "mount-method"
-          - "argo-rollouts"
-          - "head-sampling-http-nodejs"
-          - "head-sampling-http-python"
-          - "head-sampling-http-java"
-          - "tail-sampling-nodejs"
+          - "enterprise/multi-apps"
+          - "enterprise/jvm-metrics"
+          - "enterprise/helm-chart"
+          - "enterprise/mount-method"
+          - "enterprise/non-root"
+          - "enterprise/control-plane"
+          - "enterprise/instrumentation-rules"
+          - "enterprise/python-ebpf"
 
     steps:
       - name: Checkout
