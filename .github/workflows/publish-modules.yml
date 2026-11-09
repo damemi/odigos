@@ -340,13 +340,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Write npm auth
         id: npmrc
         uses: ./.github/actions/npm-auth
@@ -369,7 +362,6 @@ jobs:
           tags: |
             us-central1-docker.pkg.dev/odigos-cloud/components/${{ matrix.image }}:${{ env.ODIGOS_TAG }}${{ env.TAG_SUFFIX }}
             us-central1-docker.pkg.dev/odigos-cloud/components-private/${{ matrix.image }}:${{ env.ODIGOS_TAG }}${{ env.TAG_SUFFIX }}
-            ghcr.io/odigos-io/${{ matrix.image }}:${{ env.ODIGOS_TAG }}${{ env.TAG_SUFFIX }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
             ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
@@ -391,7 +383,6 @@ jobs:
           refs: |
             us-central1-docker.pkg.dev/odigos-cloud/components/${{ matrix.image }}
             us-central1-docker.pkg.dev/odigos-cloud/components-private/${{ matrix.image }}
-            ghcr.io/odigos-io/${{ matrix.image }}
           digest: ${{ steps.build.outputs.digest }}
 
       - name: Notify Slack

@@ -15,7 +15,6 @@ permissions:
 env:
   GCR_REPO: "us-central1-docker.pkg.dev/odigos-cloud/components"
   GCR_PRIVATE_REPO: "us-central1-docker.pkg.dev/odigos-cloud/components-private"
-  GHCR_REPO: "ghcr.io/odigos-io"
 
 jobs:
   promote-rc-to-stable:
@@ -106,12 +105,6 @@ jobs:
           registry: us-central1-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.gcp-auth.outputs.access_token }}
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Retag existing images to stable
         run: |
@@ -119,8 +112,6 @@ jobs:
             # All non-RHEL component images (OSS + enterprise). Each is promoted in components
             # and mirrored to components-private.
             GCR_IMAGE_NAMES=("odigos-autoscaler" "odigos-scheduler" "odigos-operator" "odigos-cli" "odigos-victoria-metrics" "odigos-cache" "odigos-enterprise-central-backend" "odigos-enterprise-central-proxy" "odigos-enterprise-central-ui" "odigos-enterprise-ui" "odigos-enterprise-agents" "odigos-enterprise-collector" "odigos-enterprise-instrumentor" "odigos-enterprise-odiglet" "odigos-enterprise-insights" "odigos-enterprise-connector-runtime" "odigos-enterprise-connector-aws" "odigos-enterprise-connector-azure" "odigos-enterprise-connector-gcp" "odigos-enterprise-connector-postgres")
-
-            GHCR_IMAGE_NAMES=("odigos-autoscaler" "odigos-scheduler" "odigos-operator" "odigos-enterprise-agents" "odigos-enterprise-collector" "odigos-enterprise-instrumentor" "odigos-enterprise-odiglet" "odigos-enterprise-ui" "odigos-enterprise-insights")
 
             # Community images, built only for versions released before odigos-enterprise moved here.
             # Promoted in every registry where the RC tag exists, and skipped otherwise.
@@ -155,22 +146,10 @@ jobs:
                 fi
               done
 
-              # Process GHCR images
-              for IMAGE_NAME in "${GHCR_IMAGE_NAMES[@]}"; do
-                REPO=${GHCR_REPO}
-                echo "Copying ${REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.RC_TAG }} to ${REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.STABLE_TAG }}"
-                if ! crane copy ${REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.RC_TAG }} ${REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.STABLE_TAG }}; then
-                  echo "ERROR: Failed to copy ${REPO}/${IMAGE_NAME}${SUFFIX}"
-                  FAILED_COPIES+=("${REPO}/${IMAGE_NAME}${SUFFIX}")
-                else
-                  echo "Successfully copied ${REPO}/${IMAGE_NAME}${SUFFIX}"
-                fi
-              done
-
             done
 
             for IMAGE_NAME in "${LEGACY_COMMUNITY_IMAGE_NAMES[@]}"; do
-              for REPO in "${GCR_REPO}" "${GHCR_REPO}"; do
+              for REPO in "${GCR_REPO}"; do
                 if ! crane digest ${REPO}/${IMAGE_NAME}:${{ env.RC_TAG }} >/dev/null 2>&1; then
                   echo "Skipping ${REPO}/${IMAGE_NAME}: no ${{ env.RC_TAG }} tag"
                   continue

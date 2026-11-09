@@ -114,8 +114,8 @@ can change receivers, processors, exporters, connectors, pipelines, and Collecto
 cannot update the Collector or Supervisor binaries. Image upgrades remain the responsibility of the
 AWS/GCP/Azure deployment mechanism.
 
-The image is published for `linux/amd64` and `linux/arm64` as one manifest list, to Artifact Registry,
-Docker Hub and GHCR from a single build, with every ref signed against the same digest. Deployments
+The image is published for `linux/amd64` and `linux/arm64` as one manifest list, to Artifact Registry
+from a single build, with every ref signed against the same digest. Deployments
 should reference it **by digest**, never by tag: the digest is the image's identity, and each cloud picks
 whichever registry it can pull from without changing the bytes.
 
