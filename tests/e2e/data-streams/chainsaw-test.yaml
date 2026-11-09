@@ -1,0 +1,144 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: data-streams
+spec:
+  description: This e2e test runs a data streams scenario
+  skipDelete: true
+  steps:
+    - name: '[1 - Setup] Prepare destination 1'
+      try:
+        - apply:
+            file: ../../common/apply/simple-trace-db-deployment.yaml
+    - name: '[1 - Setup] Prepare destination 2'
+      try:
+        - apply:
+            file: ../../common/apply/simple-trace-db-deployment-2.yaml
+
+    - name: '[1 - Setup] Install Odigos'
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test
+              kubectl label namespace odigos-test odigos.io/system-object="true"
+
+              ../../common/verify_odigos_installation.sh odigos-test
+        - assert:
+            timeout: 4m
+            file: ../../common/assert/odigos-installed.yaml
+
+    - name: '[1 - Setup] Verify Node Odiglet label has been added'
+      try:
+        - assert:
+            file: ../../common/assert/node-odiglet-label.yaml
+
+    - name: '[1 - Setup] Assert Trace DB 1 is up'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/simple-trace-db-running.yaml
+
+    - name: '[1 - Setup] Assert Trace DB 2 is up'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/simple-trace-db-running-2.yaml
+
+    - name: '[1 - Setup] Install - Simple Demo Apps'
+      try:
+        - apply:
+            file: ../../common/apply/install-simple-demo.yaml
+        - assert:
+            timeout: 1m30s
+            file: ../../common/assert/simple-demo-installed.yaml
+
+    - name: '[2 - Workload Instrumentation] Instrument Deployments using Sources'
+      try:
+        - apply:
+            file: 01-sources.yaml
+
+    - name: '[2 - Workload Instrumentation] Assert Runtime Detected'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/simple-demo-runtime-detected.yaml
+
+    - name: '[2 - Workload Instrumentation] Add Destinations for data streams'
+      try:
+        - apply:
+            file: ../../common/apply/add-simple-trace-db-destination-stream-1.yaml
+        - apply:
+            file: ../../common/apply/add-simple-trace-db-destination-stream-2.yaml
+
+    - name: '[2 - Workload Instrumentation] Odigos pipeline ready'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/pipeline-ready.yaml
+
+    - name: '[2 - Workload Instrumentation] Simple-demo instrumented after destination added'
+      try:
+        - assert:
+            file: ../../common/assert/simple-demo-instrumented.yaml
+        - script:
+            timeout: 1m10s
+            content: ../../common/wait_for_rollout.sh
+        - script:
+            timeout: 1m10s
+            content: |
+              echo "===== FETCHING ACTUAL CONNECTOR CONFIG ====="
+              kubectl get cm odigos-gateway -n odigos-test -o jsonpath='{.data.collector-conf}' \
+                > /tmp/raw-collector-conf.yaml
+
+              echo "===== PARSING CONNECTOR CONFIG ====="
+              yq '.connectors."odigosrouterconnector/traces"' /tmp/raw-collector-conf.yaml \
+                > /tmp/current-datastreams-connector-config.yaml
+
+              echo "===== ACTUAL CONNECTOR CONFIG ====="
+              cat /tmp/current-datastreams-connector-config.yaml
+              echo "===== END ACTUAL CONNECTOR CONFIG ====="
+
+              echo "===== DIFF EXPECTED vs ACTUAL ====="
+              diff /tmp/current-datastreams-connector-config.yaml expected-datastreams-config.yaml >/dev/null
+              echo "✅ Diff matched expected datastreams config"
+
+              ## This sleep here to ensure configuration is updated in the collector because of the debounce mechanism
+              sleep 5
+
+    - name: '[2 - Workload Instrumentation] Generate Traffic'
+      try:
+        - apply:
+            file: ../../common/apply/generate-traffic-job.yaml
+        - script:
+            timeout: 1m10s
+            content: |
+              kubectl wait --for=condition=complete --timeout=1m job/$(kubectl get -f ../../common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+        - delete:
+            file: ../../common/apply/generate-traffic-job.yaml
+
+    - name: Wait For Trace Stream 1
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              while true; do
+                ../../common/simple_trace_db_query_runner.sh ../../common/queries/wait-for-trace-stream-1.yaml
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+    - name: Wait For Trace Stream 2
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              while true; do
+                ../../common/simple_trace_db_query_runner.sh ../../common/queries/wait-for-trace-stream-2.yaml false traces-2 simple-trace-db-2
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done

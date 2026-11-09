@@ -16,7 +16,7 @@ spec:
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: frontend
       (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: java-community
+        - value: java-ebpf-instrumentations
       (env[?name == 'ODIGOS_POD_NAME']):
         - valueFrom:
             fieldRef:
@@ -68,7 +68,7 @@ spec:
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: coupon
       (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: nodejs-community
+        - value: nodejs-enterprise
       (env[?name == 'ODIGOS_POD_NAME']):
         - valueFrom:
             fieldRef:
@@ -114,7 +114,7 @@ spec:
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: inventory
       (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: python-community
+        - value: python-enterprise
       (env[?name == 'ODIGOS_POD_NAME']):
         - valueFrom:
             fieldRef:
@@ -155,7 +155,7 @@ spec:
       (env[?name == 'ODIGOS_CONTAINER_NAME']):
         - value: membership
       (env[?name == 'ODIGOS_DISTRO_NAME']):
-        - value: golang-community
+        - value: golang-enterprise
       (env[?name == 'ODIGOS_POD_NAME']):
         - valueFrom:
             fieldRef:
@@ -483,7 +483,7 @@ status:
   (identifyingAttributes[?key == 'process.runtime.description']):
     - value: Node.js
   (identifyingAttributes[?key == 'telemetry.distro.name']):
-    - value: nodejs-community
+    - value: nodejs-enterprise
   (identifyingAttributes[?key == 'telemetry.distro.version']):
     - (value != null): true
   (identifyingAttributes[?key == 'process.vpid']):
