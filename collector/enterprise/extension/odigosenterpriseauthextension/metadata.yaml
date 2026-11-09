@@ -1,0 +1,13 @@
+type: odigos_enterprise_auth
+github_project: odigos-io/odigos-enterprise
+
+status:
+  class: extension
+  stability:
+    development: [extension]
+  codeowners:
+    active: [shivanshuraj1333]
+
+tests:
+  # Start refuses to run without a valid ODIGOS_ONPREM_TOKEN, which the lifecycle test has no way to supply.
+  skip_lifecycle: true

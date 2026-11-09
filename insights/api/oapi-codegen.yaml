@@ -1,0 +1,12 @@
+# oapi-codegen config: generate the Go wire types (package apitypes) from
+# openapi.yaml. Types only - the routes are hand-wired in router.go and the
+# repo->wire mapping lives in internal/api/http/apimap. prefer-skip-optional-pointer
+# makes optional fields value types with omitempty instead of pointers, so the
+# mappers stay pointer-free (a few genuinely-optional nested structs opt back in
+# via x-go-type-skip-optional-pointer: false in the spec).
+package: apitypes
+output: internal/api/http/apitypes/models.gen.go
+generate:
+  models: true
+output-options:
+  prefer-skip-optional-pointer: true

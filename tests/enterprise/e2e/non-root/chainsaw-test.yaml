@@ -1,0 +1,264 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: non-root
+spec:
+  description: >
+    This e2e test installs Odigos in a hardened / non-privileged configuration
+    (odiglet.runAsNonRoot=true, odiglet.noHostPathMounts=true,
+    instrumentor.mountMethod=k8s-init-container, signals={traces}) and verifies that odiglet
+    comes up healthy as a non-root, non-privileged workload and that distributed traces still
+    arrive end-to-end.
+  skipDelete: true
+  steps:
+    - name: Prepare destination
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/simple-trace-db-deployment.yaml
+
+    - name: Install - Simple Demo Apps
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/install-simple-demo.yaml
+
+    - name: Install Odigos (non-root / unprivileged)
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              echo "Installing Odigos (non-root) with tag $IMAGE_TAG"
+              # use the helm chart from main repo which is expected to be in a sibling directory to this repo
+              helm upgrade --install odigos \
+                ../../../../helm/odigos \
+                --create-namespace \
+                --namespace odigos-test \
+                --set image.tag=$IMAGE_TAG \
+                --set onPremToken=$ODIGOS_API_KEY \
+                --set odiglet.runAsNonRoot=true \
+                --set odiglet.noHostPathMounts=true \
+                --set instrumentor.mountMethod=k8s-init-container \
+                --set signals="{traces}"
+              kubectl label namespace odigos-test odigos.io/system-object="true"
+              bash ../../../../tests/common/verify_odigos_installation.sh odigos-test
+      catch:
+        - script:
+            content: |
+              echo "🔍 Listing all resources in namespace 'odigos-test'..."
+              kubectl get all -n odigos-test
+              echo "📝 Describing odiglet daemonset..."
+              kubectl describe daemonset odiglet -n odigos-test
+
+    - name: Verify Odigos Installed as non-root / unprivileged
+      try:
+        - assert:
+            timeout: 4m
+            file: 01-odigos-installed-non-root.yaml
+      catch:
+        - script:
+            content: |
+              echo "=== odiglet pods ==="
+              kubectl get pods -n odigos-test -l app.kubernetes.io/name=odiglet -o yaml
+              echo "=== odiglet logs (last 200 lines) ==="
+              kubectl logs -n odigos-test -l app.kubernetes.io/name=odiglet -c odiglet --tail=200
+
+    - name: Assert config set with init container mount method
+      try:
+        - script:
+            timeout: 1m10s
+            content: bash ../../../../tests/common/assert_config_value.sh -k mountMethod -v k8s-init-container
+
+    - name: Assert Trace DB is up
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-trace-db-running.yaml
+
+    - name: Add Destination
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/add-simple-trace-db-destination.yaml
+
+    - name: Assert - Simple Demo Apps Installed
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
+
+    - name: Instrument Namespace
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/instrument-default-ns.yaml
+
+    # Assert only the detected language per container (not envFromContainerRuntime): as non-root
+    # without host mounts the odiglet can't reach the CRI runtime, so detection falls back to
+    # process env.
+    - name: Assert Runtime Detected
+      try:
+        - assert:
+            timeout: 1m10s
+            file: 02-runtime-detected-languages.yaml
+
+    - name: Odigos pipeline ready
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/pipeline-ready.yaml
+
+    - name: Instrumentation healthy after destination added
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              bash ../../../../tests/common/wait_for_rollout.sh
+              kubectl rollout status deployment -l app=currency
+              kubectl rollout status deployment -l app=geolocation
+        # We intentionally do NOT reuse the shared instrumented-and-pipeline.yaml here: that assert is written
+        # for the default device-plugin mount method and expects the instrumentation.odigos.io/generic device
+        # resource, which is not injected with mountMethod=k8s-init-container.
+        - assert:
+            timeout: 1m30s
+            file: 03-instrumentation-healthy.yaml
+      catch:
+        - script:
+            content: |
+              echo "=== default ns pods ==="
+              kubectl get pods -n default -o wide
+              echo "=== non-running pods described (shows Pending/CrashLoop/OOM reason + events) ==="
+              kubectl get pods -n default --field-selector=status.phase!=Running -o name | while read -r p; do kubectl describe -n default "$p"; done
+              echo "=== node allocated resources ==="
+              kubectl describe nodes | grep -A6 "Allocated resources"
+              echo "=== recent default ns events ==="
+              kubectl get events -n default --sort-by=.lastTimestamp | tail -n 50
+              echo "=== instrumentation instances (full status: healthy/reason/message) ==="
+              kubectl get instrumentationinstances -n default -o yaml
+              echo "=== instrumentation configs (runtimeVersion + per-container agentEnabled reason/message) ==="
+              kubectl get instrumentationconfig -n default -o yaml
+              echo "=== odiglet logs (all nodes; eBPF attach / Go instrumentation errors) ==="
+              kubectl logs -n odigos-test -l app.kubernetes.io/name=odiglet --tail=300 --prefix --all-containers
+
+    - name: Assert Java frontend instrumented via eBPF without restart
+      try:
+        # Java is attached in place via eBPF (jattach, which is why odiglet needs SETUID/SETGID in
+        # non-root mode). Unlike source/file-based languages, no `odigos-agents` init container is
+        # injected - that path would recreate the pod. A kubectl check is used because chainsaw's
+        # subset matching cannot assert the ABSENCE of an init container.
+        - script:
+            timeout: 30s
+            content: |
+              init_names=$(kubectl get pods -n default -l app=frontend \
+                -o jsonpath='{.items[*].spec.initContainers[*].name}')
+              echo "frontend initContainers: [$init_names]"
+              if echo "$init_names" | tr ' ' '\n' | grep -qx "odigos-agents"; then
+                echo "ERROR: odigos-agents init container present on frontend (pod was re-injected/restarted)"
+                exit 1
+              fi
+              echo "OK: no odigos init container injected into the Java frontend"
+      catch:
+        - script:
+            content: kubectl get pods -n default -l app=frontend -o yaml
+
+    # The first request through a freshly instrumented java app can't propagate
+    # context (http client instrumentations load lazily on first use). /rate only
+    # reaches currency, so warmup traces don't affect the trace assertions below.
+    - name: Warm Up Java Frontend
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
+              kubectl run warmup-traffic -n default --image=curlimages/curl:8.4.0 --restart=Never --command -- \
+                sh -c 'for i in 1 2 3; do curl -s -o /dev/null "http://frontend:8080/rate/usd-eur"; sleep 2; done'
+              kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/warmup-traffic -n default --timeout=90s
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
+
+    - name: Generate Traffic
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/generate-traffic-job.yaml
+        - script:
+            timeout: 2m30s
+            content: |
+              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../../tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+        - delete:
+            file: ../../../../tests/common/apply/generate-traffic-job.yaml
+
+    - name: Wait For Trace
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+              cp ../../../../tests/common/queries/wait-for-trace.yaml "$yaml"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
+
+              while true; do
+                bash "$script" "$yaml"
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
+      catch:
+        - script:
+            content: |
+              echo "=== All traces ==="
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .
+        - script:
+            content: |
+              # Which services are actually present in the trace DB (find the missing ones fast).
+              echo "=== service names seen in trace DB ==="
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" \
+                | jq -r '..|.serviceName? // empty' | sort -u
+              echo "=== instrumentation configs (runtimeVersion + per-container agentEnabled reason/message) ==="
+              kubectl get instrumentationconfig -n default -o yaml
+              # currency (php) and geolocation (ruby) are the version-gated languages most likely to be
+              # silently disabled: dump their injected agent env + initContainers and their app logs.
+              for app in currency geolocation; do
+                echo "=== $app pods (spec: env + initContainers) ==="
+                kubectl get pods -n default -l app=$app -o yaml
+                echo "=== $app logs ==="
+                kubectl logs -n default -l app=$app --tail=100 --all-containers --prefix
+              done
+        - script:
+            content: |
+              java_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^frontend)
+              kubectl logs $java_pod_name -n default
+              echo "=== odiglet logs (all nodes, last 300 lines) ==="
+              kubectl logs -n odigos-test -l app.kubernetes.io/name=odiglet -c odiglet --tail=300 --prefix --all-containers
+
+    - name: Verify Trace - Context Propagation
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+              cp ../../../../tests/common/queries/context-propagation.yaml "$yaml"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
+
+              while true; do
+                bash "$script" "$yaml"
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
+      catch:
+        - script:
+            content: |
+              echo "=== All traces ==="
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
+    - name: Uninstall Odigos
+      try:
+        - script:
+            timeout: 1m40s
+            content: helm uninstall odigos -n odigos-test

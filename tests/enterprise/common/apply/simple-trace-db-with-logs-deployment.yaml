@@ -1,0 +1,42 @@
+# Same shape as the shared simple-trace-db deployment in the odigos repo, pinned to the first
+# release that serves the OTLP logs endpoints. The shared one is still on a traces-only tag, and it
+# is applied by every other scenario, so it is left alone rather than bumped here.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: traces
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simple-trace-db
+  namespace: traces
+  labels:
+    app: simple-trace-db
+spec:
+  selector:
+    matchLabels:
+      app: simple-trace-db
+  template:
+    metadata:
+      labels:
+        app: simple-trace-db
+    spec:
+      containers:
+        - name: simple-trace-db
+          image: ghcr.io/odigos-io/simple-trace-db/simple-trace-db:v0.0.12
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4318
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: simple-trace-db
+  namespace: traces
+spec:
+  selector:
+    app: simple-trace-db
+  ports:
+    - protocol: TCP
+      port: 4318

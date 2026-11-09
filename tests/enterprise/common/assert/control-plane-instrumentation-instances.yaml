@@ -1,0 +1,35 @@
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: kube-system
+  labels:
+    instrumented-app: staticpod-etcd-kind-control-plane
+status:
+  healthy: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: kube-system
+  labels:
+    instrumented-app: staticpod-kube-apiserver-kind-control-plane
+status:
+  healthy: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: kube-system
+  labels:
+    instrumented-app: staticpod-kube-controller-manager-kind-control-plane
+status:
+  healthy: true
+---
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationInstance
+metadata:
+  namespace: kube-system
+  labels:
+    instrumented-app: staticpod-kube-scheduler-kind-control-plane
+status:
+  healthy: true

@@ -1,0 +1,12 @@
+apiVersion: odigos.io/v1alpha1
+kind: Destination
+metadata:
+  name: odigos.io.dest.prometheus
+  namespace: odigos-test
+spec:
+  data:
+    PROMETHEUS_REMOTEWRITE_URL: http://prometheus.metrics:9090/api/v1/write
+  destinationName: e2e-prometheus
+  signals:
+    - METRICS
+  type: prometheus

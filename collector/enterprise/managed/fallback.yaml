@@ -1,0 +1,25 @@
+# Complete, standalone configuration used only on a first boot when Central is unavailable and no
+# last-known-good configuration exists yet. It intentionally opens no telemetry ports and exports no
+# customer data. The Supervisor adds its local OpAMP extension before starting the Collector.
+receivers:
+  nop:
+
+exporters:
+  nop:
+
+extensions:
+  odigos_enterprise_auth:
+
+service:
+  extensions:
+    - odigos_enterprise_auth
+  pipelines:
+    traces:
+      receivers: [nop]
+      exporters: [nop]
+    metrics:
+      receivers: [nop]
+      exporters: [nop]
+    logs:
+      receivers: [nop]
+      exporters: [nop]

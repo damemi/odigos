@@ -30,7 +30,7 @@ spec:
   containers:
   - agentEnabled: true
     containerName: api
-    otelDistroName: nodejs-community
+    otelDistroName: nodejs-enterprise
   serviceName: otel-crash-demo
 status:
   (status.rollbackOccurred || `false`): false

@@ -93,8 +93,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Odigos Images
+        env:
+          # odiglet and agents download private instrumentation repos.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
           TAG=e2e-test make build-images
+          TAG=e2e-test EXTENDED=true make build-odiglet build-agents
           docker save -o odigos-images.tar $(docker images --format "{{.Repository}}:{{.Tag}}" | grep "odigos")
 
       - uses: ko-build/setup-ko@v0.9
@@ -166,13 +170,26 @@ jobs:
           - "webhooks"
           - "env-injection"
           - "data-streams"
-          - "mount-method"
           - "argo-rollouts"
           - "head-sampling-http-nodejs"
           - "head-sampling-http-python"
           - "head-sampling-http-java"
           - "tail-sampling-nodejs"
+          - "enterprise/multi-apps"
+          - "enterprise/jvm-metrics"
+          - "enterprise/mount-method"
+          - "enterprise/non-root"
+          - "enterprise/control-plane"
+          - "enterprise/instrumentation-rules"
+          - "enterprise/python-ebpf"
+        # Release PRs also run the important-customers configurations.
         include:
+          - kube-version: "1.32"
+            test-scenario: "enterprise/important-customers"
+            customer: greatwall
+          - kube-version: "1.32"
+            test-scenario: "enterprise/important-customers"
+            customer: kratos
           - kube-version: "1.32"
             test-scenario: "karpenter-mount-methods"
 
@@ -180,10 +197,10 @@ jobs:
       - name: Check if test should run
         id: should-run
         run: |
-          if [[ "${{ matrix.test-scenario }}" == "karpenter-mount-methods" ]]; then
+          if [[ "${{ matrix.test-scenario }}" == "enterprise/important-customers" || "${{ matrix.test-scenario }}" == "karpenter-mount-methods" ]]; then
             HEAD_REF="${{ github.head_ref }}"
             BASE_REF="${{ github.base_ref }}"
-            if [[ "$HEAD_REF" == release-bot-* && "$BASE_REF" == releases/* ]]; then
+            if [[ ( "$HEAD_REF" == pre-releases/* || "$HEAD_REF" == patch-release/* ) && "$BASE_REF" == releases/* ]]; then
               echo "skip=false" >> $GITHUB_OUTPUT
             else
               echo "skip=true" >> $GITHUB_OUTPUT
@@ -202,7 +219,9 @@ jobs:
         with:
           kubernetes-version: ${{ matrix.kube-version }}
           test-scenario: ${{ matrix.test-scenario }}
+          customer: ${{ matrix.customer || '' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
 
   additional-kubernetes-tests:
     needs: [prepare-additional-kubernetes-versions, build-odigos-images, build-cli]
@@ -230,12 +249,18 @@ jobs:
           - "webhooks"
           - "env-injection"
           - "data-streams"
-          - "mount-method"
           - "argo-rollouts"
           - "head-sampling-http-nodejs"
           - "head-sampling-http-python"
           - "head-sampling-http-java"
           - "tail-sampling-nodejs"
+          - "enterprise/multi-apps"
+          - "enterprise/jvm-metrics"
+          - "enterprise/mount-method"
+          - "enterprise/non-root"
+          - "enterprise/control-plane"
+          - "enterprise/instrumentation-rules"
+          - "enterprise/python-ebpf"
 
     steps:
       - name: Checkout
@@ -247,3 +272,4 @@ jobs:
           kubernetes-version: ${{ matrix.kube-version }}
           test-scenario: ${{ matrix.test-scenario }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}

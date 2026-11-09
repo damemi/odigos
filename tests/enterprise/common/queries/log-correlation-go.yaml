@@ -1,0 +1,26 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: LogTest
+endpoint: /v1/logs
+description: |
+  This test verifies that a log line written by the membership service (Go) while it was handling
+  a request is captured with the trace context of that request.
+
+  "isMember called" is the first statement of the /isMember handler, so it is written on the same
+  goroutine that carries the server span, before any outbound call. It is reached once per /buy
+  request, via coupon's /apply-coupon, and is never reached by the warm-up traffic.
+
+  traceId and spanId being present is the assertion. The simple log format omits an id that is
+  absent, empty or all zero bytes, so a record captured without trace context cannot satisfy this
+  by carrying a plausible looking string of zeros.
+
+  The expression is a filter projection over all stored log records, the same shape the trace
+  queries use, and the runner counts the records it selects.
+query: |
+  [?(
+    serviceName == 'membership' &&
+    contains(bodyText, 'isMember called') &&
+    traceId != null &&
+    spanId != null
+  )]
+expected:
+  minimum: 1

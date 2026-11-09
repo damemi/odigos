@@ -57,11 +57,6 @@ metadata:
 spec:
   containers:
     - name: java-rollout
-      resources:
-        limits:
-          instrumentation.odigos.io/generic: '1'
-        requests:
-          instrumentation.odigos.io/generic: '1'
 status:
   containerStatuses:
     - name: java-rollout

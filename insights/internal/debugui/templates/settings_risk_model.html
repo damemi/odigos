@@ -1,0 +1,59 @@
+{{define "title"}}Risk model{{end}}
+
+{{define "content"}}
+<style>
+  .rm-note { color: var(--muted); font-size: 12px; max-width: 380px; }
+  tr.rm-sub td:first-child { padding-left: 22px; color: var(--fg); }
+  tr.rm-sub td { background: #fbfbfc; }
+</style>
+
+<div class="settings-layout">
+{{template "settingsNav" .}}
+<div class="settings-main">
+
+<h2>Risk model</h2>
+<p class="hint" style="max-width:880px;">
+  The default risk model every anomaly policy builds on. Each signal adds its <b>weight</b> (points) to a 0–100 risk
+  score; dangerous <b>sub-cases</b> add on top of a class's base novelty. Read-only reference - tune the weights per
+  scope under <a href="/debug/settings/detection">Detection</a>. A signal alone lands at
+  <span class="band band-low">low</span> 20 · <span class="band band-medium">medium</span> 35 ·
+  <span class="band band-high">high</span> 50 · <span class="band band-critical">critical</span> 75.
+</p>
+
+<table>
+  <thead>
+    <tr><th>Signal</th><th>Class / source</th><th>Weight</th><th>Band</th><th>Category</th><th>What it means</th></tr>
+  </thead>
+  <tbody>
+    {{range .Classes}}
+    <tr>
+      <td><b>{{classLabel .}}</b></td>
+      <td><code>{{.}}</code></td>
+      <td>{{defaultWeight .}}</td>
+      <td><span class="band band-{{scoreBand (defaultWeight .)}}">{{scoreBand (defaultWeight .)}}</span></td>
+      <td>{{classCategory .}}</td>
+      <td class="rm-note">{{classDesc .}}</td>
+    </tr>
+    {{range enrichersForClass .}}
+    <tr class="rm-sub">
+      <td>&#8627; {{.Label}}</td>
+      <td><code>{{.Source}}</code></td>
+      <td>+{{.Weight}}</td>
+      <td><span class="band band-{{scoreBand .Weight}}">{{scoreBand .Weight}}</span></td>
+      <td></td>
+      <td class="rm-note">{{.Desc}}</td>
+    </tr>
+    {{end}}
+    {{end}}
+  </tbody>
+</table>
+
+<h3>Cross-class correlation</h3>
+<p class="hint" style="max-width:880px;">
+  A trace whose signals span two or more kill-chain categories gets a <b>+15</b> correlation bonus on top of the summed
+  weights - coordinated behavior across stages is riskier than any single novelty on its own.
+</p>
+
+</div>
+</div>
+{{end}}

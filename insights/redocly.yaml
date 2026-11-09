@@ -1,0 +1,14 @@
+# Lint config for `make api-lint` (redocly auto-discovers this file).
+extends:
+  - recommended
+rules:
+  # This API is deployed inside the cluster with no auth of its own yet, so the
+  # "every operation must declare security" rule does not apply.
+  security-defined: off
+  # Internal API; no public license.
+  info-license: off
+  # Read/health endpoints legitimately return only 2xx; keep as a nudge.
+  operation-4xx-response: warn
+  # Fail if any schema `examples` value does not match its schema, so the
+  # examples the frontend reads stay trustworthy.
+  no-invalid-schema-examples: error

@@ -11,7 +11,7 @@ on:
         description: 'The registry to push images to'
         required: false
         type: string
-        default: public.ecr.aws/y2v0v6s7
+        default: 061717858829.dkr.ecr.us-east-1.amazonaws.com
   workflow_dispatch: # Manual trigger
     inputs:
       target_tag:
@@ -22,7 +22,7 @@ on:
         description: 'The registry to push images to'
         required: false
         type: string
-        default: public.ecr.aws/y2v0v6s7
+        default: 061717858829.dkr.ecr.us-east-1.amazonaws.com
 
 permissions:
   id-token: write
@@ -38,7 +38,7 @@ jobs:
       # If none is provided (as in pull_request), it defaults to github.sha for target_tag
       TARGET_TAG: ${{ (inputs.target_tag || github.event.inputs.target_tag) || github.sha }}
       # For REGISTRY, it falls back to the default value provided here if no input is available.
-      REGISTRY: ${{ (inputs.registry || github.event.inputs.registry) || 'public.ecr.aws/y2v0v6s7' }}
+      REGISTRY: ${{ (inputs.registry || github.event.inputs.registry) || '061717858829.dkr.ecr.us-east-1.amazonaws.com' }}
       # TF_REGION: us-east-1
 
     steps:
@@ -51,9 +51,10 @@ jobs:
           role-to-assume: arn:aws:iam::061717858829:role/ecr-pull-push-role
           aws-region: us-east-1
 
+      # Dev images include the enterprise components, so they go to a private registry.
       - name: Login to Amazon ECR
         run: |
-          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$REGISTRY"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -64,21 +65,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Tag Docker Images
+      - name: Build Docker Images
         env:
           COMMIT_HASH: ${{ github.sha }}
-          DOCKER_REGISTRY: registry.odigos.io
-        run: |
-          # Build images
-          make build-images TAG=${COMMIT_HASH}
-
-          # Tag images for public ECR
-          docker tag ${DOCKER_REGISTRY}/odigos-collector:${COMMIT_HASH} public.ecr.aws/y2v0v6s7/odigos-collector:${COMMIT_HASH}
-          docker tag ${DOCKER_REGISTRY}/odigos-instrumentor:${COMMIT_HASH} public.ecr.aws/y2v0v6s7/odigos-instrumentor:${COMMIT_HASH}
-          docker tag ${DOCKER_REGISTRY}/odigos-ui:${COMMIT_HASH} public.ecr.aws/y2v0v6s7/odigos-ui:${COMMIT_HASH}
-          docker tag ${DOCKER_REGISTRY}/odigos-autoscaler:${COMMIT_HASH} public.ecr.aws/y2v0v6s7/odigos-autoscaler:${COMMIT_HASH}
-          docker tag ${DOCKER_REGISTRY}/odigos-odiglet:${COMMIT_HASH} public.ecr.aws/y2v0v6s7/odigos-odiglet:${COMMIT_HASH}
-
+          # odiglet and agents download private instrumentation repos.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+        run: make build-images TAG=${COMMIT_HASH}
 
       - uses: ko-build/setup-ko@v0.9
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
@@ -87,19 +79,14 @@ jobs:
       - name: Build CLI Image
         env:
           COMMIT_HASH: ${{ github.sha }}
-          DOCKER_REGISTRY: registry.odigos.io
-        run: |
-          make build-cli-image TAG=${COMMIT_HASH}
-          docker tag ${DOCKER_REGISTRY}/odigos-cli:${COMMIT_HASH} public.ecr.aws/y2v0v6s7/odigos-cli:${COMMIT_HASH}
-
+        run: make build-cli-image TAG=${COMMIT_HASH}
 
       - name: Push Docker Images to ECR
         env:
           COMMIT_HASH: ${{ github.sha }}
         run: |
-          docker push public.ecr.aws/y2v0v6s7/odigos-collector:${COMMIT_HASH}
-          docker push public.ecr.aws/y2v0v6s7/odigos-instrumentor:${COMMIT_HASH}
-          docker push public.ecr.aws/y2v0v6s7/odigos-ui:${COMMIT_HASH}
-          docker push public.ecr.aws/y2v0v6s7/odigos-autoscaler:${COMMIT_HASH}
-          docker push public.ecr.aws/y2v0v6s7/odigos-odiglet:${COMMIT_HASH}
-          docker push public.ecr.aws/y2v0v6s7/odigos-cli:${COMMIT_HASH}
+          for image in odigos-enterprise-collector odigos-enterprise-instrumentor odigos-enterprise-ui odigos-enterprise-odiglet odigos-enterprise-agents odigos-enterprise-insights odigos-autoscaler odigos-cli; do
+            aws ecr describe-repositories --repository-names "$image" >/dev/null 2>&1 || aws ecr create-repository --repository-name "$image" >/dev/null
+            docker tag "registry.odigos.io/$image:${COMMIT_HASH}" "$REGISTRY/$image:${COMMIT_HASH}"
+            docker push "$REGISTRY/$image:${COMMIT_HASH}"
+          done

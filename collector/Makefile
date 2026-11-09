@@ -30,23 +30,10 @@ download_builder:
 		chmod +x $(BUILDER); \
 	fi
 
-.PHONY: genodigoscol
-genodigoscol: download_builder
-    # GOWORK=off is needed to avoid pulling errors from other unrelated workspaces modules
-	GOWORK=off $(BUILDER) --ldflags="-checklinkname=0" --config builder-config.yaml --skip-compilation
-
 .PHONY: test-odigostailsamplingprocessor
 test-odigostailsamplingprocessor:
 	@echo "Running tests for odigostailsamplingprocessor at $(TAILSAMPLING_PROCESSOR_DIR)"
 	cd $(TAILSAMPLING_PROCESSOR_DIR) && GOOS=$(HOST_GOOS) GOARCH=$(HOST_GOARCH) $(GOCMD) test ./...
-
-.PHONY: build-odigoscol
-build-odigoscol: download_builder test-odigostailsamplingprocessor
-	GOWORK=off $(BUILDER) \
-	--ldflags="-s -w -checklinkname=0" \
-	--config builder-config.yaml \
-	--skip-generate \
-	--skip-get-modules
 
 .PHONY: install-tools
 install-tools:
@@ -73,7 +60,7 @@ generate: install-tools
 	# GIT_WORK_TREE (while keeping GIT_DIR pointing to the real repo .git).
 	# This avoids creating any temporary go.mod files.
 	@REPO_ROOT="$$(git rev-parse --show-toplevel)"; \
-	find . -type f -name 'metadata.yaml' -print0 | while IFS= read -r -d '' META_FILE; do \
+	find . -type f -name 'metadata.yaml' ! -path './enterprise/*' -print0 | while IFS= read -r -d '' META_FILE; do \
 		META_DIR="$$(dirname "$$META_FILE")"; \
 		MOD_ROOT="$$META_DIR"; \
 		while [ "$$MOD_ROOT" != "." ] && [ "$$MOD_ROOT" != "/" ] && [ ! -f "$$MOD_ROOT/go.mod" ]; do \
@@ -88,13 +75,14 @@ generate: install-tools
 	done
 	$(MAKE) fmt
 
-ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -E '^./' | grep -v "licenses")
+# enterprise/ holds the collector imported from odigos-enterprise, which has its own build until the two are merged.
+ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -E '^./' | grep -v "licenses" | grep -v '^./enterprise/')
 .PHONY: fmt
 fmt: $(ALL_GO_MOD_DIRS:%=fmt/%)
 fmt/%: install-tools
 	cd $* && $(GOBIN)/goimports -w -local github.com/odigos-io ./
 
-ALL_GO_MODS := $(shell find . -type f -name 'go.mod' ! -path './exporters/googlecloudstorageexporter/*' ! -path './exporters/azureblobstorageexporter/*' ! -path './internal/tools/*' ! -path './odigosotelcol/*' | sort | grep -v "LICENSES")
+ALL_GO_MODS := $(shell find . -type f -name 'go.mod' ! -path './exporters/googlecloudstorageexporter/*' ! -path './exporters/azureblobstorageexporter/*' ! -path './internal/tools/*' ! -path './enterprise/*' | sort | grep -v "LICENSES")
 GO_MODS_TO_TEST := $(ALL_GO_MODS:%=test/%)
 
 .PHONY: test
@@ -108,13 +96,3 @@ go-licenses:
 	mkdir -p $(TOOLS_BIN_DIR)
 	GOBIN=$(TOOLS_BIN_DIR) go install github.com/google/go-licenses@latest
 
-.PHONY: licenses
-licenses: go-licenses
-	# `github.com/segmentio/asm` is licensed under MIT-0 (MIT No Attribution),
-	# which is a permissive open-source license. However, `go-licenses` does not automatically
-	# detect its license file in subpackages, so we explicitly ignore it to prevent errors.
-	# we're using the same pattern as in the frontend/Makefile
-	@if [ -d "$(PWD)/odigosotelcol/licenses" ]; then \
-		rm -rf $(PWD)/odigosotelcol/licenses; \
-	fi
-	cp LICENSE odigosotelcol/. && cd odigosotelcol && $(TOOLS_BIN_DIR)/go-licenses save . --save_path=licenses --ignore=github.com/segmentio/asm

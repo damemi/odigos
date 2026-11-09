@@ -3,6 +3,15 @@
 name: "Chaos Tests"
 description: "Chaos tests entrypoint"
 
+inputs:
+  onprem-token:
+    description: "Odigos on-prem token the test installs Odigos with"
+    required: true
+  registry:
+    description: "Private ECR registry holding the dev images; the caller must have AWS credentials that can pull from it"
+    required: false
+    default: 061717858829.dkr.ecr.us-east-1.amazonaws.com
+
 runs:
   using: "composite"
   steps:
@@ -25,8 +34,21 @@ runs:
     - name: Build Odigos CLI
       uses: ./.github/actions/build/cli
 
+    - name: Create image pull secret
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+      run: |
+        kubectl create namespace odigos-test
+        kubectl create secret docker-registry odigos-ecr-pull -n odigos-test \
+          --docker-server="$REGISTRY" --docker-username=AWS \
+          --docker-password="$(aws ecr get-login-password --region us-east-1)"
+
     - name: Run Chaos Tests
       shell: bash
+      env:
+        ODIGOS_API_KEY: ${{ inputs.onprem-token }}
+        IMAGE_PREFIX: ${{ inputs.registry }}
       run: |
         export COMMIT_HASH="${GITHUB_SHA}"
         chainsaw test tests/chaos/network-latency/leader-election

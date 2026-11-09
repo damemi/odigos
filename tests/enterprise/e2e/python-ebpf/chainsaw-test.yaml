@@ -1,0 +1,190 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: python-ebpf
+spec:
+  description: |
+    This e2e test verifies the python-ebpf distro, chosen for Python workloads by installing with
+    instrumentationVersion=v2:
+    - the instrumentation-v2 profile's rule picks python-ebpf for Python workloads
+    - the odiglet attaches to inventory's running Python process, with no pod restart
+    - the instance is reported healthy
+    - with_wasp: the same, through wasp's write path (ODIGOS_FORCE_WASP)
+    - inventory's spans come from python-ebpf only, and continue the trace of the Java frontend
+  skipDelete: true
+  steps:
+    - name: Prepare destination
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/simple-trace-db-deployment.yaml
+
+    - name: Install - Simple Demo Apps
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/install-simple-demo.yaml
+
+    - name: Install Odigos
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              echo "Installing Odigos with tag $IMAGE_TAG"
+              ../../common/scripts/helm-install.sh --set instrumentationVersion=v2
+              # The with_wasp job forces python-ebpf onto its wasp write path, which kernels under
+              # lockdown take; the CI kernel would otherwise use bpf_probe_write_user.
+              if [ "$WASP_ENABLED" = "true" ]; then
+                kubectl set env daemonset/odiglet -n odigos-test -c odiglet ODIGOS_FORCE_WASP=true
+                kubectl rollout status daemonset/odiglet -n odigos-test --timeout=3m
+              fi
+              ../../common/verify_odigos_installation.sh odigos-test
+        - assert:
+            timeout: 4m
+            file: ../../common/assert/odigos-installed.yaml
+      catch:
+        - script:
+            content: |
+              kubectl describe pods -n odigos-test
+
+    - name: Assert Trace DB is up
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-trace-db-running.yaml
+
+    - name: Assert - Simple Demo Apps Installed
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
+
+    # The no-restart check below compares against this pod.
+    - name: Record Inventory Pod
+      try:
+        - script:
+            timeout: 30s
+            content: |
+              kubectl get pods -n default -l app=inventory -o jsonpath='{.items[*].metadata.uid}' > /tmp/python-ebpf-inventory-uid
+              echo "inventory pod uid: $(cat /tmp/python-ebpf-inventory-uid)"
+              test -n "$(cat /tmp/python-ebpf-inventory-uid)"
+
+    - name: Instrumentation v2 Profile Applied
+      try:
+        - assert:
+            timeout: 2m
+            file: instrumentation-v2-rule.yaml
+      catch:
+        - script:
+            content: |
+              kubectl get configmap odigos-configuration -n odigos-test -o yaml
+              kubectl get instrumentationrules -n odigos-test -o yaml
+
+    - name: Instrument Namespace
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/instrument-default-ns.yaml
+
+    - name: Assert Runtime Detected
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-demo-runtime-detected.yaml
+
+    - name: Add Destination
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/add-simple-trace-db-destination.yaml
+
+    - name: Pipeline ready
+      try:
+        - assert:
+            timeout: 1m30s
+            file: ../../common/assert/pipeline-ready.yaml
+
+    - name: Inventory Instrumented By python-ebpf
+      try:
+        - assert:
+            timeout: 2m
+            file: inventory-python-ebpf.yaml
+      catch:
+        - script:
+            content: |
+              kubectl get instrumentationconfig deployment-inventory -n default -o yaml
+              kubectl get instrumentationinstances -n default -o yaml
+              kubectl describe pods -n default -l app=inventory
+        - podLogs:
+            selector: app.kubernetes.io/name=odiglet
+            namespace: odigos-test
+            tail: 200
+
+    - name: Inventory Pod Not Restarted
+      try:
+        - script:
+            timeout: 30s
+            content: |
+              before=$(cat /tmp/python-ebpf-inventory-uid)
+              after=$(kubectl get pods -n default -l app=inventory -o jsonpath='{.items[*].metadata.uid}')
+              echo "inventory pod uid before: $before, after: $after"
+              test "$before" = "$after"
+      catch:
+        - script:
+            content: |
+              kubectl get pods -n default -l app=inventory -o wide
+              kubectl get events -n default --field-selector involvedObject.kind=Pod
+
+    - name: Assert simple demo apps ready
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
+
+    # The first request through a freshly instrumented java app can't propagate context (http client
+    # instrumentations load lazily on first use), so traffic repeats until inventory's span
+    # continues a frontend trace.
+    - name: Traffic Until inventory Continues The Frontend Trace
+      try:
+        - script:
+            timeout: 4m
+            content: |
+              script=$(mktemp)
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
+              job=../../../../tests/common/apply/generate-traffic-job.yaml
+
+              while true; do
+                kubectl apply -f "$job"
+                kubectl wait --for=condition=complete -f "$job" --timeout=1m
+                kubectl delete -f "$job"
+                if bash "$script" python-ebpf-trace.yaml; then
+                  break
+                fi
+                sleep 2
+              done
+
+              rm -f "$script"
+      catch:
+        - script:
+            content: |
+              echo "inventory spans currently in the trace db:"
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/spans" \
+                | jq -c '[.[] | select(.serviceName == "inventory") | {name, kind, traceId, parentSpanId, distro: .resourceAttributes."telemetry.distro.name"}] | .[:20][]'
+        - podLogs:
+            selector: app.kubernetes.io/name=odiglet
+            namespace: odigos-test
+            tail: 200
+
+    - name: No Other Python Agent In inventory
+      try:
+        - script:
+            timeout: 1m
+            content: |
+              script=$(mktemp)
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
+              bash "$script" no-other-python-agent.yaml
+              status=$?
+              rm -f "$script"
+              exit $status
+      catch:
+        - script:
+            content: |
+              echo "inventory spans from another distro:"
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/spans" \
+                | jq -c '.[] | select(.serviceName == "inventory" and .resourceAttributes."telemetry.distro.name" != "python-ebpf") | {name, kind, resourceAttributes}' | head -20

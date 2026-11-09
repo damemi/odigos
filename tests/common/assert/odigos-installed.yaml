@@ -1,9 +1,18 @@
+# Enterprise assert for a successful Odigos install (includes ODIGOS_ONPREM_TOKEN on data-collection).
 apiVersion: v1
 kind: Namespace
 metadata:
   name: odigos-test
   labels:
     odigos.io/system-object: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: odigos-scheduler
+  namespace: odigos-test
+spec:
+  replicas: 0
 ---
 apiVersion: v1
 kind: Pod
@@ -78,6 +87,11 @@ spec:
               containerName: data-collection
               divisor: "0"
               resource: limits.cpu
+        - name: ODIGOS_ONPREM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: odigos-onprem-token
+              name: odigos-pro
       resources:
         requests:
           (memory != null): true

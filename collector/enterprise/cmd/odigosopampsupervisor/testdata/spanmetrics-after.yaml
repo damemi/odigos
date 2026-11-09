@@ -1,0 +1,25 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 127.0.0.1:14318
+exporters:
+  debug: {}
+connectors:
+  spanmetrics/action:
+    metrics_flush_interval: 100ms
+  forward/metrics/spanmetrics-action: {}
+service:
+  pipelines:
+    traces/main:
+      receivers: [otlp]
+      exporters: [debug]
+    traces/spanmetrics-input:
+      receivers: [otlp]
+      exporters: [spanmetrics/action]
+    metrics/spanmetrics-action:
+      receivers: [spanmetrics/action]
+      exporters: [forward/metrics/spanmetrics-action]
+    metrics/main:
+      receivers: [otlp, forward/metrics/spanmetrics-action]
+      exporters: [debug]

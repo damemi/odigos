@@ -14,6 +14,8 @@ jobs:
       - name: Generate CRD API docs
         run: |
           go work init && go work use -r .
+          # odiglet/enterprise needs private instrumentation repos this job cannot download.
+          go work edit -dropuse=./odiglet/enterprise
           cd api
           make docgen
       - name: Check for changes in CRD API docs

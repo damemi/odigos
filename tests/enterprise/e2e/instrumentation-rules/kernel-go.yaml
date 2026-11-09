@@ -1,0 +1,24 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test verifies that the kernel traces rule adds spans for the membership service (Go) under
+  the span its goroutine is serving: opening the tiers file under 'loadTiers', and running openssl,
+  with its command args, under 'checkIfMember'.
+query: |
+  length([?(
+    span.serviceName == 'membership' &&
+    span.name == 'syscall openat' &&
+    span.spanAttributes."file.path" == '/etc/odigos-demo/membership-tiers.json' &&
+    parent.span.name == 'loadTiers'
+  )]) > `0`
+
+  &&
+
+  length([?(
+    span.serviceName == 'membership' &&
+    span.name == 'exec openssl' &&
+    span.spanAttributes."process.command_args" == `["openssl", "rand", "-hex", "4"]` &&
+    parent.span.name == 'checkIfMember'
+  )]) > `0`
+expected:
+  minimum: 1

@@ -1,0 +1,14 @@
+apiVersion: e2e.tests.odigos.io/v1
+kind: TraceTest
+description: |
+  This test verifies that the http.request.header.odigos-special-header attribute
+  is present in spans from membership (Go) and frontend (Java) services after applying
+  the HTTP headers collection instrumentation rule.
+query: |
+  length([?(
+    span.serviceName == 'membership' &&
+    span.spanAttributes."http.request.header.odigos-special-header" &&
+    contains(span.spanAttributes."http.request.header.odigos-special-header", 'membership-service')
+  )]) > `0`
+expected:
+  count: 1

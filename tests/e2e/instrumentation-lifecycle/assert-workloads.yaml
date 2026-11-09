@@ -50,8 +50,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   annotations:
-    deployment.kubernetes.io/revision: '2' # deployment spec changed when odigos resource was added
-  generation: 2 # deployment spec changed when odigos resource was added
+    deployment.kubernetes.io/revision: '1' # the enterprise Java agent attaches without restarting the workload
+  generation: 1 # the enterprise Java agent attaches without restarting the workload
   labels:
     app: java-supported-version
   name: java-supported-version
@@ -62,7 +62,7 @@ spec:
       app: java-supported-version
 status:
   availableReplicas: 1
-  observedGeneration: 2 # deployment spec changed when odigos resource was added
+  observedGeneration: 1
   readyReplicas: 1
   replicas: 1
   updatedReplicas: 1

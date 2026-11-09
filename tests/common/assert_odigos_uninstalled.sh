@@ -42,7 +42,7 @@ PODS_WITH_ODIGOS=$(kubectl get pods -A -o json | jq -r '
     select(
         any(.metadata.labels | keys[]; startswith("odigos.io/")) or
         any((.spec.affinity // {}).nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution.nodeSelectorTerms[]?.matchExpressions[]?; 
-            .key == "odigos.io/odiglet-oss-installed")
+            .key == "odigos.io/odiglet-oss-installed" or .key == "odigos.io/odiglet-enterprise-installed")
     ) | 
     .metadata.namespace + "/" + .metadata.name' 2>/dev/null || true)
 

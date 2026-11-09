@@ -62,5 +62,5 @@ jobs:
         with:
           instrumentation_agent: ${{ steps.in.outputs.instrumentation_agent }}
           version: ${{ steps.in.outputs.version }}
-          make_dir: odiglet
+          make_dir: odiglet/enterprise
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}

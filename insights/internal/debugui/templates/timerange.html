@@ -1,0 +1,25 @@
+{{define "timeRangePicker"}}
+<details class="tr-picker">
+  <summary class="tr-summary" title="Change findings lookback">
+    <span class="tr-prefix">Lookback</span>
+    <span class="tr-value">{{.Label}}</span>
+    <span class="tr-caret" aria-hidden="true">▾</span>
+  </summary>
+  <div class="tr-menu">
+    {{range .Presets}}
+    <a class="tr-item{{if .Active}} active{{end}}" href="{{.Href}}">{{.Label}}</a>
+    {{end}}
+    <div class="tr-sep"></div>
+    <form class="tr-custom" method="GET">
+      {{range $name, $value := .HiddenFields}}
+      <input type="hidden" name="{{$name}}" value="{{$value}}">
+      {{end}}
+      <div class="tr-custom-title">Custom range</div>
+      <label>From <input type="date" name="from" value="{{.FromDate}}" required></label>
+      <label>To <input type="date" name="to" value="{{.ToDate}}" required></label>
+      <p class="hint" style="margin:6px 0 0;">Max 120 days.</p>
+      <button type="submit" class="btn btn-primary" style="margin-top:8px;">Apply</button>
+    </form>
+  </div>
+</details>
+{{end}}

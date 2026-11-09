@@ -36,11 +36,12 @@ spec:
             content: |
               # The pwd is the directory of this file, so we have to walk up to the project root to find the helm chart
               P="../../.."
-              helm upgrade --install odigos $P/helm/odigos --create-namespace --namespace odigos-test \
-                --set image.tag=e2e-test \
+              helm upgrade --install odigos $P/helm/odigos --set onPremToken="$ODIGOS_API_KEY" --create-namespace --namespace odigos-test \
+                --set image.tag=$IMAGE_TAG \
                 --set nodeSelector."kubernetes\.io/os"=linux \
                 --set collectorNode.memoryLimit=560 \
-                --set collectorNode.limitCPUm=550
+                --set collectorNode.limitCPUm=550 \
+                $ODIGOS_INSTALL_FLAGS
               kubectl label namespace odigos-test odigos.io/system-object="true"
     - name: Verify Odigos Installation
       try:
@@ -51,8 +52,8 @@ spec:
               export ACTUAL_VERSION=$(../../../cli/odigos version --cluster)
               echo "Actual Version: $ACTUAL_VERSION"
 
-              if [ "$ACTUAL_VERSION" != "e2e-test" ]; then
-                echo "❌ Odigos version is not e2e-test, got $ACTUAL_VERSION"
+              if [ "$ACTUAL_VERSION" != "$IMAGE_TAG" ]; then
+                echo "❌ Odigos version is not $IMAGE_TAG, got $ACTUAL_VERSION"
                 exit 1
               fi
 
@@ -129,6 +130,19 @@ spec:
         - assert:
             timeout: 1m30s
             file: ../../common/assert/simple-demo-instrumented-full.yaml
+
+    # The first request through a freshly instrumented Java app can't propagate context: its HTTP client
+    # instrumentations load on first use. /rate only reaches currency, so the warm-up does not affect the trace assertions.
+    - name: Warm Up Java Frontend
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
+              kubectl run warmup-traffic -n default --image=curlimages/curl:8.4.0 --restart=Never --command -- \
+                sh -c 'for i in 1 2 3; do curl -s -o /dev/null "http://frontend:8080/rate/usd-eur"; sleep 2; done'
+              kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/warmup-traffic -n default --timeout=90s
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
 
     - name: Generate Traffic
       try:

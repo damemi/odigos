@@ -22,7 +22,7 @@ spec:
       try:
         - script:
             content: |
-              ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test
+              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test
               ../../common/verify_odigos_installation.sh odigos-test
               kubectl label namespace odigos-test odigos.io/system-object="true"
             timeout: 5m
@@ -100,4 +100,15 @@ spec:
                   break
                 fi
                 sleep 1
+              done
+      catch:
+        - script:
+            timeout: 2m
+            content: |
+              # Run each clause of the query on its own to show which expected service is missing.
+              yq e '.query' initial-trace-validation.yaml | sed -e 's/[[:space:]]*||[[:space:]]*$//' -e '/^[[:space:]]*$/d' | while IFS= read -r clause; do
+                f=$(mktemp).yaml
+                printf 'apiVersion: e2e.tests.odigos.io/v1\nkind: TraceTest\ndescription: clause\nquery: |\n  %s\nexpected:\n  minimum: 1\n' "$clause" > "$f"
+                if ../../common/simple_trace_db_query_runner.sh "$f" >/dev/null 2>&1; then echo "MATCH:    $clause"; else echo "NO MATCH: $clause"; fi
+                rm -f "$f"
               done
