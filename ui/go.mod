@@ -389,7 +389,7 @@ replace gopkg.in/yaml.v3 => github.com/colega/go-yaml-yaml v0.0.0-20220720105220
 
 replace k8s.io/cloud-provider => k8s.io/cloud-provider v0.35.0
 
-replace k8s.io/kubelet => k8s.io/kubelet v0.35.0
+replace k8s.io/kubelet => k8s.io/kubelet v0.34.1
 
 replace github.com/odigos-io/odigos/actions => ../actions
 
