@@ -5,6 +5,7 @@ module odigos.io/opentelemetry-collector/cmd/odigosotelcol
 go 1.26.4
 
 require (
+	github.com/observiq/bindplane-otel-contrib/exporter/azureloganalyticsexporter v1.13.0
 	github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.159.0
 	github.com/odigos-io/odigos/collector/enterprise/exporters/odigosurltemplatizationexporter v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/collector/enterprise/extension/odigosconfigconnectorextension v0.0.0-00010101000000-000000000000
@@ -21,6 +22,7 @@ require (
 	github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor v0.159.0
 	github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor v0.159.0
 	github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor v0.159.0
+	github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor v0.159.0
 	github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.159.0
 	github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.159.0
 	github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v0.159.0
@@ -30,6 +32,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.159.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alibabacloudlogserviceexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awscloudwatchlogsexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsemfexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awss3exporter v0.159.0
@@ -155,10 +158,11 @@ require (
 	github.com/AthenZ/athenz v1.12.13 // indirect
 	github.com/Azure/azure-kusto-go/azkustodata v1.2.2 // indirect
 	github.com/Azure/azure-kusto-go/azkustoingest v1.2.2 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.22.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/data/aztables v1.4.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/monitor/ingestion/azlogs v1.1.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 v4.3.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.6.3 // indirect
@@ -289,6 +293,7 @@ require (
 	github.com/Showmax/go-fqdn v1.0.0 // indirect
 	github.com/alecthomas/participle/v2 v2.1.4 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
+	github.com/aliyun/aliyun-log-go-sdk v0.1.100 // indirect
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/antchfx/xmlquery v1.5.1 // indirect
 	github.com/antchfx/xpath v1.3.8 // indirect
@@ -335,6 +340,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cenkalti/backoff/v7 v7.0.0 // indirect
@@ -379,6 +385,7 @@ require (
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
+	github.com/go-kit/kit v0.12.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
@@ -510,6 +517,8 @@ require (
 	github.com/mschoch/smat v0.2.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
+	github.com/observiq/bindplane-otel-contrib/internal/exporterutils v1.13.0 // indirect
+	github.com/observiq/bindplane-otel-contrib/pkg/expr v1.13.0 // indirect
 	github.com/odigos-io/go-rtml v0.0.1 // indirect
 	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000 // indirect
@@ -802,6 +811,8 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporte
 replace github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => ../../processors/odigostrafficmetrics
 
 replace github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor => ../../processors/odigostailsamplingprocessor
+
+replace github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor => ../../processors/odigosgroupbytraceprocessor
 
 replace github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor => ../../processors/odigosurltemplateprocessor
 

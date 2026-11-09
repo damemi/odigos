@@ -33,6 +33,8 @@ import (
 	awsxrayexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsxrayexporter"
 	azuredataexplorerexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuredataexplorerexporter"
 	azuremonitorexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuremonitorexporter"
+	alibabacloudlogserviceexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alibabacloudlogserviceexporter"
+	azureloganalyticsexporter "github.com/observiq/bindplane-otel-contrib/exporter/azureloganalyticsexporter"
 	clickhouseexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/clickhouseexporter"
 	cassandraexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/cassandraexporter"
 	coralogixexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/coralogixexporter"
@@ -77,6 +79,7 @@ import (
 	odigosconfigvmextension "github.com/odigos-io/odigos/collector/enterprise/extension/odigosconfigvmextension"
 	odigosconfigconnectorextension "github.com/odigos-io/odigos/collector/enterprise/extension/odigosconfigconnectorextension"
 	odigostailsamplingprocessor "github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor"
+	odigosgroupbytraceprocessor "github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor"
 	odigostracestateprocessor "github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor"
 	odigosconditionalattributes "odigosconditionalattributes"
 	odigossqldboperationprocessor "odigossqldboperationprocessor"
@@ -226,6 +229,8 @@ func components() (otelcol.Factories, error) {
 		awsxrayexporter.NewFactory(),
 		azuredataexplorerexporter.NewFactory(),
 		azuremonitorexporter.NewFactory(),
+		alibabacloudlogserviceexporter.NewFactory(),
+		azureloganalyticsexporter.NewFactory(),
 		clickhouseexporter.NewFactory(),
 		cassandraexporter.NewFactory(),
 		coralogixexporter.NewFactory(),
@@ -273,6 +278,8 @@ func components() (otelcol.Factories, error) {
 		awsxrayexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsxrayexporter v0.159.0",
 		azuredataexplorerexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuredataexplorerexporter v0.159.0",
 		azuremonitorexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuremonitorexporter v0.159.0",
+		alibabacloudlogserviceexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alibabacloudlogserviceexporter v0.159.0",
+		azureloganalyticsexporter.NewFactory().Type(): "github.com/observiq/bindplane-otel-contrib/exporter/azureloganalyticsexporter v1.13.0",
 		clickhouseexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/clickhouseexporter v0.159.0",
 		cassandraexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/cassandraexporter v0.159.0",
 		coralogixexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/coralogixexporter v0.159.0",
@@ -305,6 +312,7 @@ func components() (otelcol.Factories, error) {
 
 	factories.Processors, err = otelcol.MakeFactoryMap[processor.Factory](
 		odigostailsamplingprocessor.NewFactory(),
+		odigosgroupbytraceprocessor.NewFactory(),
 		odigostracestateprocessor.NewFactory(),
 		odigosconditionalattributes.NewFactory(),
 		odigossqldboperationprocessor.NewFactory(),
@@ -344,6 +352,7 @@ func components() (otelcol.Factories, error) {
 	}
 	factories.ProcessorModules = makeModulesMap(factories.Processors, map[component.Type]string{
 		odigostailsamplingprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.159.0",
+		odigosgroupbytraceprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor v0.159.0",
 		odigostracestateprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v0.159.0",
 		odigosconditionalattributes.NewFactory().Type(): "odigosconditionalattributes v0.159.0",
 		odigossqldboperationprocessor.NewFactory().Type(): "odigossqldboperationprocessor v0.159.0",

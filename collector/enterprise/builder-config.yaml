@@ -40,6 +40,8 @@ exporters:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsxrayexporter v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuredataexplorerexporter v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuremonitorexporter v0.159.0
+  - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alibabacloudlogserviceexporter v0.159.0
+  - gomod: github.com/observiq/bindplane-otel-contrib/exporter/azureloganalyticsexporter v1.13.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/clickhouseexporter v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/cassandraexporter v0.159.0
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/coralogixexporter v0.159.0
@@ -71,6 +73,7 @@ exporters:
 
 processors:
   - gomod: github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.159.0
+  - gomod: github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor v0.159.0
   - gomod: github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v0.159.0
   - gomod: odigosconditionalattributes v0.159.0
   - gomod: odigossqldboperationprocessor v0.159.0
@@ -155,6 +158,7 @@ replaces:
   - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter => ../../exporters/mockdestinationexporter
   - github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics => ../../processors/odigostrafficmetrics
   - github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor => ../../processors/odigostailsamplingprocessor
+  - github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor => ../../processors/odigosgroupbytraceprocessor
   - github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor => ../../processors/odigosurltemplateprocessor
   - github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor => ../../processors/odigoslogsresourceattrsprocessor
   - github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor => ../../processors/odigosextractattributeprocessor
