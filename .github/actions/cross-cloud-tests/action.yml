@@ -42,7 +42,8 @@ runs:
           *) TEST_DIR="tests/e2e/$SCENARIO" ;;
         esac
         SCENARIO_SLUG="${SCENARIO//\//-}"
-        CLUSTER_NAME="${SCENARIO_SLUG}-${{ inputs.platform }}-${GITHUB_RUN_ID}"
+        # Without the enterprise/ prefix: EKS name prefixes are limited to 38 characters and AKS node resource group names to 80.
+        CLUSTER_NAME="${SCENARIO##*/}-${{ inputs.platform }}-${GITHUB_RUN_ID}"
         echo "TF_DIR=$TF_DIR" >> "$GITHUB_ENV"
         echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
         echo "SCENARIO_SLUG=$SCENARIO_SLUG" >> "$GITHUB_ENV"
