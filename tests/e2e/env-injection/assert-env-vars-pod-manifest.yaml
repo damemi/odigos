@@ -11,7 +11,7 @@ spec:
       name: inventory
       # We are checking that in case valueFrom exists we're appending Odigos additions to the ORIGINAL_{envar}
       (env[?name=='PYTHONPATH']):
-      - value: $(ORIGINAL_PYTHONPATH):/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
+      - value: $(ORIGINAL_PYTHONPATH):/var/odigos/python-ebpf:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation:/var/odigos/python
       (env[?name=='ORIGINAL_PYTHONPATH']):
       - valueFrom:
           configMapKeyRef:
