@@ -835,6 +835,8 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/connector/serv
 
 replace github.com/odigos-io/odigos/common => ../../../common
 
+replace github.com/odigos-io/odigos/odigosauth => ../../../odigosauth
+
 replace go.opentelemetry.io/collector/config/configgrpc => ../../config/configgrpc
 
 replace github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension => ../../extension/odigosconfigk8sextension
@@ -848,7 +850,5 @@ replace golang.org/x/mod v0.39.0 => golang.org/x/mod v0.40.0
 replace golang.org/x/net v0.58.0 => golang.org/x/net v0.60.0
 
 replace google.golang.org/grpc v1.83.1 => google.golang.org/grpc v1.83.2
-
-replace github.com/odigos-io/odigos/odigosauth => ../../../odigosauth
 
 exclude github.com/knadh/koanf v1.5.0
