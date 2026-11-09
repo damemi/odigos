@@ -2,4 +2,4 @@ apiVersion: v1
 kind: Node
 metadata:
   labels:
-    odigos.io/odiglet-oss-installed: "true"
+    odigos.io/odiglet-enterprise-installed: "true"

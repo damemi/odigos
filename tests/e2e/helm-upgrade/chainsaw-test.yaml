@@ -53,11 +53,10 @@ spec:
                 --clobber
 
               echo "🚀 Installing Odigos $IMAGE_TAG from Helm Chart..."
-              helm upgrade --install odigos ./odigos-latest-chart.tgz \
+              helm upgrade --install odigos ./odigos-latest-chart.tgz --set onPremToken="$ODIGOS_API_KEY" \
                 --create-namespace \
                 --namespace odigos-test \
-                --set nodeSelector."kubernetes\.io/os"=linux \
-                --set imagePrefix=ghcr.io/odigos-io
+                --set nodeSelector."kubernetes\.io/os"=linux
               kubectl label namespace odigos-test odigos.io/system-object="true"
         - assert:
             timeout: 4m

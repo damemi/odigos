@@ -93,8 +93,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Odigos Images
+        env:
+          # odiglet and agents download private instrumentation repos.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
           TAG=e2e-test make build-images
+          TAG=e2e-test EXTENDED=true make build-odiglet build-agents
           docker save -o odigos-images.tar $(docker images --format "{{.Repository}}:{{.Tag}}" | grep "odigos")
 
       - uses: ko-build/setup-ko@v0.9
@@ -203,6 +207,7 @@ jobs:
           kubernetes-version: ${{ matrix.kube-version }}
           test-scenario: ${{ matrix.test-scenario }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
 
   additional-kubernetes-tests:
     needs: [prepare-additional-kubernetes-versions, build-odigos-images, build-cli]
@@ -247,3 +252,4 @@ jobs:
           kubernetes-version: ${{ matrix.kube-version }}
           test-scenario: ${{ matrix.test-scenario }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}

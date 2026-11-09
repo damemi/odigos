@@ -21,7 +21,7 @@ spec:
         - script:
             timeout: 5m
             content: |
-              ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test --set instrumentor.mountMethod=k8s-init-container
+              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test --set instrumentor.mountMethod=k8s-init-container
               kubectl label namespace odigos-test odigos.io/system-object="true"
               ../../common/verify_odigos_installation.sh odigos-test
         - assert:
@@ -132,7 +132,7 @@ spec:
             timeout: 2m
             content: |
               # Upgrade existing installation to CSI driver mount method
-              ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test --set instrumentor.mountMethod=k8s-csi-driver --set odiglet.odiglet.privileged=true
+              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test --set instrumentor.mountMethod=k8s-csi-driver --set odiglet.odiglet.privileged=true
 
     - name: '[3 - CSI Driver Test] Assert config changed successfully'
       try:

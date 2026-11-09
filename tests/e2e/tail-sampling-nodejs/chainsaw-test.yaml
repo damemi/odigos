@@ -30,7 +30,7 @@ spec:
               # Gateway tail sampling enabled. Short aggregation wait keeps e2e latency low
               # (synthetic-apps tail-sampling uses 2s). Enable own-metrics VictoriaMetrics
               # for sampling counter asserts (disabled by default in the chart).
-              helm upgrade --install odigos ../../../helm/odigos --create-namespace --namespace odigos-test \
+              helm upgrade --install odigos ../../../helm/odigos --set onPremToken="$ODIGOS_API_KEY" --create-namespace --namespace odigos-test \
                 --set image.tag=e2e-test \
                 --set nodeSelector."kubernetes\.io/os"=linux \
                 --set sampling.dryRun=true \

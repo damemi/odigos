@@ -14,7 +14,7 @@ metadata:
 spec:
   containers:
     - name: manager
-      image: registry.odigos.io/odigos-instrumentor:e2e-test
+      image: registry.odigos.io/odigos-enterprise-instrumentor:e2e-test
 status:
   containerStatuses:
     - name: manager
@@ -41,7 +41,7 @@ spec:
     - resources: {}
       securityContext:
         privileged: false
-      image: registry.odigos.io/odigos-odiglet:e2e-test
+      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
   (containers[?name=='data-collection']):
     - securityContext:
         privileged: false
@@ -115,7 +115,7 @@ spec:
     - resources: {}
       securityContext:
         privileged: false
-      image: registry.odigos.io/odigos-odiglet:e2e-test
+      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
   (containers[?name=='data-collection']):
     - securityContext:
         privileged: false
@@ -180,7 +180,7 @@ metadata:
 spec:
   containers:
     - name: gateway
-      image: registry.odigos.io/odigos-collector:e2e-test
+      image: registry.odigos.io/odigos-enterprise-collector:e2e-test
 status:
   containerStatuses:
     - name: gateway

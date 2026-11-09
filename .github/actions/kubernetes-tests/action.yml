@@ -11,6 +11,9 @@ inputs:
   github-token:
     description: "Token with packages: read (the GITHUB_TOKEN), written to ~/.npmrc so the UI test's yarn install can fetch the UI Kit from GitHub Packages"
     required: true
+  onprem-token:
+    description: "Odigos on-prem token the tests install Odigos with (exported to chainsaw as ODIGOS_API_KEY)"
+    required: true
   supported-versions:
     description: >-
       JSON map of every supported Kubernetes version to its kind node image and minor version.
@@ -164,6 +167,7 @@ runs:
         LATEST_RELEASE_TAG: ${{ steps.get-latest-tag.outputs.LATEST_RELEASE_TAG }}
         GH_TOKEN: ${{ github.token }}
         TEST_SCENARIO: ${{ inputs.test-scenario }}
+        ODIGOS_API_KEY: ${{ inputs.onprem-token }}
         KUBERNETES_MINOR_VERSION: ${{ fromJSON(inputs.supported-versions)[inputs.kubernetes-version].minorVersion }}
         IS_HELM: ${{ inputs.test-scenario == 'helm-chart' || inputs.test-scenario == 'helm-upgrade' }}
       run: |

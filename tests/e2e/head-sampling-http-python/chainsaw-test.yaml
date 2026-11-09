@@ -26,7 +26,7 @@ spec:
             timeout: 5m
             content: |
               # pwd is tests/e2e/head-sampling-http-python — chart lives at repo root helm/odigos
-              helm upgrade --install odigos ../../../helm/odigos --create-namespace --namespace odigos-test \
+              helm upgrade --install odigos ../../../helm/odigos --set onPremToken="$ODIGOS_API_KEY" --create-namespace --namespace odigos-test \
                 --set image.tag=e2e-test \
                 --set nodeSelector."kubernetes\.io/os"=linux \
                 --set sampling.dryRun=true \
