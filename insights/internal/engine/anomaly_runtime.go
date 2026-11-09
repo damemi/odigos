@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // keepSampleFunc is Engine.keepSample as the runtimes see it. They are wired

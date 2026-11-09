@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // A service guardrail recommendation ("lock it down") is one card per service

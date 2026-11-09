@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Defaults remain as package consts for tests and migration seeds; runtime

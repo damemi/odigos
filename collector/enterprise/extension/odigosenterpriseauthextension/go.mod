@@ -1,4 +1,4 @@
-module github.com/odigos-io/odigos-enterprise/collector/extension/odigosenterpriseauthextension
+module github.com/odigos-io/odigos/collector/enterprise/extension/odigosenterpriseauthextension
 
 go 1.26.4
 
@@ -32,8 +32,8 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261103103244-989c24ca083f // indirect
-	github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.159.0 // indirect
@@ -51,4 +51,6 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
+replace github.com/odigos-io/odigos/common => ../../../../common
+
+replace github.com/odigos-io/odigos/odigosauth => ../../../../odigosauth

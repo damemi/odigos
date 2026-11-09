@@ -3,8 +3,8 @@ package engine
 import (
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // applyIdentityDimensions appends enabled low-cardinality dimensions from the

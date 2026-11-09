@@ -6,8 +6,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/histogram"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/engine/histogram"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // d3Latency scores a (sub-)transaction's entry-span latency (its end-to-end

@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper"
 	"go.opentelemetry.io/collector/processor/xprocessor"
 
-	"github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/processors/odigossymbolizeprocessor/internal/metadata"
 )
 
 // processorCapabilities is MutatesData: true because symbolization enriches the

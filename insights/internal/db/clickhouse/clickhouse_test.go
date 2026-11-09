@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/db/clickhouse"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/db/clickhouse/migrate"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/db/clickhouse/migrate"
+	"github.com/odigos-io/odigos/insights/internal/engine"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // defaultTestDSN points at the local dev container started for these tests.

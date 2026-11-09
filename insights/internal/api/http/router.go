@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/metrics"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // NewRouter builds the API's *gin.Engine wired to the repository, using the

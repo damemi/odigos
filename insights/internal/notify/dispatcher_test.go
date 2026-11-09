@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // memRepo is the slice of repo.Repository the dispatcher touches, in memory.

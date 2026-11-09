@@ -1,4 +1,4 @@
-module github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor
+module github.com/odigos-io/odigos/collector/enterprise/processors/odigossymbolizeprocessor
 
 go 1.26.2
 

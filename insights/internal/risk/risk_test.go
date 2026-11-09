@@ -3,7 +3,7 @@ package risk
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 func TestSeverityForScore(t *testing.T) {

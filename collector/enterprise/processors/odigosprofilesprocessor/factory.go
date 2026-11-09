@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper"
 	"go.opentelemetry.io/collector/processor/xprocessor"
 
-	"github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/processors/odigosprofilesprocessor/internal/metadata"
 )
 
 var processorCapabilities = consumer.Capabilities{MutatesData: true}

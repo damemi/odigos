@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"math"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // assessRisk turns the deviated classes and their evidence into a risk

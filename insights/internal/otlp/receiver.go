@@ -27,7 +27,7 @@ import (
 
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
+	"github.com/odigos-io/odigos/insights/internal/engine"
 )
 
 // Receiver implements coltracepb.TraceServiceServer. Incoming traces are

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 func TestExpandBlastRadius_VirtualClientIsLeaf(t *testing.T) {

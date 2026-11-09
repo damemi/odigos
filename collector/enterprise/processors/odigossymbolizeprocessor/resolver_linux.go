@@ -9,7 +9,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/odigos-io/odigos-enterprise/collector/processors/odigossymbolizeprocessor/internal/symbolize"
+	"github.com/odigos-io/odigos/collector/enterprise/processors/odigossymbolizeprocessor/internal/symbolize"
 )
 
 // nativeResolver symbolizes native frames against the on-disk ELF of a

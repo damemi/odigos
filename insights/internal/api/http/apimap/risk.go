@@ -1,8 +1,8 @@
 package apimap
 
 import (
-	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // FromAssessment maps a risk.Assessment (plus the resolved fire-at threshold) to

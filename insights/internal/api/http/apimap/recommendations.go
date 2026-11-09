@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos/insights/internal/engine"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Confidence thresholds. A recommendation is only ever produced above the

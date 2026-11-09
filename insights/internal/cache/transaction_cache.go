@@ -23,8 +23,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/metrics"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // WrapTransactions returns a repository that serves the transaction lookup

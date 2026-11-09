@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	api "github.com/odigos-io/odigos-enterprise/insights/api"
+	api "github.com/odigos-io/odigos/insights/api"
 )
 
 // serveOpenAPISpec is the GET /api/v1/openapi.yaml handler; it returns the

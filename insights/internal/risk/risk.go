@@ -13,7 +13,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Category is an outcome-oriented grouping of signals (what an attacker is

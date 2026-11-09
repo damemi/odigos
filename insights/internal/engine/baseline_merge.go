@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/histogram"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/engine/histogram"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // classMerger knows how to combine two stored baseline values of the same

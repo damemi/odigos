@@ -4,11 +4,11 @@
 package sinks
 
 import (
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/alertmanager"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/slack"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/splunk"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/webhook"
+	"github.com/odigos-io/odigos/insights/internal/notify"
+	"github.com/odigos-io/odigos/insights/internal/notify/sinks/alertmanager"
+	"github.com/odigos-io/odigos/insights/internal/notify/sinks/slack"
+	"github.com/odigos-io/odigos/insights/internal/notify/sinks/splunk"
+	"github.com/odigos-io/odigos/insights/internal/notify/sinks/webhook"
 )
 
 // NewRegistry returns the registry with every shipped backend registered.

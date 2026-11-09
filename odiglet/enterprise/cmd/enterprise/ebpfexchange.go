@@ -7,7 +7,7 @@ import (
 	cilumebpf "github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 
-	"github.com/odigos-io/odigos-enterprise/odiglet/pkg/ebpf/logcapture"
+	"github.com/odigos-io/odigos/odiglet/enterprise/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos/common/ebpf/ebpfmaps"
 	"github.com/odigos-io/odigos/common/ebpf/unixfd"
 	commonlogger "github.com/odigos-io/odigos/common/logger"

@@ -3,8 +3,8 @@ package notify
 import (
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // severityRank orders tiers for the min_severity filter.

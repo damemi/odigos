@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 
-	"github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/exporters/odigosurltemplatizationexporter/internal/metadata"
 )
 
 func NewFactory() exporter.Factory {

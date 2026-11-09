@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper"
 	"go.opentelemetry.io/collector/processor/xprocessor"
 
-	"github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/processors/odigosvmprofileattrsprocessor/internal/metadata"
 )
 
 // NewFactory returns a factory for the VM profile resource attributes processor.

@@ -9,7 +9,7 @@ import (
 
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // saturationTrace is one trace of a transaction whose call edges carry a

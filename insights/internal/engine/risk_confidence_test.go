@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 func TestMagnitudeConfidence(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 func d2Peers(hosts ...string) map[string]json.RawMessage {

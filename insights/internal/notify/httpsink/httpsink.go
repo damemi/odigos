@@ -15,7 +15,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
+	"github.com/odigos-io/odigos/insights/internal/notify"
 )
 
 // maxBodyBytes bounds how much of an error response is kept for the audit.

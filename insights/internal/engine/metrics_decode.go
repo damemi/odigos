@@ -5,8 +5,8 @@ import (
 
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Scope and metric names emitted by the vendored servicegraph connector. This

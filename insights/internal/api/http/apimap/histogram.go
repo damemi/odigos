@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/histogram"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos/insights/internal/engine/histogram"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // HistogramPresentation builds the chart-ready BaselineHistogram for metric

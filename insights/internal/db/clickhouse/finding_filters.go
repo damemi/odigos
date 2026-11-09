@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 const decisionEpochSQL = `toDateTime64('1970-01-01 00:00:00', 3)`

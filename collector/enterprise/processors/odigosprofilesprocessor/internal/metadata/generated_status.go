@@ -10,7 +10,7 @@ import (
 
 var (
 	Type      = component.MustNewType("odigosprofilesprocessor")
-	ScopeName = "github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor"
+	ScopeName = "github.com/odigos-io/odigos/collector/enterprise/processors/odigosprofilesprocessor"
 )
 
 const (

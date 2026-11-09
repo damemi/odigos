@@ -11,9 +11,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos/insights/internal/notify"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 const integrationsPath = "/debug/settings/integrations"

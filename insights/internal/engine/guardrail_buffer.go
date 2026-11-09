@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/metrics"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // guardrailBuffer accumulates guardrail-violation occurrences in memory, keyed

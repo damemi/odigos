@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // anomalyBuffer accumulates anomaly firings in memory, keyed by (transaction,

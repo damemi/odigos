@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/notify"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Case is one backend under test. Config must be a valid JSON config whose

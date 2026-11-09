@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/histogram"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/engine/histogram"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Compile-time check that the engine satisfies the backend-neutral seam.

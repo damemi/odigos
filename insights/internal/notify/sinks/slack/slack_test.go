@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinktest"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/notify"
+	"github.com/odigos-io/odigos/insights/internal/notify/sinktest"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 func TestContract(t *testing.T) {

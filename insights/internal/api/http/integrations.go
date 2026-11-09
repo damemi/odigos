@@ -11,11 +11,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apimap"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/api/http/apimap"
+	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos/insights/internal/notify"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 var errIntegrationsUnavailable = errors.New("integrations are not available yet")

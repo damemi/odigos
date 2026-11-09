@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // d6DBAccess scores against the database accesses a transaction makes, tracking

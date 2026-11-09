@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/ui/mcp/k8s"
+	"github.com/odigos-io/odigos/ui/mcp/k8s"
 )
 
 // TestToolsListReadOnly drives the real /mcp handler with a tools/list

@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
 
-	"github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/extension/odigosconfigvmextension/internal/metadata"
 )
 
 // Type is the extension's component type, for use with component.NewID.

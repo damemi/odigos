@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // Operator actions on guardrail recommendations. Every action is exposed through

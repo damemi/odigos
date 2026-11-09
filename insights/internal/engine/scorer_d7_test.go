@@ -7,7 +7,7 @@ import (
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/histogram"
+	"github.com/odigos-io/odigos/insights/internal/engine/histogram"
 )
 
 func httpTrace(attrs map[string]string) *Trace {

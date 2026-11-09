@@ -3,7 +3,7 @@ package engine
 import (
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // DefaultMinObservations is used when a policy has no conditions, so an

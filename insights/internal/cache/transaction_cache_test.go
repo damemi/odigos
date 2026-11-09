@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // countingRepo embeds the interface (so unused methods exist) and counts how

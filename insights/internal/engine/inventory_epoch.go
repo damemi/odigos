@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // The transaction-inventory generation guards write-behind buffers against an

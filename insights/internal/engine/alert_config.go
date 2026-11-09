@@ -13,7 +13,7 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // AlertConfig is a lock-free, in-memory snapshot of the alert policies indexed

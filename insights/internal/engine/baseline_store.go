@@ -9,8 +9,8 @@ import (
 
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/metrics"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // The in-memory baseline store keeps DB load tied to the number of learning

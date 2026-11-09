@@ -10,7 +10,7 @@ import (
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
+	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
 )
 
 // Span is the engine's flattened view of an OTLP span, keeping only the fields

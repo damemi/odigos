@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/processor/processortest"
 
-	managed "github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigconnectorextension"
+	managed "github.com/odigos-io/odigos/collector/enterprise/extension/odigosconfigconnectorextension"
 	sqlprocessor "github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor"
 	urlprocessor "github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor"
 )

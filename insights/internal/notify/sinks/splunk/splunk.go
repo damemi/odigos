@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/httpsink"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/notify/sinks/webhook"
+	"github.com/odigos-io/odigos/insights/internal/notify"
+	"github.com/odigos-io/odigos/insights/internal/notify/httpsink"
+	"github.com/odigos-io/odigos/insights/internal/notify/sinks/webhook"
 )
 
 // Type is the catalog id.

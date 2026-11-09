@@ -1,9 +1,9 @@
-module github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor
+module github.com/odigos-io/odigos/collector/enterprise/processors/odigosprofilesprocessor
 
 go 1.26.2
 
 require (
-	github.com/odigos-io/odigos/common v1.34.0-pre1.0.20260803114326-2a76b712ad1d
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.65.0
 	go.opentelemetry.io/collector/component/componenttest v0.159.0
@@ -11,7 +11,7 @@ require (
 	go.opentelemetry.io/collector/consumer v1.65.0
 	go.opentelemetry.io/collector/consumer/consumertest v0.159.0
 	go.opentelemetry.io/collector/consumer/xconsumer v0.159.0
-	go.opentelemetry.io/collector/pdata v1.65.0
+	go.opentelemetry.io/collector/pdata v1.67.0
 	go.opentelemetry.io/collector/pdata/pprofile v0.159.0
 	go.opentelemetry.io/collector/processor v1.65.0
 	go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper v0.159.0
@@ -43,7 +43,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/component/componentstatus v0.159.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.65.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.159.0 // indirect
 	go.opentelemetry.io/collector/pdata/testdata v0.159.0 // indirect
 	go.opentelemetry.io/collector/pipeline v1.65.0 // indirect
@@ -53,3 +53,5 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
+
+replace github.com/odigos-io/odigos/common => ../../../../common

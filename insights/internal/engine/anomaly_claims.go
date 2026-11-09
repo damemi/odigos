@@ -3,8 +3,8 @@ package engine
 import (
 	"encoding/json"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/metrics"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // anomalyClaims keeps one suspicious behaviour to one finding.

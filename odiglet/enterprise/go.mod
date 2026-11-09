@@ -1,4 +1,4 @@
-module github.com/odigos-io/odigos-enterprise/odiglet
+module github.com/odigos-io/odigos/odiglet/enterprise
 
 go 1.26.4
 
@@ -12,10 +12,10 @@ require (
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.17.1
 	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/common v1.40.0-pre1.0.20261108143013-08858490d0e0
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/deviceplugin v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/distros v1.40.0-pre1.0.20261108143013-08858490d0e0
-	github.com/odigos-io/odigos/instrumentation v1.40.0-pre1.0.20261108143013-08858490d0e0
+	github.com/odigos-io/odigos/distros v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/instrumentation v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/procdiscovery v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/python-ebpf v0.0.0-20261104125337-291ec51988a2
@@ -150,10 +150,10 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/odigos-io/odigos-device-plugin v1.19.8 // indirect
-	github.com/odigos-io/odigos/odiglet v1.40.0-pre1.0.20261108143013-08858490d0e0
-	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v1.40.0-pre1.0.20261108143013-08858490d0e0 // indirect
-	github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108143013-08858490d0e0
-	github.com/odigos-io/odigos/opampserver v1.40.0-pre1.0.20261108143013-08858490d0e0 // indirect
+	github.com/odigos-io/odigos/odiglet v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/opampserver v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/runtime-detector v0.0.25 // indirect
 	github.com/ohler55/ojg v1.28.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -289,28 +289,34 @@ require (
 // for it's name, which needs to be changed first.
 replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.34.0
 
-replace github.com/odigos-io/odigos/procdiscovery => github.com/odigos-io/odigos/procdiscovery v1.40.0-pre1.0.20261108143013-08858490d0e0
-
-replace github.com/odigos-io/odigos/k8sutils => github.com/odigos-io/odigos/k8sutils v1.40.0-pre1.0.20261108143013-08858490d0e0
-
-replace github.com/odigos-io/odigos/opampserver => github.com/odigos-io/odigos/opampserver v1.40.0-pre1.0.20261108143013-08858490d0e0
-
-replace github.com/odigos-io/odigos/distros => github.com/odigos-io/odigos/distros v1.40.0-pre1.0.20261108143013-08858490d0e0
-
 // parca-agent pins cloud.google.com/go/compute v1.6.1, which still embeds cloud.google.com/go/compute/metadata.
 // grpc and OTel GCP detectors use the standalone cloud.google.com/go/compute/metadata module — same import path, two modules.
 // Newer compute releases dropped the nested metadata package; this replace removes the ambiguity.
 // Added during OBI change
 replace cloud.google.com/go/compute => cloud.google.com/go/compute v1.57.0
 
-replace github.com/odigos-io/odigos/api => github.com/odigos-io/odigos/api v1.40.0-pre1.0.20261108143013-08858490d0e0
-
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.40.0-pre1.0.20261108143013-08858490d0e0
-
-replace github.com/odigos-io/odigos/deviceplugin => github.com/odigos-io/odigos/deviceplugin v1.40.0-pre1.0.20261108143013-08858490d0e0
-
 // k8sutils requires this via its own local-only replace, which doesn't propagate across repos.
-replace github.com/odigos-io/odigos/actions => github.com/odigos-io/odigos/actions v1.40.0-pre1.0.20261108143013-08858490d0e0
 
 // Same as actions above, required transitively via k8sutils.
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108143013-08858490d0e0
+
+replace github.com/odigos-io/odigos/api => ../../api
+
+replace github.com/odigos-io/odigos/common => ../../common
+
+replace github.com/odigos-io/odigos/deviceplugin => ../../deviceplugin
+
+replace github.com/odigos-io/odigos/distros => ../../distros
+
+replace github.com/odigos-io/odigos/instrumentation => ../../instrumentation
+
+replace github.com/odigos-io/odigos/k8sutils => ../../k8sutils
+
+replace github.com/odigos-io/odigos/odiglet => ..
+
+replace github.com/odigos-io/odigos/odiglet/pkg/ebpf/sdks/obi => ../pkg/ebpf/sdks/obi
+
+replace github.com/odigos-io/odigos/odigosauth => ../../odigosauth
+
+replace github.com/odigos-io/odigos/opampserver => ../../opampserver
+
+replace github.com/odigos-io/odigos/procdiscovery => ../../procdiscovery

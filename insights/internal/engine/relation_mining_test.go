@@ -10,8 +10,8 @@ import (
 
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // relationTrace is one learning-phase trace of the demo's "POST /accounts"

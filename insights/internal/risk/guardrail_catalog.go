@@ -1,6 +1,6 @@
 package risk
 
-import "github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+import "github.com/odigos-io/odigos/insights/internal/repo"
 
 // Service-guardrail catalog. A guardrail is an operator-declared L7 micro-
 // segmentation rule ("only these services may call me"), not learned behaviour.

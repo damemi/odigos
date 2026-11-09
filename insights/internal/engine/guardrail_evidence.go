@@ -4,9 +4,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // GuardrailSpanHighlights marks the spans in a captured evidence trace that

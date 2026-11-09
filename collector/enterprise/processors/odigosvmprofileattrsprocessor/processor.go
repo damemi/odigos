@@ -12,7 +12,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"go.uber.org/zap"
 
-	"github.com/odigos-io/odigos-enterprise/collector/processors/odigosvmprofileattrsprocessor/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/processors/odigosvmprofileattrsprocessor/internal/metadata"
 )
 
 // Resource attribute keys, sourced from semconv so they stay aligned with the eBPF profiler

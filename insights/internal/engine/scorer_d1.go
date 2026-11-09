@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/risk"
+	"github.com/odigos-io/odigos/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/risk"
 )
 
 // d1CallEdges scores against the set of directed (parent → child) call edges in

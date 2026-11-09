@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Service-map view geometry, in SVG user units (== CSS px). The layout is a

@@ -1,10 +1,10 @@
-module github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter
+module github.com/odigos-io/odigos/collector/enterprise/exporters/odigosurltemplatizationexporter
 
 go 1.26.2
 
 require (
 	github.com/alicebob/miniredis/v2 v2.37.0
-	github.com/odigos-io/odigos/common v1.40.0-pre1.0.20261108135538-13718770f199
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.8.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.65.0
@@ -71,3 +71,5 @@ require (
 	google.golang.org/grpc v1.83.2 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
+
+replace github.com/odigos-io/odigos/common => ../../../../common

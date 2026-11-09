@@ -1,7 +1,7 @@
 package notify
 
 import (
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Router answers "should this finding be sent to this integration" from the

@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 
-	"github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/receivers/odigosebpfreceiver/internal/metadata"
 )
 
 func TestDeprecatedMetricsReceiver(t *testing.T) {

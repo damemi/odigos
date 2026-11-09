@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine"
+	"github.com/odigos-io/odigos/insights/internal/engine"
 )
 
 // errBadRequest marks a service-layer validation failure the caller can fix;

@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/histogram"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/engine/histogram"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // TestCodecRoundTripSets checks that each set class survives Encode → (store

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/metrics"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // recommendationMiner turns learned traffic into guardrail recommendations: a

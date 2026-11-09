@@ -1,4 +1,4 @@
-module github.com/odigos-io/odigos-enterprise/collector/internal/tools
+module github.com/odigos-io/odigos/collector/enterprise/internal/tools
 
 go 1.26.2
 

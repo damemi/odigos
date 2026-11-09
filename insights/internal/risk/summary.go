@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // ViolationSummary is the render-ready sentence for a guardrail violation. It

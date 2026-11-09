@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Deps is the shared infrastructure handed to every Factory.

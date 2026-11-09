@@ -1,9 +1,9 @@
-module github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigconnectorextension
+module github.com/odigos-io/odigos/collector/enterprise/extension/odigosconfigconnectorextension
 
 go 1.26.4
 
 require (
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261020111437-15a37689ec31
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.65.0
 	go.opentelemetry.io/collector/component/componenttest v0.159.0
@@ -43,3 +43,5 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
+
+replace github.com/odigos-io/odigos/common => ../../../../common

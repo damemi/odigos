@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pprofile"
 	"go.uber.org/zap"
 
-	"github.com/odigos-io/odigos-enterprise/collector/processors/odigosprofilesprocessor/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/processors/odigosprofilesprocessor/internal/metadata"
 	"github.com/odigos-io/odigos/common/collector"
 )
 

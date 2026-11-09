@@ -1,11 +1,11 @@
-module github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver
+module github.com/odigos-io/odigos/collector/enterprise/receivers/odigosebpfreceiver
 
 go 1.26.2
 
 require (
 	github.com/cilium/ebpf v0.20.0
 	github.com/odigos-io/go-rtml v0.0.1
-	github.com/odigos-io/odigos/common v1.40.0-pre1.0.20261108135538-13718770f199
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.65.0
 	go.opentelemetry.io/collector/component/componenttest v0.159.0
@@ -62,3 +62,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
 	google.golang.org/grpc v1.83.2 // indirect
 )
+
+replace github.com/odigos-io/odigos/common => ../../../../common

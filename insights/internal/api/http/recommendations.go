@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
 )
 
 // listRecommendations is GET /api/v1/recommendations.

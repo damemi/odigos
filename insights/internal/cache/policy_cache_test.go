@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // countingPolicyRepo embeds the interface (so unused methods exist) and counts

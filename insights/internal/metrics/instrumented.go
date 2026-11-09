@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // WrapRepo decorates a Repository so every method records a call count and

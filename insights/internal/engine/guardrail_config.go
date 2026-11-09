@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // GuardrailConfig is a lock-free, in-memory snapshot of the service guardrails

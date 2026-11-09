@@ -1,6 +1,6 @@
 package risk
 
-import "github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+import "github.com/odigos-io/odigos/insights/internal/repo"
 
 // Catalog of context-enricher signals - the counterpart to the deviation-class
 // Catalog in risk.go. A class fires a single base signal; an enricher adds

@@ -15,8 +15,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"github.com/odigos-io/odigos-enterprise/ui/mcp"
-	"github.com/odigos-io/odigos-enterprise/ui/mcp/k8s"
+	"github.com/odigos-io/odigos/ui/mcp"
+	"github.com/odigos-io/odigos/ui/mcp/k8s"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common"
 	commonlogger "github.com/odigos-io/odigos/common/logger"

@@ -10,7 +10,7 @@ import (
 
 var (
 	Type      = component.MustNewType("odigos_url_templatization")
-	ScopeName = "github.com/odigos-io/odigos-enterprise/collector/exporters/odigosurltemplatizationexporter"
+	ScopeName = "github.com/odigos-io/odigos/collector/enterprise/exporters/odigosurltemplatizationexporter"
 )
 
 const (

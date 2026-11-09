@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
 
-	"github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/receivers/odigosebpfreceiver/internal/metadata"
 	"github.com/odigos-io/odigos/common/ebpf/unixfd"
 )
 

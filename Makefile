@@ -321,10 +321,8 @@ debug-odiglet:
 	kubectl wait --for=condition=ready pod -n $(ODIGOS_NS) -l app.kubernetes.io/name=odiglet --timeout=180s; \
 	kubectl port-forward -n $(ODIGOS_NS) daemonset/odiglet 2345:2345
 
-# Modules imported from odigos-enterprise still pin odigos modules by version and pull private dependencies,
-# so they are left out until they replace odigos modules with local paths.
-IMPORTED_ENTERPRISE_MOD_DIRS := ^\./(insights|ui|enterprise-docs)(/|$$)|/enterprise(/|$$)
-ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -v "licenses" | grep -vE '$(IMPORTED_ENTERPRISE_MOD_DIRS)')
+# odiglet/enterprise depends on private instrumentation repos that this repo's go mod CI cannot download.
+ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -v "licenses" | grep -v '^./odiglet/enterprise')
 
 .PHONY: go-mod-tidy
 go-mod-tidy: $(ALL_GO_MOD_DIRS:%=go-mod-tidy/%)

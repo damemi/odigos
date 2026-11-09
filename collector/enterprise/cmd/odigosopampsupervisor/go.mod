@@ -1,4 +1,4 @@
-module github.com/odigos-io/odigos-enterprise/collector/cmd/odigosopampsupervisor
+module github.com/odigos-io/odigos/collector/enterprise/cmd/odigosopampsupervisor
 
 go 1.26.4
 

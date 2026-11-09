@@ -12,7 +12,7 @@ import (
 
 	"go.opentelemetry.io/collector/component/componenttest"
 
-	"github.com/odigos-io/odigos-enterprise/collector/receivers/odigosebpfreceiver/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/receivers/odigosebpfreceiver/internal/metadata"
 )
 
 func TestSetupTelemetry(t *testing.T) {

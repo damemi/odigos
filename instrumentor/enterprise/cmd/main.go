@@ -4,7 +4,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/odigos-io/odigos-enterprise/instrumentor/urltemplatization"
+	"github.com/odigos-io/odigos/instrumentor/enterprise/urltemplatization"
 	distros "github.com/odigos-io/odigos/distros/enterprise"
 	"github.com/odigos-io/odigos/odigosauth"
 

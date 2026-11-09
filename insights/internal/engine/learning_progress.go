@@ -3,7 +3,7 @@ package engine
 import (
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Display-only observation window used when the resolved policy has no

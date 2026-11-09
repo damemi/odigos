@@ -11,8 +11,8 @@ import (
 
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/metrics"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // warnInterval bounds how often a given engine warning is logged. During a DB

@@ -10,7 +10,7 @@ import (
 
 var (
 	Type      = component.MustNewType("odigos_config_vm")
-	ScopeName = "github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigvmextension"
+	ScopeName = "github.com/odigos-io/odigos/collector/enterprise/extension/odigosconfigvmextension"
 )
 
 const (

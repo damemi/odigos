@@ -6,7 +6,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
 
-	"github.com/odigos-io/odigos-enterprise/collector/extension/odigosconfigconnectorextension/internal/metadata"
+	"github.com/odigos-io/odigos/collector/enterprise/extension/odigosconfigconnectorextension/internal/metadata"
 	"github.com/odigos-io/odigos/common/collector"
 )
 

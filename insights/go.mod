@@ -1,4 +1,4 @@
-module github.com/odigos-io/odigos-enterprise/insights
+module github.com/odigos-io/odigos/insights
 
 go 1.26.4
 
@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261103103244-989c24ca083f
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/proto/otlp v1.5.0
@@ -58,7 +58,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
+	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/paulmach/orb v0.11.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
@@ -101,4 +101,6 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
+replace github.com/odigos-io/odigos/common => ../common
+
+replace github.com/odigos-io/odigos/odigosauth => ../odigosauth

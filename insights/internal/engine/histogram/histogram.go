@@ -13,7 +13,7 @@ import (
 	"math"
 	"math/bits"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // BucketCount is the default number of exponential buckets when Layout is unset.

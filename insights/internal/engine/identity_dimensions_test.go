@@ -3,8 +3,8 @@ package engine
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/engine/semconv"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 func TestApplyIdentityDimensions_StatusSplitsIdentity(t *testing.T) {

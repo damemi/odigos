@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // d5Libraries scores against the set of OpenTelemetry instrumentation libraries

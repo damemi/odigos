@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/metrics"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/metrics"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // PollInterval is how often the dispatcher diffs findings against the ledger.

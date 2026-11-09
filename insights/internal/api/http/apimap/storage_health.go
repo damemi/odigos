@@ -1,8 +1,8 @@
 package apimap
 
 import (
-	"github.com/odigos-io/odigos-enterprise/insights/internal/api/http/apitypes"
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 func FromStorageHealth(h repo.StorageHealth) apitypes.StorageHealth {

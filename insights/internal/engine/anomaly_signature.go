@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/insights/internal/repo"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // anomalySignature is a stable identity for a class of identical anomaly firings
