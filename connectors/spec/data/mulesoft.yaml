@@ -1,0 +1,473 @@
+provider: mulesoft
+displayName: MuleSoft Anypoint Platform
+
+# Provider boundary and non-secret connector configuration (not authentication).
+#
+# The bootstrap region is the Anypoint CONTROL PLANE, not a cloud region: it selects which Anypoint API host the
+# connector talks to (us -> anypoint.mulesoft.com, eu -> eu1.anypoint.mulesoft.com). It rides here rather than in
+# a connector field because only bootstrapRegion and auth fields reach the connector pod. Gov (FedRAMP) is not
+# supported yet.
+connector:
+  bootstrapRegion:
+    defaultRegion: us
+    supportedRegions:
+      - us
+      - eu
+  fields:
+    - name: organizationId
+      displayName: Anypoint organization ID
+      componentType: input
+      required: true
+      tooltip: >-
+        The Anypoint organization (business group) this connector manages. Find it under Access Management >
+        Business Groups, or in the URL of any Anypoint page.
+
+# Authentication: a Connected App that acts on its own behalf (client credentials). Its scopes, assigned per
+# business group and environment, are the connector's whole view of the organization: an environment the app
+# has no scope in is simply not scanned.
+#
+# The scope names below are the labels Access Management shows in the Connected App scope picker. They are not
+# verified against every Anypoint release; confirm them in your organization's picker.
+auth:
+  permissions:
+    - View Environment
+  methods:
+    - id: connected-app
+      displayName: Connected App (client credentials)
+      description: >-
+        A Connected App with the "App acts on its own behalf (client credentials)" grant type.
+      fields:
+        - name: clientId
+          displayName: Client ID
+          componentType: input
+          required: true
+          tooltip: The Connected App's client ID.
+          envVar: ANYPOINT_CLIENT_ID
+        - name: clientSecret
+          displayName: Client secret
+          componentType: input
+          secret: true
+          required: true
+          tooltip: The Connected App's client secret.
+          envVar: ANYPOINT_CLIENT_SECRET
+
+# workloads: Mule 4 applications, discovered per environment and instrumented in place by setting Mule's Direct
+# Telemetry Stream properties (mule.openTelemetry.*). CloudHub 1.0 and Mule 3 are legacy and not discovered.
+workloads:
+  discovery:
+    enabled: true
+    displayName: Workload discovery
+    description: >-
+      Enumerate Mule applications in every environment the Connected App can see — CloudHub 2.0 shared and
+      private spaces, Runtime Fabric and hybrid servers — and the Omni Gateways in front of them, so they can be
+      surfaced as Odigos Source candidates.
+    types:
+      # CloudHub 2.0 and Runtime Fabric deployments all come from the Application Manager API; one scan feeds
+      # the three types, and the deployment target decides which one a deployment is. Only a target known to be
+      # a shared space counts as mulesoft.cloudhub2-app; a target that cannot be identified is a private space.
+      #
+      # View APIs Configuration reads API Manager, which pairs an application with the API instance it enforces
+      # (autodiscovery). The pairing is added to the application's spans as mulesoft.api.* resource attributes.
+      # It is optional: without the scope, applications are discovered and instrumented without it.
+      - name: mulesoft.cloudhub2-app
+        displayName: CloudHub 2.0 application
+        description: >-
+          List CloudHub 2.0 deployments on shared spaces in every visible environment, with their runtime version,
+          application properties and the API Manager instance each one pairs with.
+        permissions:
+          - Read Applications
+          - View APIs Configuration
+      - name: mulesoft.private-space-app
+        displayName: CloudHub 2.0 private space application
+        description: >-
+          List CloudHub 2.0 deployments on private spaces in every visible environment, with their runtime
+          version, application properties and the API Manager instance each one pairs with.
+        permissions:
+          - Read Applications
+          - View APIs Configuration
+      - name: mulesoft.rtf-app
+        displayName: Runtime Fabric application
+        description: >-
+          List Runtime Fabric deployments in every visible environment, with their runtime version, application
+          properties and the API Manager instance each one pairs with.
+        permissions:
+          - Read Applications
+          - Read Runtime Fabrics
+          - View APIs Configuration
+      - name: mulesoft.hybrid-app
+        displayName: Hybrid application
+        description: >-
+          List applications deployed through Runtime Manager to customer-managed servers, server groups and
+          clusters, with the runtime version of the server they run on.
+        permissions:
+          - Read Applications
+          - Read Servers
+      # Omni Gateway (formerly Flex Gateway), managed by MuleSoft on a CloudHub 2.0 space or self-managed on the
+      # customer's own hosts, listed through Gateway Manager. The scope names are unverified.
+      - name: mulesoft.omni-gateway
+        displayName: Omni Gateway
+        description: >-
+          List the Omni Gateways (managed and self-managed) in every visible environment, with their version,
+          status and tracing configuration.
+        permissions:
+          - Read Servers
+
+  # instrumentation: set the Direct Telemetry Stream properties on the deployment. Changing a deployment's
+  # properties rolls (restarts) the application, so the connector only writes when they differ. Hybrid apps are
+  # not declared: Direct Telemetry Stream is configured per SERVER there, so it is not a per-app change.
+  #
+  # Private spaces and Runtime Fabric are built (the same Application Manager write as CloudHub 2.0) but declared
+  # implemented: false until they are verified against a real private space and fabric. Their applications are
+  # still discovered; one with a source reports NotImplemented, and the connector neither changes it nor serves
+  # manual instructions for it. Removing the flag is all it takes to turn them on.
+  instrumentation:
+    enabled: true
+    displayName: Workload instrumentation
+    description: >-
+      Turn on Mule's Direct Telemetry Stream for discovered applications, exporting their traces, logs and
+      metrics to the connector's OTLP destination. Requires Mule 4.11 or later on an Anypoint Advanced or
+      Titanium subscription, and an OTLP destination.
+    types:
+      - name: mulesoft.cloudhub2-app
+        displayName: CloudHub 2.0 application
+        description: >-
+          Set the mule.openTelemetry.* application properties on the CloudHub 2.0 deployment. The platform
+          redeploys the application (rolling update) to apply them.
+        method: service
+        permissions:
+          - Create Applications
+      - name: mulesoft.private-space-app
+        displayName: CloudHub 2.0 private space application
+        description: >-
+          Set the mule.openTelemetry.* application properties on the private space deployment. The platform
+          redeploys the application (rolling update) to apply them. Not available yet.
+        method: service
+        implemented: false
+        permissions:
+          - Create Applications
+      - name: mulesoft.rtf-app
+        displayName: Runtime Fabric application
+        description: >-
+          Set the mule.openTelemetry.* application properties on the Runtime Fabric deployment. The platform
+          redeploys the application (rolling update) to apply them. Not available yet.
+        method: service
+        implemented: false
+        permissions:
+          - Create Applications
+      # A gateway is instrumented by turning on its own distributed tracing with an OpenTelemetry provider pointed
+      # at the connector's destination. Odigos writes that only on a Managed Omni Gateway; a self-managed gateway
+      # keeps its configuration on its host, so it takes manual mode (the Configuration resource below).
+      - name: mulesoft.omni-gateway
+        displayName: Omni Gateway
+        description: >-
+          Turn on the gateway's distributed tracing with an OpenTelemetry provider exporting to the connector's
+          OTLP destination. Managed Omni Gateways only; Gateway Manager rolls the gateway to apply it.
+        method: service
+        permissions:
+          - Manage Servers
+
+# Mule applications are the workload; the platforms they run on are MuleSoft-managed or reached through Runtime
+# Manager, so there is nothing to discover or install as a compute platform.
+computePlatforms:
+  discovery:
+    enabled: false
+    displayName: Compute-platform discovery
+    description: Not applicable to MuleSoft.
+    types: []
+  installation:
+    enabled: false
+    displayName: Compute-platform installation
+    description: Not applicable to MuleSoft.
+    types: []
+
+gateway:
+  enabled: false
+  displayName: Gateway / collector wiring
+  description: >-
+    Route Mule applications to a managed regional collector. Not implemented for MuleSoft.
+  types: []
+
+setup:
+  subtitle: Create the Connected App Odigos uses to read and configure your Mule applications.
+  artifacts:
+    - id: policy-preview
+      section: permissions
+      title: Scope preview
+      description: The Connected App scopes Odigos needs for the selected access level.
+      format: yaml
+      itemTemplate: '- {{permission}}'
+      itemSeparator: "\n"
+      template: |-
+        # Assign these scopes to the Connected App for every business group and environment Odigos should see.
+        scopes:
+          {{permissions}}
+    - id: create-connected-app
+      section: create-role
+      variant: console
+      variantLabel: Anypoint console
+      title: Create the Connected App
+      description: >-
+        Create a Connected App that acts on its own behalf and grant it the scopes below in each environment
+        Odigos should manage.
+      format: yaml
+      itemTemplate: '- {{permission}}'
+      itemSeparator: "\n"
+      steps:
+        - Open Anypoint Platform → Access Management → Connected Apps → Create app.
+        - Name it (for example odigos-connector) and select "App acts on its own behalf (client credentials)".
+        - Click Add Scopes and add every scope listed below.
+        - Select the business groups and environments Odigos should see. Environments left out are not scanned.
+        - Save, then copy the client ID and client secret into the next step.
+      template: |-
+        scopes:
+          {{permissions}}
+    - id: enter-credentials
+      section: credentials
+      title: Enter Connected App credentials
+      description: Paste the client ID and client secret of the Connected App created above.
+      format: text
+      template: ""
+
+    # ---------------------------------------------------------------------------------------------------
+    # MANUAL (IaC) INSTRUMENTATION INSTRUCTIONS — sections "instrumentation:mulesoft.cloudhub2-app",
+    # "instrumentation:mulesoft.private-space-app" and "instrumentation:mulesoft.rtf-app". The last two are not
+    # served while their instrumentation is implemented: false; they are kept so enabling the type needs no new
+    # instructions.
+    #
+    # Mule has no agent to stage: instrumentation IS the property set below. The connector's planner builds the
+    # same set the automatic reconciler writes (providers/mulesoft/pkg/workload/instrumentor/properties.go) and
+    # TestInstrumentationArtifactsMatchPlans there asserts every value it needs appears here. The artifacts are
+    # language-neutral because every Mule app runs the same runtime.
+    #
+    # <ANGLE_BRACKETED> tokens are values the connector fills in per workload when it serves these instructions
+    # (or the customer substitutes when reading the catalog): the protocol and per-signal endpoints come from the
+    # connector's OTLP destination — gRPC uses one endpoint for every signal, OTLP/HTTP a per-signal path — and
+    # the sampling ratio from its live configuration.
+    # ---------------------------------------------------------------------------------------------------
+    - id: instrumentation-cloudhub2-runtime-manager
+      section: instrumentation:mulesoft.cloudhub2-app
+      variant: runtime-manager
+      variantLabel: Runtime Manager
+      title: Set the properties in Runtime Manager
+      description: Paste the Direct Telemetry Stream properties into the application's properties (Text view).
+      format: text
+      steps: &rm-steps
+        - Open Runtime Manager → Applications → your application → Settings → Properties, and switch to Text view.
+        - Append the lines below. If the application already sets mule.openTelemetry.exporter.resource.attributes, append ours to its value with a comma instead of adding a second line.
+        - Remove the meter lines on Mule 4.11; metrics need Mule 4.12 or later.
+        - Click Apply Changes. The application redeploys to pick the properties up.
+      prerequisites: &mule-prereqs
+        - >-
+          Direct Telemetry Stream requires Mule runtime 4.11 or later and an Anypoint Advanced or Titanium
+          subscription; on other tiers the properties are accepted and export nothing
+          (https://docs.odigos.io/cloud-connectors/add-connectors/add-mulesoft-connector).
+        - >-
+          Enabling Direct Telemetry Stream turns off Anypoint Monitoring's Telemetry Exporter for the application.
+          Any export you configured there stops.
+        - The OTLP endpoint must be reachable from the application's space or fabric.
+      template: &mule-props |-
+        ODIGOS_IAC={"v":1,"lang":"mule"}
+        mule.openTelemetry.tracer.exporter.enabled=true
+        mule.openTelemetry.tracer.exporter.type=<OTLP_PROTOCOL>
+        mule.openTelemetry.tracer.exporter.endpoint=<OTLP_TRACES_ENDPOINT>
+        mule.openTelemetry.tracer.exporter.sampler=parentbased_traceidratio
+        mule.openTelemetry.tracer.exporter.sampler.arg=<SAMPLE_RATIO>
+        mule.openTelemetry.logging.exporter.enabled=true
+        mule.openTelemetry.logging.exporter.type=<OTLP_PROTOCOL>
+        mule.openTelemetry.logging.exporter.endpoint=<OTLP_LOGS_ENDPOINT>
+        mule.openTelemetry.meter.exporter.enabled=true
+        mule.openTelemetry.meter.exporter.type=<OTLP_PROTOCOL>
+        mule.openTelemetry.meter.exporter.endpoint=<OTLP_METRICS_ENDPOINT>
+        mule.openTelemetry.exporter.resource.service.name=<ODIGOS_SOURCE_NAME>
+        mule.openTelemetry.exporter.resource.attributes=deployment.environment.name=<ENVIRONMENT>,mulesoft.org.id=<ORGANIZATION_ID>,mulesoft.target.type=<TARGET_TYPE>
+        mule.put.trace.id.and.span.id.in.mdc=true
+    - id: instrumentation-cloudhub2-maven
+      section: instrumentation:mulesoft.cloudhub2-app
+      variant: maven
+      variantLabel: Maven (mule-maven-plugin)
+      title: Set the properties in your deployment configuration
+      description: Add the properties to the mule-maven-plugin deployment block you deploy with.
+      format: text
+      steps: &maven-steps
+        - Add the entries below to the <properties> element of your cloudhub2Deployment or runtimeFabricDeployment block.
+        - Drop the meter entries on Mule 4.11; metrics need Mule 4.12 or later.
+        - Redeploy (mvn deploy -DmuleDeploy).
+      prerequisites: *mule-prereqs
+      template: &maven-props |-
+        <properties>
+          <!-- your existing properties stay as they are -->
+          <ODIGOS_IAC>{"v":1,"lang":"mule"}</ODIGOS_IAC>
+          <mule.openTelemetry.tracer.exporter.enabled>true</mule.openTelemetry.tracer.exporter.enabled>
+          <mule.openTelemetry.tracer.exporter.type><OTLP_PROTOCOL></mule.openTelemetry.tracer.exporter.type>
+          <mule.openTelemetry.tracer.exporter.endpoint><OTLP_TRACES_ENDPOINT></mule.openTelemetry.tracer.exporter.endpoint>
+          <mule.openTelemetry.tracer.exporter.sampler>parentbased_traceidratio</mule.openTelemetry.tracer.exporter.sampler>
+          <mule.openTelemetry.tracer.exporter.sampler.arg><SAMPLE_RATIO></mule.openTelemetry.tracer.exporter.sampler.arg>
+          <mule.openTelemetry.logging.exporter.enabled>true</mule.openTelemetry.logging.exporter.enabled>
+          <mule.openTelemetry.logging.exporter.type><OTLP_PROTOCOL></mule.openTelemetry.logging.exporter.type>
+          <mule.openTelemetry.logging.exporter.endpoint><OTLP_LOGS_ENDPOINT></mule.openTelemetry.logging.exporter.endpoint>
+          <mule.openTelemetry.meter.exporter.enabled>true</mule.openTelemetry.meter.exporter.enabled>
+          <mule.openTelemetry.meter.exporter.type><OTLP_PROTOCOL></mule.openTelemetry.meter.exporter.type>
+          <mule.openTelemetry.meter.exporter.endpoint><OTLP_METRICS_ENDPOINT></mule.openTelemetry.meter.exporter.endpoint>
+          <mule.openTelemetry.exporter.resource.service.name><ODIGOS_SOURCE_NAME></mule.openTelemetry.exporter.resource.service.name>
+          <!-- if you already set resource.attributes, append ours to your value with a comma instead -->
+          <mule.openTelemetry.exporter.resource.attributes>deployment.environment.name=<ENVIRONMENT>,mulesoft.org.id=<ORGANIZATION_ID>,mulesoft.target.type=<TARGET_TYPE></mule.openTelemetry.exporter.resource.attributes>
+          <mule.put.trace.id.and.span.id.in.mdc>true</mule.put.trace.id.and.span.id.in.mdc>
+        </properties>
+    - id: instrumentation-cloudhub2-cli
+      section: instrumentation:mulesoft.cloudhub2-app
+      variant: anypoint-cli
+      variantLabel: anypoint-cli
+      title: Set the properties with anypoint-cli
+      description: Modify the running application with anypoint-cli-v4.
+      format: shell
+      steps: &cli-steps
+        - Authenticate anypoint-cli-v4 to the organization and environment of the application.
+        - Note that --property replaces the application's whole property set; include your existing properties in the same command.
+        - Drop the meter properties on Mule 4.11; metrics need Mule 4.12 or later.
+        - Run the command. The application redeploys to pick the properties up.
+      prerequisites: *mule-prereqs
+      template: &cli-props |-
+        anypoint-cli-v4 runtime-mgr:application:modify <APPLICATION_ID> \
+          --property 'ODIGOS_IAC:{"v":1,"lang":"mule"}' \
+          --property 'mule.openTelemetry.tracer.exporter.enabled:true' \
+          --property 'mule.openTelemetry.tracer.exporter.type:<OTLP_PROTOCOL>' \
+          --property 'mule.openTelemetry.tracer.exporter.endpoint:<OTLP_TRACES_ENDPOINT>' \
+          --property 'mule.openTelemetry.tracer.exporter.sampler:parentbased_traceidratio' \
+          --property 'mule.openTelemetry.tracer.exporter.sampler.arg:<SAMPLE_RATIO>' \
+          --property 'mule.openTelemetry.logging.exporter.enabled:true' \
+          --property 'mule.openTelemetry.logging.exporter.type:<OTLP_PROTOCOL>' \
+          --property 'mule.openTelemetry.logging.exporter.endpoint:<OTLP_LOGS_ENDPOINT>' \
+          --property 'mule.openTelemetry.meter.exporter.enabled:true' \
+          --property 'mule.openTelemetry.meter.exporter.type:<OTLP_PROTOCOL>' \
+          --property 'mule.openTelemetry.meter.exporter.endpoint:<OTLP_METRICS_ENDPOINT>' \
+          --property 'mule.openTelemetry.exporter.resource.service.name:<ODIGOS_SOURCE_NAME>' \
+          --property 'mule.openTelemetry.exporter.resource.attributes:deployment.environment.name=<ENVIRONMENT>,mulesoft.org.id=<ORGANIZATION_ID>,mulesoft.target.type=<TARGET_TYPE>' \
+          --property 'mule.put.trace.id.and.span.id.in.mdc:true'
+    - id: instrumentation-private-space-runtime-manager
+      section: instrumentation:mulesoft.private-space-app
+      variant: runtime-manager
+      variantLabel: Runtime Manager
+      title: Set the properties in Runtime Manager
+      description: Paste the Direct Telemetry Stream properties into the application's properties (Text view).
+      format: text
+      steps: *rm-steps
+      prerequisites: *mule-prereqs
+      template: *mule-props
+    - id: instrumentation-private-space-maven
+      section: instrumentation:mulesoft.private-space-app
+      variant: maven
+      variantLabel: Maven (mule-maven-plugin)
+      title: Set the properties in your deployment configuration
+      description: Add the properties to the mule-maven-plugin deployment block you deploy with.
+      format: text
+      steps: *maven-steps
+      prerequisites: *mule-prereqs
+      template: *maven-props
+    - id: instrumentation-private-space-cli
+      section: instrumentation:mulesoft.private-space-app
+      variant: anypoint-cli
+      variantLabel: anypoint-cli
+      title: Set the properties with anypoint-cli
+      description: Modify the running application with anypoint-cli-v4.
+      format: shell
+      steps: *cli-steps
+      prerequisites: *mule-prereqs
+      template: *cli-props
+    - id: instrumentation-rtf-runtime-manager
+      section: instrumentation:mulesoft.rtf-app
+      variant: runtime-manager
+      variantLabel: Runtime Manager
+      title: Set the properties in Runtime Manager
+      description: Paste the Direct Telemetry Stream properties into the application's properties (Text view).
+      format: text
+      steps: *rm-steps
+      prerequisites: *mule-prereqs
+      template: *mule-props
+    - id: instrumentation-rtf-maven
+      section: instrumentation:mulesoft.rtf-app
+      variant: maven
+      variantLabel: Maven (mule-maven-plugin)
+      title: Set the properties in your deployment configuration
+      description: Add the properties to the mule-maven-plugin deployment block you deploy with.
+      format: text
+      steps: *maven-steps
+      prerequisites: *mule-prereqs
+      template: *maven-props
+    - id: instrumentation-rtf-cli
+      section: instrumentation:mulesoft.rtf-app
+      variant: anypoint-cli
+      variantLabel: anypoint-cli
+      title: Set the properties with anypoint-cli
+      description: Modify the running application with anypoint-cli-v4.
+      format: shell
+      steps: *cli-steps
+      prerequisites: *mule-prereqs
+      template: *cli-props
+
+    # ---------------------------------------------------------------------------------------------------
+    # OMNI GATEWAY MANUAL INSTRUCTIONS — section "instrumentation:mulesoft.omni-gateway".
+    #
+    # The settings are the gateway's distributed tracing configuration (instrumentor/gatewaymanual.go): tracing
+    # on, an OpenTelemetry provider with the destination's service type and traces address, the Odigos source
+    # name as the service name, and the odigos.iac label that tells Odigos the customer applied them.
+    # ---------------------------------------------------------------------------------------------------
+    - id: instrumentation-omni-gateway-runtime-manager
+      section: instrumentation:mulesoft.omni-gateway
+      variant: runtime-manager
+      variantLabel: Runtime Manager (managed gateway)
+      title: Turn on tracing in Runtime Manager
+      description: Configure the Managed Omni Gateway's distributed tracing to export to Odigos.
+      format: text
+      steps:
+        - Open Runtime Manager → Omni Gateways → your gateway → Runtime Configurations → Tracing.
+        - Turn on Enable Tracing, then under Provider set Type to OpenTelemetry.
+        - Fill in the provider properties below; leave Sampling and your own labels as they are.
+        - Under Labels, add a literal label named odigos.iac with the value omni-gateway.
+        - Save. Runtime Manager redeploys the gateway to apply it.
+      prerequisites: &gateway-prereqs
+        - >-
+          Odigos sets this itself on a Managed Omni Gateway in automatic mode
+          (https://docs.odigos.io/cloud-connectors/add-connectors/add-mulesoft-connector). Apply it by hand only
+          in manual mode, or on a self-managed gateway.
+        - The OTLP endpoint must be reachable from the gateway.
+        - Turning tracing on for an OpenTelemetry provider stops sending the gateway's traces to Anypoint Monitoring.
+      template: |-
+        tracing.enabled: true
+        tracing.provider.type: opentelemetry
+        tracing.provider.properties.serviceType: <OTLP_SERVICE_TYPE>
+        tracing.provider.properties.address: <OTLP_TRACES_ENDPOINT>
+        tracing.provider.properties.serviceName: <ODIGOS_SOURCE_NAME>
+        tracing.provider.properties.timeout: 10
+        tracing.labels.odigos.iac: omni-gateway
+    - id: instrumentation-omni-gateway-configuration-resource
+      section: instrumentation:mulesoft.omni-gateway
+      variant: configuration-resource
+      variantLabel: Configuration resource (self-managed gateway)
+      title: Apply a Configuration resource on the gateway
+      description: Add a tracing Configuration resource to a self-managed Omni Gateway.
+      format: yaml
+      steps:
+        - Save the resource below as a YAML file in the gateway's configuration directory (conf.d), or apply it the way you manage the gateway's other resources.
+        - "For http, set address to the collector's base URL (for example http://collector:4318) and add tracesUri: <OTLP_TRACES_ENDPOINT>."
+        - The gateway picks the resource up without a restart.
+      prerequisites: *gateway-prereqs
+      template: |-
+        # tracing.enabled: true — a Configuration resource with a tracing provider turns tracing on.
+        # tracing.labels.odigos.iac: omni-gateway
+        apiVersion: gateway.mulesoft.com/v1beta1
+        kind: Configuration
+        metadata:
+          name: odigos-tracing
+        spec:
+          tracing:
+            provider:
+              type: opentelemetry
+              properties:
+                serviceType: <OTLP_SERVICE_TYPE>
+                address: <OTLP_TRACES_ENDPOINT>
+                serviceName: <ODIGOS_SOURCE_NAME>
+                timeout: 10s
+            labels:
+              - name: odigos.iac
+                type: literal
+                defaultValue: omni-gateway

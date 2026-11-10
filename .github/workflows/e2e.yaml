@@ -99,6 +99,7 @@ jobs:
         run: |
           TAG=e2e-test make build-images
           TAG=e2e-test EXTENDED=true make build-odiglet build-agents
+          TAG=e2e-test make build-central-images build-connector-opamp-gateway
           docker save -o odigos-images.tar $(docker images --format "{{.Repository}}:{{.Tag}}" | grep "odigos")
 
       - uses: ko-build/setup-ko@v0.9
@@ -183,6 +184,10 @@ jobs:
           - "enterprise/control-plane"
           - "enterprise/instrumentation-rules"
           - "enterprise/python-ebpf"
+          - "enterprise/central-install"
+          - "enterprise/central-infrastructure"
+          - "enterprise/central-ui"
+          - "enterprise/central-auth-idp"
         wasp-enabled: [false]
         # Release PRs also run the important-customers configurations.
         include:

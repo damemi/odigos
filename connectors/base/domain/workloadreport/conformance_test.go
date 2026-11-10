@@ -1,0 +1,469 @@
+package workloadreport
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/spec"
+)
+
+var driftSince = time.Date(2026, 8, 1, 9, 30, 0, 0, time.UTC)
+
+// observedWorkload is a manual-mode workload the customer has marked, enabled and instrumented, whose
+// conformance has been observed as correct. Every case below varies one observed fact from here.
+//
+// ConformanceObservable is part of the baseline because every verdict below presupposes it: a type this
+// connector registers no observer for cannot report Conformant, Partial or anything else.
+func observedWorkload() api.DiscoveredWorkload {
+	w := manualWorkload()
+	w.Instrumented = true
+	w.Conformance = api.ConformanceConformant
+	w.ConformanceSince = driftSince
+	w.ConformanceObservable = true
+	return w
+}
+
+// TestConformanceStateMatrix walks the rows conformance observation adds to §9's table — the ones marker
+// presence alone could not express.
+//
+// The load-bearing column is again `state`: central-ui decodes current.state through a closed set, so drift has
+// to arrive as Error with its detail on stage/issue rather than as a new state string, which would render as
+// Unknown and be worse than the status quo.
+func TestConformanceStateMatrix(t *testing.T) {
+	cases := []struct {
+		name         string
+		mutate       func(*api.DiscoveredWorkload)
+		state        string
+		instrumented bool
+		stage        string
+		issueCodes   []string
+		wantSince    bool
+	}{
+		{
+			name:         "observed conformant",
+			mutate:       func(*api.DiscoveredWorkload) {},
+			state:        api.WorkloadStateInstrumented,
+			instrumented: true,
+			stage:        api.PhaseInstrumented,
+		},
+		{
+			// The false green this whole pass exists to close: the marker is present, so the workload used to
+			// report Instrumented, while the layer that does the actual work is gone.
+			name: "marker present but instrumentation partial",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformancePartial
+				w.MissingComponents = []string{"instrumentationLayer"}
+			},
+			state:        "Error",
+			instrumented: true,
+			stage:        "Instrumentation does not match",
+			issueCodes:   []string{"InstrumentationPartiallyApplied"},
+			wantSince:    true,
+		},
+		{
+			// A change still being applied looks exactly like a partial application. It must win, or every
+			// customer deploy would flash a drift error while it lands.
+			name: "settling outranks a partial verdict",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformancePartial
+				w.MissingComponents = []string{"instrumentationLayer"}
+				w.Settling = true
+			},
+			state:        api.WorkloadStateInstrumenting,
+			instrumented: true,
+			stage:        "Verifying customer changes",
+		},
+		{
+			// Nothing applied yet: Absent is not an error, and the workload is simply waiting for the customer.
+			name: "conformance absent, awaiting the customer",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Instrumented = false
+				w.Conformance = api.ConformanceAbsent
+				w.WaitingFor = api.WaitingForCustomer
+			},
+			state:      api.WorkloadStateNotInstrumented,
+			stage:      "Waiting for you to apply the instrumentation",
+			issueCodes: []string{"WaitingForCustomer"},
+			wantSince:  true,
+		},
+		{
+			// A read failure is NOT drift. The last confirmed verdict keeps being reported and the failure rides
+			// alongside as a transient issue — telling a customer their deployment broke because Odigos could not
+			// call the API would be blaming them for our outage.
+			name: "observation failed over a conformant workload",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.ObservationError = "AccessDenied: lambda:ListFunctions"
+			},
+			state:        api.WorkloadStateInstrumented,
+			instrumented: true,
+			stage:        api.PhaseInstrumented,
+			issueCodes:   []string{"InstrumentationObservationFailed"},
+		},
+		{
+			// Both: the workload is drifted AND the latest read failed. Both travel, because suppressing either
+			// hides half of what the operator needs.
+			name: "observation failed over a drifted workload",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformancePartial
+				w.MissingComponents = []string{"serviceName"}
+				w.ObservationError = "throttled"
+			},
+			state:        "Error",
+			instrumented: true,
+			stage:        "Instrumentation does not match",
+			issueCodes:   []string{"InstrumentationPartiallyApplied", "InstrumentationObservationFailed"},
+			wantSince:    true,
+		},
+		{
+			// Unknown on a type that IS observed: the verdict is pending, not absent. It must not read as drift
+			// — nothing was compared — but it must not read as CONFORMANT either, which is the whole reason
+			// api.Conformance makes Unknown the zero value. Before this row existed, an unobserved workload
+			// rendered byte-for-byte identically to the "observed conformant" case above, and an adopted
+			// workload hit that every time.
+			name: "observable but not yet observed",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformanceUnknown
+				w.ConformanceSince = time.Time{}
+			},
+			state:        api.WorkloadStateInstrumented,
+			instrumented: true,
+			stage:        "Instrumentation not verified",
+			issueCodes:   []string{"InstrumentationNotVerified"},
+		},
+		{
+			// Unknown on a type this connector registers no observer for, which is where GCP Cloud Run and
+			// Azure Container Apps sit today: their IaC flows are not wired, so no verdict is coming. The report
+			// falls back to what marker presence can say and adds nothing — promising a verification that never
+			// runs would be worse than saying nothing, and activeObservers already warns once at startup.
+			name: "never observed because the type has no observer",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformanceUnknown
+				w.ConformanceSince = time.Time{}
+				w.ConformanceObservable = false
+			},
+			state:        api.WorkloadStateInstrumented,
+			instrumented: true,
+			stage:        api.PhaseInstrumented,
+		},
+		{
+			// Source gone outranks drift: the remedy is "remove it", not "fix it", so relabelling this as drift
+			// would send the customer to repair instrumentation they are about to delete.
+			name: "source disabled outranks a partial verdict",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.SourceEnabled = false
+				w.Conformance = api.ConformancePartial
+				w.MissingComponents = []string{"instrumentationLayer"}
+			},
+			state:        "Error",
+			instrumented: true,
+			stage:        "Source disabled but still instrumented",
+			issueCodes:   []string{"SourceDisabledButInstrumented"},
+			wantSince:    true,
+		},
+		{
+			name: "automatic mode does not hide untracked IaC instrumentation",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.ManagementMode = spec.ModeAutomatic
+				w.SourceMatched = false
+				w.SourceEnabled = false
+				w.InstrumentationOrigin = "external"
+				w.Conformance = api.ConformanceUnknown
+			},
+			state:        "Error",
+			instrumented: true,
+			stage:        "No source but still instrumented",
+			issueCodes:   []string{"SourceMissingButInstrumented"},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := observedWorkload()
+			c.mutate(&w)
+			m := ToModel(w)
+
+			if m.Current.State != c.state {
+				t.Errorf("current.state = %q, want %q", m.Current.State, c.state)
+			}
+			if m.Current.Instrumented != c.instrumented {
+				t.Errorf("current.instrumented = %v, want %v", m.Current.Instrumented, c.instrumented)
+			}
+			if m.Progress.Stage != c.stage {
+				t.Errorf("progress.stage = %q, want %q", m.Progress.Stage, c.stage)
+			}
+			var codes []string
+			for _, i := range m.Issues {
+				codes = append(codes, i.Code)
+			}
+			if strings.Join(codes, ",") != strings.Join(c.issueCodes, ",") {
+				t.Errorf("issue codes = %v, want %v", codes, c.issueCodes)
+			}
+			for _, i := range m.Issues {
+				if i.Message == "" {
+					t.Errorf("issue %q has no message; it is the only explanation a client receives", i.Code)
+				}
+			}
+			if len(c.issueCodes) > 0 && c.wantSince {
+				if got := m.Issues[0].Since; got == nil {
+					t.Error("the leading issue must carry `since`; how long a state has held is what makes it actionable")
+				} else if *got != driftSince.Format(time.RFC3339) {
+					t.Errorf("issue.since = %q, want %q", *got, driftSince.Format(time.RFC3339))
+				}
+			}
+		})
+	}
+}
+
+// TestAutomaticModeIgnoresConformance is the regression guard for the other mode. In automatic mode a partial
+// application is a moment in time — the next reconcile converges it — so surfacing it as an error would fire on
+// every workload mid-instrument and turn a self-healing connector into a wall of alerts. Only manual mode, where
+// nothing converges anything, turns it into something a customer must resolve.
+func TestAutomaticModeIgnoresConformance(t *testing.T) {
+	for _, conf := range []api.Conformance{api.ConformancePartial, api.ConformanceAbsent, api.ConformanceUnknown} {
+		w := observedWorkload()
+		w.ManagementMode = spec.ModeAutomatic
+		w.Conformance = conf
+		w.MissingComponents = []string{"instrumentationLayer"}
+
+		m := ToModel(w)
+		if m.Current.State != api.WorkloadStateInstrumented {
+			t.Errorf("conformance %q: state = %q, want %q (automatic mode converges this itself)",
+				conf, m.Current.State, api.WorkloadStateInstrumented)
+		}
+		if len(m.Issues) != 0 {
+			t.Errorf("conformance %q: issues = %d, want none", conf, len(m.Issues))
+		}
+	}
+
+	// Settling likewise: an automatic-mode workload mid-apply is already described by its instrumentation phase,
+	// which the instrumentor writes. Reporting the customer-facing "verifying your changes" there would credit
+	// the customer with a change Odigos made.
+	w := observedWorkload()
+	w.ManagementMode = spec.ModeAutomatic
+	w.Settling = true
+	if got := ToModel(w).Progress.Stage; got == "VerifyingCustomerChanges" {
+		t.Error("automatic mode must not report VerifyingCustomerChanges; the connector made the change, not the customer")
+	}
+}
+
+// TestDriftMessageNamesComponents pins the one thing a manual-mode drift report has to deliver: where to look.
+// The customer edits their own deployment definition, so a message that says "drift detected" and nothing else
+// is unactionable.
+func TestDriftMessageNamesComponents(t *testing.T) {
+	w := observedWorkload()
+	w.Conformance = api.ConformancePartial
+	w.MissingComponents = []string{"instrumentationLayer", "serviceName"}
+
+	msg := *ToModel(w).Progress.Message
+	for _, want := range []string{
+		componentLabels["instrumentationLayer"],
+		componentLabels["serviceName"],
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("drift message %q does not name %q", msg, want)
+		}
+	}
+
+	// A component the base has no label for still reaches the customer as its raw name rather than being
+	// dropped: degraded prose beats a message that silently omits the only actionable detail.
+	w.MissingComponents = []string{"somethingNewAProviderAdded"}
+	if msg := *ToModel(w).Progress.Message; !strings.Contains(msg, "somethingNewAProviderAdded") {
+		t.Errorf("an unlabelled component must still be named, got %q", msg)
+	}
+
+	// A Partial verdict that arrives with no components at all still produces a usable sentence rather than a
+	// dangling one.
+	w.MissingComponents = nil
+	if msg := *ToModel(w).Progress.Message; msg == "" || strings.Contains(msg, "()") {
+		t.Errorf("a component-less Partial verdict must still read as a sentence, got %q", msg)
+	}
+}
+
+// TestEveryComponentHasALabel is the check that makes centralizing the component vocabulary worth it. Both
+// sides live in the base now, so this compares the real declaration against the real label map — unlike the
+// provider-side version it replaces, which asserted a duplicated copy of the map against itself and passed
+// happily with a label deleted.
+//
+// A component with no label still reaches the customer, as its raw identifier ("agentStartupDependency"), which
+// reads as a bug in Odigos rather than a fact about their deployment.
+func TestEveryComponentHasALabel(t *testing.T) {
+	if len(api.InstrumentationComponents) == 0 {
+		t.Fatal("no components declared; this test has stopped checking anything")
+	}
+	for _, c := range api.InstrumentationComponents {
+		label, ok := componentLabels[c]
+		if !ok {
+			t.Errorf("component %q has no customer-facing label", c)
+			continue
+		}
+		// The label is prose spliced into a sentence, so it must not be the identifier echoed back.
+		if label == c || label == "" {
+			t.Errorf("component %q has a placeholder label %q", c, label)
+		}
+	}
+	// The other direction. Keying the map on the constants makes a stale label impossible — rename a constant
+	// and its key renames with it — but a label added as a raw STRING would sit here labelling nothing while
+	// the component it was meant for stays unlabelled. That is the only way the two can drift now, so it is
+	// the one worth asserting.
+	declared := make(map[string]bool, len(api.InstrumentationComponents))
+	for _, c := range api.InstrumentationComponents {
+		declared[c] = true
+	}
+	for c := range componentLabels {
+		if !declared[c] {
+			t.Errorf("label for %q, which no api.Component* constant declares; label the constant, not a literal", c)
+		}
+	}
+}
+
+// TestInstrumentedButUnverifiedIsNotReportedAsHealthy is the reported bug, stated at the level a customer sees.
+//
+// A workload adopted from live instrumentation, on a connector with no OTLP destination, used to render
+// byte-for-byte identically to one Odigos had observed and confirmed correct: state Instrumented, stage
+// Instrumented, no issues. Two facts have to survive that, and they pull in opposite directions — the agents
+// ARE live and exporting, and Odigos has NOT established that they match — so the state keeps saying
+// instrumented while an issue says the check did not happen.
+func TestInstrumentedButUnverifiedIsNotReportedAsHealthy(t *testing.T) {
+	// The AWS Fargate service from the bug report: adopted, source enabled, marker present, and the connector
+	// has no destination — so markBlockedOnPrerequisites stamped WaitingForDestination and no observation pass
+	// could compute a verdict.
+	adopted := func() api.DiscoveredWorkload {
+		w := manualWorkload()
+		w.Kind, w.InstrumentationType = "aws.fargate-task", "aws.fargate-task"
+		w.Instrumented = true
+		w.ConformanceObservable = true
+		w.Conformance = api.ConformanceUnknown
+		w.WaitingFor = api.WaitingForDestination
+		return w
+	}
+
+	m := ToModel(adopted())
+
+	// Not the NotInstrumented wait: live agents are exporting telemetry, and a state that denied it would hide
+	// them from whoever has to reason about them.
+	if m.Current.State != api.WorkloadStateInstrumented || !m.Current.Instrumented {
+		t.Fatalf("state = %q instrumented = %v, want %q / true — the agents are live",
+			m.Current.State, m.Current.Instrumented, api.WorkloadStateInstrumented)
+	}
+	if len(m.Issues) != 1 {
+		t.Fatalf("issues = %d, want exactly 1 saying the instrumentation is unverified", len(m.Issues))
+	}
+	got := m.Issues[0]
+	if got.Code != "InstrumentationNotVerified" {
+		t.Errorf("issue.code = %q, want InstrumentationNotVerified", got.Code)
+	}
+	// Not drift, and not an error: nothing is broken, something is unconfirmed. Reporting an error here would
+	// send a customer to repair a task definition that may need no change at all.
+	if got.Severity != "unknown" {
+		t.Errorf("issue.severity = %q, want %q — an unconfirmed check is not a failure", got.Severity, "unknown")
+	}
+	// It clears when a destination is configured, with no action on the workload.
+	if got.Transient == nil || !*got.Transient {
+		t.Error("issue.transient = false, want true — configuring a destination resolves this by itself")
+	}
+	if !strings.Contains(got.Message, "no OTLP destination") {
+		t.Errorf("issue.message does not name the destination as the cause: %q", got.Message)
+	}
+	if m.Progress.WaitingFor == nil || *m.Progress.WaitingFor != api.WaitingForDestination {
+		t.Error("progress.waitingFor must carry the reason so a client can branch on it")
+	}
+	// A standing cause is dated, so a UI can say how long it has held.
+	if got.Since == nil {
+		t.Error("issue.since is nil; a missing destination is a standing condition and should be dated")
+	}
+
+	// And it is genuinely distinguishable from the verified-healthy report, which is the entire point.
+	healthy := ToModel(observedWorkload())
+	if healthy.Progress.Stage == m.Progress.Stage || len(healthy.Issues) != 0 {
+		t.Errorf("unverified and verified-conformant still render alike: stages %q vs %q, %d healthy issues",
+			m.Progress.Stage, healthy.Progress.Stage, len(healthy.Issues))
+	}
+}
+
+// TestUnverifiedNeverOutranksSomethingMoreSpecific pins the branch ORDER. "Not verified" is the weakest thing
+// the report can say about an instrumented workload, so anything that knows more has to win — otherwise adding
+// this branch would have silently swallowed the drift and settling states that took real observation to earn.
+func TestUnverifiedNeverOutranksSomethingMoreSpecific(t *testing.T) {
+	cases := []struct {
+		name      string
+		mutate    func(*api.DiscoveredWorkload)
+		wantStage string
+		wantCodes []string
+	}{
+		{
+			// A real verdict, computed against a real destination. Drift, not "unverified".
+			name: "a genuine partial verdict still reports drift",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformancePartial
+				w.MissingComponents = []string{"agentSidecar"}
+			},
+			wantStage: "Instrumentation does not match",
+			wantCodes: []string{"InstrumentationPartiallyApplied"},
+		},
+		{
+			// A stale Partial from when a destination existed describes a comparison against an endpoint that
+			// is now gone. The missing destination outranks it — hence this branch preceding the drift one.
+			name: "a missing destination outranks a stale partial verdict",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformancePartial
+				w.MissingComponents = []string{"agentSidecar"}
+				w.WaitingFor = api.WaitingForDestination
+			},
+			wantStage: "Instrumentation not verified",
+			wantCodes: []string{"InstrumentationNotVerified"},
+		},
+		{
+			// A read that failed already explains itself, and says the last confirmed state is what is shown.
+			// Adding "not verified" on top would be the same sentence twice.
+			name: "an observation error explains itself",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformanceUnknown
+				w.ObservationError = "AccessDenied: ecs:DescribeTaskDefinition"
+			},
+			wantStage: "Instrumented",
+			wantCodes: []string{"InstrumentationObservationFailed"},
+		},
+		{
+			// A customer deploy still landing looks exactly like a half-applied one, and must not be reported
+			// as either drifted or unverified while it settles.
+			name: "settling outranks unverified",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.Conformance = api.ConformanceUnknown
+				w.Settling = true
+			},
+			wantStage: "Verifying customer changes",
+			wantCodes: nil,
+		},
+		{
+			// Automatic mode has no observer by design — the reconciler converges and verifies — so its
+			// permanently-Unknown conformance must never surface as unverified.
+			name: "automatic mode is never reported as unverified",
+			mutate: func(w *api.DiscoveredWorkload) {
+				w.ManagementMode = spec.ModeAutomatic
+				w.Conformance = api.ConformanceUnknown
+				w.ConformanceObservable = false
+			},
+			wantStage: "Instrumented",
+			wantCodes: nil,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := observedWorkload()
+			c.mutate(&w)
+			m := ToModel(w)
+			if m.Progress.Stage != c.wantStage {
+				t.Errorf("progress.stage = %q, want %q", m.Progress.Stage, c.wantStage)
+			}
+			var codes []string
+			for _, i := range m.Issues {
+				codes = append(codes, i.Code)
+			}
+			if strings.Join(codes, ",") != strings.Join(c.wantCodes, ",") {
+				t.Errorf("issue codes = %v, want %v", codes, c.wantCodes)
+			}
+		})
+	}
+}

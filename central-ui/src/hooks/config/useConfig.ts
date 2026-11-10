@@ -1,0 +1,13 @@
+import { Role } from '@/types';
+import { useUserStore } from '@/store';
+import type { FetchedConfig } from '@odigos/ui-kit/types';
+import { useApiQuery } from '@odigos/ui-kit/contexts';
+
+export const useConfig = (): { config: Partial<FetchedConfig> | undefined; isReadonly: boolean } => {
+  const { user, canEdit } = useUserStore();
+  const { data: config } = useApiQuery('GET_CONFIG');
+
+  const isReadonly = user?.role === Role.VIEWER || user?.role === Role.NO_ACCESS || (!!config?.readonly && !canEdit);
+
+  return { config, isReadonly };
+};

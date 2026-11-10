@@ -37,6 +37,13 @@ is_enterprise() {
 # Image repository names that gain an "enterprise-" infix on enterprise installs.
 expected_image_name() {
 	local c="$1"
+	# Central and the cloud connectors are published only under enterprise names.
+	case "${c}" in
+		central-*|connector-*)
+			echo "odigos-enterprise-${c}${img_suffix}"
+			return
+			;;
+	esac
 	if is_enterprise; then
 		case "${c}" in
 			ui|instrumentor|odiglet|collector|agents)

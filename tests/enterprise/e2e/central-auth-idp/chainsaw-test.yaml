@@ -1,0 +1,60 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: central-auth-idp
+spec:
+  description: |
+    Standalone Central Auth IdP e2e (not part of Cypress).
+
+    Validates:
+    - Live OIDC discovery URL fetching for Azure / Okta (getOIDCDiscoveryEndpoints)
+    - Creating AZURE / OKTA IdPs with OIDC and SAML (one at a time)
+    - Keycloak IdP + brokered user reset between cases for a fresh IdP store
+    - Login using the created IdP (OIDC code flow via mock server; SAML broker redirect)
+  skipDelete: true
+  steps:
+    - name: Install Odigos Central
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              helm upgrade --install odigos-central \
+                ../../../../helm/odigos-central \
+                --create-namespace \
+                --namespace odigos-central \
+                --set image.tag=$IMAGE_TAG \
+                --set imagePrefix=registry.odigos.io \
+                --set onPremToken=$ODIGOS_API_KEY \
+                --set auth.adminUsername=admin \
+                --set auth.adminPassword=admin
+
+              kubectl label namespace odigos-central odigos.io/system-object="true"
+
+    - name: Verify Odigos Central Installation
+      try:
+        - assert:
+            timeout: 5m
+            file: ../../common/assert/odigos-central-installed.yaml
+      catch:
+        - script:
+            content: |
+              kubectl get all -n odigos-central
+              kubectl describe deployments -n odigos-central
+              kubectl logs -n odigos-central deploy/central-backend --tail=100 || true
+              kubectl logs -n odigos-central deploy/keycloak --tail=100 || true
+
+    - name: Run standalone auth IdP e2e
+      try:
+        - script:
+            timeout: 15m
+            content: |
+              chmod +x ./run-auth-idp-e2e.sh
+              ./run-auth-idp-e2e.sh
+      catch:
+        - script:
+            content: |
+              echo "Debugging central-auth-idp failure..."
+              kubectl get all -n odigos-central
+              kubectl logs -n odigos-central deploy/central-backend --tail=150 || true
+              kubectl logs -n odigos-central deploy/keycloak --tail=150 || true
+              kubectl logs -n odigos-central deploy/mock-oidc --tail=100 || true

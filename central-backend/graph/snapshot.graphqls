@@ -1,0 +1,41 @@
+# Cluster snapshot types for multi-cluster state aggregation
+
+type WorkloadSnapshot {
+  namespace: String!
+  name: String!
+  kind: String!
+  selected: Boolean!
+  # True when the workload's own Source has disableInstrumentation set, so it stays uninstrumented
+  # even when its namespace is auto-instrumented. Proxies before this field report false.
+  disabled: Boolean
+  otelServiceName: String
+  healthStatus: String
+  dataStreamNames: [String!]
+  detectedLanguages: [String!]
+  agentInjectionStatus: String
+}
+
+type NamespaceSnapshot {
+  name: String!
+  selected: Boolean
+  workloads: [WorkloadSnapshot!]!
+}
+
+type ClusterSnapshot {
+  clusterId: String!
+  clusterName: String!
+  timestamp: Int64!
+  namespaces: [NamespaceSnapshot!]!
+}
+
+type MultiClusterWorkloadsView {
+  clusters: [ClusterSnapshot!]!
+  totalWorkloads: Int!
+  totalNamespaces: Int!
+  lastUpdated: Int64!
+}
+
+extend type Query {
+  clusterSnapshot(clusterId: String!): ClusterSnapshot
+  allClusterSnapshots: MultiClusterWorkloadsView!
+}

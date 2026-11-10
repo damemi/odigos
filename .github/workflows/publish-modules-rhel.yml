@@ -17,7 +17,7 @@ jobs:
         strategy:
           fail-fast: false
           matrix:
-            service: ['autoscaler', 'instrumentor', 'scheduler', 'collector', 'odiglet', 'ui', 'operator', 'agents', 'insights']
+            service: ['autoscaler', 'instrumentor', 'scheduler', 'collector', 'odiglet', 'ui', 'operator', 'agents', 'insights', 'central-backend', 'central-proxy', 'central-ui']
             include:
               - service: autoscaler
                 runner: depot-ubuntu-latest
@@ -55,6 +55,18 @@ jobs:
                 runner: depot-ubuntu-latest
                 summary: 'Insights for Odigos'
                 description: 'Insights learns per-transaction baselines from traces and scores deviations.'
+              - service: central-backend
+                runner: depot-ubuntu-24.04-4
+                summary: 'Central Backend for Odigos'
+                description: 'Central Backend provides the API and coordination for Odigos Central multi-cluster management.'
+              - service: central-proxy
+                runner: depot-ubuntu-24.04-4
+                summary: 'Central Proxy for Odigos'
+                description: 'Central Proxy connects Odigos in workload clusters to Odigos Central.'
+              - service: central-ui
+                runner: depot-ubuntu-24.04-4
+                summary: 'Central UI for Odigos'
+                description: 'Central UI provides the web application for managing Odigos Central.'
         steps:
           - name: Checkout repository
             uses: actions/checkout@v5
@@ -71,6 +83,7 @@ jobs:
             run: |
               if [ -f odiglet/enterprise/Dockerfile ]; then enterprise=true; else enterprise=false; fi
               skip=false
+              context=.
               case "$SERVICE" in
                 autoscaler|scheduler|operator) image="odigos-$SERVICE"; file="$SERVICE/Dockerfile" ;;
                 instrumentor|collector|odiglet)
@@ -85,8 +98,14 @@ jobs:
                 insights)
                   if $enterprise; then image="odigos-enterprise-insights"; file="insights/Dockerfile"
                   else skip=true; fi ;;
+                # Tags from before Central moved here release it from odigos-enterprise.
+                central-backend|central-proxy|central-ui)
+                  if [ -f "$SERVICE/Dockerfile" ]; then image="odigos-enterprise-$SERVICE"; file="$SERVICE/Dockerfile"
+                  else skip=true; fi
+                  if [ "$SERVICE" = central-ui ]; then context=central-ui; fi ;;
               esac
               echo "skip=$skip" >> "$GITHUB_OUTPUT"
+              echo "context=$context" >> "$GITHUB_OUTPUT"
               echo "image=$image" >> "$GITHUB_OUTPUT"
               echo "file=$file" >> "$GITHUB_OUTPUT"
 
@@ -157,7 +176,7 @@ jobs:
               # Use the checked-out files (at inputs.tag) instead of build-push-action's
               # default Git context, which would otherwise build from the workflow's
               # triggering ref (e.g. main) and ignore the actions/checkout above.
-              context: .
+              context: ${{ steps.image.outputs.context }}
               push: true
               provenance: false
               tags: |
@@ -298,9 +317,27 @@ jobs:
         needs: publish-cli-rhel
         runs-on: ubuntu-latest
         permissions:
+          contents: read
           id-token: write
         steps:
+          # Tags that carry Central and the cloud connectors are released entirely from this repo; patches of
+          # versions released before the move still publish their enterprise images from odigos-enterprise.
+          - name: Check whether odigos-enterprise publishes this tag
+            id: layout
+            env:
+              GH_TOKEN: ${{ github.token }}
+              TAG: ${{ inputs.tag }}
+              REPO: ${{ github.repository }}
+            run: |
+              if gh api "repos/${REPO}/contents/central-backend?ref=${TAG}" --silent 2>/dev/null; then
+                echo "Tag ${TAG} carries Central and the connectors; nothing to publish from odigos-enterprise."
+                echo "dispatch=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "dispatch=true" >> "$GITHUB_OUTPUT"
+              fi
+
           - name: Get sts tokens
+            if: steps.layout.outputs.dispatch == 'true'
             id: sts-enterprise
             uses: odigos-io/ci-core/sts@main
             with:
@@ -309,6 +346,7 @@ jobs:
               output-git-config: "false"
 
           - name: Trigger Enterprise Publish job
+            if: steps.layout.outputs.dispatch == 'true'
             uses: peter-evans/repository-dispatch@v4
             with:
               token: ${{ steps.sts-enterprise.outputs.GH_TOKEN }}

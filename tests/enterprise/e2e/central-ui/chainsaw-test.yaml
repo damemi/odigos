@@ -1,0 +1,338 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: central-ui
+spec:
+  description: |
+    Run E2E tests against the Central UI using Cypress.
+
+    Single-cluster setup:
+    - Installs both Odigos Central (in `odigos-central`) and a single Odigos OSS instance acting as a Central Proxy (in `odigos-test`) on the chainsaw cluster, plus Jaeger and the standard simple-demo apps.
+    - Cypress drives the Central UI through admin sign-in + connection-select + the same flows the standalone webapp suite runs.
+  skipDelete: true
+  steps:
+    - name: Install - Jaeger
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/install-jaeger.yaml
+
+    - name: Install - Simple Demo Apps
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/install-simple-demo.yaml
+
+    # Install Odigos as a Central Proxy. Mirrors the helm flow documented at
+    #   https://docs.odigos.io/central/adding-connections/remote-clusters
+    # plus `image.tag=$IMAGE_TAG` so the e2e cluster picks the locally-built
+    # images that were `kind load`ed by the CI workflow.
+    - name: Install Odigos OSS as Central Proxy
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              helm upgrade --install odigos \
+                ../../../../helm/odigos \
+                --create-namespace \
+                --namespace odigos-test \
+                --set image.tag=$IMAGE_TAG \
+                --set onPremToken=$ODIGOS_API_KEY \
+                --set clusterName=testing \
+                --set centralProxy.centralBackendURL="central-backend.odigos-central.svc.cluster.local:8081"
+
+              kubectl label namespace odigos-test odigos.io/system-object="true"
+
+    # Patch the OSS `odigos-deployment` ConfigMap so `ODIGOS_VERSION` matches
+    # the actual schema served by the registry-pulled OSS UI image (which is
+    # the latest released `odigos-ui:vX.Y.Z`, retagged to `:e2e-test` by CI).
+    #
+    # Why this is needed:
+    #   - The helm chart sets `ODIGOS_VERSION = .Values.image.tag`, which in
+    #     CI is the string "e2e-test". Central UI feeds that into
+    #     `trimVersion()` to pick a versioned GraphQL query, but
+    #     `trimVersion("e2e-test")` extracts the `2` from `e2e` and treats
+    #     it as major version 2 (=20000), so it always picks the *newest*
+    #     query — which references fields added on the OSS `main` branch
+    #     that the latest *released* UI image doesn't have yet.
+    #   - Pinning ODIGOS_VERSION to the latest released helm tag aligns
+    #     Central UI's versioned query selector with the schema actually
+    #     served by the deployed UI pod, so `EffectiveConfig` resolves
+    #     cleanly instead of failing on unknown fields.
+    #
+    # Restarting central-proxy is required because it reads `ODIGOS_VERSION`
+    # from this ConfigMap on startup and reports it to central-backend over
+    # the WebSocket; without a restart the ConfigMap edit has no effect.
+    - name: Override ODIGOS_VERSION to match OSS UI image
+      try:
+        - script:
+            timeout: 1m20s
+            content: |
+              # Never patch with an empty value: components like the autoscaler
+              # read ODIGOS_VERSION at startup and os.Exit(1) when it is empty,
+              # which puts them in a permanent CrashLoopBackOff.
+              if [ -z "$LATEST_RELEASE_TAG" ]; then
+                echo "❌ LATEST_RELEASE_TAG is empty, refusing to patch ODIGOS_VERSION"
+                exit 1
+              fi
+              kubectl patch configmap odigos-deployment -n odigos-test \
+                --type merge \
+                -p "{\"data\":{\"ODIGOS_VERSION\":\"$LATEST_RELEASE_TAG\"}}"
+              kubectl rollout restart deployment/central-proxy -n odigos-test
+              kubectl rollout status deployment/central-proxy -n odigos-test --timeout=2m
+
+    # Install Odigos Central. Mirrors the helm flow documented at
+    #   https://docs.odigos.io/central/installation
+    # — Keycloak's admin password is auto-generated per the docs, and we
+    # don't override `image.repository`: the chart already defaults to
+    # registry.odigos.io/odigos-enterprise-<component> via _helpers.tpl.
+    - name: Install Odigos Central
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              helm upgrade --install odigos-central \
+                ../../../../helm/odigos-central \
+                --create-namespace \
+                --namespace odigos-central \
+                --set image.tag=$IMAGE_TAG \
+                --set onPremToken=$ODIGOS_API_KEY
+
+              kubectl label namespace odigos-central odigos.io/system-object="true"
+
+    - name: Verify Odigos OSS Installation
+      try:
+        - assert:
+            timeout: 2m50s
+            file: ../../common/assert/odigos-installed.yaml
+      catch:
+        - script:
+            content: |
+              echo "🔍 Listing all resources in namespace 'odigos-test'..."
+              kubectl get all -n odigos-test
+              echo "📝 Describing all deployments in namespace 'odigos-test'..."
+              kubectl describe deployments -n odigos-test
+              echo "📜 Dumping logs of non-ready pods in namespace 'odigos-test'..."
+              for POD in $(kubectl get pods -n odigos-test \
+                -o jsonpath='{range .items[?(@.status.containerStatuses[0].ready==false)]}{.metadata.name}{"\n"}{end}'); do
+                echo "---- logs: $POD (current) ----"
+                kubectl logs "$POD" -n odigos-test --all-containers --tail=100 || true
+                echo "---- logs: $POD (previous) ----"
+                kubectl logs "$POD" -n odigos-test --all-containers --tail=100 --previous || true
+              done
+
+    - name: Verify Odigos Central Installation
+      try:
+        - assert:
+            # Keycloak cold-start on kind regularly exceeds ~2m; backend waits on it.
+            timeout: 5m
+            file: ../../common/assert/odigos-central-installed.yaml
+      catch:
+        - script:
+            content: |
+              echo "🔍 Listing all resources in namespace 'odigos-central'..."
+              kubectl get all -n odigos-central
+              echo "📝 Describing all deployments in namespace 'odigos-central'..."
+              kubectl describe deployments -n odigos-central
+
+    - name: Verify - Jaeger Installed
+      try:
+        - assert:
+            file: ../../../../tests/common/assert/jaeger-installed.yaml
+
+    - name: Assert - Simple Demo Apps Installed
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
+
+    - name: Wait for Central Backend Ready
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              # Pod Ready can flip early while /healthz is used for readiness;
+              # GraphQL and WS accept traffic only after /readyz is 200.
+              echo "Waiting for central-backend /readyz..."
+              kubectl port-forward -n odigos-central svc/central-backend 8083:8081 >/dev/null 2>&1 &
+              PF_PID=$!
+              cleanup() { kill $PF_PID 2>/dev/null || true; }
+              trap cleanup EXIT
+              sleep 3
+              for i in $(seq 1 90); do
+                CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://localhost:8083/readyz" || echo "000")
+                if [ "$CODE" = "200" ]; then
+                  echo "✅ central-backend /readyz is 200"
+                  exit 0
+                fi
+                echo "⏳ /readyz=$CODE ($i/90)..."
+                sleep 2
+              done
+              echo "❌ central-backend /readyz did not become ready"
+              kubectl get pods -n odigos-central -l app=central-backend || true
+              kubectl logs -n odigos-central -l app=central-backend --tail=80 || true
+              exit 1
+
+    - name: Wait for Central Proxy WebSocket Connection
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              # The central-proxy deployment streams a "WebSocket connection
+              # established" log line once it has registered itself with
+              # central-backend. Loop until we see it (or time out).
+              echo "Waiting for central-proxy → central-backend connection..."
+              for i in $(seq 1 60); do
+                if kubectl logs deploy/central-proxy -n odigos-test --tail=200 2>/dev/null \
+                  | grep -q "WebSocket connection established"; then
+                  echo "✅ central-proxy is connected to central-backend"
+                  exit 0
+                fi
+                sleep 5
+              done
+              echo "❌ central-proxy did not connect within timeout"
+              kubectl logs deploy/central-proxy -n odigos-test --tail=200 || true
+              kubectl logs deploy/central-backend -n odigos-central --tail=80 || true
+              exit 1
+
+    - name: Wait for Compute Platform Registration in Central
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              # Verify central-backend's GraphQL has at least one
+              # ComputePlatform whose name matches the proxy's clusterName.
+              kubectl port-forward -n odigos-central svc/central-backend 8083:8081 >/dev/null 2>&1 &
+              PF_PID=$!
+              cleanup() { kill $PF_PID 2>/dev/null || true; }
+              trap cleanup EXIT
+              sleep 5
+
+              # central-backend exposes the proxy connection status as the
+              # lowercase string "success" (see central-backend
+              # consts.StatusConnected). The Central UI maps this to the
+              # `Connection live` badge via StatusType.Success === 'success'.
+              # computePlatforms requires a session, so sign in as the Keycloak
+              # bootstrap admin through central-backend's Keycloak proxy. Its
+              # built-in master-realm `admin` role is what Central reads as ADMIN.
+              KC_USER=$(kubectl get secret keycloak-admin-credentials -n odigos-central -o jsonpath='{.data.admin-username}' | base64 -d)
+              KC_PASS=$(kubectl get secret keycloak-admin-credentials -n odigos-central -o jsonpath='{.data.admin-password}' | base64 -d)
+
+              for i in $(seq 1 48); do
+                TOKEN=$(curl -s -X POST "http://localhost:8083/realms/master/protocol/openid-connect/token" \
+                  -H "Content-Type: application/x-www-form-urlencoded" \
+                  --data-urlencode "grant_type=password" \
+                  --data-urlencode "client_id=odigos-central" \
+                  --data-urlencode "username=$KC_USER" \
+                  --data-urlencode "password=$KC_PASS" | jq -r '.access_token // ""' 2>/dev/null || echo "")
+                RES=$(curl -s -X POST "http://localhost:8083/graphql" \
+                  -H "Content-Type: application/json" \
+                  -H "Authorization: Bearer $TOKEN" \
+                  -d '{"query": "{ computePlatforms { name status } }"}' || true)
+                NAME=$(echo "$RES" | jq -r '.data.computePlatforms[0].name // ""' 2>/dev/null || echo "")
+                STATUS=$(echo "$RES" | jq -r '.data.computePlatforms[0].status // ""' 2>/dev/null || echo "")
+                if [ "$NAME" = "testing" ] && [ "$STATUS" = "success" ]; then
+                  echo "✅ Central registered proxy 'testing' with status=success"
+                  exit 0
+                fi
+                echo "⏳ Waiting for proxy registration (current: name=$NAME status=$STATUS)..."
+                sleep 5
+              done
+              echo "❌ Proxy did not register with status=success in time"
+              echo "Last response: $RES"
+              exit 1
+
+    # NOTE: `chainsaw script` buffers stdout until the script exits, so when
+    # this step is cancelled mid-run the chainsaw log shows nothing about
+    # what cypress was doing. We work around this by writing yarn output to
+    # log files inside the central-ui dir; the catch step then dumps the
+    # tail of those files even on hang/timeout, giving us a clear picture of
+    # which spec was executing when things stopped.
+    #
+    # We deliberately AVOID `cmd | tee log` here because:
+    #  1. chainsaw runs `script:` content under `/usr/bin/sh` (dash), so
+    #     `set -o pipefail` is rejected ("Illegal option").
+    #  2. Without pipefail, the pipeline's exit code is tee's (always 0),
+    #     so cypress failures are silently swallowed and the whole chainsaw
+    #     step becomes a no-op for assertions.
+    # A direct redirect `cmd > log 2>&1` propagates the command's exit code
+    # naturally and is POSIX-portable.
+    - name: Run Cypress tests
+      try:
+        - script:
+            # yarn install + cypress + full suite is typically ~4–5m; leave headroom
+            # so a slow cluster does not SIGTERM a green run.
+            timeout: 10m
+            content: |
+              # Reach Central UI via kind NodePort instead of a long-lived
+              # kubectl port-forward. Under Cypress load, port-forward wedges
+              # without exiting ("Timeout occurred" / broken pipe) while still
+              # accepting some TCP connections — health checks can pass
+              # intermittently while cy.visit hits ESOCKETTIMEDOUT /
+              # pageLoadTimeout and cascades into skipped suites.
+              #
+              # NodePort goes through the kind Docker network to the pod, so
+              # browser + Cypress share a stable origin for the whole run.
+              # GraphQL/SSE still rewrite in-cluster to central-backend.
+              echo "Exposing central-ui via NodePort for Cypress..."
+              kubectl patch svc central-ui -n odigos-central --type merge \
+                -p '{"spec":{"type":"NodePort"}}'
+              NODE_PORT=$(kubectl get svc central-ui -n odigos-central \
+                -o jsonpath='{.spec.ports[0].nodePort}')
+              NODE_IP=$(kubectl get nodes \
+                -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+              if [ -z "$NODE_IP" ] || [ -z "$NODE_PORT" ]; then
+                echo "❌ Failed to resolve kind NodePort endpoint (ip=$NODE_IP port=$NODE_PORT)"
+                kubectl get svc central-ui -n odigos-central -o wide || true
+                kubectl get nodes -o wide || true
+                exit 1
+              fi
+              export CYPRESS_BASE_URL="http://${NODE_IP}:${NODE_PORT}"
+              echo "CYPRESS_BASE_URL=${CYPRESS_BASE_URL}"
+
+              echo "Waiting for Central UI on ${CYPRESS_BASE_URL}..."
+              for i in $(seq 1 30); do
+                if curl -fsSL --max-time 2 "${CYPRESS_BASE_URL}/" >/dev/null 2>&1; then
+                  echo "✅ Central UI is up"
+                  break
+                fi
+                sleep 2
+              done
+              if ! curl -fsSL --max-time 2 "${CYPRESS_BASE_URL}/" >/dev/null 2>&1; then
+                echo "❌ Central UI did not become reachable on ${CYPRESS_BASE_URL}"
+                kubectl get svc central-ui -n odigos-central -o yaml || true
+                kubectl get pods -n odigos-central -o wide || true
+                exit 1
+              fi
+
+              cd ../../../../central-ui
+              # Direct redirect (not `| tee`) so the command's exit code propagates and a failing install / cypress run fails the step.
+              # The `catch:` block below tails these files for diagnostics.
+              yarn install > yarn-install.log 2>&1
+              # Cypress is installed only in CI (not a package.json dependency).
+              # Use yarn global add (not yarn dlx) — this repo uses Yarn classic
+              # v1, which does not support `dlx`.
+              yarn add -D cypress@16 > yarn-add-cypress.log 2>&1
+              export PATH="$(yarn global bin):$PATH"
+              ./node_modules/.bin/cypress run --e2e -q > cy-run.log 2>&1
+              exit $?
+      catch:
+        - script:
+            content: |
+              echo "==== central-ui service (NodePort) ===="
+              kubectl get svc central-ui -n odigos-central -o wide || true
+              echo "==== yarn install (last 50 lines) ===="
+              tail -n 50 central-ui/yarn-install.log 2>/dev/null \
+                || tail -n 50 ../../../../central-ui/yarn-install.log 2>/dev/null || true
+              echo "==== yarn global add cypress (last 50 lines) ===="
+              tail -n 50 central-ui/yarn-add-cypress.log 2>/dev/null \
+                || tail -n 50 ../../../../central-ui/yarn-add-cypress.log 2>/dev/null || true
+              echo "==== cypress run (full log) ===="
+              cat central-ui/cy-run.log 2>/dev/null \
+                || cat ../../../../central-ui/cy-run.log 2>/dev/null || true
+              echo "==== central-ui pod logs ===="
+              kubectl logs deploy/central-ui -n odigos-central --tail=300 || true
+              echo "==== central-backend pod logs ===="
+              kubectl logs deploy/central-backend -n odigos-central --tail=300 || true
+              echo "==== central-proxy pod logs ===="
+              kubectl logs deploy/central-proxy -n odigos-test --tail=300 || true
+              echo "==== keycloak pod logs ===="
+              kubectl logs deploy/keycloak -n odigos-central --tail=200 || true
