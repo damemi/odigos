@@ -11,7 +11,7 @@
 #    - SAML: broker login redirect reaches the configured SSO endpoint
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
 BACKEND_PORT="${BACKEND_PORT:-18084}"
 KEYCLOAK_PORT="${KEYCLOAK_PORT:-18085}"
 SAML_SSO_PORT="${SAML_SSO_PORT:-18086}"
