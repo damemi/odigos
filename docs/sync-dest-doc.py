@@ -535,9 +535,6 @@ def process_files(backend_mdx_dir, backend_yaml_dir):
                     yaml_content = yaml.safe_load(yaml_file)
 
                 destination = file[:-5]
-                # Pyroscope is enterprise-only and is not published on the Open Source site.
-                if destination == "pyroscope":
-                    continue
 
                 # Generate or update the MDX file
                 mdx_path = os.path.join(
@@ -551,11 +548,11 @@ def process_files(backend_mdx_dir, backend_yaml_dir):
                 else:
                     create_mdx(mdx_path, yaml_content)
 
-                # The Open Source page wraps the snippet but keeps its own navigation metadata.
+                # The page wraps the snippet but keeps its own navigation metadata.
                 frontmatter = get_documenation(yaml_content)["content_before_custom"].split("---", 2)[1]
                 if frontmatter == previous_frontmatter:
                     continue
-                wrapper_path = os.path.join("oss", "backends", destination + '.mdx')
+                wrapper_path = os.path.join("enterprise", "backends", destination + '.mdx')
                 if os.path.exists(wrapper_path):
                     with open(wrapper_path, 'r') as wrapper_file:
                         wrapper = wrapper_file.read()
@@ -575,12 +572,12 @@ def process_overview(backend_yaml_dir, docs_dir):
     Returns:
         None
     """
-    overview_path = os.path.join(docs_dir, "snippets/oss/backends-overview.mdx")
+    overview_path = os.path.join(docs_dir, "snippets/enterprise/backends-overview.mdx")
 
     rows = []
     for root, _, files in os.walk(backend_yaml_dir):
         for file in sorted(files):
-            if file.endswith('.yaml') and file != "pyroscope.yaml":
+            if file.endswith('.yaml'):
                 # Read the YAML file
                 yaml_path = os.path.join(root, file)
                 with open(yaml_path, 'r') as yaml_file:
@@ -640,30 +637,19 @@ def process_mint(backend_mdx_dir, docs_dir):
                 backend_pages.append(file.replace('.mdx', ''))
     backend_pages = sorted(backend_pages)
 
-    # Update the Open Source K8s Agent destination navigation.
+    # Update the K8s Agent destination navigation.
     k8s_product = next((
         p for p in docs_data.get("navigation", {}).get("products", [])
         if p.get("product") == "K8s Agent"
     ), None)
 
     if k8s_product:
-        # docs.json may list tabs under product ("tabs") or under "versions"[] (legacy).
-        tabs_to_process = []
-        if k8s_product.get("versions"):
-            for version in k8s_product["versions"]:
-                tabs_to_process.extend(version.get("tabs", []))
-        else:
-            tabs_to_process = k8s_product.get("tabs", [])
-
-        for tab in tabs_to_process:
-            if tab.get("href") != "oss":
-                continue
-            prefix = "oss/backends"
-            for group in tab.get("groups", []):
-                if group.get("group") == "Destinations":
-                    for page in group.get("pages", []):
-                        if isinstance(page, dict) and page.get("group") == "Supported Backends":
-                            page["pages"] = [f"{prefix}/{name}" for name in backend_pages]
+        prefix = "enterprise/backends"
+        for group in k8s_product.get("groups", []):
+            if group.get("group") == "Destinations":
+                for page in group.get("pages", []):
+                    if isinstance(page, dict) and page.get("group") == "Supported Backends":
+                        page["pages"] = [f"{prefix}/{name}" for name in backend_pages]
 
     # Save the modified JSON back to the file
     with open(docs_json_path, 'w') as file:
@@ -672,7 +658,7 @@ def process_mint(backend_mdx_dir, docs_dir):
 
 
 if __name__ == "__main__":
-    backend_mdx_dir = "./snippets/oss/backends"
+    backend_mdx_dir = "./snippets/enterprise/backends"
     backend_yaml_dir = "../destinations/data"
     docs_dir = "."
 
