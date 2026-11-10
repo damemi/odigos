@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.20
 # Pinned independently of OSS's collector/Dockerfile, and may run ahead of it. The floor is the
 # `go 1.26.4` that the collector components declare, since the builder runs with GOTOOLCHAIN=local; above
 # that it tracks the latest 1.26 patch, because the stdlib compiled into both binaries is what
@@ -5,28 +6,30 @@
 FROM --platform=$BUILDPLATFORM golang:1.26.9-trixie AS builder
 # install the required tooling for calling `setcap` on the compiled binary
 RUN apt-get update && apt-get install -y --no-install-recommends libcap2-bin
-# The enterprise distribution replaces odigos collector components, common and odigosauth with local paths.
-COPY ./common/ /go/src/common
-COPY ./odigosauth/ /go/src/odigosauth
-COPY ./collector/ /go/src/collector
+WORKDIR /go/src
+
+# copy dependency metadata first for better layer caching (COPY --parents needs syntax 1.20+).
+# The enterprise distribution replaces odigos collector components, common and odigosauth with local
+# paths, so go mod download needs the go.mod of every one of them.
+COPY --parents collector/**/go.mod collector/**/go.sum common/go.mod common/go.sum odigosauth/go.mod odigosauth/go.sum ./
 WORKDIR /go/src/collector/enterprise
 
 # download dependencies before branching out to cross-compile for better caching
-RUN --mount=type=secret,id=github_token \
-    --mount=type=cache,target=/go/pkg/mod \
+RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     cd odigosotelcol && go mod download
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     cd cmd/odigosopampsupervisor && go mod download
 
+COPY ./common/ /go/src/common
+COPY ./odigosauth/ /go/src/odigosauth
+COPY ./collector/ /go/src/collector
+
 ARG TARGETARCH
 ARG RHEL=false
-RUN --mount=type=secret,id=github_token \
-    --mount=type=cache,target=/go/pkg/mod \
+RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH make build-odigoscol
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
