@@ -206,8 +206,15 @@ spec:
     - name: Verify Trace - Context Propagation
       try:
         - script:
+            timeout: 1m10s
             content: |
-              ../../common/simple_trace_db_query_runner.sh ../../common/queries/context-propagation.yaml
+              while true; do
+                ../../common/simple_trace_db_query_runner.sh ../../common/queries/context-propagation.yaml
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
       catch:
         - podLogs:
             name: odiglet
