@@ -302,9 +302,20 @@ jobs:
           - "enterprise/jvm-metrics"
           - "enterprise/mount-method"
           - "enterprise/non-root"
-          - "enterprise/control-plane"
           - "enterprise/instrumentation-rules"
           - "enterprise/python-ebpf"
+        include:
+          # Control plane instrumentation is tested from k8s 1.29: older control plane binaries are built with
+          # Go versions the enterprise Go agent does not fully support (stripped binaries, gRPC context propagation).
+          - kubernetes-version: "1.29"
+            test-scenario: "enterprise/control-plane"
+          - kubernetes-version: "1.37"
+            test-scenario: "enterprise/control-plane"
+          # non-root also ran on these versions in the enterprise CI.
+          - kubernetes-version: "1.23"
+            test-scenario: "enterprise/non-root"
+          - kubernetes-version: "1.32"
+            test-scenario: "enterprise/non-root"
 
     steps:
       - name: Checkout
