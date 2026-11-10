@@ -1,0 +1,95 @@
+name: Connector Postgres Migrations
+
+# Validates the goose migration set and exercises a full up -> down -> up round trip against a real
+# Postgres, so a broken revert (or an up migration that can't be re-applied after a rollback) fails the PR.
+#
+# connectors/postgres is in the trigger set as well as connector-postgres: the migrations write the
+# schema_versions markers that connectors/postgres/schema.go declares, and every connector runtime verifies
+# that map with exact equality at startup. A PR that changes only one side would otherwise skip this
+# workflow entirely and ship a mismatch that stops all connector pods from starting.
+on:
+  pull_request:
+    paths:
+      - "connector-postgres/**"
+      - "connectors/postgres/**"
+      - ".github/workflows/connector-postgres-migrations.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Pure file-parsing check of the Go <-> SQL version contract: no database needed, so it runs as its own
+  # job rather than inside the migration round trip (which pins its own Go for goose, independent of the
+  # connectors module's go directive).
+  verify-schema-contract:
+    name: Verify schema-version contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: "connectors/go.mod"
+
+      - name: Assert ExpectedSchemaVersions matches the migration markers
+        working-directory: connectors
+        run: go test ./postgres/...
+
+  verify-migrations:
+    name: Validate & round-trip migrations
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: odigos
+          POSTGRES_DB: odigos_central
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: "postgres://postgres:odigos@localhost:5432/odigos_central?sslmode=disable"
+      MIGRATIONS_DIR: connector-postgres/migrations
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.8"
+
+      - name: Install goose
+        run: CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@v3.28.0
+
+      - name: Validate migrations parse
+        run: goose -dir "$MIGRATIONS_DIR" validate
+
+      - name: Apply all up migrations
+        run: goose -dir "$MIGRATIONS_DIR" postgres "$DATABASE_URL" up
+
+      - name: Revert all down migrations
+        run: goose -dir "$MIGRATIONS_DIR" postgres "$DATABASE_URL" down-to 0
+
+      - name: Re-apply up (down migrations left a clean, migratable state)
+        run: goose -dir "$MIGRATIONS_DIR" postgres "$DATABASE_URL" up
+
+      - name: Assert connector schemas exist after re-apply
+        run: |
+          count=$(psql "$DATABASE_URL" -tAc \
+            "SELECT count(*) FROM pg_namespace WHERE nspname IN ('connector_platform','connector_aws');")
+          if [ "$count" != "2" ]; then
+            echo "::error title=Migration round-trip failed::expected connector_platform + connector_aws after re-apply, found $count schema(s)."
+            exit 1
+          fi
+          echo "✅ up -> down-to 0 -> up round trip succeeded."

@@ -1,0 +1,99 @@
+# OdigosCloudConnector installs one AWS connector runtime (one account boundary).
+#
+# Everything provider-specific is declared in the connector spec (connectors/spec/data/aws.yaml),
+# not in this CR — the CR only references it:
+#   spec.account.id              -> the connector.field "accountId"
+#   spec.workloads / spec.computePlatforms / spec.collectors -> per-type allow-lists (see below)
+#   the credentials Secret keys  -> auth.methods[].fields[].name (see below)
+# The connector scans every region enabled in the account; there is no region selection.
+#
+# How credentials flow (no AWS-specific wiring in the controller):
+#   1. The keys in the Secret below match the spec's auth field NAMES (accessKeyId, roleArn, ...).
+#   2. connector-runtime reads the spec and, for each auth field, injects its Secret value into the
+#      env var the field declares (envVar), e.g. accessKeyId -> AWS_ACCESS_KEY_ID. Adding a provider
+#      needs no controller change — only its spec.
+#   3. central-backend's testConnectionForCloudConnector runs the same checks in-memory (credentials
+#      keyed by these same field names) BEFORE this CR/Secret is applied; on success you apply this.
+#
+# Apply the credentials Secret in the same namespace before (or with) this CR.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: odigos-connector-aws-prod-credentials
+  namespace: odigos-central
+type: Opaque
+stringData:
+  # Provide the keys for exactly ONE auth path (keys = connectors/spec/data/aws.yaml auth.methods[].fields[].name).
+  # Leave the Secret empty to use workload-identity (pod / IRSA) — no keys required.
+  #
+  # --- static-keys ---
+  # accessKeyId: AKIA...
+  # secretAccessKey: ...
+  # sessionToken: ...               # optional; temporary credentials only
+  #
+  # --- assume-role (composes on top of workload-identity or static-keys) ---
+  # roleArn: arn:aws:iam::025950698545:role/OdigosConnectorRole
+  # externalId: odigos-external-id  # optional; recommended in the role's trust policy
+---
+apiVersion: odigos.io/v1alpha1
+kind: OdigosCloudConnector
+metadata:
+  name: aws-prod
+  namespace: odigos-central
+  labels:
+    odigos.io/platform-type: connector
+    odigos.io/provider: aws
+  annotations:
+    odigos.io/deletion-policy: cleanup
+spec:
+  provider: aws
+  displayName: AWS Production
+
+  # Provider boundary -> connectors/spec/data/aws.yaml connector.field "accountId". The connector scans every
+  # region enabled in the account, so there is no region selection here.
+  account:
+    id: "025950698545"
+    displayName: Odigos dev account
+
+  # Credentials live in a Secret — never in the CR. Supported auth paths (connectors/spec/data/aws.yaml
+  # auth.methods); the keys provided in the Secret select which one applies:
+  #   workload-identity — pod / IRSA; no keys required
+  #   static-keys       — accessKeyId + secretAccessKey (+ optional sessionToken)
+  #   assume-role       — roleArn (+ optional externalId), composing on top of either base method
+  credentialsSecretRef:
+    name: odigos-connector-aws-prod-credentials
+
+# Per-type allow-lists, split into the two domains (mirrors connectors/spec/data/aws.yaml). The connector
+# intersects these with the types its spec supports; a type it does not support is ignored.
+#
+# Workloads — directly-instrumentable resources:
+#   discovery       — enumerate workloads of this type (aws.lambda, aws.fargate-task)
+#   instrumentation — instrument them in place (Lambda layer / Fargate sidecar)
+  workloads:
+    - type: aws.lambda
+      discovery: true
+      instrumentation: true
+    - type: aws.fargate-task
+      discovery: true
+      instrumentation: true
+
+# ComputePlatforms — managed environments (aws.ecs-cluster, aws.fargate-cluster, aws.eks, aws.ec2):
+#   discovery    — detect compute platforms of this type
+#   installation — install a separate Odigos agent onto one (not supported yet; leave unset)
+  computePlatforms:
+    - type: aws.fargate-cluster
+      discovery: true
+    - type: aws.ecs-cluster
+      discovery: true
+
+# Collectors — enable management for discovery/configuration of Collector installations.
+# Enable deployment as well to let Odigos install the Collector. For a customer-managed
+# installation, set deployment: false. Uncomment only after configuring the desired mode.
+  # collectors:
+  #   - type: aws.fargate-collector
+  #     management: true
+  #     deployment: true
+
+  discovery:
+    refreshInterval: 10m

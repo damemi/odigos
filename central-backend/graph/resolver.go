@@ -1,0 +1,21 @@
+package graph
+
+import (
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/internal/services"
+	websocketserver "github.com/odigos-io/odigos/central-backend/internal/websocket"
+)
+
+type Resolver struct {
+	RedisClient            *redisclient.RedisClient
+	WebSocketServer        *websocketserver.WebSocketServer
+	AdminService           *services.AdminService
+	AuthService            *services.AuthService
+	UserService            *services.UserService
+	TeamService            *services.TeamService
+	RoleMappingService     *services.RoleMappingService
+	HealthService          *services.HealthService
+	ComputePlatformService *services.ComputePlatformService
+	ConfigService          *services.ConfigService
+	CloudConnectorService  *services.CloudConnectorService
+}

@@ -140,15 +140,32 @@ jobs:
             echo "kind=standard" >> "$GITHUB_OUTPUT"
           fi
 
+      # Central and the cloud connectors moved here from odigos-enterprise. A tag that carries them is released
+      # entirely from this repo; patches of versions released before the move still release their enterprise
+      # components from odigos-enterprise.
+      - name: Check whether odigos-enterprise releases this tag
+        id: layout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "repos/${REPO}/contents/central-backend?ref=${TAG}" --silent 2>/dev/null; then
+            echo "Tag ${TAG} carries Central and the connectors; nothing to release in odigos-enterprise."
+            echo "dispatch=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
-        if: steps.meta.outputs.kind == 'feature'
+        if: steps.meta.outputs.kind == 'feature' && steps.layout.outputs.dispatch == 'true'
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ needs.decide.outputs.tag }}
 
       - name: Read enterprise branch from tag annotation
-        if: steps.meta.outputs.kind == 'feature'
+        if: steps.meta.outputs.kind == 'feature' && steps.layout.outputs.dispatch == 'true'
         id: branch
         env:
           TAG: ${{ needs.decide.outputs.tag }}
@@ -178,6 +195,7 @@ jobs:
           echo "OSS branch: '${OSS_BRANCH}'"
 
       - name: Get sts tokens
+        if: steps.layout.outputs.dispatch == 'true'
         id: sts-enterprise
         uses: odigos-io/ci-core/sts@main
         with:
@@ -186,7 +204,7 @@ jobs:
           output-git-config: "false"
 
       - name: Trigger create release PR workflow
-        if: steps.meta.outputs.kind == 'standard'
+        if: steps.meta.outputs.kind == 'standard' && steps.layout.outputs.dispatch == 'true'
         uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ steps.sts-enterprise.outputs.GH_TOKEN }}
@@ -195,7 +213,7 @@ jobs:
           client-payload: '{"tag": "${{ needs.decide.outputs.tag }}"}'
 
       - name: Trigger create feature-release PR workflow
-        if: steps.meta.outputs.kind == 'feature'
+        if: steps.meta.outputs.kind == 'feature' && steps.layout.outputs.dispatch == 'true'
         uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ steps.sts-enterprise.outputs.GH_TOKEN }}
@@ -204,7 +222,7 @@ jobs:
           client-payload: '{"tag": "${{ needs.decide.outputs.tag }}", "branch": "${{ steps.branch.outputs.enterprise_branch }}", "oss_branch": "${{ steps.branch.outputs.oss_branch }}"}'
 
       - name: Notify Slack
-        if: always()
+        if: always() && steps.layout.outputs.dispatch != 'false'
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
@@ -294,7 +312,67 @@ jobs:
             runner: depot-ubuntu-latest
             summary: 'Insights for Odigos'
             description: 'Insights learns per-transaction baselines from traces and scores deviations.'
+          - service: central-backend
+            image: odigos-enterprise-central-backend
+            file: central-backend/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            summary: 'Central Backend for Odigos'
+            description: 'Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui.'
+          - service: central-proxy
+            image: odigos-enterprise-central-proxy
+            file: central-proxy/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            summary: 'Central Proxy for Odigos'
+            description: 'Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central.'
+          - service: central-ui
+            image: odigos-enterprise-central-ui
+            # The Dockerfile path is relative to the central-ui context.
+            file: Dockerfile
+            context: '{{defaultContext}}:central-ui'
+            runner: depot-ubuntu-24.04-4
+            summary: 'Central UI for Odigos'
+            description: 'Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos.'
+          - service: connector-opamp-gateway
+            image: odigos-enterprise-connector-opamp-gateway
+            file: connector-opamp-gateway/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            summary: 'Managed Collector OpAMP Gateway for Odigos'
+            description: 'Authenticates managed Collector OpAMP connections and routes each to the cloud connector its credential is bound to.'
+          # Cloud connector images are best-effort: a failure does not fail the release or cancel the other images.
+          - service: connector-runtime
+            image: odigos-enterprise-connector-runtime
+            file: connector-runtime/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-aws
+            image: odigos-enterprise-connector-aws
+            file: connectors/providers/aws/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-azure
+            image: odigos-enterprise-connector-azure
+            file: connectors/providers/azure/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-gcp
+            image: odigos-enterprise-connector-gcp
+            file: connectors/providers/gcp/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-mulesoft
+            image: odigos-enterprise-connector-mulesoft
+            file: connectors/providers/mulesoft/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-postgres
+            image: odigos-enterprise-connector-postgres
+            # The Dockerfile path is relative to the connector-postgres context.
+            file: Dockerfile
+            context: '{{defaultContext}}:connector-postgres'
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
     runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.best-effort == true }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -369,6 +447,7 @@ jobs:
             RHEL=false
             EXTENDED=${{ matrix.extended && 'true' || 'false' }}
           platforms: linux/amd64,linux/arm64
+          context: ${{ matrix.context || '{{defaultContext}}' }}
           file: ${{ matrix.file }}
           target: ${{ matrix.target || '' }}
 

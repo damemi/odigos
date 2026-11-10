@@ -1,0 +1,57 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: central-infrastructure
+spec:
+  description: This e2e test validates the central backend infrastructure components (Redis, SSE, WebSocket, Keycloak)
+  skipDelete: true
+  steps:
+    - name: Install Odigos Central
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              # Install Odigos Central in odigos-central namespace
+              helm upgrade --install odigos-central \
+                ../../../../helm/odigos-central \
+                --create-namespace \
+                --namespace odigos-central \
+                --set image.tag=$IMAGE_TAG \
+                --set imagePrefix=registry.odigos.io \
+                --set onPremToken=$ODIGOS_API_KEY \
+                --set auth.adminUsername=admin \
+                --set auth.adminPassword=admin
+
+              kubectl label namespace odigos-central odigos.io/system-object="true"
+
+    - name: Verify Odigos Central Installation
+      try:
+        - assert:
+            # Keycloak cold-start on kind regularly exceeds ~2m; backend waits on it.
+            timeout: 5m
+            file: ../../common/assert/odigos-central-installed.yaml
+
+      catch:
+        - script:
+            content: |
+              echo "Listing all resources in namespace 'odigos-central'..."
+              kubectl get all -n odigos-central
+
+              echo "Describing deployments in namespace 'odigos-central'..."
+              kubectl describe deployments -n odigos-central
+
+    - name: Test Central Backend Infrastructure
+      try:
+        - script:
+            # Wait up to ~3m for /readyz (Keycloak admin can lag kubelet Ready),
+            # then run GraphQL/SSE/WS checks.
+            timeout: 5m
+            content: |
+              ./test-infrastructure.sh
+
+      catch:
+        - script:
+            content: |
+              echo "Debugging infrastructure test failure..."
+              kubectl logs -n odigos-central deploy/central-backend --tail=100
+              kubectl logs -n odigos-central deploy/redis --tail=50
