@@ -4,7 +4,7 @@ metadata:
   name: tail-sampling-nodejs
 spec:
   description: |
-    E2E for Odigos gateway tail sampling with nodejs-community.
+    E2E for Odigos gateway tail sampling with nodejs-enterprise.
     Uses the prebuilt nodejs-tail-sampling image from Artifact Registry, enables
     sampling dry-run and short aggregation wait, generates error/duration/http-server traffic,
     and asserts odigos.sampling.* span attributes plus VictoriaMetrics sampling

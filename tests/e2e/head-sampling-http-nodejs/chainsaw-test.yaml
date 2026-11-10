@@ -4,7 +4,7 @@ metadata:
   name: head-sampling-http-nodejs
 spec:
   description: |
-    E2E for Odigos head sampling on HTTP route matching with nodejs-community.
+    E2E for Odigos head sampling on HTTP route matching with nodejs-enterprise.
     Uses the prebuilt nodejs-head-sampling image from Artifact Registry, enables
     sampling dry-run, generates traffic, and asserts odigos.sampling.* attributes
     on collected spans.
@@ -84,7 +84,7 @@ spec:
         - script:
             timeout: 1m
             content: |
-              # Allow InstrumentationConfig / OpAMP to propagate Sampling rules to nodejs-community agents.
+              # Allow InstrumentationConfig / OpAMP to propagate Sampling rules to nodejs-enterprise agents.
               sleep 20
 
     - name: Generate traffic
