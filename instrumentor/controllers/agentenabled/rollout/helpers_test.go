@@ -13,6 +13,7 @@ import (
 	"github.com/odigos-io/odigos/common"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/distros"
+	enterprisedistros "github.com/odigos-io/odigos/distros/enterprise"
 	"github.com/odigos-io/odigos/instrumentor/controllers/agentenabled/rollout"
 	"github.com/odigos-io/odigos/instrumentor/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -48,8 +49,7 @@ func newTestSetup() *testSetup {
 	_ = batchv1.AddToScheme(scheme)
 	_ = argorolloutsv1alpha1.AddToScheme(scheme)
 
-	getter, _ := distros.NewCommunityGetter()
-	provider, _ := distros.NewProvider(distros.NewCommunityDefaulter(), getter)
+	provider, _ := enterprisedistros.NewEnterpriseProvider()
 
 	return &testSetup{
 		ctx:            context.Background(),

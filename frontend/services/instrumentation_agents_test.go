@@ -14,6 +14,7 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/distros"
+	enterprisedistros "github.com/odigos-io/odigos/distros/enterprise"
 	"github.com/odigos-io/odigos/frontend/graph/model"
 )
 
@@ -55,11 +56,9 @@ type testContainer = struct {
 	agentEnabled bool
 }
 
-func communityProvider(t *testing.T) *distros.Provider {
+func enterpriseProvider(t *testing.T) *distros.Provider {
 	t.Helper()
-	getter, err := distros.NewCommunityGetter()
-	require.NoError(t, err)
-	provider, err := distros.NewProvider(distros.NewCommunityDefaulter(), getter)
+	provider, err := enterprisedistros.NewEnterpriseProvider()
 	require.NoError(t, err)
 	return provider
 }
@@ -73,27 +72,33 @@ func agentByLanguage(agents []*model.InstrumentationAgent, language string) *mod
 	return nil
 }
 
-func TestGetInstrumentationAgents_communityDistroMetadata(t *testing.T) {
-	agents, err := GetInstrumentationAgents(context.Background(), newAgentsClient(), communityProvider(t))
+func TestGetInstrumentationAgents_distroMetadata(t *testing.T) {
+	agents, err := GetInstrumentationAgents(context.Background(), newAgentsClient(), enterpriseProvider(t))
 	require.NoError(t, err)
 
-	// One row per language in the community defaulter.
-	require.Len(t, agents, 7)
+	var defaults []*model.InstrumentationAgent
+	for _, a := range agents {
+		if a.IsDefault {
+			defaults = append(defaults, a)
+		}
+	}
+	// One default row per language in the enterprise defaulter.
+	require.Len(t, defaults, 8)
 
 	// Deterministic ordering, so the response doesn't reshuffle between calls.
-	for i := 1; i < len(agents); i++ {
-		assert.Less(t, agents[i-1].Language, agents[i].Language)
+	for i := 1; i < len(defaults); i++ {
+		assert.Less(t, defaults[i-1].Language, defaults[i].Language)
 	}
 
 	goAgent := agentByLanguage(agents, string(common.GoProgrammingLanguage))
 	require.NotNil(t, goAgent)
-	assert.Equal(t, "golang-community", goAgent.DistroName)
+	assert.Equal(t, "golang-enterprise", goAgent.DistroName)
 	assert.Equal(t, "go-runtime", goAgent.RuntimeEnvironment)
-	assert.Equal(t, ">= 1.19", goAgent.SupportedRuntimeVersions)
+	assert.Equal(t, ">= 1.17", goAgent.SupportedRuntimeVersions)
 
 	nodeAgent := agentByLanguage(agents, string(common.JavascriptProgrammingLanguage))
 	require.NotNil(t, nodeAgent)
-	assert.Equal(t, "nodejs-community", nodeAgent.DistroName)
+	assert.Equal(t, "nodejs-enterprise", nodeAgent.DistroName)
 
 	// Bounded ranges must survive verbatim — the UI needs the upper bound.
 	phpAgent := agentByLanguage(agents, string(common.PhpProgrammingLanguage))
@@ -104,12 +109,12 @@ func TestGetInstrumentationAgents_communityDistroMetadata(t *testing.T) {
 func TestGetInstrumentationAgents_sourceCounts(t *testing.T) {
 	objects := []client.Object{
 		instrumentationConfig("deployment-coupon",
-			testContainer{name: "coupon", language: common.JavascriptProgrammingLanguage, distro: "nodejs-community", agentEnabled: true},
+			testContainer{name: "coupon", language: common.JavascriptProgrammingLanguage, distro: "nodejs-enterprise", agentEnabled: true},
 		),
 		// A container on a distro the page does not list (a version fallback)
 		// still counts against the language's default row.
 		instrumentationConfig("deployment-legacy",
-			testContainer{name: "legacy", language: common.JavascriptProgrammingLanguage, distro: "nodejs-community-14", agentEnabled: true},
+			testContainer{name: "legacy", language: common.JavascriptProgrammingLanguage, distro: "nodejs-enterprise-14", agentEnabled: true},
 		),
 		instrumentationConfig("deployment-currency",
 			testContainer{name: "currency", language: common.PhpProgrammingLanguage, distro: "php-community", agentEnabled: true},
@@ -122,7 +127,7 @@ func TestGetInstrumentationAgents_sourceCounts(t *testing.T) {
 		),
 	}
 
-	agents, err := GetInstrumentationAgents(context.Background(), newAgentsClient(objects...), communityProvider(t))
+	agents, err := GetInstrumentationAgents(context.Background(), newAgentsClient(objects...), enterpriseProvider(t))
 	require.NoError(t, err)
 
 	nodeAgent := agentByLanguage(agents, string(common.JavascriptProgrammingLanguage))
@@ -151,13 +156,13 @@ func TestGetInstrumentationAgents_sourcesCountedOncePerLanguage(t *testing.T) {
 		// javascript row must see 2 containers but only 1 source, and the
 		// source is counted again on the python row.
 		instrumentationConfig("deployment-multi",
-			testContainer{name: "web", language: common.JavascriptProgrammingLanguage, distro: "nodejs-community", agentEnabled: true},
-			testContainer{name: "worker", language: common.JavascriptProgrammingLanguage, distro: "nodejs-community", agentEnabled: false},
-			testContainer{name: "sidecar", language: common.PythonProgrammingLanguage, distro: "python-community", agentEnabled: true},
+			testContainer{name: "web", language: common.JavascriptProgrammingLanguage, distro: "nodejs-enterprise", agentEnabled: true},
+			testContainer{name: "worker", language: common.JavascriptProgrammingLanguage, distro: "nodejs-enterprise", agentEnabled: false},
+			testContainer{name: "sidecar", language: common.PythonProgrammingLanguage, distro: "python-enterprise", agentEnabled: true},
 		),
 	}
 
-	agents, err := GetInstrumentationAgents(context.Background(), newAgentsClient(objects...), communityProvider(t))
+	agents, err := GetInstrumentationAgents(context.Background(), newAgentsClient(objects...), enterpriseProvider(t))
 	require.NoError(t, err)
 
 	nodeAgent := agentByLanguage(agents, string(common.JavascriptProgrammingLanguage))

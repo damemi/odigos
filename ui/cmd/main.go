@@ -20,7 +20,6 @@ import (
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
-	enterprisedistros "github.com/odigos-io/odigos/distros/enterprise"
 	"github.com/odigos-io/odigos/frontend/server"
 	"github.com/odigos-io/odigos/frontend/services"
 	"github.com/odigos-io/odigos/odigosauth"
@@ -70,14 +69,6 @@ func main() {
 	deps, err := server.Bootstrap(ctx, flags, logger)
 	if err != nil {
 		log.Error("Frontend server bootstrap failed", "err", err)
-		os.Exit(1)
-	}
-
-	// Bootstrap defaults to the community provider. Replace it with the enterprise
-	// one so the UI reports the distros the enterprise instrumentor actually injects.
-	deps.DistrosProvider, err = enterprisedistros.NewEnterpriseProvider()
-	if err != nil {
-		log.Error("Loading enterprise distros failed", "err", err)
 		os.Exit(1)
 	}
 
