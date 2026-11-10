@@ -23,7 +23,7 @@ const (
 
 // MinK8SVersionForInstallation is the minimum Kubernetes version required for Odigos installation
 // this value must be in sync with the one defined in the kubeVersion field in Chart.yaml
-var MinK8SVersionForInstallation = version.MustParse("v1.20.15-0")
+var MinK8SVersionForInstallation = version.MustParse("v1.21.12-0")
 
 // MinK8SVersionForInitContainerPullSecrets is the first Kubernetes version where
 // kubelet re-verifies pull credentials for cached images
