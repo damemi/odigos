@@ -58,13 +58,13 @@ docgen: genref
 		cd $(CURDIR)/.. && go work init && go work use -r . && \
 		go work edit -dropuse=./odiglet/enterprise -dropuse=./connectors/base -dropuse=./connectors/providers/aws -dropuse=./connectors/providers/azure -dropuse=./connectors/providers/gcp -dropuse=./connectors/providers/mulesoft -dropuse=./connector-opamp-gateway; \
 	fi
-	rm -rf $(CURDIR)/../docs/snippets/oss/api-reference/*
-	$(TOOLS)/genref -c genref-config.yaml -f markdown -o $(CURDIR)/../docs/snippets/oss/api-reference
-	for file in $(CURDIR)/../docs/snippets/oss/api-reference/*; do \
+	rm -rf $(CURDIR)/../docs/snippets/enterprise/api-reference/*
+	$(TOOLS)/genref -c genref-config.yaml -f markdown -o $(CURDIR)/../docs/snippets/enterprise/api-reference
+	for file in $(CURDIR)/../docs/snippets/enterprise/api-reference/*; do \
 		mv $${file} $${file%.md}.mdx; \
 	done
 	# Fix known genref output issues (trailing whitespace + broken MDX <td> formatting)
-	python3 $(CURDIR)/fix-genref-output.py $(CURDIR)/../docs/snippets/oss/api-reference
+	python3 $(CURDIR)/fix-genref-output.py $(CURDIR)/../docs/snippets/enterprise/api-reference
 
 .PHONY: manifests
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.

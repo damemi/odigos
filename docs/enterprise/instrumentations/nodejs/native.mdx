@@ -1,0 +1,14 @@
+---
+title: 'Automatic Instrumentation'
+sidebarTitle: 'Native'
+icon: 'node-js'
+---
+
+import Content from "/snippets/enterprise/instrumentations/nodejs/native.mdx";
+
+<Info>
+  Odigos Enterprise instruments Node.js applications with [eBPF-based instrumentation](/enterprise/instrumentations/nodejs/ebpf) by default.
+  To use the native OpenTelemetry Node.js SDK instead, set the container's **Otel Distro Name** to `nodejs-community` in the source drawer, or set `otelDistroName: nodejs-community` under `containerOverrides` in the [Source object](/enterprise/pipeline/sources/introduction).
+</Info>
+
+<Content />

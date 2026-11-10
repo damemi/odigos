@@ -68,7 +68,7 @@ Frequently asked questions about sampling in Odigos.
 
 <AccordionGroup>
   <Accordion title="Why is the aggregation window 30 seconds, and can I change it?">
-    There is no reliable signal for "this trace is finished," so the engine uses a fixed timeout instead. **30 seconds** is the Odigos default, matching the OpenTelemetry community default. You can change it through the Helm value `sampling.tailSampling.traceAggregationWaitDuration` (for example `'45s'` or `'15s'`); the same value applies to every trace in the cluster. Larger windows hold more memory and delay traces appearing in your backend; smaller windows risk evaluating partial traces and fragmenting a single trace across multiple sampling decisions. See [Aggregation window](./head-and-tail-sampling#aggregation-window).
+    There is no reliable signal for "this trace is finished," so the engine uses a fixed timeout instead. **30 seconds** is the Odigos default, matching the OpenTelemetry community default. You can change it through the Helm values `collectorGateway.traceAggregation.syncWait` and `asyncWait` (for example `'45s'` or `'15s'`); they apply to every trace in the cluster. Traces whose root span has arrived are forwarded sooner, after `rootSettle` (7 seconds by default) with no new spans. The older `sampling.tailSampling.traceAggregationWaitDuration` is deprecated and ignored. Larger windows hold more memory and delay traces appearing in your backend; smaller windows risk evaluating partial traces and fragmenting a single trace across multiple sampling decisions. See [Aggregation window](./head-and-tail-sampling#aggregation-window).
   </Accordion>
 
   <Accordion title="Does the 30-second timer start at the first span or the last span of a trace?">

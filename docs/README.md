@@ -1,6 +1,6 @@
 # Odigos Documentation
 
-Source for [enterprise.docs.odigos.io](https://enterprise.docs.odigos.io), where every page (Open Source included) is behind enterprise API key sign-in. The Kubernetes Agent has two tabs: Open Source (`oss/`) and Enterprise (`enterprise/`). Odigos Central (`central/`), the VM Agent and ECS Agent (`vmagent/`), and Cloud Connectors (`cloud-connectors/`) are documented in full.
+Source for [enterprise.docs.odigos.io](https://enterprise.docs.odigos.io), where every page is behind enterprise API key sign-in. The Kubernetes Agent is documented under `enterprise/`. Odigos Central (`central/`), the VM Agent and ECS Agent (`vmagent/`), and Cloud Connectors (`cloud-connectors/`) are documented in full.
 
 ### Development
 
@@ -13,7 +13,7 @@ npm i -g mint
 mint dev
 ```
 
-Generated CLI, CRD, destination, instrumentation, and RBAC snippets are written under `snippets/oss`:
+Generated CLI, CRD, destination, instrumentation, and RBAC snippets are written under `snippets/enterprise`:
 
 ```
 make cli-docs
@@ -22,7 +22,7 @@ cd api && make docgen
 cd docs && python sync-dest-doc.py
 ```
 
-`sync-dest-doc.py` updates Open Source destination pages and skips Pyroscope, which is documented only in the Enterprise tab. Enterprise pages import their own copies from `snippets/enterprise`; copy changed generated snippets there when those pages should stay in sync.
+`sync-dest-doc.py` updates the destination snippets, the destination pages' frontmatter, the destinations overview table, and the destination navigation in `docs.json`.
 
 ### Publishing Changes
 
