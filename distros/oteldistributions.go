@@ -21,14 +21,6 @@ type Defaulter interface {
 	GetDefaultVmDistroNames() map[common.ProgrammingLanguage]string
 }
 
-type communityDefaulter struct{}
-
-var _ Defaulter = &communityDefaulter{}
-
-func NewCommunityDefaulter() Defaulter {
-	return &communityDefaulter{}
-}
-
 func NewCommunityGetter() (*Getter, error) {
 	return NewGetterFromFS(yamls.GetFS())
 }
@@ -44,22 +36,6 @@ func NewGetterFromFS(fs embed.FS) (*Getter, error) {
 	g.distrosByName = distrosByName
 
 	return &g, nil
-}
-
-func (c *communityDefaulter) GetDefaultDistroNames() map[common.ProgrammingLanguage]string {
-	return map[common.ProgrammingLanguage]string{
-		common.JavascriptProgrammingLanguage: "nodejs-community",
-		common.PythonProgrammingLanguage:     "python-community",
-		common.DotNetProgrammingLanguage:     "dotnet-community",
-		common.JavaProgrammingLanguage:       "java-community",
-		common.GoProgrammingLanguage:         "golang-community",
-		common.PhpProgrammingLanguage:        "php-community",
-		common.RubyProgrammingLanguage:       "ruby-community",
-	}
-}
-
-func (c *communityDefaulter) GetDefaultVmDistroNames() map[common.ProgrammingLanguage]string {
-	return c.GetDefaultDistroNames()
 }
 
 type Getter struct {
