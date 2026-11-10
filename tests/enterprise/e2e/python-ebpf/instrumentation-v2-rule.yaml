@@ -1,0 +1,12 @@
+# Installing with instrumentationVersion=v2 adds the instrumentation-v2 profile, whose rule picks
+# python-ebpf for every Python workload. It must exist before the namespace is instrumented, so each
+# workload's InstrumentationConfig names python-ebpf from the start.
+apiVersion: odigos.io/v1alpha1
+kind: InstrumentationRule
+metadata:
+  name: instrumentation-v2
+  namespace: odigos-test
+spec:
+  otelDistros:
+    otelDistroNames:
+      - python-ebpf

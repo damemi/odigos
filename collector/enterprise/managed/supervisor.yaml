@@ -1,0 +1,67 @@
+# Bootstrap settings for an Odigos-managed Collector. The cloud connector deployment supplies
+# these values as environment variables and mounts persistent storage at storage.directory.
+server:
+  endpoint: ${ODIGOS_OPAMP_ENDPOINT}
+  headers:
+    Authorization: ${ODIGOS_OPAMP_AUTHORIZATION}
+
+capabilities:
+  accepts_remote_config: true
+  accepts_restart_command: true
+  accepts_opamp_connection_settings: false
+  reports_effective_config: true
+  reports_own_metrics: true
+  reports_own_logs: false
+  reports_own_traces: false
+  reports_health: true
+  reports_remote_config: true
+  reports_available_components: true
+  reports_heartbeat: true
+  # Package updates are deliberately handled by the cloud deployment, not by OpAMP. Upstream
+  # Supervisor package installation is not yet a supported production capability.
+  accepts_packages: false
+
+agent:
+  executable: /odigosotelcol
+  passthrough_logs: true
+  collector_crash_log_snippet_kib: 0
+  bootstrap_timeout: 30s
+  config_apply_timeout: 30s
+  validate_config: true
+  automatic_config_rollback: true
+  use_hup_config_reload: false
+  description:
+    identifying_attributes:
+      service.namespace: odigos
+      service.name: odigos-managed-collector
+      odigos.cloud.connector.id: ${ODIGOS_CLOUD_CONNECTOR_ID}
+      cloud.provider: ${ODIGOS_CLOUD_PROVIDER}
+    include_resource_attributes: true
+  # Central supplies the complete data pipeline. The two generated local snippets and the final
+  # guardrail cannot be removed by a remote config.
+  config_files:
+    - $REMOTE_CONFIG
+    - $OWN_TELEMETRY_CONFIG
+    - $OPAMP_EXTENSION_CONFIG
+    - /etc/odigos/managed-collector/guardrails.yaml
+  # What a cold start serves when Central is unreachable and no last-known-good config was cached.
+  # The bundled entry is inert by design. When the deployment supplies
+  # ODIGOS_COLLECTOR_BOOTSTRAP_CONFIG, odigosopampsupervisor REPLACES this list with the decoded
+  # document followed by the local files in config_files above — see collector/managed/README.md,
+  # "Cold-start configuration". It is replaced rather than prepended to because this list is MERGED in
+  # order, and an inert entry merged after a real one would put `nop` back in every pipeline.
+  startup_fallback_configs:
+    - /etc/odigos/managed-collector/fallback.yaml
+
+storage:
+  directory: /var/lib/odigos/collector-supervisor
+
+healthcheck:
+  # Keep this separate from the conventional Collector health_check extension port (13133), which
+  # Central may choose to include in a remote pipeline.
+  endpoint: 0.0.0.0:13134
+
+telemetry:
+  logs:
+    level: info
+    encoding: console

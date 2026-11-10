@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+#
+# Reset the Odigos Insights service and its ClickHouse database from scratch.
+#
+# It drops every table in the insights database, re-applies the schema
+# migrations straight from source (internal/db/clickhouse/migrate/migrations),
+# records the applied version so the Helm migrate Job stays a no-op, and rolls
+# the service. Nothing survives: baselines, observations, anomalies,
+# transactions and the seeded policies are all recreated fresh.
+#
+# Migrations are applied with clickhouse-client (a real SQL parser), so this
+# works even against an image whose embedded golang-migrate runner is broken
+# (that runner splits on ';' naively and chokes on some comments).
+#
+# Usage:
+#   insights/scripts/reset-db.sh
+#
+# Overridable via env:
+#   NS               k8s namespace                (default: odigos-system)
+#   INSIGHTS_DEPLOY  insights deployment name     (default: odigos-insights)
+#   CH_DEPLOY        clickhouse deployment name   (default: odigos-insights-clickhouse)
+#   DB               clickhouse database/user     (default: odigos_insights)
+set -euo pipefail
+
+NS="${NS:-odigos-system}"
+INSIGHTS_DEPLOY="${INSIGHTS_DEPLOY:-odigos-insights}"
+CH_DEPLOY="${CH_DEPLOY:-odigos-insights-clickhouse}"
+DB="${DB:-odigos_insights}"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MIGRATIONS_DIR="$SCRIPT_DIR/../internal/db/clickhouse/migrate/migrations"
+
+# Run whatever SQL arrives on stdin inside the ClickHouse pod. The password is
+# read from the pod's own env so it never lands in shell history or argv.
+ch() {
+	kubectl exec -i -n "$NS" "deploy/$CH_DEPLOY" -- sh -c \
+		"clickhouse-client --user '$DB' --password \"\$CLICKHOUSE_PASSWORD\" --database '$DB' --multiquery"
+}
+
+echo ">> [1/5] Scaling $INSIGHTS_DEPLOY to 0 so nothing writes during the reset"
+was="$(kubectl get deploy "$INSIGHTS_DEPLOY" -n "$NS" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 1)"
+{ [ -z "$was" ] || [ "$was" -lt 1 ] 2>/dev/null; } && was=1
+kubectl scale deploy "$INSIGHTS_DEPLOY" -n "$NS" --replicas=0 >/dev/null
+kubectl rollout status deploy/"$INSIGHTS_DEPLOY" -n "$NS" --timeout=90s >/dev/null
+
+echo ">> [2/5] Dropping every table in '$DB'"
+tables="$(printf 'SELECT name FROM system.tables WHERE database = currentDatabase()' | ch || true)"
+for t in $tables; do
+	echo "   - drop $t"
+	printf 'DROP TABLE IF EXISTS `%s`' "$t" | ch
+done
+
+echo ">> [3/5] Applying migrations from source"
+for f in "$MIGRATIONS_DIR"/*.up.sql; do
+	echo "   - apply $(basename "$f")"
+	ch <"$f"
+done
+
+echo ">> [4/5] Recording applied version so the Helm migrate Job stays a no-op"
+latest="$(for f in "$MIGRATIONS_DIR"/*.up.sql; do basename "$f"; done | sed -E 's/^0*([0-9]+)_.*/\1/' | sort -n | tail -1)"
+seq="$(( $(date +%s) * 1000000000 ))" # portable ns-ish monotonic value (macOS date lacks %N)
+printf 'CREATE TABLE IF NOT EXISTS schema_migrations (version Int64, dirty UInt8, sequence UInt64) ENGINE = TinyLog;
+TRUNCATE TABLE schema_migrations;
+INSERT INTO schema_migrations (version, dirty, sequence) VALUES (%s, 0, %s);
+' "$latest" "$seq" | ch
+echo "   - marked version $latest, dirty 0"
+
+echo ">> [5/5] Restoring $INSIGHTS_DEPLOY to $was replica(s)"
+kubectl scale deploy "$INSIGHTS_DEPLOY" -n "$NS" --replicas="$was" >/dev/null
+kubectl rollout status deploy/"$INSIGHTS_DEPLOY" -n "$NS" --timeout=120s
+
+echo ">> Fresh table row counts:"
+printf "SELECT name, total_rows FROM system.tables WHERE database = currentDatabase() ORDER BY name" | ch
+
+echo ">> Done. Insights + database reset from scratch."

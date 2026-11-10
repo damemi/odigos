@@ -1,0 +1,271 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: multi-apps
+spec:
+  description: This e2e test runs a multi-apps scenario
+  skipDelete: true
+  steps:
+    - name: Prepare destination
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/simple-trace-db-deployment.yaml
+
+    - name: Install - Simple Demo Apps
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/install-simple-demo.yaml
+
+    - name: Install Odigos
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              echo "Installing Odigos with tag $IMAGE_TAG"
+              ../../../../cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY $ODIGOS_INSTALL_FLAGS
+              kubectl label namespace odigos-test odigos.io/system-object="true"
+              ../../common/verify_odigos_installation.sh odigos-test
+        - assert:
+            timeout: 4m
+            file: ../../common/assert/odigos-installed.yaml
+      catch:
+        - script:
+            content: |
+              kubectl describe pods -n odigos-test
+
+    - name: Verify node Odiglet installed label has been added
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/node-odiglet-label.yaml
+
+    - name: Assert Trace DB is up
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-trace-db-running.yaml
+
+    - name: Assert - Simple Demo Apps Installed
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
+
+    - name: Add Code Attribute Instrumentation Rule
+      try:
+        - apply:
+            file: ../../common/apply/add-code-attribute-instrumentation-rule.yaml
+
+    - name: Add Custom Instrumentation Rule
+      try:
+        - apply:
+            file: ../../common/apply/add-custom-instrumentation-rule.yaml
+
+    - name: Add HTTP Headers Rule
+      try:
+        - apply:
+            file: ../../common/apply/add-http-headers-rule.yaml
+    
+    - name: Add Payload Collection Rule
+      try:
+        - apply:
+            file: ../../common/apply/add-payload-collection.yaml
+
+    - name: Instrument Namespace
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/instrument-default-ns.yaml
+
+    - name: Assert Runtime Detected
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-demo-runtime-detected.yaml
+
+    - name: Add Destination
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/add-simple-trace-db-destination.yaml
+
+    - name: Assert simple demo apps ready
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
+
+    - name: Simple-demo instrumented and pipeline ready
+      try:
+        - assert:
+            timeout: 1m30s
+            file: ../../common/assert/instrumented-and-pipeline.yaml
+      catch:
+        - script:
+            content: |
+              kubectl describe pods -n default
+
+    # The first request through a freshly instrumented java app can't propagate
+    # context (http client instrumentations load lazily on first use). /rate only
+    # reaches currency, so warmup traces don't affect the trace assertions below.
+    - name: Warm Up Java Frontend
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
+              kubectl run warmup-traffic -n default --image=curlimages/curl:8.4.0 --restart=Never --command -- \
+                sh -c 'for i in 1 2 3; do curl -s -o /dev/null "http://frontend:8080/rate/usd-eur"; sleep 2; done'
+              kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/warmup-traffic -n default --timeout=90s
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
+
+    - name: Generate Traffic
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/generate-traffic-job.yaml
+        - script:
+            timeout: 1m10s
+            content: |
+              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../../tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
+        - delete:
+            file: ../../../../tests/common/apply/generate-traffic-job.yaml
+
+
+    - name: Wait For Trace
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+              cp ../../../../tests/common/queries/wait-for-trace.yaml "$yaml"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
+
+              while true; do
+                bash "$script" "$yaml"
+                status=$?
+                if [ $status -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
+      catch:
+        - script:
+            content: |
+              java_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^frontend)
+              kubectl logs $java_pod_name -n default
+      finally:
+        - script:
+            timeout: 1m
+            # a failing finally operation fails the step, the report should never fail a passing test
+            content: |
+              bash ../../../../tests/common/simple_trace_db_report.sh || true
+
+    - name: Verify Trace - Context Propagation
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              yaml=$(mktemp)
+              script=$(mktemp)
+
+              cp ../../../../tests/common/queries/context-propagation.yaml "$yaml"
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
+
+              while true; do
+                bash "$script" "$yaml"
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$yaml" "$script"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
+    - name: Verify Trace - Resource Attributes
+      try:
+        - script:
+            content: |
+              yaml=$(mktemp)
+              cp ../../../../tests/common/queries/resource-attributes.yaml "$yaml"
+              bash ../../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
+    - name: Verify Trace - Span Attributes
+      try:
+        - script:
+            content: |
+              yaml=$(mktemp)
+              cp ../../../../tests/common/queries/span-attributes.yaml "$yaml"
+              bash ../../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
+    - name: Verify Trace - Code Attributes Go
+      try:
+        - script:
+            content: |
+              yaml=../../common/queries/code-attributes.yaml
+              bash ../../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
+      catch:
+        - script:
+            content: |
+              echo "=== All traces ==="
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .
+
+    - name: Verify Trace - Code Attributes Python
+      try:
+        - script:
+            content: |
+              yaml=../../common/queries/code-attributes-python.yaml
+              bash ../../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
+      catch:
+        - script:
+            content: |
+              echo "=== All traces ==="
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .
+
+    - name: Verify Trace - Custom Instrumentation Rule
+      try:
+        - script:
+            content: |
+              yaml=../../common/queries/custom-instrumentation-traces.yaml
+              bash ../../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
+      catch:
+        - script:
+            content: |
+              echo "=== All traces ==="
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .
+
+    - name: Verify Trace - HTTP Headers Rule
+      try:
+        - script:
+            content: |
+              yaml=../../common/queries/http-headers-traces.yaml
+              bash ../../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
+      catch:
+        - script:
+            content: |
+              echo "=== All traces ==="
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .
+
+    - name: Verify Trace - Payload Collection
+      try:
+        - script:
+            content: |
+              yaml=../../common/queries/payload-collection-traces.yaml
+              bash ../../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
+      catch:
+        - script:
+            content: |
+              echo "=== All traces ==="
+              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .

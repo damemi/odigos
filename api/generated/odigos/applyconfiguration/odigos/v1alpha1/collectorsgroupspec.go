@@ -92,6 +92,10 @@ type CollectorsGroupSpecApplyConfiguration struct {
 	// Capturing these attributes gives visibility into sampling decision-making and effective
 	// sampling percentages when viewing traces or querying the database with tools.
 	SpanSamplingAttributes *sampling.SpanSamplingAttributesConfiguration `json:"spanSamplingAttributes,omitempty"`
+	// TraceAggregation holds the validated collectorGateway.traceAggregation settings
+	// for the gateway's groupby processor, used by tail sampling and Insights.
+	// Unset fields use the processor defaults. Only relevant for the cluster gateway collector.
+	TraceAggregation *common.TraceAggregationConfiguration `json:"traceAggregation,omitempty"`
 }
 
 // CollectorsGroupSpecApplyConfiguration constructs a declarative configuration of the CollectorsGroupSpec type for use with
@@ -237,5 +241,13 @@ func (b *CollectorsGroupSpecApplyConfiguration) WithSamplingDryRun(value bool) *
 // If called multiple times, the SpanSamplingAttributes field is set to the value of the last call.
 func (b *CollectorsGroupSpecApplyConfiguration) WithSpanSamplingAttributes(value sampling.SpanSamplingAttributesConfiguration) *CollectorsGroupSpecApplyConfiguration {
 	b.SpanSamplingAttributes = &value
+	return b
+}
+
+// WithTraceAggregation sets the TraceAggregation field in the declarative configuration to the given value
+// and returns the receiver, so that objects can be built by chaining "With" function invocations.
+// If called multiple times, the TraceAggregation field is set to the value of the last call.
+func (b *CollectorsGroupSpecApplyConfiguration) WithTraceAggregation(value common.TraceAggregationConfiguration) *CollectorsGroupSpecApplyConfiguration {
+	b.TraceAggregation = &value
 	return b
 }

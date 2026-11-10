@@ -1,0 +1,47 @@
+apiVersion: internal.odigos.io/v1beta1
+kind: OtelDistribution
+metadata:
+  name: ruby-community-legacy
+spec:
+  name: ruby-community-legacy
+  language: ruby
+  runtimeEnvironments:
+    - name: ruby
+      supportedVersions: '>=2.7,<3.0'
+  fallbackDistro: ruby-community
+  displayName: 'Ruby Community Native Instrumentation (Ruby 2.7)'
+  description: |
+    Legacy distribution for Ruby 2.7 applications using the last OpenTelemetry Ruby
+    SDK and instrumentation libraries that still accept Ruby 2.7.
+  isEbpf: false
+  requireParameters:
+    - RUNTIME_VERSION_MAJOR_MINOR
+  environmentVariables:
+    opAmpClientEnvironments: true
+    otlpHttpLocalNode: true
+    signalsAsStaticOtelEnvVars: true
+    staticVariables:
+      - envName: RUBYOPT
+        envValue: '-r/var/odigos/ruby-legacy/{{.RUNTIME_VERSION_MAJOR_MINOR}}/index.rb'
+      - envName: ODIGOS_GEM_PATH
+        envValue: '/var/odigos/ruby-legacy/{{.RUNTIME_VERSION_MAJOR_MINOR}}/bundle'
+      - envName: OTEL_EXPORTER_OTLP_PROTOCOL
+        envValue: 'http/protobuf'
+      - envName: OTEL_PROPAGATORS
+        envValue: 'tracecontext,baggage'
+  runtimeAgent:
+    directoryNames:
+      - '{{ODIGOS_AGENTS_DIR}}/ruby-legacy'
+    device: 'instrumentation.odigos.io/generic'
+    k8sAttrsViaEnvVars: true
+    opAmpTransportsSupported: [unix, http]
+  traces:
+    payloadCollection:
+      supported: true
+    headSampling:
+      supported: true
+      httpQueryParamsSupported: true
+  # Env vars are the bootstrap config, read before the agent's OpAMP client
+  # connects. Payload collection and head sampling updates then arrive over
+  # OpAMP, so rule changes apply without restarting the pod.
+  configAsEnvVars: true

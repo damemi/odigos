@@ -4,8 +4,8 @@ metadata:
   name: head-sampling-http-java
 spec:
   description: |
-    E2E for Odigos sampling on HTTP route matching with java-community.
-    java-community does not support agent head sampling, so this scenario relies
+    E2E for Odigos sampling on HTTP route matching with the Java agent.
+    The Java agent does not do agent head sampling, so this scenario relies
     on gateway tail sampling (dry-run) to stamp odigos.sampling.* attributes.
     Uses the prebuilt java-head-sampling image from Artifact Registry.
     GraphQL kubelet probe coverage is omitted (Java app has no /graphql endpoint).
@@ -29,13 +29,14 @@ spec:
             timeout: 5m
             content: |
               # pwd is tests/e2e/head-sampling-http-java — chart lives at repo root helm/odigos
-              # Tail sampling enabled (java-community has no agent head sampling). Short aggregation
+              # Tail sampling enabled (the Java agent has no agent head sampling). Short aggregation
               # wait keeps e2e latency low (synthetic-apps tail-sampling uses 2s).
-              helm upgrade --install odigos ../../../helm/odigos --create-namespace --namespace odigos-test \
+              helm upgrade --install odigos ../../../helm/odigos --set onPremToken="$ODIGOS_API_KEY" --create-namespace --namespace odigos-test \
                 --set image.tag=e2e-test \
                 --set nodeSelector."kubernetes\.io/os"=linux \
                 --set sampling.dryRun=true \
-                --set sampling.tailSampling.traceAggregationWaitDuration=2s \
+                --set collectorGateway.traceAggregation.syncWait=10s \
+                --set collectorGateway.traceAggregation.rootSettle=2s \
                 --set sampling.k8sHealthProbesSampling.enabled=true
               ../../common/verify_odigos_installation.sh odigos-test
               kubectl label namespace odigos-test odigos.io/system-object="true"
@@ -101,7 +102,8 @@ spec:
             content: |
               kubectl wait --for=condition=complete job/head-sampling-http-server-curls -n default --timeout=180s || \
                 (kubectl logs job/head-sampling-http-server-curls -n default --tail=200; exit 1)
-              # Wait for gateway groupbytrace aggregation (traceAggregationWaitDuration=2s) plus export.
+              # Traces with a root are released rootSettle (2s) after it, plus export. The assert step below
+              # polls, so traces without a root (released at syncWait, 10s) are still caught.
               sleep 5
 
     - name: Assert sampling span attributes
@@ -123,7 +125,8 @@ spec:
                 # Client asserts skipped: TS httpClient matching needs url.template; Java has url.full only.
                 queries/kubelet-liveness.yaml
                 queries/kubelet-readiness.yaml
-                queries/kubelet-startup.yaml
+                # No startup probe assert: the enterprise Java agent (eBPF) attaches to the running process without
+                # a restart, after the app has started, so the startup probe requests are never traced.
               )
               last_failed=""
               last_failed_output=""

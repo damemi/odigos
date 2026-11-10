@@ -19,28 +19,45 @@ jobs:
     name: build-all-services
     strategy:
       matrix:
-        service: [instrumentor, odiglet, agents, frontend, operator]
+        service: [instrumentor, odiglet, agents, ui, collector, insights, operator]
         include:
           - service: instrumentor
-            dockerfile_path: instrumentor
+            dockerfile_path: instrumentor/enterprise
           - service: odiglet
-            dockerfile_path: odiglet
+            dockerfile_path: odiglet/enterprise
           - service: agents
-            dockerfile_path: odiglet
-          - service: frontend
-            dockerfile_path: frontend
+            dockerfile_path: odiglet/enterprise
+          - service: ui
+            dockerfile_path: ui
+          - service: collector
+            dockerfile_path: collector/enterprise
+          - service: insights
+            dockerfile_path: insights
           - service: operator
             dockerfile_path: operator
     runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v5
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+      - name: Write npm auth
+        id: npmrc
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build ${{ matrix.service }} Image
         uses: docker/build-push-action@v7
         with:
+          # github_token: odiglet and agents download private instrumentation repos.
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
+          secret-files: |
+            npmrc=${{ steps.npmrc.outputs.path }}
           platforms: linux/amd64,linux/arm64
           push: false
           provenance: false

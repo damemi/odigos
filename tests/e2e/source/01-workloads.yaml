@@ -8,7 +8,7 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  generation: 2
+  generation: 1 # the enterprise Java agent attaches without restarting the workload
   name: frontend
   namespace: default
 ---
@@ -22,7 +22,7 @@ metadata:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  generation: 2
+  generation: 1 # the enterprise Go agent attaches without restarting the workload
   name: membership
   namespace: default
 ---

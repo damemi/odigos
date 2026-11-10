@@ -1,0 +1,13 @@
+type: odigos_config_vm
+github_project: odigos-io/odigos-enterprise
+
+status:
+  class: extension
+  stability:
+    development: [extension]
+  codeowners:
+    active: [tamirdavid]
+
+tests:
+  config:
+    actions_dir: testdata/actions.d

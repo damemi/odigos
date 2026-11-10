@@ -49,3 +49,11 @@ Dockerfile
 odiglet/Dockerfile
 odiglet/base.Dockerfile
 odiglet/debug.Dockerfile
+
+# Imported from odigos-enterprise: parked repo config, test infrastructure and host build outputs
+.enterprise/
+tests-infrastructure/
+**/.obi/
+insights/sendtrace
+collector/enterprise/odigosotelcol/odigosotelcol
+collector/enterprise/cmd/odigosopampsupervisor/odigosopampsupervisor

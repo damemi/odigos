@@ -149,8 +149,6 @@ func insightsGatewayConfig(t *testing.T, tier common.OdigosTier) *config.Config 
 	}
 	if common.InsightsPipelineActive(insightsCfg) {
 		gatewayOptions.InsightsOtlpEndpoint = k8sconsts.InsightsOtlpGrpcDNSEndpoint("odigos-system")
-		waitDuration := k8sconsts.OdigosClusterCollectorTraceAggregationWaitDurationDefault
-		gatewayOptions.TraceAggregationWaitDuration = &waitDuration
 	}
 
 	cfg, err, _, signals := pipelinegen.CalculateGatewayConfig(nil, nil,

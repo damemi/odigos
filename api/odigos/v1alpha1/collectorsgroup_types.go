@@ -228,6 +228,11 @@ type CollectorsGroupSpec struct {
 	// Capturing these attributes gives visibility into sampling decision-making and effective
 	// sampling percentages when viewing traces or querying the database with tools.
 	SpanSamplingAttributes *sampling.SpanSamplingAttributesConfiguration `json:"spanSamplingAttributes,omitempty"`
+
+	// TraceAggregation holds the validated collectorGateway.traceAggregation settings
+	// for the gateway's groupby processor, used by tail sampling and Insights.
+	// Unset fields use the processor defaults. Only relevant for the cluster gateway collector.
+	TraceAggregation *common.TraceAggregationConfiguration `json:"traceAggregation,omitempty"`
 }
 
 // CollectorsGroupStatus defines the observed state of Collector

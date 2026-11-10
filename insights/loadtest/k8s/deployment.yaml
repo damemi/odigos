@@ -1,0 +1,75 @@
+# Continuous multi-service OTLP load → odigos-insights.
+# Prefer:  make -C insights/loadtest start   (or: make loadtest-start from insights/)
+# Stop:    make -C insights/loadtest stop
+#
+# Manual apply:
+#   kubectl apply -f k8s/namespace.yaml
+#   kubectl -n insights-loadtest create configmap insights-k6-script \
+#     --from-file=script.js=script.js --dry-run=client -o yaml | kubectl apply -f -
+#   kubectl apply -f k8s/deployment.yaml
+#
+# Tune via make:  VUS=20 SLEEP_MS=10 make -C insights/loadtest start
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: insights-k6
+  namespace: insights-loadtest
+  labels:
+    app: insights-k6
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: insights-k6
+  template:
+    metadata:
+      labels:
+        app: insights-k6
+    spec:
+      containers:
+        - name: k6-tracing
+          image: public.ecr.aws/e1u7m2k3/insights-k6-runner:v0.0.3
+          imagePullPolicy: Always
+          args:
+            - run
+            - /scripts/script.js
+          env:
+            - name: ENDPOINT
+              value: odigos-insights-headless.odigos-system.svc.cluster.local:4317
+            - name: VUS
+              value: "5"
+            - name: DURATION
+              value: "24h"
+            - name: SLEEP_MS
+              value: "50"
+            - name: TRACE_NAMESPACE
+              value: loadtest
+            # Fans the same scenarios out over N service.namespace values, which
+            # is the only knob that scales resident transactions in Insights
+            # without changing what any baseline learns.
+            - name: TENANTS
+              value: "2"
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+              readOnly: true
+          # k6 buffers traces in the exporter queue when Insights ingests slower
+          # than we push, so headroom here is what turns an OOMKill into a
+          # "sending queue is full" warning we can actually read. Nodes are
+          # m5.2xlarge (8 vCPU / 32Gi), so 8Gi still schedules alongside the
+          # Insights replicas.
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+      volumes:
+        - name: script
+          configMap:
+            name: insights-k6-script
+            items:
+              - key: script.js
+                path: script.js

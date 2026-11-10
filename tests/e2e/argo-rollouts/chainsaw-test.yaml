@@ -40,7 +40,7 @@ spec:
         - script:
             timeout: 5m
             content: |
-              ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test
+              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test
               ../../common/verify_odigos_installation.sh odigos-test
               kubectl label namespace odigos-test odigos.io/system-object="true"
         - assert:

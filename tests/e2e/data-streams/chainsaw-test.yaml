@@ -20,7 +20,7 @@ spec:
         - script:
             timeout: 5m
             content: |
-              ../../../cli/odigos install --ns odigos-test --set image.tag=e2e-test
+              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test
               kubectl label namespace odigos-test odigos.io/system-object="true"
 
               ../../common/verify_odigos_installation.sh odigos-test
@@ -105,6 +105,19 @@ spec:
 
               ## This sleep here to ensure configuration is updated in the collector because of the debounce mechanism
               sleep 5
+
+    # The first request through a freshly instrumented Java app can't propagate context: its HTTP client
+    # instrumentations load on first use. /rate only reaches currency, so the warm-up does not affect the trace assertions.
+    - name: '[2 - Workload Instrumentation] Warm Up Java Frontend'
+      try:
+        - script:
+            timeout: 3m
+            content: |
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
+              kubectl run warmup-traffic -n default --image=curlimages/curl:8.4.0 --restart=Never --command -- \
+                sh -c 'for i in 1 2 3; do curl -s -o /dev/null "http://frontend:8080/rate/usd-eur"; sleep 2; done'
+              kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/warmup-traffic -n default --timeout=90s
+              kubectl delete pod warmup-traffic -n default --ignore-not-found
 
     - name: '[2 - Workload Instrumentation] Generate Traffic'
       try:

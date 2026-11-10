@@ -16,7 +16,6 @@ permissions:
   id-token: write
 
 env:
-  DOCKERHUB_ORG: "keyval"
   VICTORIA_METRICS_VERSION: "v1.144.0"
   # Upstream Redis tag re-hosted as odigos-cache:<odigos-tag> (same pattern as VictoriaMetrics).
   REDIS_VERSION: "8.10.2"
@@ -142,7 +141,9 @@ jobs:
 
       - name: Verify Components Image Ready
         run: |
-          declare -a REPOS=("odigos-autoscaler" "odigos-instrumentor" "odigos-scheduler" "odigos-odiglet" "odigos-collector" "odigos-enterprise-collector" "odigos-enterprise-odiglet" "odigos-ui" "odigos-enterprise-instrumentor" "odigos-operator" "odigos-enterprise-agents" "odigos-enterprise-insights" "odigos-enterprise-interrogation" "odigos-enterprise-central-backend" "odigos-enterprise-central-proxy" "odigos-enterprise-central-ui" "odigos-enterprise-connector-runtime" "odigos-enterprise-connector-aws" "odigos-enterprise-connector-azure" "odigos-enterprise-connector-gcp" "odigos-enterprise-connector-postgres")
+          # Community instrumentor, odiglet, collector and ui images are only built for versions released
+          # before odigos-enterprise moved here, so they are not required.
+          declare -a REPOS=("odigos-autoscaler" "odigos-scheduler" "odigos-operator" "odigos-enterprise-collector" "odigos-enterprise-odiglet" "odigos-enterprise-instrumentor" "odigos-enterprise-ui" "odigos-enterprise-agents" "odigos-enterprise-insights" "odigos-enterprise-central-backend" "odigos-enterprise-central-proxy" "odigos-enterprise-central-ui" "odigos-enterprise-connector-runtime" "odigos-enterprise-connector-aws" "odigos-enterprise-connector-azure" "odigos-enterprise-connector-gcp" "odigos-enterprise-connector-postgres")
 
           TAG_TO_CHECK=${{ env.TAG }}
 
@@ -409,43 +410,37 @@ jobs:
       - name: Install oras
         uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
 
-      - name: Copy CLI image to Docker Hub and private GCR
+      - name: Copy CLI image to private GCR
         env:
           SOURCE_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-cli
-          DEST_IMAGE: docker.io/${{ env.DOCKERHUB_ORG }}/odigos-cli
           GCR_PRIVATE_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cli
         run: |
           # oras copy -r rather than crane copy: -r copies the referrers graph
           # (cosign signature and SBOM attestation) along with the image, so
-          # the mirrors stay verifiable. crane copy moves only the manifest.
-          oras copy -r ${SOURCE_IMAGE}:${{ env.TAG }} ${DEST_IMAGE}:${{ env.TAG }}
+          # the mirror stays verifiable. crane copy moves only the manifest.
           oras copy -r ${SOURCE_IMAGE}:${{ env.TAG }} ${GCR_PRIVATE_DEST_IMAGE}:${{ env.TAG }}
 
-          # Mirror :latest only when this release owns it, so the mirrors stay
+          # Mirror :latest only when this release owns it, so the mirror stays
           # in step with the source registry.
           if [ "${{ env.PUSH_LATEST }}" = "true" ]; then
-            oras copy -r ${SOURCE_IMAGE}:latest ${DEST_IMAGE}:latest
             oras copy -r ${SOURCE_IMAGE}:latest ${GCR_PRIVATE_DEST_IMAGE}:latest
           else
             echo "Skipping :latest mirror for ${{ env.TAG }}"
           fi
 
-      - name: Copy VictoriaMetrics image to Docker Hub and GCR
+      - name: Copy VictoriaMetrics image to GCR
         id: vm-copy
         env:
           SOURCE_IMAGE: docker.io/victoriametrics/victoria-metrics:${{ env.VICTORIA_METRICS_VERSION }}
-          DEST_IMAGE: docker.io/${{ env.DOCKERHUB_ORG }}/odigos-victoria-metrics
           GCR_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-victoria-metrics
           GCR_PRIVATE_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-victoria-metrics
         run: |
-          oras copy -r ${SOURCE_IMAGE} ${DEST_IMAGE}:${{ env.TAG }}
           oras copy -r ${SOURCE_IMAGE} ${GCR_DEST_IMAGE}:${{ env.TAG }}
           oras copy -r ${SOURCE_IMAGE} ${GCR_PRIVATE_DEST_IMAGE}:${{ env.TAG }}
 
           # VICTORIA_METRICS_VERSION is pinned per branch, so :latest here
           # tracks whichever release owns it rather than the last one to run.
           if [ "${{ env.PUSH_LATEST }}" = "true" ]; then
-            oras copy -r ${SOURCE_IMAGE} ${DEST_IMAGE}:latest
             oras copy -r ${SOURCE_IMAGE} ${GCR_DEST_IMAGE}:latest
             oras copy -r ${SOURCE_IMAGE} ${GCR_PRIVATE_DEST_IMAGE}:latest
           else
@@ -464,27 +459,23 @@ jobs:
         uses: odigos-io/ci-core/sign-oci@main
         with:
           refs: |
-            docker.io/${{ env.DOCKERHUB_ORG }}/odigos-victoria-metrics
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-victoria-metrics
             us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-victoria-metrics
           digest: ${{ steps.vm-copy.outputs.digest }}
 
-      - name: Copy Redis image to Docker Hub and GCR as odigos-cache
+      - name: Copy Redis image to GCR as odigos-cache
         id: cache-copy
         env:
           SOURCE_IMAGE: docker.io/library/redis:${{ env.REDIS_VERSION }}
-          DEST_IMAGE: docker.io/${{ env.DOCKERHUB_ORG }}/odigos-cache
           GCR_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-cache
           GCR_PRIVATE_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cache
         run: |
-          oras copy -r ${SOURCE_IMAGE} ${DEST_IMAGE}:${{ env.TAG }}
           oras copy -r ${SOURCE_IMAGE} ${GCR_DEST_IMAGE}:${{ env.TAG }}
           oras copy -r ${SOURCE_IMAGE} ${GCR_PRIVATE_DEST_IMAGE}:${{ env.TAG }}
 
           # REDIS_VERSION is pinned per branch, so :latest here tracks whichever
           # release owns it rather than the last one to run.
           if [ "${{ env.PUSH_LATEST }}" = "true" ]; then
-            oras copy -r ${SOURCE_IMAGE} ${DEST_IMAGE}:latest
             oras copy -r ${SOURCE_IMAGE} ${GCR_DEST_IMAGE}:latest
             oras copy -r ${SOURCE_IMAGE} ${GCR_PRIVATE_DEST_IMAGE}:latest
           else
@@ -503,7 +494,6 @@ jobs:
         uses: odigos-io/ci-core/sign-oci@main
         with:
           refs: |
-            docker.io/${{ env.DOCKERHUB_ORG }}/odigos-cache
             us-central1-docker.pkg.dev/odigos-cloud/components/odigos-cache
             us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cache
           digest: ${{ steps.cache-copy.outputs.digest }}

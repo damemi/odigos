@@ -15,7 +15,7 @@ const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targe
   };
 };
 
-export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, interrogationEnabled?: boolean) => {
+export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, isEnterprise: boolean, interrogationEnabled?: boolean) => {
   const navIcons: NavbarProps['icons'] = [];
   const add = (path: string, label: string, icon: SVG, place: { group?: string; bottom?: boolean; gatedFeature?: GatedFeature } = {}) =>
     navIcons.push({ ...getPayloadForIcon(router, currentPath, path, label, icon), ...place });
@@ -25,9 +25,12 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, i
 
   // Pages whose feature can be off stay listed, marked "Turned off" by the menu while it is.
   add(ROUTES.SERVICE_MAP, 'Service Map', ServiceMapIcon, { group: 'Observe', gatedFeature: GatedFeature.ServiceMap });
-  // Listed even when insights are off: the page says so and how to turn them on.
-  add(ROUTES.INSIGHTS, 'Insights', InsightsIcon, { group: 'Observe', gatedFeature: GatedFeature.Insights });
-  add(ROUTES.PROFILING, 'Profiling', ProfilingIcon, { group: 'Observe', gatedFeature: GatedFeature.Profiling });
+  // Enterprise only, since community can't turn them on: insights deploys only with an on-prem token, and the eBPF
+  // profiler is only in the enterprise collector. On enterprise they're listed even when off: the page says how to turn them on.
+  if (isEnterprise) {
+    add(ROUTES.INSIGHTS, 'Insights', InsightsIcon, { group: 'Observe', gatedFeature: GatedFeature.Insights });
+    add(ROUTES.PROFILING, 'Profiling', ProfilingIcon, { group: 'Observe', gatedFeature: GatedFeature.Profiling });
+  }
   // Interrogation has no gated-feature entry yet, so it stays hidden until enabled.
   if (interrogationEnabled) {
     add(ROUTES.INTERROGATIONS, 'Interrogations', SparkleIcon, { group: 'Observe' });

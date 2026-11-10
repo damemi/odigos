@@ -1244,6 +1244,19 @@ Capturing these attributes gives visibility into sampling decision-making and ef
 sampling percentages when viewing traces or querying the database with tools.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>traceAggregation</code> <B>[Required]</B>
+</td>
+<td>
+<a href="https://pkg.go.dev/github.com/odigos-io/odigos/common#TraceAggregationConfiguration"><code>common.TraceAggregationConfiguration</code></a>
+</td>
+<td>
+   <p>TraceAggregation holds the validated collectorGateway.traceAggregation settings
+for the gateway's groupby processor, used by tail sampling and Insights.
+Unset fields use the processor defaults. Only relevant for the cluster gateway collector.</p>
+</td>
+</tr>
 </tbody>
 </table>
 

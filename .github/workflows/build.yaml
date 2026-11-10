@@ -64,8 +64,9 @@ jobs:
           push: false
           tags: agents:pr-${{ github.event.number || github.run_number }}
           provenance: false
-          file: odiglet/Dockerfile
-          build-args: SERVICE_NAME=agents
+          file: odiglet/enterprise/Dockerfile
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
           target: agents
           outputs: type=docker,dest=/tmp/agents.tar
       - name: Load Docker image for scanning
@@ -113,7 +114,7 @@ jobs:
           push: false
           tags: instrumentor:pr-${{ github.event.number || github.run_number }}
           provenance: false
-          file: instrumentor/Dockerfile
+          file: instrumentor/enterprise/Dockerfile
           outputs: type=docker,dest=/tmp/instrumentor.tar
       - name: Load Docker image for scanning
         run: docker load -i /tmp/instrumentor.tar
@@ -161,7 +162,7 @@ jobs:
           push: false
           tags: odigos-collector:pr-${{ github.event.number || github.run_number }}
           provenance: false
-          file: collector/Dockerfile
+          file: collector/enterprise/Dockerfile
           outputs: type=docker,dest=/tmp/odigos-collector.tar
       - name: Load Docker image for scanning
         run: docker load -i /tmp/odigos-collector.tar
@@ -208,8 +209,10 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           platforms: linux/amd64
-          file: odiglet/Dockerfile
+          file: odiglet/enterprise/Dockerfile
           context: .
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
           push: false
           tags: odiglet:pr-${{ github.event.number || github.run_number }}
           provenance: false
@@ -251,7 +254,13 @@ jobs:
 
   build-frontend:
     name: build-frontend
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+      packages: read
+    # setup-node's .npmrc reads this for every yarn command in the job, not just the install.
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
       # webapp is scanned separately because it runs with yarn, while the rest of the frontend runs with golang.
@@ -259,6 +268,8 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@odigos-io'
       - name: Install webapp dependencies
         run: yarn install --frozen-lockfile
         working-directory: frontend/webapp
@@ -290,11 +301,18 @@ jobs:
       # build the frontend image and scan the golang code.
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
+      - name: Write npm auth
+        id: npmrc
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Frontend Image
         uses: docker/build-push-action@v7
         with:
+          secret-files: |
+            npmrc=${{ steps.npmrc.outputs.path }}
           platforms: linux/amd64
-          file: frontend/Dockerfile
+          file: ui/Dockerfile
           context: .
           push: false
           tags: frontend:pr-${{ github.event.number || github.run_number }}
@@ -330,10 +348,6 @@ jobs:
       - name: Build webapp
         run: yarn build
         working-directory: frontend/webapp
-      # Note: frontend Go tests (`make test` in ./frontend) now run as a
-      # chainsaw Test under tests/e2e/ui/frontend-go-tests/ in parallel with the
-      # sibling tests/e2e/ui/frontend-cypress-tests/ Test, so they no longer
-      # block this build job. See PLAT-1214.
 
   build-operator:
     name: build-operator
@@ -480,3 +494,33 @@ jobs:
         working-directory: ./destinations
         run: |
           go test -v ./...
+
+  test-enterprise-modules:
+    name: Unit Tests (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - frontend
+          - ui
+          - insights
+          - instrumentor/enterprise
+          - collector/enterprise/cmd/odigosopampsupervisor
+          - collector/enterprise/exporters/odigosurltemplatizationexporter
+          - collector/enterprise/extension/odigosconfigconnectorextension
+          - collector/enterprise/extension/odigosconfigvmextension
+          - collector/enterprise/extension/odigosenterpriseauthextension
+          - collector/enterprise/processors/odigosprofilesprocessor
+          - collector/enterprise/processors/odigossymbolizeprocessor
+          - collector/enterprise/processors/odigosvmprofileattrsprocessor
+          - collector/enterprise/receivers/odigosebpfreceiver
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.6"
+      - name: Test ${{ matrix.module }}
+        working-directory: ./${{ matrix.module }}
+        # go-rtml (odigosebpfreceiver) links against runtime internals.
+        run: go test -ldflags=-checklinkname=0 ./...

@@ -9,6 +9,13 @@ odigos ui
 
 Then, go to: http://localhost:3000
 
+{{- with .Values.sampling }}{{- with .tailSampling }}{{- if .traceAggregationWaitDuration }}
+
+DEPRECATION: sampling.tailSampling.traceAggregationWaitDuration is deprecated and ignored.
+Use collectorGateway.traceAggregation.syncWait and collectorGateway.traceAggregation.asyncWait instead.
+Their defaults apply while they are unset.
+{{- end }}{{- end }}{{- end }}
+
 {{ if and (include "odigos.insightsEnabled" .) (eq .Values.insights.clickhouse.storage.persistence false) }}
 {{- $existingPVC := lookup "v1" "PersistentVolumeClaim" .Release.Namespace "odigos-insights-clickhouse" }}
 

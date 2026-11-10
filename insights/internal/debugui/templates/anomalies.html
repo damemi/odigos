@@ -1,0 +1,153 @@
+{{define "title"}}Findings{{end}}
+
+{{define "content"}}
+<h2>Findings</h2>
+<p class="hint">The same unified feed the product UI renders (<code>GET /api/v1/findings</code>): <strong>policy violations</strong> (a guardrail you declared was broken) and <strong>anomalies</strong> (deviations from learned baselines) as one list, worst first. Each row's <em>summary</em> line comes straight from the API so you can read what happened without opening investigate. The tabs bucket that one feed by what you've acted on.</p>
+
+{{template "timeRangePicker" .TimeRange}}
+
+<div class="tabs">
+  <a class="tab{{if eq .Tab "open"}} active{{end}}" href="{{.TabOpen}}">Open ({{.Counts.Open}})</a>
+  <a class="tab{{if eq .Tab "dismissed"}} active{{end}}" href="{{.TabDismissed}}">Dismissed ({{.Counts.Dismissed}})</a>
+  <a class="tab{{if eq .Tab "accepted"}} active{{end}}" href="{{.TabAccepted}}">Accepted ({{.Counts.Accepted}})</a>
+</div>
+
+{{if .Findings}}
+{{$tab := .Tab}}
+<table class="findings-table">
+  <thead>
+    <tr>
+      <th class="pv-risk">Severity</th>
+      <th>Namespace</th>
+      <th>Service</th>
+      <th>Finding</th>
+      <th>Type</th>
+      <th>Matched traces</th>
+      <th>Status</th>
+      <th>Last seen</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range $f := .Findings}}
+    <tr class="finding-lead">
+      <td class="pv-risk">{{template "sevBadge" (dict "Sev" $f.Severity "Score" $f.Score)}}</td>
+      <td>{{$f.Namespace}}</td>
+      <td><strong>{{$f.Service}}</strong></td>
+      <td>{{$f.Title}}</td>
+      <td><span class="badge badge-kind">{{$f.Kind}}</span></td>
+      <td><span class="badge tip" data-tip="How many traces matched this finding over the window. A one-off differs from a sustained pattern.">{{$f.Occurrences}}</span></td>
+      <td><span class="badge">{{$f.Status}}</span></td>
+      <td class="pv-when">{{$f.LastSeen.Format "2006-01-02 15:04:05"}}</td>
+      <td class="pv-actions">
+        {{if eq $f.Kind "anomaly"}}
+        <a class="btn tip tip-end" data-tip="Open the baseline-vs-anomaly trace comparison - see exactly what deviated." href="/debug/anomalies/issue?transaction_id={{$f.TransactionID}}&amp;signature={{$f.Signature}}">investigate</a>
+        {{if ne $f.Status "accepted"}}
+        <form class="js-resolve" method="POST" action="/debug/anomalies/accept" data-confirm="Accept this anomaly as baseline? Its flagged behaviour becomes normal and stops alerting." data-label="✓ accepted">
+          <input type="hidden" name="transaction_id" value="{{$f.TransactionID}}">
+          <input type="hidden" name="signature" value="{{$f.Signature}}">
+          <input type="hidden" name="tab" value="{{$tab}}">
+          <button type="submit" class="btn btn-primary tip tip-end" data-tip="Fold a captured trace into the baseline so its behaviour becomes normal and stops alerting.">accept</button>
+        </form>
+        {{end}}
+        {{if eq $f.Status "open"}}
+        <form class="js-resolve" method="POST" action="/debug/anomalies/dismiss" data-confirm="Dismiss this anomaly? Closed without changing the baseline; it stays counted and can be reopened." data-label="dismissed">
+          <input type="hidden" name="transaction_id" value="{{$f.TransactionID}}">
+          <input type="hidden" name="signature" value="{{$f.Signature}}">
+          <input type="hidden" name="tab" value="{{$tab}}">
+          <button type="submit" class="btn tip tip-end" data-tip="Close without changing the baseline; it stays counted and can be reopened.">dismiss</button>
+        </form>
+        {{end}}
+        {{if eq $f.Status "dismissed"}}
+        <form class="js-resolve" method="POST" action="/debug/anomalies/reopen" data-label="reopened">
+          <input type="hidden" name="transaction_id" value="{{$f.TransactionID}}">
+          <input type="hidden" name="signature" value="{{$f.Signature}}">
+          <input type="hidden" name="tab" value="{{$tab}}">
+          <button type="submit" class="btn tip tip-end" data-tip="Move this back to the Open tab for re-triage.">reopen</button>
+        </form>
+        {{end}}
+        {{else}}
+        <a class="btn tip tip-end" data-tip="Open a captured trace showing the forbidden edge - an investigation starting point." href="/debug/guardrails/violations/evidence?scope_key={{$f.ScopeKey}}&amp;rule_key={{$f.RuleKey}}&amp;offending={{$f.Offending}}">investigate</a>
+        {{if ne $f.Status "accepted"}}
+        <form class="js-resolve" method="POST" action="/debug/guardrails/violations/accept" data-confirm="Accept {{$f.Offending}}? It is added to {{$f.Service}}'s guardrail allowlist, so this edge becomes normal and stops alerting." data-label="✓ accepted">
+          <input type="hidden" name="scope_key" value="{{$f.ScopeKey}}">
+          <input type="hidden" name="rule_key" value="{{$f.RuleKey}}">
+          <input type="hidden" name="offending" value="{{$f.Offending}}">
+          <input type="hidden" name="tab" value="{{$tab}}">
+          <button type="submit" class="btn btn-primary tip tip-end" data-tip="Accept this edge as legitimate: add it to the service's allowlist and close the finding - the same affirmative action as accepting an anomaly.">accept</button>
+        </form>
+        {{end}}
+        {{if eq $f.Status "open"}}
+        <form class="js-resolve" method="POST" action="/debug/guardrails/violations/dismiss" data-confirm="Dismiss this violation? Closed without changing the guardrail; it moves to the Dismissed tab and its count keeps rising if the edge still fires." data-label="dismissed">
+          <input type="hidden" name="scope_key" value="{{$f.ScopeKey}}">
+          <input type="hidden" name="rule_key" value="{{$f.RuleKey}}">
+          <input type="hidden" name="offending" value="{{$f.Offending}}">
+          <input type="hidden" name="tab" value="{{$tab}}">
+          <button type="submit" class="btn tip tip-end" data-tip="Close without allowlisting. Moves to the Dismissed tab; the count keeps rising if the edge still fires.">dismiss</button>
+        </form>
+        {{end}}
+        {{if eq $f.Status "dismissed"}}
+        <form class="js-resolve" method="POST" action="/debug/guardrails/violations/reopen" data-label="reopened">
+          <input type="hidden" name="scope_key" value="{{$f.ScopeKey}}">
+          <input type="hidden" name="rule_key" value="{{$f.RuleKey}}">
+          <input type="hidden" name="offending" value="{{$f.Offending}}">
+          <input type="hidden" name="tab" value="{{$tab}}">
+          <button type="submit" class="btn tip tip-end" data-tip="Move this back to the Open tab for re-triage. Does not allowlist it; the guardrail stays enforced.">reopen</button>
+        </form>
+        {{end}}
+        {{end}}
+      </td>
+    </tr>
+    <tr class="finding-summary-row">
+      <td class="pv-risk"></td>
+      <td colspan="8"><span class="finding-summary">{{$f.Summary}}</span></td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+{{else}}
+<div class="empty">
+  {{if eq .Tab "dismissed"}}Nothing dismissed yet.
+  {{else if eq .Tab "accepted"}}Nothing accepted yet - no accepted violations or anomalies.
+  {{else}}No open findings in {{.TimeRange.Label}} - no policy violations and no anomalies need attention.{{end}}
+</div>
+{{end}}
+
+<script>
+  // Post a form and resolve only on a genuinely successful action. The handlers
+  // reply 204 to a fetch on success and a 4xx with a plain-text reason on
+  // failure (e.g. accepting an anomaly whose trace has aged out), so we gray
+  // the row only on 2xx and surface the server's message otherwise.
+  function postAction(action, body) {
+    return fetch(action, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) {
+        if (r.ok) return r;
+        return r.text().then(function (t) { throw new Error((t && t.trim()) || ('HTTP ' + r.status)); });
+      });
+  }
+
+  // Gray a resolved finding (its lead row plus the summary row beneath it) and
+  // swap its actions for a status pill, so the decision is visible immediately
+  // without a reload (the finding leaves its tab on the next manual refresh).
+  function markResolved(tr, label) {
+    if (!tr) return;
+    tr.classList.add('resolved');
+    var summary = tr.nextElementSibling;
+    if (summary && summary.classList.contains('finding-summary-row')) summary.classList.add('resolved');
+    var actions = tr.querySelector('.pv-actions');
+    if (actions) actions.innerHTML = '<span class="st-badge st-done">' + (label || 'done') + '</span>';
+  }
+
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.classList || !form.classList.contains('js-resolve')) return;
+    e.preventDefault();
+    if (form.dataset.confirm && !confirm(form.dataset.confirm)) return;
+    var btn = form.querySelector('[type=submit]');
+    if (btn) btn.disabled = true;
+    postAction(form.action, new FormData(form))
+      .then(function () { markResolved(form.closest('tr'), form.dataset.label); })
+      .catch(function (err) { if (btn) btn.disabled = false; alert('Action failed: ' + err.message); });
+  });
+</script>
+{{end}}

@@ -1,0 +1,90 @@
+type: odigosgroupbytrace
+
+status:
+  class: processor
+  stability:
+    alpha: [traces]
+  distributions: [odigos]
+  codeowners:
+    active: [odigos]
+
+attributes:
+  action:
+    description: What the component did with the data under memory pressure.
+    type: string
+    enum: [rejected]
+  class:
+    description: "Which wait applies to the trace: sync for traces without PRODUCER/CONSUMER spans (held up to sync_wait), async for traces with them (held up to async_wait)."
+    type: string
+    enum: [sync, async]
+  component:
+    description: ID of the component that reacted to memory pressure.
+    type: string
+  reason:
+    description: "How the trace was released. settled: its root span arrived and no new span came for root_settle. timeout: it was held for the full sync_wait or async_wait. evicted: the buffer reached max_traces and it was the oldest trace. shutdown: the collector was stopping. long_running (late_spans and late_traces only): the late span lasted longer than the wait itself, so no wait setting would have caught it."
+    type: string
+    enum: [settled, timeout, evicted, shutdown, long_running]
+
+telemetry:
+  metrics:
+    odigos.groupbytrace.late_spans:
+      enabled: true
+      description: Spans that arrived after their trace was released, by how that trace was released.
+      unit: "{spans}"
+      sum:
+        value_type: int
+        monotonic: true
+      attributes: [class, reason]
+      stability: development
+    odigos.groupbytrace.late_traces:
+      enabled: true
+      description: Traces that got spans after they were released, so they reached the next consumer in more than one piece. Counted once per trace.
+      unit: "{traces}"
+      sum:
+        value_type: int
+        monotonic: true
+      attributes: [class, reason]
+      stability: development
+    odigos.groupbytrace.spans_in_memory:
+      enabled: true
+      description: Spans currently buffered.
+      unit: "{spans}"
+      sum:
+        value_type: int
+        monotonic: false
+      stability: development
+    odigos.groupbytrace.spans_released:
+      enabled: true
+      description: Spans released to the next consumer.
+      unit: "{spans}"
+      sum:
+        value_type: int
+        monotonic: true
+      attributes: [reason, class]
+      stability: development
+    odigos.groupbytrace.traces_in_memory:
+      enabled: true
+      description: Traces currently buffered.
+      unit: "{traces}"
+      sum:
+        value_type: int
+        monotonic: false
+      stability: development
+    odigos.groupbytrace.traces_released:
+      enabled: true
+      description: Traces released to the next consumer.
+      unit: "{traces}"
+      sum:
+        value_type: int
+        monotonic: true
+      attributes: [reason, class]
+      stability: development
+    odigos.memory_pressure.spans:
+      enabled: true
+      description: Spans a component acted on because the Go memory limit (GOMEMLIMIT) was reached.
+      unit: "{spans}"
+      sum:
+        value_type: int
+        monotonic: true
+      attributes: [component, action]
+      stability: development

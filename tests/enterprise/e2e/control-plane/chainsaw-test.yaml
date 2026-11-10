@@ -1,0 +1,140 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: control-plane
+spec:
+  description: This e2e test verifies instrumentation of Kubernetes control plane components
+  skipDelete: true
+  steps:
+    - name: Prepare destination
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/simple-trace-db-deployment.yaml
+
+    - name: Install Odigos
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              # use the helm chart from main repo which is expected to be in a sibling directory to this repo
+              helm upgrade --install odigos \
+                ../../../../helm/odigos \
+                --create-namespace \
+                --namespace odigos-test \
+                --set image.tag=$IMAGE_TAG \
+                --set onPremToken=$ODIGOS_API_KEY
+              kubectl label namespace odigos-test odigos.io/system-object="true"
+
+    - name: Verify Odigos Installation
+      try:
+        - script:
+            timeout: 2m
+            content: |
+              echo "Starting Odigos version check..."
+              export ACTUAL_VERSION=$(../../../../cli/odigos version --cluster)
+              echo "Actual Version: $ACTUAL_VERSION"
+              echo "Expected Version: $IMAGE_TAG"
+
+        - assert:
+            timeout: 4m
+            file: ../../common/assert/odigos-installed.yaml
+
+      catch:
+        - script:
+            content: |
+              echo "🔍 Listing all resources in namespace 'odigos-test'..."
+              kubectl get all -n odigos-test
+
+              echo "📝 Describing all resources in namespace 'odigos-test'..."
+              kubectl describe deployments -n odigos-test
+
+    - name: Verify Node Odiglet label has been added
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/node-odiglet-label.yaml
+
+    - name: Assert Trace DB is up
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../../tests/common/assert/simple-trace-db-running.yaml
+
+    - name: Add Destination
+      try:
+        - apply:
+            file: ../../../../tests/common/apply/add-simple-trace-db-destination.yaml
+
+    - name: Assert Control Plane Components Ready
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/control-plane-components-ready.yaml
+
+    - name: Instrument Control Plane
+      try:
+        - apply:
+            file: ../../common/apply/instrument-control-plane.yaml
+
+    - name: Odigos pipeline ready
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/pipeline-ready.yaml
+
+    - name: Assert Control Plane Instrumentation Instances
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/control-plane-instrumentation-instances.yaml
+
+    - name: Generate Control Plane Traffic
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              kubectl get mutatingwebhookconfigurations.admissionregistration.k8s.io
+
+    - name: Verify Control Plane Traces
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              script=$(mktemp)
+              cp ../../../../tests/common/simple_trace_db_query_runner.sh "$script"
+
+              while true; do
+                bash "$script" ../../common/queries/control-plane-traces.yaml
+                if [ $? -eq 0 ]; then
+                  break
+                fi
+                sleep 1
+              done
+
+              rm -f "$script"
+      catch:
+        - podLogs:
+            name: odiglet
+            namespace: odigos-test
+
+    - name: Un-instrument Control Plane
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              kubectl delete source control-plane-instrumentation -n kube-system
+
+    - name: Assert Control Plane Instrumentation Instances Removed
+      try:
+        - script:
+            timeout: 3m50s
+            content: |
+              while true; do
+                instances=$(kubectl get instrumentationinstances -n kube-system -o json 2>/dev/null | jq -r '.items | length')
+                if [ "$instances" = "0" ] || [ -z "$instances" ]; then
+                  echo "All InstrumentationInstances have been removed"
+                  break
+                fi
+                echo "Waiting for InstrumentationInstances to be removed. Current count: $instances"
+                sleep 2
+              done

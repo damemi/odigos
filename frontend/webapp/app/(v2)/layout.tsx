@@ -3,6 +3,7 @@
 import React, { type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
+import { Tier } from '@odigos/ui-kit/types';
 import { OverviewHeader } from '@/components';
 import { NavbarNext } from '@odigos/ui-kit/components';
 import { ToastListNext } from '@odigos/ui-kit/containers';
@@ -35,7 +36,7 @@ function InnerLayout({ children }: PropsWithChildren) {
       <ViewportColumn $gap={0}>
         <OverviewHeader />
         <ContentRow $gap={0}>
-          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, config?.interrogationEnabled)} />
+          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, config?.tier === Tier.Onprem, config?.interrogationEnabled)} />
           {children}
         </ContentRow>
       </ViewportColumn>

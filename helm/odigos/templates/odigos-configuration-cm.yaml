@@ -178,6 +178,24 @@ data:
       {{- if .Values.collectorGateway.deploymentName }}
       deploymentName: {{ .Values.collectorGateway.deploymentName }}
       {{- end }}
+      {{- with .Values.collectorGateway.traceAggregation }}
+      traceAggregation:
+        {{- if .syncWait }}
+        syncWait: {{ .syncWait | quote }}
+        {{- end }}
+        {{- if .asyncWait }}
+        asyncWait: {{ .asyncWait | quote }}
+        {{- end }}
+        {{- if .rootSettle }}
+        rootSettle: {{ .rootSettle | quote }}
+        {{- end }}
+        {{- if .maxTraces }}
+        maxTraces: {{ .maxTraces | int }}
+        {{- end }}
+        {{- if hasKey . "lateSpansMaxMemoryMiB" }}
+        lateSpansMaxMemoryMiB: {{ .lateSpansMaxMemoryMiB | int }}
+        {{- end }}
+      {{- end }}
     {{- end }}
     {{- if .Values.collectorNode }}
     {{- $nodeLimiter := include "collector.node.memoryLimiter" . | fromYaml }}

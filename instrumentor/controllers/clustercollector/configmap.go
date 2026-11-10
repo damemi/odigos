@@ -176,9 +176,7 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 	}
 
 	tailSamplingEnabled := false
-	waitDuration := k8sconsts.OdigosClusterCollectorTraceAggregationWaitDurationDefault
 	// TailSampling is nil when inactive, non-nil when the scheduler has resolved it as active.
-	// TraceAggregationWaitDuration is already validated and defaulted by the scheduler.
 	if gateway.Spec.TailSampling != nil {
 		if gateway.Spec.TailSampling.Disabled != nil && !*gateway.Spec.TailSampling.Disabled {
 			tailSamplingEnabled = true
@@ -186,15 +184,10 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 				gatewayOptions.SamplingDryRun = *gateway.Spec.SamplingDryRun
 			}
 		}
-		if gateway.Spec.TailSampling.TraceAggregationWaitDuration != nil && *gateway.Spec.TailSampling.TraceAggregationWaitDuration != "" {
-			waitDuration = *gateway.Spec.TailSampling.TraceAggregationWaitDuration
-		}
-	}
-
-	if tailSamplingEnabled {
-		gatewayOptions.TraceAggregationWaitDuration = &waitDuration
 	}
 	gatewayOptions.TailSamplingEnabled = &tailSamplingEnabled
+	// Resolved and validated from collectorGateway.traceAggregation by the collectorsgroup controller.
+	gatewayOptions.TraceAggregation = gateway.Spec.TraceAggregation
 
 	collectorLogLevel := string(odigoscommon.LogLevelInfo)
 	var profilingCfg *odigoscommon.ProfilingConfiguration
@@ -220,14 +213,6 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 	if odigoscommon.InsightsPipelineActive(insightsCfg) {
 		gatewayOptions.InsightsOtlpEndpoint = k8sconsts.InsightsOtlpGrpcDNSEndpoint(env.GetCurrentNamespace())
 	}
-	// Insights / interrogation can trigger groupbytrace without tail sampling on, in
-	// which case the scheduler hasn't resolved TraceAggregationWaitDuration. Fall
-	// back to the canonical default so we never feed groupbytrace a nil wait_duration.
-	if gatewayOptions.TraceAggregationWaitDuration == nil &&
-		(odigoscommon.InsightsPipelineActive(insightsCfg) || odigoscommon.InterrogationActive(interrogationCfg)) {
-		def := k8sconsts.OdigosClusterCollectorTraceAggregationWaitDurationDefault
-		gatewayOptions.TraceAggregationWaitDuration = &def
-	}
 
 	desiredData, err, status, signals := pipelinegen.GetGatewayConfig(
 		pipeline.ToExporterConfigurerArray(enabledDests),
@@ -246,11 +231,7 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 				if err := addProfilingGatewayPipeline(c, env.GetCurrentNamespace(), profilingCfg); err != nil {
 					return err
 				}
-				groupByWait := k8sconsts.OdigosClusterCollectorTraceAggregationWaitDurationDefault
-				if gatewayOptions.TraceAggregationWaitDuration != nil && *gatewayOptions.TraceAggregationWaitDuration != "" {
-					groupByWait = *gatewayOptions.TraceAggregationWaitDuration
-				}
-				if err := addInterrogationExporters(c, env.GetCurrentNamespace(), interrogationCfg, groupByWait); err != nil {
+				if err := addInterrogationExporters(c, env.GetCurrentNamespace(), interrogationCfg, interrogationGroupByTraceWait(gatewayOptions.TraceAggregation)); err != nil {
 					return err
 				}
 				addEnterpriseAuthExtension(c)

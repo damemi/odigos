@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jvm-metrics-traffic
+  namespace: default
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: jvm-metrics-traffic
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: curl
+          image: curlimages/curl:8.4.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              for i in $(seq 1 50); do
+                curl -s -m 5 -X POST "http://frontend:8080/buy?id=${i}" || true
+                sleep 0.5
+              done

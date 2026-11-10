@@ -279,7 +279,38 @@ type CollectorGatewayConfiguration struct {
 	// Deployment name for the cluster gateway collector deployment.
 	// If not set, the default is 'odigos-gateway'.
 	DeploymentName string `json:"deploymentName,omitempty"`
+
+	// TraceAggregation controls how the gateway groups spans into whole traces
+	// before tail sampling and Insights. Unset fields use the processor defaults.
+	TraceAggregation *TraceAggregationConfiguration `json:"traceAggregation,omitempty"`
 }
+
+// TraceAggregationConfiguration tunes the gateway's odigosgroupbytrace processor.
+// Durations use Go syntax (for example "30s").
+// +kubebuilder:object:generate=true
+type TraceAggregationConfiguration struct {
+	// SyncWait is the longest a trace without PRODUCER/CONSUMER spans is held
+	// before it is sent on. Default 30s.
+	SyncWait *string `json:"syncWait,omitempty"`
+
+	// AsyncWait is the longest a trace with a PRODUCER or CONSUMER span is held;
+	// its consumer side can arrive long after the root span. Default 30s.
+	AsyncWait *string `json:"asyncWait,omitempty"`
+
+	// RootSettle sends a trace once its root span arrived and no new span came
+	// for this long, instead of waiting the full SyncWait. "0s" disables it. Default 7s.
+	RootSettle *string `json:"rootSettle,omitempty"`
+
+	// MaxTraces caps how many traces are buffered; when full, the oldest trace is
+	// sent early. Default 200000.
+	MaxTraces *int `json:"maxTraces,omitempty"`
+
+	// LateSpansMaxMemoryMiB bounds the memory used to remember sent traces so spans
+	// arriving after them are counted in the late_spans and late_traces metrics. 0 disables that
+	// tracking. Default 70.
+	LateSpansMaxMemoryMiB *int `json:"lateSpansMaxMemoryMiB,omitempty"`
+}
+
 type UserInstrumentationEnvs struct {
 	Languages map[ProgrammingLanguage]LanguageConfig `json:"languages,omitempty"`
 }

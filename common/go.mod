@@ -24,6 +24,7 @@ require (
 )
 
 require (
+	github.com/cilium/ebpf v0.20.0
 	github.com/go-logr/logr v1.4.4
 	github.com/go-logr/zapr v1.3.0
 	github.com/hashicorp/go-version v1.9.0

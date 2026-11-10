@@ -7,6 +7,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 jobs:
   build-images:
@@ -16,7 +17,16 @@ jobs:
     needs: build-images
     runs-on: depot-ubuntu-24.04-8
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+      - name: Configure AWS credentials from OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::061717858829:role/ecr-pull-push-role
+          aws-region: us-east-1
       - name: Run chaos-tests
         uses: ./.github/actions/chaos-tests
+        with:
+          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
         env:
           GITHUB_SHA: ${{ github.sha }}

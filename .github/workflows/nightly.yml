@@ -5,10 +5,39 @@ on:
     - cron: '0 0 * * *' # Nightly run at midnight
   workflow_call:
   workflow_dispatch:
+    inputs:
+      provider:
+        description: 'Cross-cloud tests: cloud provider'
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - aks
+          - eks
+      test_scenario:
+        description: 'Cross-cloud tests: scenario'
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - helm-chart
+          - enterprise/multi-apps
+      platform:
+        description: 'Cross-cloud tests: CPU architecture'
+        required: false
+        default: all
+        type: choice
+        options:
+          - all
+          - amd
+          - arm
 
 permissions:
   id-token: write
   contents: read
+  packages: read
 
 jobs:
   build-cli:
@@ -55,15 +84,26 @@ jobs:
     runs-on: depot-ubuntu-24.04-8
     env:
       COMMIT_HASH: ${{ github.sha }}
-      DOCKER_REGISTRY: docker.io/keyval
-      REGISTRY: public.ecr.aws/y2v0v6s7
+      DOCKER_REGISTRY: registry.odigos.io
+      # Dev images include the enterprise components, so they go to a private registry.
+      REGISTRY: 061717858829.dkr.ecr.us-east-1.amazonaws.com
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Write npm auth
+        id: npmrc
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build Odigos Images
+        env:
+          # odiglet and agents download private instrumentation repos.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
         run: |
           TAG=e2e-test make build-images
+          TAG=e2e-test EXTENDED=true make build-odiglet build-agents
           docker save -o odigos-images.tar $(docker images --format "{{.Repository}}:{{.Tag}}" | grep "odigos")
 
       - uses: ko-build/setup-ko@v0.9
@@ -71,19 +111,19 @@ jobs:
       - name: Build CLI Image
         run: |
           TAG=e2e-test make build-cli-image
-          docker save docker.io/keyval/odigos-cli:e2e-test -o cli-image.tar
+          docker save registry.odigos.io/odigos-cli:e2e-test -o cli-image.tar
 
       # Victoria Metrics is published, not built in this repo. Materialize a single-platform
       # image (buildx --load) so kind load does not fail on multi-arch manifests.
       - name: Prepare Victoria Metrics Image
         run: |
-          printf 'FROM docker.io/keyval/odigos-victoria-metrics:latest\n' | docker buildx build \
+          printf 'FROM registry.odigos.io/odigos-victoria-metrics:latest\n' | docker buildx build \
             --platform=linux/$(docker version -f '{{.Server.Arch}}') \
             --pull \
-            -t docker.io/keyval/odigos-victoria-metrics:e2e-test \
+            -t registry.odigos.io/odigos-victoria-metrics:e2e-test \
             --load \
             -
-          docker save docker.io/keyval/odigos-victoria-metrics:e2e-test -o victoria-metrics-image.tar
+          docker save registry.odigos.io/odigos-victoria-metrics:e2e-test -o victoria-metrics-image.tar
 
       # odigos-cache is only published on release. Until then e2e re-hosts upstream
       # Redis (pin must match REDIS_VERSION in release.yml).
@@ -92,10 +132,10 @@ jobs:
           printf 'FROM docker.io/library/redis:8.10.2\n' | docker buildx build \
             --platform=linux/$(docker version -f '{{.Server.Arch}}') \
             --pull \
-            -t docker.io/keyval/odigos-cache:e2e-test \
+            -t registry.odigos.io/odigos-cache:e2e-test \
             --load \
             -
-          docker save docker.io/keyval/odigos-cache:e2e-test -o cache-image.tar
+          docker save registry.odigos.io/odigos-cache:e2e-test -o cache-image.tar
 
       - name: Save Odigos images to cache
         uses: actions/cache/save@v4
@@ -115,14 +155,121 @@ jobs:
 
       - name: Login to Amazon ECR
         run: |
-          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$REGISTRY"
 
       - name: Push Docker Images to ECR
         run: |
-          for image in collector instrumentor ui autoscaler odiglet cli; do
-            docker tag "${DOCKER_REGISTRY}/odigos-${image}:e2e-test" "${REGISTRY}/odigos-${image}:${COMMIT_HASH}"
-            docker push "${REGISTRY}/odigos-${image}:${COMMIT_HASH}"
+          for image in odigos-enterprise-collector odigos-enterprise-instrumentor odigos-enterprise-ui odigos-enterprise-odiglet odigos-enterprise-agents odigos-enterprise-insights odigos-cli; do
+            aws ecr describe-repositories --repository-names "$image" >/dev/null 2>&1 || aws ecr create-repository --repository-name "$image" >/dev/null
+            docker tag "${DOCKER_REGISTRY}/${image}:e2e-test" "${REGISTRY}/${image}:${COMMIT_HASH}"
+            docker push "${REGISTRY}/${image}:${COMMIT_HASH}"
           done
+
+  # The cloud clusters pull these images from private ECR, so they are pushed for both
+  # architectures instead of being loaded into kind.
+  build-cloud-images:
+    runs-on: ${{ matrix.runner || 'depot-ubuntu-24.04-4' }}
+    env:
+      IMAGE_REGISTRY: 061717858829.dkr.ecr.us-east-1.amazonaws.com
+      IMAGE_TAG: ${{ github.sha }}-multiarch
+    strategy:
+      matrix:
+        service: [odiglet, instrumentor, ui, collector, agents, cli]
+        include:
+          - service: collector
+            runner: depot-ubuntu-24.04-16
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Configure AWS credentials from OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::061717858829:role/ecr-pull-push-role
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$IMAGE_REGISTRY"
+          REPOSITORY="${{ matrix.service == 'cli' && 'odigos-cli' || format('odigos-enterprise-{0}', matrix.service) }}"
+          aws ecr describe-repositories --region us-east-1 --repository-names "$REPOSITORY" >/dev/null 2>&1 \
+            || aws ecr create-repository --region us-east-1 --repository-name "$REPOSITORY"
+
+      - name: Write npm auth
+        id: npmrc
+        if: ${{ matrix.service == 'ui' }}
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Image
+        if: ${{ matrix.service != 'cli' }}
+        env:
+          # odiglet and agents download private instrumentation repos.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
+          NPMRC: ${{ steps.npmrc.outputs.path }}
+        run: make push-${{ matrix.service }} ORG="$IMAGE_REGISTRY" TAG="$IMAGE_TAG" PUSH_IMAGE=true
+
+      # The instrumentor runs the cli image for the go offsets job, under the same image prefix and tag.
+      - name: Build and Push CLI Image
+        if: ${{ matrix.service == 'cli' }}
+        uses: docker/build-push-action@v7
+        with:
+          file: cli/Dockerfile
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/odigos-cli:${{ env.IMAGE_TAG }}
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          build-args: |
+            VERSION=${{ env.IMAGE_TAG }}
+            CHART_VERSION=${{ env.IMAGE_TAG }}
+            RELEASE=${{ env.IMAGE_TAG }}
+
+  cross-cloud-tests:
+    runs-on: depot-ubuntu-24.04-8
+    needs: build-cloud-images
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.provider == 'all') && '["aks","eks"]' || format('["{0}"]', inputs.provider)) }}
+        test_scenario: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.test_scenario == 'all') && '["enterprise/multi-apps","helm-chart"]' || format('["{0}"]', inputs.test_scenario)) }}
+        platform: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.platform == 'all') && '["amd","arm"]' || format('["{0}"]', inputs.platform)) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run Cross-Cloud Tests
+        if: ${{ !(matrix.provider == 'aks' && matrix.platform == 'arm') }}
+        uses: ./.github/actions/cross-cloud-tests
+        with:
+          provider: ${{ matrix.provider }}
+          test_scenario: ${{ matrix.test_scenario }}
+          platform: ${{ matrix.platform }}
+          image_registry: 061717858829.dkr.ecr.us-east-1.amazonaws.com
+          image_tag: ${{ github.sha }}-multiarch
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Report Test Outcome
+        if: always() && !(matrix.provider == 'aks' && matrix.platform == 'arm')
+        uses: ./.github/actions/nightly/report
+        with:
+          status: ${{ job.status }}
+          suite_name: cross-cloud-tests
+          suite_parameters: '{"provider": "${{ matrix.provider }}", "test_scenario": "${{ matrix.test_scenario }}", "platform": "${{ matrix.platform }}"}'
+          slack_webhook_url: ${{ secrets.CLOUD_PROVIDERS_TESTS_WEBHOOK_URL }}
 
   kubernetes-tests:
     needs: [build-cli, build-images]
@@ -146,12 +293,29 @@ jobs:
           - "webhooks"
           - "env-injection"
           - "data-streams"
-          - "mount-method"
           - "argo-rollouts"
           - "head-sampling-http-nodejs"
           - "head-sampling-http-python"
           - "head-sampling-http-java"
           - "tail-sampling-nodejs"
+          - "enterprise/multi-apps"
+          - "enterprise/jvm-metrics"
+          - "enterprise/mount-method"
+          - "enterprise/non-root"
+          - "enterprise/instrumentation-rules"
+          - "enterprise/python-ebpf"
+        include:
+          # Control plane instrumentation is tested from k8s 1.29: older control plane binaries are built with
+          # Go versions the enterprise Go agent does not fully support (stripped binaries, gRPC context propagation).
+          - kubernetes-version: "1.29"
+            test-scenario: "enterprise/control-plane"
+          - kubernetes-version: "1.37"
+            test-scenario: "enterprise/control-plane"
+          # non-root also ran on these versions in the enterprise CI.
+          - kubernetes-version: "1.23"
+            test-scenario: "enterprise/non-root"
+          - kubernetes-version: "1.32"
+            test-scenario: "enterprise/non-root"
 
     steps:
       - name: Checkout
@@ -162,6 +326,8 @@ jobs:
         with:
           kubernetes-version: ${{ matrix.kubernetes-version }}
           test-scenario: ${{ matrix.test-scenario }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
 
   kubernetes-tests-report:
     if: always()
@@ -213,8 +379,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v5
 
+      - name: Configure AWS credentials from OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::061717858829:role/ecr-pull-push-role
+          aws-region: us-east-1
+
       - name: Run Chaos Tests
         uses: ./.github/actions/chaos-tests
+        with:
+          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
 
       - name: Report Test Outcome
         if: always()

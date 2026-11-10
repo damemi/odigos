@@ -54,6 +54,9 @@ updates:
       interval: weekly
 
   - package-ecosystem: npm
+    # The UI Kit comes from GitHub Packages, which Dependabot can't read without a long-lived token. Bump it manually.
+    ignore:
+      - dependency-name: '@odigos/ui-kit'
     directories:
       - /frontend/webapp
       - /docs

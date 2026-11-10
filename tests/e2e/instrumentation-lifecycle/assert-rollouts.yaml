@@ -43,7 +43,7 @@ metadata:
   name: java-supported-version
   namespace: default
   annotations:
-    deployment.kubernetes.io/revision: "2"
+    deployment.kubernetes.io/revision: '1' # the enterprise Java agent attaches without restarting the workload
   labels:
     app: java-supported-version
     odigos.io/e2e: test-workload

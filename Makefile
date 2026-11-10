@@ -3,12 +3,10 @@ ODIGOS_CLI_VERSION ?= $(shell odigos version --cli)
 CLUSTER_NAME ?= local-dev-cluster
 CENTRAL_BACKEND_URL ?=
 ODIGOS_NS ?= odigos-system
-OSS_ORG ?= docker.io/keyval
-ENTERPRISE_ORG ?= registry.odigos.io
 # Default for builds/pushes. Local deploy/load-to-kind resolve registry + image name
 # via scripts/resolve-dev-image.sh so OSS make deploy works against enterprise
-# installs (registry.odigos.io, odigos-enterprise-ui, etc.).
-ORG ?= $(OSS_ORG)
+# installs (odigos-enterprise-ui, etc.).
+ORG ?= registry.odigos.io
 # Override ORG for staging pushes
 ifeq ($(STAGING_ORG),true)
     ORG = us-central1-docker.pkg.dev/odigos-cloud/staging-components
@@ -38,20 +36,12 @@ ifneq ($(strip $(TARGET)),)
   TARGET_FLAG := --target $(TARGET)
 endif
 
-# When ORG is set on the CLI or environment, force that registry in deploy resolution.
-# The Makefile default (OSS_ORG) is not forced so enterprise clusters get ENTERPRISE_ORG.
-ifneq ($(filter command line environment,$(origin ORG)),)
-  DEV_IMAGE_ORG_OVERRIDE := $(ORG)
-endif
-
 # IMAGE=registry/name:tag overrides resolution for a single-component deploy.
 # Otherwise resolve registry + repository from the live cluster / install tier.
 dev_image_repo = $(shell \
 	ODIGOS_NS=$(ODIGOS_NS) \
 	ODIGOS_ENTERPRISE=$(ODIGOS_ENTERPRISE) \
-	ORG_OVERRIDE=$(DEV_IMAGE_ORG_OVERRIDE) \
-	OSS_ORG=$(OSS_ORG) \
-	ENTERPRISE_ORG=$(ENTERPRISE_ORG) \
+	ORG=$(ORG) \
 	IMG_SUFFIX=$(IMG_SUFFIX) \
 	bash $(CURDIR)/scripts/resolve-dev-image.sh $(1))
 dev_image = $(or $(IMAGE),$(call dev_image_repo,$(1)):$(TAG))
@@ -103,11 +93,28 @@ $(HELM_SCHEMA_BIN):
 helm-schema-clean:
 	rm -f $(HELM_SCHEMA_BIN)
 
+# The ui image reads the private UI Kit from GitHub Packages with the token in ~/.npmrc (see frontend/webapp/README.md).
+# Override NPMRC to point at another .npmrc (CI does).
+NPMRC ?= $(HOME)/.npmrc
+NPMRC_SECRET_FLAG = --secret id=npmrc,src=$(NPMRC)
+NPMRC_SECRET = $(if $(wildcard $(NPMRC)),$(NPMRC_SECRET_FLAG))
+
+# Enterprise odiglet and agents builds download private instrumentation repos with this token.
+GITHUB_TOKEN_SECRET = $(if $(GITHUB_TOKEN),--secret id=github_token$(comma)env=GITHUB_TOKEN)
+comma := ,
+
+# Components with separate enterprise images; the rest (autoscaler, scheduler, operator, cli) are shared.
+ENTERPRISE_COMPONENTS := odiglet agents instrumentor collector ui insights
+image_name = $(if $(filter $(ENTERPRISE_COMPONENTS),$(1)),odigos-enterprise-$(1),odigos-$(1))
+# EXTENDED=true builds the odiglet and agents variants published with an -extended tag suffix.
+EXTENDED ?= false
+TAG_SUFFIX = $(if $(filter true,$(EXTENDED)),-extended)
+
 # Pass DOCKER_BUILD_OPTS=--no-cache to force a clean build (e.g. when go.mod replace changes and cache is stale).
-# IMAGE= overrides the default $(ORG)/odigos-$*$(IMG_SUFFIX):$(TAG) tag (used by deploy-*).
+# IMAGE= overrides the default $(ORG)/$(call image_name,$*)$(IMG_SUFFIX):$(TAG) tag (used by deploy-*).
 build-image/%:
-	docker build $(DOCKER_BUILD_OPTS) $(TARGET_FLAG) \
-	-t $(or $(IMAGE),$(ORG)/odigos-$*$(IMG_SUFFIX):$(TAG)) $(BUILD_DIR) -f $(DOCKERFILE) \
+	docker build $(DOCKER_BUILD_OPTS) $(TARGET_FLAG) $(if $(filter ui,$*),$(NPMRC_SECRET)) $(GITHUB_TOKEN_SECRET) \
+	-t $(or $(IMAGE),$(ORG)/$(call image_name,$*)$(IMG_SUFFIX):$(TAG)$(TAG_SUFFIX)) $(BUILD_DIR) -f $(DOCKERFILE) \
 	--build-arg SERVICE_NAME="$*" \
 	--build-arg ODIGOS_VERSION=$(TAG) \
 	--build-arg VERSION=$(TAG) \
@@ -115,7 +122,8 @@ build-image/%:
 	--build-arg SUMMARY="$(SUMMARY)" \
 	--build-arg DESCRIPTION="$(DESCRIPTION)" \
 	--build-arg LD_FLAGS="$(LD_FLAGS)" \
-	--build-arg RHEL="$(RHEL)"
+	--build-arg RHEL="$(RHEL)" \
+	--build-arg EXTENDED="$(EXTENDED)"
 
 .PHONY: build-operator-index
 build-operator-index:
@@ -127,12 +135,12 @@ build-operator:
 
 .PHONY: build-odiglet
 build-odiglet:
-	$(MAKE) build-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) build-image/odiglet DOCKERFILE=odiglet/enterprise/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: build-agents
 build-agents:
 	$(MAKE) build-image/agents \
-		DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=$(if $(filter true,$(RHEL)),agents-rhel,agents) \
+		DOCKERFILE=odiglet/enterprise/$(DOCKERFILE) TARGET=$(if $(filter true,$(RHEL)),agents-rhel,agents) \
 		SUMMARY="Init container for Odigos" \
 		DESCRIPTION="Init container for Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." \
 		TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
@@ -144,7 +152,7 @@ build-autoscaler:
 
 .PHONY: build-instrumentor
 build-instrumentor:
-	$(MAKE) build-image/instrumentor DOCKERFILE=instrumentor/Dockerfile SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) build-image/instrumentor DOCKERFILE=instrumentor/enterprise/Dockerfile SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: build-scheduler
 build-scheduler:
@@ -152,11 +160,15 @@ build-scheduler:
 
 .PHONY: build-collector
 build-collector:
-	$(MAKE) build-image/collector DOCKERFILE=collector/$(DOCKERFILE) SUMMARY="Odigos Collector" DESCRIPTION="The Odigos build of the OpenTelemetry Collector." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) build-image/collector DOCKERFILE=collector/enterprise/$(DOCKERFILE) SUMMARY="Odigos Collector" DESCRIPTION="The Odigos build of the OpenTelemetry Collector." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: build-ui
 build-ui:
-	$(MAKE) build-image/ui DOCKERFILE=frontend/$(DOCKERFILE) SUMMARY="UI for Odigos" DESCRIPTION="UI provides the frontend webapp for managing an Odigos installation." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) build-image/ui DOCKERFILE=ui/$(DOCKERFILE) SUMMARY="UI for Odigos" DESCRIPTION="UI provides the frontend webapp for managing an Odigos installation." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: build-insights
+build-insights:
+	$(MAKE) build-image/insights DOCKERFILE=insights/Dockerfile SUMMARY="Insights for Odigos" DESCRIPTION="Insights learns per-transaction baselines from traces and scores deviations." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: verify-nodejs-agent
 verify-nodejs-agent:
@@ -168,15 +180,15 @@ verify-nodejs-agent:
 .PHONY: build-images
 build-images:
 	# prefer to build timeconsuimg images first to make better use of parallelism
-	make -j $(nproc) build-ui build-collector build-odiglet build-autoscaler build-instrumentor build-agents TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+	make -j $(nproc) build-ui build-collector build-odiglet build-autoscaler build-instrumentor build-agents build-insights TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: build-images-rhel
 build-images-rhel:
 	$(MAKE) build-images RHEL=true TAG=$(TAG) ORG=$(ORG)
 
 push-image/%:
-	docker buildx build $(DOCKER_BUILD_OPTS) $(TARGET_FLAG) \
-	--platform linux/amd64,linux/arm64/v8 -t $(ORG)/odigos-$*$(IMG_SUFFIX):$(TAG) $(BUILD_DIR) -f $(DOCKERFILE) \
+	docker buildx build $(DOCKER_BUILD_OPTS) $(TARGET_FLAG) $(if $(filter ui,$*),$(NPMRC_SECRET)) $(GITHUB_TOKEN_SECRET) \
+	--platform linux/amd64,linux/arm64/v8 -t $(ORG)/$(call image_name,$*)$(IMG_SUFFIX):$(TAG)$(TAG_SUFFIX) $(BUILD_DIR) -f $(DOCKERFILE) \
 	$(if $(filter true,$(PUSH_IMAGE)),--push,) \
 	$(if $(filter true,$(GCP_MARKETPLACE)),--annotation="index:com.googleapis.cloudmarketplace.product.service.name=services/odigos.endpoints.odigos-public.cloud.goog",) \
 	--build-arg SERVICE_NAME="$*" \
@@ -186,7 +198,8 @@ push-image/%:
 	--build-arg SUMMARY="$(SUMMARY)" \
 	--build-arg DESCRIPTION="$(DESCRIPTION)" \
 	--build-arg LD_FLAGS="$(LD_FLAGS)" \
-	--build-arg RHEL="$(RHEL)"
+	--build-arg RHEL="$(RHEL)" \
+	--build-arg EXTENDED="$(EXTENDED)"
 
 .PHONY: push-operator
 push-operator:
@@ -194,7 +207,7 @@ push-operator:
 
 .PHONY: push-odiglet
 push-odiglet:
-	$(MAKE) push-image/odiglet DOCKERFILE=odiglet/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) push-image/odiglet DOCKERFILE=odiglet/enterprise/$(DOCKERFILE) SUMMARY="Odiglet for Odigos" DESCRIPTION="Odiglet is the core component of Odigos managing auto-instrumentation." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-autoscaler
 push-autoscaler:
@@ -202,7 +215,7 @@ push-autoscaler:
 
 .PHONY: push-instrumentor
 push-instrumentor:
-	$(MAKE) push-image/instrumentor SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) push-image/instrumentor DOCKERFILE=instrumentor/enterprise/Dockerfile SUMMARY="Instrumentor for Odigos" DESCRIPTION="Instrumentor manages auto-instrumentation for workloads with Odigos." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-scheduler
 push-scheduler:
@@ -210,19 +223,23 @@ push-scheduler:
 
 .PHONY: push-collector
 push-collector:
-	$(MAKE) push-image/collector DOCKERFILE=collector/$(DOCKERFILE) BUILD_DIR=. SUMMARY="Odigos Collector" DESCRIPTION="The Odigos build of the OpenTelemetry Collector." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) push-image/collector DOCKERFILE=collector/enterprise/$(DOCKERFILE) BUILD_DIR=. SUMMARY="Odigos Collector" DESCRIPTION="The Odigos build of the OpenTelemetry Collector." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-ui
 push-ui:
-	$(MAKE) push-image/ui DOCKERFILE=frontend/$(DOCKERFILE) SUMMARY="UI for Odigos" DESCRIPTION="UI provides the frontend webapp for managing an Odigos installation." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) push-image/ui DOCKERFILE=ui/$(DOCKERFILE) SUMMARY="UI for Odigos" DESCRIPTION="UI provides the frontend webapp for managing an Odigos installation." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-agents
 push-agents:
-	$(MAKE) push-image/agents DOCKERFILE=odiglet/$(DOCKERFILE) TARGET=$(if $(filter true,$(RHEL)),agents-rhel,agents) SUMMARY="Init container for Odigos" DESCRIPTION="Init container for Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) push-image/agents DOCKERFILE=odiglet/enterprise/$(DOCKERFILE) TARGET=$(if $(filter true,$(RHEL)),agents-rhel,agents) SUMMARY="Init container for Odigos" DESCRIPTION="Init container for Odigos managing auto-instrumentation. This container requires a root user to run and manage eBPF programs." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+
+.PHONY: push-insights
+push-insights:
+	$(MAKE) push-image/insights DOCKERFILE=insights/Dockerfile SUMMARY="Insights for Odigos" DESCRIPTION="Insights learns per-transaction baselines from traces and scores deviations." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-images
 push-images:
-	make push-autoscaler push-odiglet push-instrumentor push-collector push-ui push-scheduler TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
+	make push-autoscaler push-odiglet push-instrumentor push-collector push-ui push-scheduler push-agents push-insights TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX) DOCKERFILE=$(DOCKERFILE)
 
 .PHONY: push-images-rhel
 push-images-rhel:
@@ -319,13 +336,15 @@ deploy:
 debug-odiglet:
 	@img="$(call dev_image,odiglet)"; \
 	echo "Building debug odiglet as $$img"; \
-	docker build -t $$img . -f odiglet/debug.Dockerfile; \
+	docker build -t $$img . -f odiglet/enterprise/debug.Dockerfile; \
 	kind load docker-image $$img; \
 	kubectl delete pod -n $(ODIGOS_NS) -l app.kubernetes.io/name=odiglet; \
 	kubectl wait --for=condition=ready pod -n $(ODIGOS_NS) -l app.kubernetes.io/name=odiglet --timeout=180s; \
 	kubectl port-forward -n $(ODIGOS_NS) daemonset/odiglet 2345:2345
 
-ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -v "licenses")
+# odiglet/enterprise depends on private instrumentation repos that this repo's go mod CI cannot download.
+# collector/enterprise/odigosotelcol is generated by ocb and verified by verify-enterprise-collector-ocb.
+ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -v "licenses" | grep -v '^./odiglet/enterprise' | grep -v '^./collector/enterprise/odigosotelcol')
 
 .PHONY: go-mod-tidy
 go-mod-tidy: $(ALL_GO_MOD_DIRS:%=go-mod-tidy/%)

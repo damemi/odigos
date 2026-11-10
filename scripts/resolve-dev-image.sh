@@ -2,8 +2,8 @@
 # Resolve the container image repository (registry/name, no tag) for local
 # make deploy / load-to-kind workflows.
 #
-# Enterprise installs (odigos-pro secret or ODIGOS_TIER=onprem) default to
-# registry.odigos.io and odigos-enterprise-* names where those differ from OSS.
+# Enterprise installs (odigos-pro secret or ODIGOS_TIER=onprem) use
+# odigos-enterprise-* names where those differ from OSS.
 # When a matching workload already exists in the cluster with the expected image
 # name, its registry/prefix is preserved (custom imagePrefix, mirrors, etc.).
 #
@@ -11,9 +11,7 @@
 # Env:
 #   ODIGOS_NS          - namespace (default: odigos-system)
 #   ODIGOS_ENTERPRISE  - true|false to skip auto-detection
-#   ORG_OVERRIDE       - force registry/org (when user set ORG on the CLI/env)
-#   OSS_ORG            - default OSS registry (default: docker.io/keyval)
-#   ENTERPRISE_ORG     - default enterprise registry (default: registry.odigos.io)
+#   ORG                - registry/org when the cluster has no matching image (default: registry.odigos.io)
 #   IMG_SUFFIX         - optional image suffix (e.g. -rhel-certified)
 
 set -euo pipefail
@@ -21,8 +19,7 @@ set -euo pipefail
 component="${1:?component name required (e.g. autoscaler, ui, odiglet)}"
 ns="${ODIGOS_NS:-odigos-system}"
 img_suffix="${IMG_SUFFIX:-}"
-oss_org="${OSS_ORG:-docker.io/keyval}"
-enterprise_org="${ENTERPRISE_ORG:-registry.odigos.io}"
+org="${ORG:-registry.odigos.io}"
 
 is_enterprise() {
 	case "${ODIGOS_ENTERPRISE:-}" in
@@ -49,18 +46,6 @@ expected_image_name() {
 		esac
 	fi
 	echo "odigos-${c}${img_suffix}"
-}
-
-fallback_org() {
-	if [ -n "${ORG_OVERRIDE:-}" ]; then
-		echo "${ORG_OVERRIDE}"
-		return
-	fi
-	if is_enterprise; then
-		echo "${enterprise_org}"
-	else
-		echo "${oss_org}"
-	fi
 }
 
 # Strip digest and tag, leaving registry/repo.
@@ -118,7 +103,6 @@ lookup_cluster_image() {
 }
 
 expected="$(expected_image_name "${component}")"
-fallback="$(fallback_org)/${expected}"
 
 cluster_img="$(lookup_cluster_image "${component}")"
 if [ -n "${cluster_img}" ]; then
@@ -128,20 +112,9 @@ if [ -n "${cluster_img}" ]; then
 	# That preserves custom imagePrefix/mirrors while recovering from a prior
 	# deploy that tagged the wrong OSS name into an enterprise cluster.
 	if [ "${cluster_base}" = "${expected}" ]; then
-		# Shared components (autoscaler) keep the same image name on
-		# enterprise, so a prior OSS `make deploy` may have left docker.io/keyval
-		# in the cluster — treat that as stale and use the enterprise registry.
-		if is_enterprise; then
-			case "${cluster_repo}" in
-				"${oss_org}"/*)
-					echo "$(fallback_org)/${expected}"
-					exit 0
-					;;
-			esac
-		fi
 		echo "${cluster_repo}"
 		exit 0
 	fi
 fi
 
-echo "${fallback}"
+echo "${org}/${expected}"

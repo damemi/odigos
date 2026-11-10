@@ -30,7 +30,7 @@ spec:
     agentEnabledMessage: Pods entered CrashLoopBackOff; instrumentation disabled
     agentEnabledReason: CrashLoopBackOff
     containerName: api
-    otelDistroName: nodejs-community
+    otelDistroName: nodejs-enterprise
   serviceName: otel-crash-demo
 status:
   rollbackOccurred: true

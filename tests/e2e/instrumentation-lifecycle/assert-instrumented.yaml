@@ -79,8 +79,9 @@ status:
       status: "True"
       type: AgentEnabled
   (conditions[?type == 'WorkloadRollout']):
-    - message: workload rollout finished successfully
-      reason: RolloutFinished
+    # The enterprise Java agent (java-ebpf-instrumentations) attaches without restarting the workload.
+    - message: The selected instrumentation distributions do not require application restart
+      reason: NotRequired
       status: "True"
       type: WorkloadRollout
 ---

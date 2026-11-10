@@ -480,6 +480,42 @@ spec:
                       Also increases memory usage for keeping spans in memory until the wait duration time is reached.
                       Setting it too low might introduce fragmentation of traces - sampling decisions based on incomplete traces,
                       and broken traces due to sampling each trace in few pieces.
+
+                      Deprecated: ignored. Use CollectorGatewayConfiguration.TraceAggregation (syncWait and asyncWait),
+                      which also applies when only Insights needs whole traces.
+                    type: string
+                type: object
+              traceAggregation:
+                description: |-
+                  TraceAggregation holds the validated collectorGateway.traceAggregation settings
+                  for the gateway's groupby processor, used by tail sampling and Insights.
+                  Unset fields use the processor defaults. Only relevant for the cluster gateway collector.
+                properties:
+                  asyncWait:
+                    description: |-
+                      AsyncWait is the longest a trace with a PRODUCER or CONSUMER span is held;
+                      its consumer side can arrive long after the root span. Default 30s.
+                    type: string
+                  lateSpansMaxMemoryMiB:
+                    description: |-
+                      LateSpansMaxMemoryMiB bounds the memory used to remember sent traces so spans
+                      arriving after them are counted in the late_spans and late_traces metrics. 0 disables that
+                      tracking. Default 70.
+                    type: integer
+                  maxTraces:
+                    description: |-
+                      MaxTraces caps how many traces are buffered; when full, the oldest trace is
+                      sent early. Default 200000.
+                    type: integer
+                  rootSettle:
+                    description: |-
+                      RootSettle sends a trace once its root span arrived and no new span came
+                      for this long, instead of waiting the full SyncWait. "0s" disables it. Default 7s.
+                    type: string
+                  syncWait:
+                    description: |-
+                      SyncWait is the longest a trace without PRODUCER/CONSUMER spans is held
+                      before it is sent on. Default 30s.
                     type: string
                 type: object
             required:

@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coredns
+  namespace: kube-system
+status:
+  availableReplicas: 2
+  readyReplicas: 2
+  replicas: 2
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kindnet
+  namespace: kube-system
+status:
+  numberReady: 2
+  desiredNumberScheduled: 2
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-proxy
+  namespace: kube-system
+status:
+  numberReady: 2
+  desiredNumberScheduled: 2
+

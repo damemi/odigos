@@ -70,6 +70,9 @@ type TailSamplingConfiguration struct {
 	// Also increases memory usage for keeping spans in memory until the wait duration time is reached.
 	// Setting it too low might introduce fragmentation of traces - sampling decisions based on incomplete traces,
 	// and broken traces due to sampling each trace in few pieces.
+	//
+	// Deprecated: ignored. Use CollectorGatewayConfiguration.TraceAggregation (syncWait and asyncWait),
+	// which also applies when only Insights needs whole traces.
 	TraceAggregationWaitDuration *string `json:"traceAggregationWaitDuration,omitempty" mapstructure:"traceAggregationWaitDuration"`
 
 	// Controls when the collector enforces noisy-operations rules via tail sampling.

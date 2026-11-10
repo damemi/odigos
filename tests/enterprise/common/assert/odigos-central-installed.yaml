@@ -1,0 +1,47 @@
+# Check that central-backend deployment is running
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: central-backend
+  namespace: odigos-central
+spec:
+  replicas: 1
+status:
+  readyReplicas: 1
+  availableReplicas: 1
+---
+# Check that central-ui deployment is running
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: central-ui
+  namespace: odigos-central
+spec:
+  replicas: 1
+status:
+  readyReplicas: 1
+  availableReplicas: 1
+---
+# Check that redis deployment is running
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: odigos-central
+spec:
+  replicas: 1
+status:
+  readyReplicas: 1
+  availableReplicas: 1
+---
+# Check that keycloak deployment is running
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: odigos-central
+spec:
+  replicas: 1
+status:
+  readyReplicas: 1
+  availableReplicas: 1

@@ -145,7 +145,7 @@ const (
 const (
 	GenericBatchProcessorConfigKey        = "batch/generic-batch-processor"
 	SmallBatchesProcessor                 = "batch/small-batches"
-	GroupByTraceProcessor                 = "groupbytrace"
+	GroupByTraceProcessor                 = "odigosgroupbytrace"
 	TracesPostGroupByForwardConnectorName = "forward/traces-post-groupby"
 	TracesExportingPipelineName           = "traces/exporting"
 	OdigosTailSamplingProcessorName       = "odigostailsampling"

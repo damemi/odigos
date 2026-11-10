@@ -407,6 +407,44 @@
           },
           "title": "serviceGraphVirtualNodePeerAttributes",
           "type": "array"
+        },
+        "traceAggregation": {
+          "additionalProperties": false,
+          "description": "How the gateway groups spans into whole traces before tail sampling and Insights.\nUnset fields keep the defaults shown.",
+          "properties": {
+            "asyncWait": {
+              "default": "30s",
+              "description": "longest a trace with a PRODUCER or CONSUMER span is held,\nsince its consumer side can arrive long after the root span.",
+              "title": "asyncWait",
+              "type": "string"
+            },
+            "lateSpansMaxMemoryMiB": {
+              "default": 70,
+              "description": "memory (MiB) used to remember sent traces, so spans arriving after their trace was sent\nare counted in the late_spans and late_traces metrics. 0 disables that tracking.",
+              "title": "lateSpansMaxMemoryMiB",
+              "type": "integer"
+            },
+            "maxTraces": {
+              "default": 200000,
+              "description": "max traces buffered; when full, the oldest trace is sent early.",
+              "title": "maxTraces",
+              "type": "integer"
+            },
+            "rootSettle": {
+              "default": "7s",
+              "description": "send a trace once its root span arrived and no new span came for this long,\ninstead of waiting the full syncWait. \"0s\" disables it.",
+              "title": "rootSettle",
+              "type": "string"
+            },
+            "syncWait": {
+              "default": "30s",
+              "description": "longest a trace without async (PRODUCER/CONSUMER) spans is held before it is sent on.",
+              "title": "syncWait",
+              "type": "string"
+            }
+          },
+          "required": [],
+          "title": "traceAggregation"
         }
       },
       "required": [],
@@ -658,7 +696,7 @@
     },
     "imagePrefix": {
       "default": "",
-      "description": "Default image registry prefix. When unset:\n  - community installs use `docker.io/keyval`\n  - enterprise installs (onPremToken / odigos-pro secret) use `registry.odigos.io`\n  - OpenShift installs use `registry.connect.redhat.com/odigos`\nIf you use a custom or internal registry, set imagePrefix to your registry.\nFor example, if you set imagePrefix to `myregistry.io/odigos`, the images will be pulled from `myregistry.io/odigos/odigos-\u003ccomponent\u003e:\u003ctag\u003e`",
+      "description": "Default image registry prefix. When unset:\n  - OpenShift installs use `registry.connect.redhat.com/odigos`\n  - all other installs use `registry.odigos.io`\nIf you use a custom or internal registry, set imagePrefix to your registry.\nFor example, if you set imagePrefix to `myregistry.io/odigos`, the images will be pulled from `myregistry.io/odigos/odigos-\u003ccomponent\u003e:\u003ctag\u003e`",
       "required": [],
       "title": "imagePrefix"
     },
@@ -2606,7 +2644,7 @@
             },
             "traceAggregationWaitDuration": {
               "default": "30s",
-              "description": "time to wait from the first span of a trace until a trace is considered completed.\nat this time, all spans received for this trace are aggregated and a tail-sampling decision is applied.\nintroduces this amount of latency in the pipeline and for trace to hit the destination.\nalso increases memory usage for keeping spans in memory until the wait duration time is reached.\nsetting it too low might introduce fragmentation of traces - sampling decisions based on incomplete traces,\nand broken traces due to sampling each trace in few pieces.",
+              "description": "time to wait from the first span of a trace until a trace is considered completed.\nat this time, all spans received for this trace are aggregated and a tail-sampling decision is applied.\nintroduces this amount of latency in the pipeline and for trace to hit the destination.\nalso increases memory usage for keeping spans in memory until the wait duration time is reached.\nsetting it too low might introduce fragmentation of traces - sampling decisions based on incomplete traces,\nand broken traces due to sampling each trace in few pieces.\nDeprecated: Use collectorGateway.traceAggregation.syncWait and asyncWait instead, which also apply\nwhen only Insights needs whole traces. Ignored; kept only for backwards compatibility with helm schema.",
               "required": [],
               "title": "traceAggregationWaitDuration"
             }

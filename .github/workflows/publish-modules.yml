@@ -221,40 +221,78 @@ jobs:
 
     strategy:
       matrix:
-        service: ['autoscaler', 'scheduler', 'instrumentor', 'collector', 'odiglet', 'ui', 'operator', 'agents']
+        # odiglet and agents also publish an -extended variant (EXTENDED=true, tag suffix -extended).
         include:
           - service: autoscaler
+            image: odigos-autoscaler
+            file: autoscaler/Dockerfile
             runner: depot-ubuntu-latest
             summary: 'Autoscaler for Odigos'
             description: 'Compatibility image. Autoscaler controllers now run in the instrumentor.'
-          - service: instrumentor
-            runner: depot-ubuntu-latest
-            summary: 'Instrumentor for Odigos'
-            description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
           - service: scheduler
+            image: odigos-scheduler
+            file: scheduler/Dockerfile
             runner: depot-ubuntu-latest
             summary: 'Scheduler for Odigos'
             description: 'Compatibility image. Scheduler controllers now run in the instrumentor.'
+          - service: operator
+            image: odigos-operator
+            file: operator/Dockerfile
+            runner: depot-ubuntu-latest
+            summary: 'Odigos Operator'
+            description: 'The Odigos Operator installs and manages Odigos in a cluster'
+          - service: instrumentor
+            image: odigos-enterprise-instrumentor
+            file: instrumentor/enterprise/Dockerfile
+            runner: depot-ubuntu-latest
+            summary: 'Instrumentor for Odigos'
+            description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
           - service: collector
+            image: odigos-enterprise-collector
+            file: collector/enterprise/Dockerfile
             runner: depot-ubuntu-24.04-16
             summary: 'Odigos Collector'
             description: 'The Odigos build of the OpenTelemetry Collector.'
           - service: odiglet
+            image: odigos-enterprise-odiglet
+            file: odiglet/enterprise/Dockerfile
             runner: depot-ubuntu-24.04-4
             summary: 'Odiglet for Odigos'
             description: 'Odiglet is the core component of Odigos managing auto-instrumentation. This image requires a root user to load and manage eBPF programs.'
-          - service: ui
-            runner: depot-ubuntu-latest
-            summary: 'UI for Odigos'
-            description: 'UI provides the frontend webapp for managing an Odigos installation.'
-          - service: operator
-            runner: depot-ubuntu-latest
-            summary: 'Odigos Operator'
-            description: 'The Odigos Operator installs and manages Odigos in a cluster'
+          - service: odiglet
+            image: odigos-enterprise-odiglet
+            file: odiglet/enterprise/Dockerfile
+            extended: true
+            runner: depot-ubuntu-24.04-4
+            summary: 'Odiglet for Odigos'
+            description: 'Odiglet is the core component of Odigos managing auto-instrumentation. This image requires a root user to load and manage eBPF programs.'
           - service: agents
+            image: odigos-enterprise-agents
+            file: odiglet/enterprise/Dockerfile
+            target: agents
             runner: depot-ubuntu-latest
             summary: 'Odigos Agents'
             description: 'The Odigos Agents used to copy Odigos agent relevant files into the user workloads.'
+          - service: agents
+            image: odigos-enterprise-agents
+            file: odiglet/enterprise/Dockerfile
+            target: agents
+            extended: true
+            runner: depot-ubuntu-latest
+            summary: 'Odigos Agents'
+            description: 'The Odigos Agents used to copy Odigos agent relevant files into the user workloads.'
+          - service: ui
+            image: odigos-enterprise-ui
+            file: ui/Dockerfile
+            runner: depot-ubuntu-latest
+            summary: 'UI for Odigos'
+            description: 'UI provides the frontend webapp for managing an Odigos installation.'
+          - service: insights
+            image: odigos-enterprise-insights
+            file: insights/Dockerfile
+            runner: depot-ubuntu-latest
+            summary: 'Insights for Odigos'
+            description: 'Insights learns per-transaction baselines from traces and scores deviations.'
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Checkout repository
@@ -269,8 +307,8 @@ jobs:
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          success-description: "start publishing docker image for component ${{ matrix.service }} and dockerfile ${{ matrix.dockerfile }}"
-          failure-description: "error during building or publishing of docker image for component ${{ matrix.service }} and dockerfile ${{ matrix.dockerfile }}"
+          success-description: "start publishing docker image ${{ matrix.image }}${{ matrix.extended && ' (extended)' || '' }}"
+          failure-description: "error during building or publishing of docker image ${{ matrix.image }}${{ matrix.extended && ' (extended)' || '' }}"
           tag: ${{ steps.extract_tag.outputs.tag }}
 
       - name: Set up Docker Buildx
@@ -301,47 +339,40 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Write npm auth
+        id: npmrc
+        uses: ./.github/actions/npm-auth
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push Docker Image for ${{ matrix.service }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and Push Docker Image for ${{ matrix.image }}
         id: build
         uses: docker/build-push-action@v7
         env:
           ODIGOS_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || steps.extract_tag.outputs.tag}}
+          TAG_SUFFIX: ${{ matrix.extended && '-extended' || '' }}
         with:
+          # github_token: odiglet and agents download private instrumentation repos.
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
+          secret-files: |
+            npmrc=${{ steps.npmrc.outputs.path }}
           push: true
           provenance: false
           tags: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
-            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
-            keyval/odigos-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
-            ghcr.io/odigos-io/odigos-${{ matrix.service }}:${{ env.ODIGOS_TAG }}
+            us-central1-docker.pkg.dev/odigos-cloud/components/${{ matrix.image }}:${{ env.ODIGOS_TAG }}${{ env.TAG_SUFFIX }}
+            us-central1-docker.pkg.dev/odigos-cloud/components-private/${{ matrix.image }}:${{ env.ODIGOS_TAG }}${{ env.TAG_SUFFIX }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
             ODIGOS_VERSION=${{ env.ODIGOS_TAG }}
             LD_FLAGS=-s -w
             RHEL=false
+            EXTENDED=${{ matrix.extended && 'true' || 'false' }}
           platforms: linux/amd64,linux/arm64
-          file: >-
-            ${{ matrix.service == 'odiglet' && 'odiglet/Dockerfile' ||
-                matrix.service == 'collector' && 'collector/Dockerfile' ||
-                matrix.service == 'ui' && 'frontend/Dockerfile' ||
-                matrix.service == 'operator' && 'operator/Dockerfile' ||
-                matrix.service == 'agents' && 'odiglet/Dockerfile' ||
-                matrix.service == 'scheduler' && 'scheduler/Dockerfile' ||
-                matrix.service == 'autoscaler' && 'autoscaler/Dockerfile' ||
-                matrix.service == 'instrumentor' && 'instrumentor/Dockerfile' ||
-                'Dockerfile' }}
-          target: >-
-            ${{ matrix.service == 'agents' && 'agents' || '' }}
+          file: ${{ matrix.file }}
+          target: ${{ matrix.target || '' }}
 
       # Runs in this job so it inherits the registry logins above. One build
-      # writes the same digest to four registries; each ref gets its own
+      # writes the same digest to three registries; each ref gets its own
       # signature, because signatures live beside the image in one registry
       # and do not travel with a copy. Signing is fail-closed: a signing
       # failure fails this publish job.
@@ -349,10 +380,8 @@ jobs:
         uses: odigos-io/ci-core/sign-oci@main
         with:
           refs: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-${{ matrix.service }}
-            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-${{ matrix.service }}
-            keyval/odigos-${{ matrix.service }}
-            ghcr.io/odigos-io/odigos-${{ matrix.service }}
+            us-central1-docker.pkg.dev/odigos-cloud/components/${{ matrix.image }}
+            us-central1-docker.pkg.dev/odigos-cloud/components-private/${{ matrix.image }}
           digest: ${{ steps.build.outputs.digest }}
 
       - name: Notify Slack
@@ -360,6 +389,6 @@ jobs:
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
-          success-description: "Odigos component ${{ matrix.service }} with dockerfile ${{ matrix.dockerfile }} released successfully"
-          failure-description: "ERROR: Odigos component ${{ matrix.service }} with dockerfile ${{ matrix.dockerfile }} release failed"
+          success-description: "Odigos image ${{ matrix.image }}${{ matrix.extended && ' (extended)' || '' }} released successfully"
+          failure-description: "ERROR: Odigos image ${{ matrix.image }}${{ matrix.extended && ' (extended)' || '' }} release failed"
           tag: ${{ steps.extract_tag.outputs.tag }}

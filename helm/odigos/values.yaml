@@ -13,9 +13,8 @@ imagePullSecrets: []
 # @schema
 # description: |-
 #   Default image registry prefix. When unset:
-#     - community installs use `docker.io/keyval`
-#     - enterprise installs (onPremToken / odigos-pro secret) use `registry.odigos.io`
 #     - OpenShift installs use `registry.connect.redhat.com/odigos`
+#     - all other installs use `registry.odigos.io`
 #   If you use a custom or internal registry, set imagePrefix to your registry.
 #   For example, if you set imagePrefix to `myregistry.io/odigos`, the images will be pulled from `myregistry.io/odigos/odigos-<component>:<tag>`
 # @schema
@@ -479,6 +478,50 @@ collectorGateway:
   #   if not specified, it will be set to 80% of the hard limit of the memory limiter.
   # @schema
   # goMemLimitMiB: 440
+
+  # @schema
+  # description: |-
+  #   How the gateway groups spans into whole traces before tail sampling and Insights.
+  #   Unset fields keep the defaults shown.
+  # @schema
+  traceAggregation:
+    # @schema
+    # type: string
+    # description: |-
+    #   longest a trace without async (PRODUCER/CONSUMER) spans is held before it is sent on.
+    # @schema
+    # syncWait: 30s
+
+    # @schema
+    # type: string
+    # description: |-
+    #   longest a trace with a PRODUCER or CONSUMER span is held,
+    #   since its consumer side can arrive long after the root span.
+    # @schema
+    # asyncWait: 30s
+
+    # @schema
+    # type: string
+    # description: |-
+    #   send a trace once its root span arrived and no new span came for this long,
+    #   instead of waiting the full syncWait. "0s" disables it.
+    # @schema
+    # rootSettle: 7s
+
+    # @schema
+    # type: integer
+    # description: |-
+    #   max traces buffered; when full, the oldest trace is sent early.
+    # @schema
+    # maxTraces: 200000
+
+    # @schema
+    # type: integer
+    # description: |-
+    #   memory (MiB) used to remember sent traces, so spans arriving after their trace was sent
+    #   are counted in the late_spans and late_traces metrics. 0 disables that tracking.
+    # @schema
+    # lateSpansMaxMemoryMiB: 70
 
   # @schema
   # description: |-
@@ -2224,6 +2267,8 @@ sampling:
     #   also increases memory usage for keeping spans in memory until the wait duration time is reached.
     #   setting it too low might introduce fragmentation of traces - sampling decisions based on incomplete traces,
     #   and broken traces due to sampling each trace in few pieces.
+    #   Deprecated: Use collectorGateway.traceAggregation.syncWait and asyncWait instead, which also apply
+    #   when only Insights needs whole traces. Ignored; kept only for backwards compatibility with helm schema.
     # @schema
     # traceAggregationWaitDuration: '30s'
 

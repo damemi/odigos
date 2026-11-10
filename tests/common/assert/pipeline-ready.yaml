@@ -1,3 +1,4 @@
+# Enterprise assert that collectors are ready (includes ODIGOS_ONPREM_TOKEN on gateway).
 apiVersion: odigos.io/v1alpha1
 kind: CollectorsGroup
 metadata:
@@ -61,6 +62,11 @@ spec:
                   containerName: gateway
                   divisor: "0"
                   resource: limits.cpu
+            - name: ODIGOS_ONPREM_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: odigos-onprem-token
+                  name: odigos-pro
           name: gateway
           resources:
             requests:
