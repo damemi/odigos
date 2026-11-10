@@ -1,0 +1,8 @@
+# Read-only access to this repo for odigos-io/rsi-i workflows. The RSI-I nightly run builds the
+# enterprise odiglet from source against python-ebpf main, which fetches this repo. Branch runs only
+# (the schedule and manual dispatch), not pull requests or tags.
+issuer: https://token.actions.githubusercontent.com
+subject_pattern: '^repo:odigos-io(@84347062)?/rsi-i(@1452453795)?:ref:refs/heads/.+$'
+
+permissions:
+  contents: read
