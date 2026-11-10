@@ -218,11 +218,6 @@ func main() {
 	})
 
 	o.AddRunnable(odiglet.Runnable{
-		Name: "ebpf map fd server",
-		Run:  mapExchange.serve,
-	})
-
-	o.AddRunnable(odiglet.Runnable{
 		Name:         "go offsets watcher",
 		PropagateErr: true,
 		Run: func(runCtx context.Context) error {
