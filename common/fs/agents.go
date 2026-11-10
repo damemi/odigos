@@ -344,5 +344,12 @@ func getCriticalFiles(bp string) map[string]struct{} {
 	cf[filepath.Join(bp, "php", "8.2", "opentelemetry.so")] = struct{}{}
 	cf[filepath.Join(bp, "php", "8.3", "opentelemetry.so")] = struct{}{}
 	cf[filepath.Join(bp, "php", "8.4", "opentelemetry.so")] = struct{}{}
+	// .NET: the CLR maps the native profiler (CORECLR_PROFILER_PATH) from the agents
+	// directory and keeps faulting pages in from it for the life of the process, so
+	// rewriting it in place kills the process with SIGILL. That is what happened to
+	// every running .NET workload when the auto-instrumentation moved from v1.9.0 to
+	// v1.19.1. The dotnet-community distro picks the glibc or musl one per app (LIBC_TYPE).
+	cf[filepath.Join(bp, "dotnet", "linux-glibc", "OpenTelemetry.AutoInstrumentation.Native.so")] = struct{}{}
+	cf[filepath.Join(bp, "dotnet", "linux-musl", "OpenTelemetry.AutoInstrumentation.Native.so")] = struct{}{}
 	return cf
 }
