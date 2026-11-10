@@ -161,24 +161,26 @@ runs:
       shell: bash
       run: chmod +x cli/odigos
 
-    - name: Get latest release tag for branch from Helm
+    - name: Get latest release tag for branch from the chart registry
       id: get-latest-tag
       shell: bash
       env:
         BRANCH: ${{ github.base_ref || github.ref_name }}
+        ODIGOS_API_KEY: ${{ inputs.onprem-token }}
       run: |
-        echo "📦 Updating Helm repositories..."
-        helm repo add odigos https://odigos-io.github.io/odigos/ || true
-        helm repo update
+        STABLE_VERSIONS=$(curl -fsSL -u "odigos:${ODIGOS_API_KEY}" https://registry.odigos.io/v2/charts/odigos/tags/list \
+          | jq -r '.tags[]' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
 
         if [[ "$BRANCH" == releases/* ]]; then
           VERSION_PREFIX=$(echo "$BRANCH" | sed -E 's|releases/v([0-9]+\.[0-9]+)\..*|\1|')
-          echo "Release branch detected, looking for v${VERSION_PREFIX}.* in Helm"
-          LATEST_RELEASE_TAG=$(helm search repo odigos/odigos --versions | awk -v prefix="^v${VERSION_PREFIX}\\." '$1 == "odigos/odigos" && $3 ~ prefix {print $3; exit}')
-        else
-          echo "Non-release branch, using latest Helm chart version"
-          LATEST_RELEASE_TAG=$(helm search repo odigos/odigos | awk '$1 == "odigos/odigos" {print $3}')
+          echo "Release branch detected, looking for ${VERSION_PREFIX}.* in the chart registry"
+          LATEST_VERSION=$(grep -E "^${VERSION_PREFIX//./\\.}\." <<< "$STABLE_VERSIONS" | tail -n 1)
         fi
+        # Non-release branches, and a release branch with no stable version yet, upgrade from the latest stable.
+        if [ -z "$LATEST_VERSION" ]; then
+          LATEST_VERSION=$(tail -n 1 <<< "$STABLE_VERSIONS")
+        fi
+        LATEST_RELEASE_TAG="${LATEST_VERSION:+v$LATEST_VERSION}"
         echo "LATEST_RELEASE_TAG=$LATEST_RELEASE_TAG" >> "$GITHUB_OUTPUT"
         echo "Latest release tag for branch $BRANCH: $LATEST_RELEASE_TAG"
 
@@ -190,7 +192,6 @@ runs:
       shell: bash
       env:
         LATEST_RELEASE_TAG: ${{ steps.get-latest-tag.outputs.LATEST_RELEASE_TAG }}
-        GH_TOKEN: ${{ github.token }}
         TEST_SCENARIO: ${{ inputs.test-scenario }}
         ODIGOS_API_KEY: ${{ inputs.onprem-token }}
         IMAGE_TAG: e2e-test
