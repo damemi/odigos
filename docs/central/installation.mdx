@@ -129,14 +129,19 @@ Odigos Central images are hosted at `registry.odigos.io`. To install from a priv
 | Keycloak (`auth.image`) | Bundled Keycloak. Tag is **not** the Odigos version. Do not substitute the official Keycloak image. |
 | Redis (`redis.image`) | Bundled Redis. |
 
-The Keycloak and Redis image versions are defined in the [`odigos-central` Helm values file](https://github.com/odigos-io/odigos/blob/main/helm/odigos-central/values.yaml) (`auth.image` and `redis.image`). Use those values as the source of truth when mirroring; do not rely on tags copied from this page.
+The Keycloak and Redis image versions are defined in the `odigos-central` Helm chart values (`auth.image` and `redis.image`). Use those values as the source of truth when mirroring; do not rely on tags copied from this page. To print them for the version you are installing:
+
+```bash
+echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+helm show values oci://registry.odigos.io/charts/odigos-central --version ${VERSION#v} | grep -A3 -E '^(auth|redis):'
+```
 
 If Cloud Connectors are enabled, also mirror `odigos-enterprise-connector-runtime`, `odigos-enterprise-connector-aws`, `odigos-enterprise-connector-gcp`, `odigos-enterprise-connector-azure`, `odigos-enterprise-connector-mulesoft`, and `odigos-enterprise-connector-postgres`.
 
-Keycloak is set with `auth.image`, not `imagePrefix`. After you push the mirrored Keycloak image, set `auth.image` to that full URL. Copy `auth.image` from the Helm values file first:
+Keycloak is set with `auth.image`, not `imagePrefix`. After you push the mirrored Keycloak image, set `auth.image` to that full URL. Copy `auth.image` from the chart values first:
 
 ```bash
-# Example: registry.odigos.io/keycloak:<tag> from helm/odigos-central/values.yaml
+# Example: registry.odigos.io/keycloak:<tag> from the chart's auth.image value
 export KEYCLOAK_IMAGE=<auth.image from values.yaml>
 export KEYCLOAK_TAG=<tag from auth.image>
 
@@ -145,8 +150,17 @@ docker tag $KEYCLOAK_IMAGE $CUSTOM_DOCKER_REGISTRY/keycloak:$KEYCLOAK_TAG
 docker push $CUSTOM_DOCKER_REGISTRY/keycloak:$KEYCLOAK_TAG
 ```
 
+If the machine that runs `helm install` cannot reach `registry.odigos.io`, mirror the chart too (your registry must support OCI artifacts), and install from `oci://$CUSTOM_DOCKER_REGISTRY/charts/odigos-central` below:
+
+```bash
+helm pull oci://registry.odigos.io/charts/odigos-central --version ${VERSION#v}
+helm registry login $CUSTOM_DOCKER_REGISTRY  # with your registry's credentials
+helm push odigos-central-${VERSION#v}.tgz oci://$CUSTOM_DOCKER_REGISTRY/charts
+```
+
 ```bash
 helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
+  --version ${VERSION#v} \
   --namespace odigos-central \
   --create-namespace \
   --set onPremToken=$ODIGOS_TOKEN \

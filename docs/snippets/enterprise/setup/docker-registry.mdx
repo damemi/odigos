@@ -10,7 +10,7 @@ export CUSTOM_DOCKER_REGISTRY=<YOUR-CUSTOM-DOCKER-REGISTRY>
 export PLATFORM=<YOUR-PLATFORM-ARCHITECTURE>
 export ODIGOS_TOKEN=<YOUR-ONPREM-TOKEN>
 ```
-Replace `<YOUR-DESIRED-VERSION>` with the version of the Odigos images you want to use, `<YOUR-CUSTOM-DOCKER-REGISTRY>` with the URL of your custom Docker registry, `<YOUR-PLATFORM-ARCHITECTURE>` with the platform architecture of the environment where you are deploying Odigos (linux/amd64, linux/arm64), and `<YOUR-ONPREM-TOKEN>` with your Odigos Enterprise on-prem token.
+Replace `<YOUR-DESIRED-VERSION>` with the version of the Odigos images you want to use (for example `v1.40.0`), `<YOUR-CUSTOM-DOCKER-REGISTRY>` with the URL of your custom Docker registry, `<YOUR-PLATFORM-ARCHITECTURE>` with the platform architecture of the environment where you are deploying Odigos (linux/amd64, linux/arm64), and `<YOUR-ONPREM-TOKEN>` with your Odigos Enterprise on-prem token.
 
 ---
 
@@ -193,7 +193,23 @@ docker push $CUSTOM_DOCKER_REGISTRY/odigos-victoria-metrics:$VERSION
 docker push $CUSTOM_DOCKER_REGISTRY/odigos-cache:$VERSION
 ```
 
-### Step 6: Configure Access for Private Registries
+### Step 6: Mirror the Helm Chart (Optional)
+
+The Odigos Helm chart is hosted as an OCI artifact at `oci://registry.odigos.io/charts/odigos`. If the machine that runs `helm install` cannot reach `registry.odigos.io`, mirror the chart to your registry as well. Your registry must support OCI artifacts (most do, including Harbor, Artifactory, ECR, GAR, and ACR).
+
+Chart versions have no leading `v` (for example `1.40.0`), so strip it from `$VERSION`:
+
+```bash
+echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+helm pull oci://registry.odigos.io/charts/odigos --version ${VERSION#v}
+
+helm registry login $CUSTOM_DOCKER_REGISTRY  # with your registry's credentials
+helm push odigos-${VERSION#v}.tgz oci://$CUSTOM_DOCKER_REGISTRY/charts
+```
+
+The chart is now available at `oci://$CUSTOM_DOCKER_REGISTRY/charts/odigos`.
+
+### Step 7: Configure Access for Private Registries
 
 If your Docker registry is private, configure your Kubernetes cluster to pull images from it. Refer to the official Kubernetes documentation for guidance: [Pull an Image from a Private Registry](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/).
 
@@ -221,8 +237,8 @@ Pass the secret name as `imagePullSecrets` at install time so Odigos components 
 > --type='json' -p='[{"op": "add", "path": "/spec/template/spec/imagePullSecrets", "value": [{"name": '$IMAGE_PULL_SECRET'}]}]'
 > ```
 
-### Step 7: Install Odigos Using Custom Images
-Finally, install Odigos using the images from your custom Docker registry:
+### Step 8: Install Odigos Using Custom Images
+Finally, install Odigos using the images from your custom Docker registry. Install the chart version that matches the images you mirrored:
 
 
 <Tabs>
@@ -234,7 +250,15 @@ odigos install --image-prefix=$CUSTOM_DOCKER_REGISTRY --onprem-token $ODIGOS_TOK
   <Tab title="Helm Chart">
 ```bash
 echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
-helm upgrade --install odigos oci://registry.odigos.io/charts/odigos --namespace odigos-system --create-namespace --set imagePrefix=$CUSTOM_DOCKER_REGISTRY --set onPremToken=$ODIGOS_TOKEN
+helm upgrade --install odigos oci://registry.odigos.io/charts/odigos --version ${VERSION#v} --namespace odigos-system --create-namespace --set imagePrefix=$CUSTOM_DOCKER_REGISTRY --set onPremToken=$ODIGOS_TOKEN
+kubectl label namespace odigos-system odigos.io/system-object="true"
+```
+  </Tab>
+  <Tab title="Helm Chart (Mirrored)">
+If you mirrored the chart in [Step 6](#step-6-mirror-the-helm-chart-optional), install it from your registry:
+
+```bash
+helm upgrade --install odigos oci://$CUSTOM_DOCKER_REGISTRY/charts/odigos --version ${VERSION#v} --namespace odigos-system --create-namespace --set imagePrefix=$CUSTOM_DOCKER_REGISTRY --set onPremToken=$ODIGOS_TOKEN
 kubectl label namespace odigos-system odigos.io/system-object="true"
 ```
   </Tab>
