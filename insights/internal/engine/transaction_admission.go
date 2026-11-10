@@ -95,6 +95,14 @@ func (a *transactionAdmission) reset() {
 	a.byService = map[string]map[int64]struct{}{}
 }
 
+// contains reports whether id of serviceKey is in the index, without admitting it.
+func (a *transactionAdmission) contains(serviceKey string, id int64) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	_, ok := a.byService[serviceKey][id]
+	return ok
+}
+
 // count returns how many transactions of serviceKey the index knows about.
 func (a *transactionAdmission) count(serviceKey string) int {
 	a.mu.RLock()

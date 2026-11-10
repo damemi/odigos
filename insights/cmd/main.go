@@ -1,6 +1,7 @@
 // Command insights is the entrypoint for the odigos-enterprise-insights
 // service. It boots the HTTP API (consumed by the UI) and the OTLP gRPC
-// receiver (fed by the Odigos gateway), both backed by ClickHouse.
+// receiver (fed by the Odigos gateway), both backed by ClickHouse, and
+// optionally the interrogation feature (see internal/interrogation).
 package main
 
 import (
@@ -11,8 +12,11 @@ import (
 
 	// Registers the /debug/pprof/* handlers.
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -26,6 +30,7 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/db/clickhouse/migrate"
 	"github.com/odigos-io/odigos/insights/internal/debugui"
 	"github.com/odigos-io/odigos/insights/internal/engine"
+	"github.com/odigos-io/odigos/insights/internal/interrogation"
 	"github.com/odigos-io/odigos/insights/internal/leader"
 	"github.com/odigos-io/odigos/insights/internal/metrics"
 	"github.com/odigos-io/odigos/insights/internal/notify"
@@ -51,9 +56,23 @@ const (
 	// bundled ClickHouse Secret.
 	envClickHouseDSN = "CLICKHOUSE_DSN"
 
-	// leaderLease elects the one replica that runs the singleton jobs (findings
-	// notifier, recommendation sweeps). The chart grants leases get/create/update.
+	// envInterrogationRedisEndpoint is the cacheDb Redis address (host:port)
+	// used to fetch interrogation profile stacks (logical DB 1). Set by Helm
+	// only when interrogation.enabled; when unset, call-trie writes stay off.
+	envInterrogationRedisEndpoint = "INTERROGATION_REDIS_ENDPOINT"
+
+	// leaderLease elects the one replica that runs the singleton jobs: the
+	// findings notifier, recommendation sweeps, and, when enabled, the
+	// interrogation loop. The chart grants leases get/create/update.
 	leaderLease = "odigos-insights-leader"
+
+	// Interrogation feature. The Helm chart sets these only when
+	// insights.interrogation.enabled is true.
+	envInterrogationEnabled              = "INTERROGATION_ENABLED"
+	envInterrogationClickHouseDSN        = "INTERROGATION_CLICKHOUSE_DSN"
+	envInterrogationLiteLLMMasterKey     = "INTERROGATION_LITELLM_MASTER_KEY"
+	envInterrogationAutoApply            = "INTERROGATION_AUTO_APPLY"
+	envInterrogationMaxProbesPerWorkload = "INTERROGATION_MAX_PROBES_PER_WORKLOAD"
 )
 
 // getLogLevel reads ODIGOS_LOG_LEVEL, defaulting to "info" when unset.
@@ -170,6 +189,21 @@ func main() {
 	eng := engine.New(r, log, learningCfg, alertCfg)
 	go runAlertPolicyReloader(rootCtx, log, eng)
 
+	if redisEndpoint := os.Getenv(envInterrogationRedisEndpoint); redisEndpoint != "" {
+		ic, err := interrogation.Open(redisEndpoint, log)
+		if err != nil {
+			log.Warn("interrogation call-trie writer unavailable; java-ebpf profile correlation disabled",
+				"redis_endpoint", redisEndpoint, "error", err)
+		} else {
+			eng.SetInterrogation(ic)
+			defer func() {
+				if err := ic.Close(); err != nil {
+					log.Warn("interrogation call-trie writer close failed", "error", err)
+				}
+			}()
+		}
+	}
+
 	// Same pattern for service guardrails (operator-declared L7 segmentation):
 	// an in-memory snapshot resolves a service's guardrail off the per-trace
 	// path, kept fresh by a background reloader.
@@ -211,15 +245,24 @@ func main() {
 		close(sampleWriterDone)
 	}()
 	// Singleton jobs run only on the replica holding the Lease: the findings
-	// notifier (delivering a finding twice is wrong) and the recommendation
+	// notifier (delivering a finding twice is wrong), the recommendation
 	// miner (one miner serves the queued requests and the periodic sweeps;
-	// requests handled on a follower are picked up by the leader's next sweep).
-	go runLeaderJobs(rootCtx, log, r, integrationRegistry, eng)
+	// requests handled on a follower are picked up by the leader's next sweep),
+	// and the interrogation loop when that feature is enabled. One campaign
+	// covers all of them. Shutdown waits on leaderDone so the elector releases
+	// the lease before the process exits.
+	leaderDone := make(chan struct{})
+	go func() {
+		defer close(leaderDone)
+		runLeaderJobs(rootCtx, log, r, integrationRegistry, eng)
+	}()
 
 	otlpSrv := otlp.NewServer(otlpAddr, eng, log)
 	otlpErrCh, err := otlpSrv.Start()
 	if err != nil {
 		log.Error("failed to start OTLP server", "error", err)
+		stop()
+		<-leaderDone
 		shutdownHTTP(httpSrv, log)
 		os.Exit(1)
 	}
@@ -247,10 +290,37 @@ func main() {
 	// of both RunBaselineFlusher and RunSampleWriter).
 	otlpSrv.Stop()
 	stopFlusher()
+	// Cancelling the root context stops the leader jobs and releases the lease
+	// so another replica can take over without waiting for it to expire.
+	stop()
 	<-flusherDone
 	<-sampleWriterDone
+	<-leaderDone
 	shutdownHTTP(httpSrv, log)
 	log.Info("insights service exited")
+}
+
+func envTruthy(v string) bool {
+	switch v {
+	case "1", "true", "TRUE", "yes", "YES":
+		return true
+	default:
+		return false
+	}
+}
+
+// envPositiveInt parses v as an int > 0. Empty or invalid values return 0 so
+// callers can fall back to their own default.
+func envPositiveInt(v string) int {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 {
+		return 0
+	}
+	return n
 }
 
 // DB connection retry policy. The backoff grows by dbRetryStep each failed
@@ -358,15 +428,15 @@ func runMigrate() int {
 	delay := dbRetryInitial
 	var lastLog time.Time
 	for attempt := 1; ; attempt++ {
-		if err := migrate.Apply(dsn); err == nil {
+		err := migrate.Apply(dsn, os.Getenv(envInterrogationClickHouseDSN))
+		if err == nil {
 			log.Info("schema migrations applied", "attempts", attempt)
 			return 0
-		} else {
-			now := time.Now()
-			if lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {
-				log.Warn("migration failed, retrying (clickhouse may be starting)", "attempt", attempt, "retry_in", delay.String(), "error", err)
-				lastLog = now
-			}
+		}
+		now := time.Now()
+		if lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {
+			log.Warn("migration failed, retrying (clickhouse may be starting)", "attempt", attempt, "retry_in", delay.String(), "error", err)
+			lastLog = now
 		}
 
 		select {
@@ -472,12 +542,31 @@ func runSystemSettingsReloader(
 
 // runLeaderJobs runs the singleton jobs on the replica holding the leader
 // Lease, each in its own goroutine so a long mining sweep never delays a
-// notifier tick. Losing the lease cancels them all. Outside a cluster (no
-// in-cluster credentials) they run unconditionally, which is the local
-// single-process case.
+// notifier tick or the interrogation loop. Losing the lease cancels them
+// all. Outside a cluster (no in-cluster credentials) they run
+// unconditionally, which is the local single-process case. Interrogation
+// joins the slice only when INTERROGATION_ENABLED is set. Tries and analysis
+// runs stay in the interrogation database; transaction inventory is read from
+// insights.transactions via resource_attributes.
 func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, reg *notify.Registry, eng *engine.Engine) {
 	dispatcher := notify.NewDispatcher(r, reg, slog.New(commonlogger.NewSlogHandler("notifier")), leader.Identity(), notify.PollInterval, notify.DefaultOverlap)
 	jobs := []func(context.Context){dispatcher.Run, eng.RunRecommendationMiner}
+	if envTruthy(os.Getenv(envInterrogationEnabled)) {
+		opts := interrogation.Options{
+			Log:                  log,
+			ClickHouseDSN:        os.Getenv(envInterrogationClickHouseDSN),
+			InsightsDatabase:     clickHouseDatabase(os.Getenv(envClickHouseDSN)),
+			RedisEndpoint:        os.Getenv(envInterrogationRedisEndpoint),
+			LiteLLMMasterKey:     os.Getenv(envInterrogationLiteLLMMasterKey),
+			AutoApply:            envTruthy(os.Getenv(envInterrogationAutoApply)),
+			MaxProbesPerWorkload: envPositiveInt(os.Getenv(envInterrogationMaxProbesPerWorkload)),
+		}
+		jobs = append(jobs, func(ctx context.Context) {
+			if err := interrogation.Run(ctx, opts); err != nil && ctx.Err() == nil {
+				log.Error("interrogation loop stopped", "error", err)
+			}
+		})
+	}
 	run := func(ctx context.Context) {
 		var wg sync.WaitGroup
 		for _, job := range jobs {
@@ -501,6 +590,24 @@ func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.R
 	default:
 		log.Error("leader jobs disabled: leader election unavailable", "error", err)
 	}
+}
+
+// clickHouseDatabase returns the database name from a ClickHouse DSN path.
+// clickhouse-go (v2.30) takes the database only from the path and ignores a
+// ?database= parameter, so the path is the database insights writes to. The
+// interrogation loop logs the name it resolved.
+func clickHouseDatabase(dsn string) string {
+	if dsn == "" {
+		return ""
+	}
+	if !strings.Contains(dsn, "://") {
+		dsn = "clickhouse://" + dsn
+	}
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return ""
+	}
+	return strings.Trim(u.Path, "/")
 }
 
 // shutdownHTTP gracefully shuts the HTTP server down within a 10s deadline.

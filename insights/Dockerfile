@@ -2,7 +2,10 @@ FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
 
 WORKDIR /workspace
 # insights replaces these odigos modules with local paths.
+COPY actions/ actions/
+COPY api/ api/
 COPY common/ common/
+COPY k8sutils/ k8sutils/
 COPY odigosauth/ odigosauth/
 COPY insights/ insights/
 WORKDIR /workspace/insights

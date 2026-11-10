@@ -63,6 +63,12 @@ type Transaction struct {
 	Namespace string
 	Operation string
 	Kind      TransactionKind
+	// ResourceAttributes are the source-identity attributes used for keyed
+	// lookups (k8s workload, host, instance, …). They are not part of the
+	// transaction_id hash: the same (service, namespace, operation, kind) is
+	// one transaction across replicas. Agents choose which keys to write so
+	// the inventory is not bound to Kubernetes columns.
+	ResourceAttributes map[string]string
 }
 
 // TransactionRef is a transaction's id and the service it belongs to, without

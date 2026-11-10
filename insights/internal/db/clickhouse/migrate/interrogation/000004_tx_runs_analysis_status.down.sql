@@ -1,0 +1,2 @@
+ALTER TABLE tx_runs DROP COLUMN IF EXISTS AnalysisRevision;
+ALTER TABLE tx_runs DROP COLUMN IF EXISTS AnalysisStatus;

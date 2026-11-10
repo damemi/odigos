@@ -2,8 +2,9 @@
 #
 # Reset the Odigos Insights service and its ClickHouse database from scratch.
 #
-# It drops every table in the insights database, re-applies the schema
-# migrations straight from source (internal/db/clickhouse/migrate/migrations),
+# It drops every table in the insights database (and interrogation, when that
+# schema is present), re-applies the schema migrations straight from source
+# (internal/db/clickhouse/migrate/migrations and .../interrogation),
 # records the applied version so the Helm migrate Job stays a no-op, and rolls
 # the service. Nothing survives: baselines, observations, anomalies,
 # transactions and the seeded policies are all recreated fresh.
@@ -20,56 +21,71 @@
 #   INSIGHTS_DEPLOY  insights deployment name     (default: odigos-insights)
 #   CH_DEPLOY        clickhouse deployment name   (default: odigos-insights-clickhouse)
 #   DB               clickhouse database/user     (default: odigos_insights)
+#   INTERROGATION_DB interrogation database       (default: interrogation)
 set -euo pipefail
 
 NS="${NS:-odigos-system}"
 INSIGHTS_DEPLOY="${INSIGHTS_DEPLOY:-odigos-insights}"
 CH_DEPLOY="${CH_DEPLOY:-odigos-insights-clickhouse}"
 DB="${DB:-odigos_insights}"
+INTERROGATION_DB="${INTERROGATION_DB:-interrogation}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATIONS_DIR="$SCRIPT_DIR/../internal/db/clickhouse/migrate/migrations"
+INTERROGATION_MIGRATIONS_DIR="$SCRIPT_DIR/../internal/db/clickhouse/migrate/interrogation"
 
 # Run whatever SQL arrives on stdin inside the ClickHouse pod. The password is
 # read from the pod's own env so it never lands in shell history or argv.
+# Optional first arg selects the database (defaults to $DB).
 ch() {
+	local db="${1:-$DB}"
 	kubectl exec -i -n "$NS" "deploy/$CH_DEPLOY" -- sh -c \
-		"clickhouse-client --user '$DB' --password \"\$CLICKHOUSE_PASSWORD\" --database '$DB' --multiquery"
+		"clickhouse-client --user '$DB' --password \"\$CLICKHOUSE_PASSWORD\" --database '$db' --multiquery"
 }
 
-echo ">> [1/5] Scaling $INSIGHTS_DEPLOY to 0 so nothing writes during the reset"
+reset_database() {
+	local db="$1"
+	local migrations_dir="$2"
+	echo "   - create database $db"
+	printf 'CREATE DATABASE IF NOT EXISTS `%s`' "$db" | ch "$DB"
+	echo "   - drop tables in $db"
+	tables="$(printf 'SELECT name FROM system.tables WHERE database = currentDatabase()' | ch "$db" || true)"
+	for t in $tables; do
+		echo "     drop $t"
+		printf 'DROP TABLE IF EXISTS `%s`' "$t" | ch "$db"
+	done
+	echo "   - apply migrations in $db"
+	for f in "$migrations_dir"/*.up.sql; do
+		echo "     apply $(basename "$f")"
+		ch "$db" <"$f"
+	done
+	local latest seq
+	latest="$(for f in "$migrations_dir"/*.up.sql; do basename "$f"; done | sed -E 's/^0*([0-9]+)_.*/\1/' | sort -n | tail -1)"
+	seq="$(( $(date +%s) * 1000000000 ))" # portable ns-ish monotonic value (macOS date lacks %N)
+	printf 'CREATE TABLE IF NOT EXISTS schema_migrations (version Int64, dirty UInt8, sequence UInt64) ENGINE = TinyLog;
+TRUNCATE TABLE schema_migrations;
+INSERT INTO schema_migrations (version, dirty, sequence) VALUES (%s, 0, %s);
+' "$latest" "$seq" | ch "$db"
+	echo "     marked version $latest, dirty 0"
+}
+
+echo ">> [1/4] Scaling $INSIGHTS_DEPLOY to 0 so nothing writes during the reset"
 was="$(kubectl get deploy "$INSIGHTS_DEPLOY" -n "$NS" -o jsonpath='{.spec.replicas}' 2>/dev/null || echo 1)"
 { [ -z "$was" ] || [ "$was" -lt 1 ] 2>/dev/null; } && was=1
 kubectl scale deploy "$INSIGHTS_DEPLOY" -n "$NS" --replicas=0 >/dev/null
 kubectl rollout status deploy/"$INSIGHTS_DEPLOY" -n "$NS" --timeout=90s >/dev/null
 
-echo ">> [2/5] Dropping every table in '$DB'"
-tables="$(printf 'SELECT name FROM system.tables WHERE database = currentDatabase()' | ch || true)"
-for t in $tables; do
-	echo "   - drop $t"
-	printf 'DROP TABLE IF EXISTS `%s`' "$t" | ch
-done
+echo ">> [2/4] Resetting '$DB'"
+reset_database "$DB" "$MIGRATIONS_DIR"
 
-echo ">> [3/5] Applying migrations from source"
-for f in "$MIGRATIONS_DIR"/*.up.sql; do
-	echo "   - apply $(basename "$f")"
-	ch <"$f"
-done
+echo ">> [3/4] Resetting '$INTERROGATION_DB'"
+reset_database "$INTERROGATION_DB" "$INTERROGATION_MIGRATIONS_DIR"
 
-echo ">> [4/5] Recording applied version so the Helm migrate Job stays a no-op"
-latest="$(for f in "$MIGRATIONS_DIR"/*.up.sql; do basename "$f"; done | sed -E 's/^0*([0-9]+)_.*/\1/' | sort -n | tail -1)"
-seq="$(( $(date +%s) * 1000000000 ))" # portable ns-ish monotonic value (macOS date lacks %N)
-printf 'CREATE TABLE IF NOT EXISTS schema_migrations (version Int64, dirty UInt8, sequence UInt64) ENGINE = TinyLog;
-TRUNCATE TABLE schema_migrations;
-INSERT INTO schema_migrations (version, dirty, sequence) VALUES (%s, 0, %s);
-' "$latest" "$seq" | ch
-echo "   - marked version $latest, dirty 0"
-
-echo ">> [5/5] Restoring $INSIGHTS_DEPLOY to $was replica(s)"
+echo ">> [4/4] Restoring $INSIGHTS_DEPLOY to $was replica(s)"
 kubectl scale deploy "$INSIGHTS_DEPLOY" -n "$NS" --replicas="$was" >/dev/null
 kubectl rollout status deploy/"$INSIGHTS_DEPLOY" -n "$NS" --timeout=120s
 
 echo ">> Fresh table row counts:"
-printf "SELECT name, total_rows FROM system.tables WHERE database = currentDatabase() ORDER BY name" | ch
+printf "SELECT database, name, total_rows FROM system.tables WHERE database IN ('%s', '%s') ORDER BY database, name" "$DB" "$INTERROGATION_DB" | ch "$DB"
 
-echo ">> Done. Insights + database reset from scratch."
+echo ">> Done. Insights + interrogation databases reset from scratch."

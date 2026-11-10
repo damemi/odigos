@@ -5,9 +5,11 @@
 package migrate
 
 import (
+	"context"
 	"embed"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	migratelib "github.com/golang-migrate/migrate/v4"
@@ -23,15 +25,72 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-// Apply runs all pending schema migrations at dsn, then returns. It opens its
-// own short-lived database/sql connection (independent of the serving Repo) so
-// it can run as a standalone step.
+// interrogationFiles is the schema for the interrogation database. It is a
+// separate migration history because that database is not odigos_insights.
+// Serving replicas and the Redis trie flusher do not run DDL.
+//
+//go:embed interrogation/*.sql
+var interrogationFiles embed.FS
+
+// Apply runs pending schema migrations, then returns. insightsDSN is the
+// odigos_insights database and is required. interrogationDSN is the
+// interrogation database; an empty value skips that schema, which is how
+// installs with interrogation disabled behave.
+//
+// The two databases keep separate migration directories. Both start at version
+// 000001, and golang-migrate records only the version number in
+// schema_migrations inside the database the DSN names, so one directory cannot
+// target both.
 //
 // This is meant to run exactly ONCE per rollout - from the Helm migration Job -
 // not from every app replica, so replicas can scale without racing on DDL.
-// golang-migrate records applied versions in a schema_migrations table and skips
-// them next time, so re-running is a no-op.
-func Apply(dsn string) error {
+// golang-migrate skips versions it has already applied, so re-running is a no-op.
+func Apply(insightsDSN, interrogationDSN string) error {
+	if err := applyEmbedded(insightsDSN, migrationFiles, "migrations"); err != nil {
+		return err
+	}
+	if interrogationDSN == "" {
+		return nil
+	}
+	if err := ensureDatabase(interrogationDSN); err != nil {
+		return fmt.Errorf("interrogation: %w", err)
+	}
+	if err := applyEmbedded(interrogationDSN, interrogationFiles, "interrogation"); err != nil {
+		return fmt.Errorf("interrogation: %w", err)
+	}
+	return nil
+}
+
+// ensureDatabase creates the DSN's database from the default database, because
+// the ClickHouse driver cannot connect to a database that does not exist yet.
+func ensureDatabase(dsn string) error {
+	opts, err := clickhouse.ParseDSN(dsn)
+	if err != nil {
+		return fmt.Errorf("parse clickhouse dsn: %w", err)
+	}
+	name := opts.Auth.Database
+	if name == "" || name == "default" {
+		return fmt.Errorf("interrogation dsn must name its database")
+	}
+	opts.Auth.Database = "default"
+	db := clickhouse.OpenDB(opts)
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("ping clickhouse: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", quoteIdent(name))); err != nil {
+		return fmt.Errorf("create database %s: %w", name, err)
+	}
+	return nil
+}
+
+func quoteIdent(name string) string {
+	return "`" + name + "`"
+}
+
+func applyEmbedded(dsn string, files embed.FS, dir string) error {
 	opts, err := clickhouse.ParseDSN(dsn)
 	if err != nil {
 		return fmt.Errorf("parse clickhouse dsn: %w", err)
@@ -55,7 +114,7 @@ func Apply(dsn string) error {
 	// blind to comments, so a ';' inside a comment is mistaken for a statement
 	// terminator and yields an empty query (ClickHouse error 62). Keep comments
 	// semicolon-free; TestMigrationsHaveNoSemicolonInComments guards this.
-	src, err := iofs.New(migrationFiles, "migrations")
+	src, err := iofs.New(files, dir)
 	if err != nil {
 		return fmt.Errorf("load embedded migrations: %w", err)
 	}

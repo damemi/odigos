@@ -69,7 +69,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOARCH=$TARGETARCH \
-    go build -ldflags="${LD_FLAGS}" -a -o /workspace/build/$SERVICE_NAME ./cmd
+    go build -ldflags="${LD_FLAGS}" -o /workspace/build/$SERVICE_NAME ./cmd
 
 ############################################################
 # RHEL variant (Red Hat certified image; mirrors shared Dockerfile)

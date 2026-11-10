@@ -28,10 +28,14 @@ func (r *Repo) UpsertTransactions(ctx context.Context, txs []repo.Transaction) e
 		return nil
 	}
 	err := r.insert(ctx,
-		"INSERT INTO transactions (transaction_id, service, namespace, operation, kind)",
+		"INSERT INTO transactions (transaction_id, service, namespace, operation, kind, resource_attributes)",
 		func(b driver.Batch) error {
 			for _, tx := range txs {
-				if err := b.Append(tx.ID, tx.Service, tx.Namespace, tx.Operation, string(tx.Kind)); err != nil {
+				attrs := tx.ResourceAttributes
+				if attrs == nil {
+					attrs = map[string]string{}
+				}
+				if err := b.Append(tx.ID, tx.Service, tx.Namespace, tx.Operation, string(tx.Kind), attrs); err != nil {
 					return err
 				}
 			}
@@ -51,7 +55,7 @@ func (r *Repo) ListTransactions(ctx context.Context, limit int) ([]repo.Transact
 		limit = 100
 	}
 	return queryRows(ctx, r.conn, "list transactions",
-		"SELECT transaction_id, service, namespace, operation, kind FROM transactions FINAL ORDER BY transaction_id ASC LIMIT ?",
+		"SELECT transaction_id, service, namespace, operation, kind, resource_attributes FROM transactions FINAL ORDER BY transaction_id ASC LIMIT ?",
 		scanTransaction, uint64(limit))
 }
 
@@ -70,7 +74,7 @@ func (r *Repo) ListTransactionRefs(ctx context.Context) ([]repo.TransactionRef, 
 // GetTransactionByID returns one transaction's identity. ok=false when unknown.
 func (r *Repo) GetTransactionByID(ctx context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	return queryRow(ctx, r.conn, "get transaction",
-		`SELECT transaction_id, service, namespace, operation, kind
+		`SELECT transaction_id, service, namespace, operation, kind, resource_attributes
 		 FROM transactions FINAL
 		 WHERE transaction_id = ?
 		 LIMIT 1`,
@@ -80,7 +84,7 @@ func (r *Repo) GetTransactionByID(ctx context.Context, transactionID int64) (rep
 func scanTransaction(s rowScanner) (repo.Transaction, error) {
 	var t repo.Transaction
 	var kind string
-	if err := s.Scan(&t.ID, &t.Service, &t.Namespace, &t.Operation, &kind); err != nil {
+	if err := s.Scan(&t.ID, &t.Service, &t.Namespace, &t.Operation, &kind, &t.ResourceAttributes); err != nil {
 		return repo.Transaction{}, err
 	}
 	t.Kind = repo.TransactionKind(kind)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -35,7 +36,7 @@ func testRepo(t *testing.T) *clickhouse.Repo {
 	if err := r.Ping(ctx); err != nil {
 		t.Skipf("clickhouse not reachable at %s (%v)", dsn, err)
 	}
-	if err := migrate.Apply(dsn); err != nil {
+	if err := migrate.Apply(dsn, ""); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return r
@@ -43,6 +44,15 @@ func testRepo(t *testing.T) *clickhouse.Repo {
 
 // uniqueService keeps each test's rows isolated from previous runs (the shared
 // container persists data; the transaction id is a hash of the identity).
+func rewriteClickHouseDatabase(dsn, database string) string {
+	u, err := url.Parse(dsn)
+	if err != nil {
+		return dsn
+	}
+	u.Path = "/" + database
+	return u.String()
+}
+
 func uniqueService(prefix string) string {
 	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixNano(), rand.Int63())
 }
@@ -56,8 +66,26 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	if dsn == "" {
 		dsn = defaultTestDSN
 	}
-	if err := migrate.Apply(dsn); err != nil {
+	if err := migrate.Apply(dsn, ""); err != nil {
 		t.Fatalf("second migrate should be a no-op: %v", err)
+	}
+}
+
+func TestInterrogationMigrateIsIdempotent(t *testing.T) {
+	_ = testRepo(t)
+	dsn := os.Getenv("CLICKHOUSE_TEST_DSN")
+	if dsn == "" {
+		dsn = defaultTestDSN
+	}
+	interrogationDSN := os.Getenv("INTERROGATION_CLICKHOUSE_TEST_DSN")
+	if interrogationDSN == "" {
+		interrogationDSN = rewriteClickHouseDatabase(dsn, "interrogation")
+	}
+	if err := migrate.Apply(dsn, interrogationDSN); err != nil {
+		t.Fatalf("interrogation migrate: %v", err)
+	}
+	if err := migrate.Apply(dsn, interrogationDSN); err != nil {
+		t.Fatalf("second interrogation migrate should be a no-op: %v", err)
 	}
 }
 
@@ -107,6 +135,29 @@ func TestTransactions(t *testing.T) {
 	}
 	if !stats[0].HasBaseline || !stats[0].Promoted {
 		t.Fatalf("promoted transaction = has:%v promoted:%v, want true/true", stats[0].HasBaseline, stats[0].Promoted)
+	}
+}
+
+func TestTransactionResourceAttributes(t *testing.T) {
+	r := testRepo(t)
+	ctx := context.Background()
+	svc := uniqueService("res")
+	tx := repo.NewTransaction(svc, "ns", "GET /x", repo.KindHTTP)
+	tx.ResourceAttributes = map[string]string{
+		"k8s.namespace.name":   "ns",
+		"odigos.workload.kind": "Deployment",
+		"odigos.workload.name": "api",
+		"k8s.container.name":   "app",
+	}
+	if err := r.UpsertTransactions(ctx, []repo.Transaction{tx}); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := r.GetTransactionByID(ctx, tx.ID)
+	if err != nil || !ok {
+		t.Fatalf("get: ok=%v err=%v", ok, err)
+	}
+	if got.ResourceAttributes["odigos.workload.name"] != "api" {
+		t.Fatalf("resource_attributes = %#v", got.ResourceAttributes)
 	}
 }
 

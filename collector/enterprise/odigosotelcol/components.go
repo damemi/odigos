@@ -27,6 +27,7 @@ import (
 	googlecloudstorageexporter "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter"
 	mockdestinationexporter "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter"
 	odigosurltemplatizationexporter "github.com/odigos-io/odigos/collector/enterprise/exporters/odigosurltemplatizationexporter"
+	odigosinterrogationprofilesexporter "github.com/odigos-io/odigos/collector/enterprise/exporters/odigosinterrogationprofilesexporter"
 	awscloudwatchlogsexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awscloudwatchlogsexporter"
 	awsemfexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsemfexporter"
 	awss3exporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awss3exporter"
@@ -223,6 +224,7 @@ func components() (otelcol.Factories, error) {
 		googlecloudstorageexporter.NewFactory(),
 		mockdestinationexporter.NewFactory(),
 		odigosurltemplatizationexporter.NewFactory(),
+		odigosinterrogationprofilesexporter.NewFactory(),
 		awscloudwatchlogsexporter.NewFactory(),
 		awsemfexporter.NewFactory(),
 		awss3exporter.NewFactory(),
@@ -272,6 +274,7 @@ func components() (otelcol.Factories, error) {
 		googlecloudstorageexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter v0.159.0",
 		mockdestinationexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter v0.159.0",
 		odigosurltemplatizationexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector/enterprise/exporters/odigosurltemplatizationexporter v0.0.0-00010101000000-000000000000",
+		odigosinterrogationprofilesexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector/enterprise/exporters/odigosinterrogationprofilesexporter v0.0.0-00010101000000-000000000000",
 		awscloudwatchlogsexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awscloudwatchlogsexporter v0.159.0",
 		awsemfexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsemfexporter v0.159.0",
 		awss3exporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awss3exporter v0.159.0",

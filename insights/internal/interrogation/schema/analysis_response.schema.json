@@ -1,0 +1,132 @@
+{
+  "$defs": {
+    "AnalysisResponse": {
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": [
+            "1"
+          ]
+        },
+        "transactionId": {
+          "type": "string"
+        },
+        "recommendations": {
+          "items": {
+            "$ref": "#/$defs/Recommendation"
+          },
+          "type": "array",
+          "maxItems": 15
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "transactionId",
+        "recommendations"
+      ]
+    },
+    "Probe": {
+      "properties": {
+        "className": {
+          "type": "string"
+        },
+        "methodName": {
+          "type": "string"
+        },
+        "packageName": {
+          "type": "string"
+        },
+        "functionName": {
+          "type": "string"
+        },
+        "receiverName": {
+          "type": "string"
+        },
+        "receiverMethodName": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "className",
+        "methodName",
+        "packageName",
+        "functionName",
+        "receiverName",
+        "receiverMethodName",
+        "signature"
+      ]
+    },
+    "Recommendation": {
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": [
+            "observability",
+            "security",
+            "performance"
+          ]
+        },
+        "function": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "java",
+            "go",
+            "php",
+            "cpp"
+          ]
+        },
+        "probe": {
+          "$ref": "#/$defs/Probe"
+        },
+        "why": {
+          "type": "string",
+          "description": "1-2 sentences citing the exact function name plus a caller→callee edge from the evidence; say what the identifier and graph position imply. No vague domain filler."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "category",
+        "function",
+        "language",
+        "probe",
+        "why"
+      ]
+    }
+  },
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "enum": [
+        "1"
+      ]
+    },
+    "transactionId": {
+      "type": "string"
+    },
+    "recommendations": {
+      "items": {
+        "$ref": "#/$defs/Recommendation"
+      },
+      "type": "array",
+      "maxItems": 15
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "transactionId",
+    "recommendations"
+  ]
+}

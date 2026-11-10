@@ -11,6 +11,7 @@ import (
 
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
+	"github.com/odigos-io/odigos/insights/internal/interrogation"
 	"github.com/odigos-io/odigos/insights/internal/metrics"
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
@@ -60,6 +61,10 @@ type Engine struct {
 	// admission bounds how many distinct transactions each service may add to
 	// the inventory (max_transactions_per_service). See transaction_admission.go.
 	admission *transactionAdmission
+
+	// interrogation optionally correlates java-ebpf traces with Redis profile
+	// stacks and writes call-trie edges to ClickHouse (when interrogation is enabled).
+	interrogation *interrogation.Client
 
 	warnMu       sync.Mutex
 	warnThrottle map[string]*warnState
@@ -163,6 +168,9 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 	for _, sub := range subs {
 		e.processOne(ctx, sub, t, claims)
 	}
+	// After processOne so the per-service cap has admitted (or dropped) each
+	// identity; see enqueueInterrogation.
+	e.enqueueInterrogation(t)
 }
 
 // processOne scores and learns a single (sub-)transaction. The Trace passed
@@ -192,6 +200,9 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	system := e.system.snapshot()
 	ident.Operation = applyIdentityDimensions(ident.Operation, t.Root, system.settings.TransactionIdentityDimensions)
 	tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind)
+	if attrs := sourceResourceAttributes(t.Root.ResourceAttrs); len(attrs) > 0 {
+		tx.ResourceAttributes = attrs
+	}
 	// 1a. Per-service cap on distinct transactions. An identity the inventory
 	// does not know yet is dropped once its service is full, before anything
 	// (guardrail state, baselines, activity, samples) is recorded for it. This
@@ -226,6 +237,9 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	}
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
+	if len(tx.ResourceAttributes) == 0 && len(entry.identity.ResourceAttributes) > 0 {
+		tx.ResourceAttributes = entry.identity.ResourceAttributes
+	}
 	entry.identity = tx
 	e.seedEntryClasses(entry)
 
