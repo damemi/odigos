@@ -158,7 +158,7 @@ func TestAnUnclassifiableHealthStringIsStillReportable(t *testing.T) {
 // and a repository re-layout must not fail a test about a string. A skip says the guard did not run; a
 // failure here would say the wrong thing.
 func TestTheLicenceErrorPhraseStillExistsInTheCollector(t *testing.T) {
-	const path = "../../../../../../collector/extension/odigosenterpriseauthextension/extension.go"
+	const path = "../../../../../../collector/enterprise/extension/odigosenterpriseauthextension/extension.go"
 	src, err := os.ReadFile(path)
 	if err != nil {
 		t.Skipf("cannot read %s, so the licence phrase is unguarded from here: %v", path, err)

@@ -16,7 +16,7 @@ OpAMP credential, and cannot be used to open an OpAMP session. The gateway strip
 before forwarding the authenticated Collector identity to the connector.
 
 Each connection is authenticated by the credential the Collector presents and reverse-proxied to the
-connector that owns that Collector's cloud account. Design: [`collector/managed/OPAMP_ROUTING.md`](../collector/managed/OPAMP_ROUTING.md).
+connector that owns that Collector's cloud account. Design: [`collector/enterprise/managed/OPAMP_ROUTING.md`](../collector/enterprise/managed/OPAMP_ROUTING.md).
 Credential lifecycle: [`connectors/MANAGED-COLLECTOR.md`](../connectors/MANAGED-COLLECTOR.md) §6.3–6.4.
 
 ## What it does on a handshake
