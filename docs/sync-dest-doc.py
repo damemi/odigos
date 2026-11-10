@@ -589,7 +589,7 @@ def process_overview(backend_yaml_dir, docs_dir):
 
                     rows.append(
                         f"{generate_logo(yaml_content, True, 4)} | "
-                        f"[{name}](/backends/{file.replace('.yaml', '')}) | "
+                        f"[{name}](/enterprise/backends/{file.replace('.yaml', '')}) | "
                         f"{'Managed' if category == 'managed' else 'Self-Hosted'} | "
                         f"{'✅' if signals.get('traces', {}).get('supported', False) else ''} | "
                         f"{'✅' if signals.get('metrics', {}).get('supported', False) else ''} | "
@@ -600,7 +600,7 @@ def process_overview(backend_yaml_dir, docs_dir):
     content = (
         "<Tip>"
         + "\n  Can't find your backend in Odigos? Please tell us! We are constantly adding new integrations.<br />"
-        + "\n  You can also follow our quick [add new destination](/adding-new-dest) guide and submit a PR."
+        + "\n  You can also follow our quick [add new destination](/enterprise/adding-new-dest) guide and submit a PR."
         + "\n</Tip>"
         + "\n\n| | | | Traces | Metrics | Logs | Profiles |"
         + "\n|---|---|---|:---:|:---:|:---:|:---:|"

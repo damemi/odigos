@@ -41,8 +41,10 @@ The cluster gateway is a Deployment that receives telemetry from node collectors
 
 The node collector is a DaemonSet (one pod per node) that receives telemetry from apps on that node and forwards it to the cluster gateway.
 
+The default tab covers Odigos instrumentation. Use the community distros numbers for containers whose **Otel Distro Name** is set to a `*-community` distro, such as [`java-community`](/enterprise/instrumentations/java/native).
+
 <Tabs>
-  <Tab title="Enterprise instrumentation">
+  <Tab title="Odigos instrumentation (default)">
 <NodeCollectorChart instrumentation="enterprise" />
 
 | Size      | spans/s    | span throughput (MB/second) |
@@ -52,7 +54,7 @@ The node collector is a DaemonSet (one pod per node) that receives telemetry fro
 | `size_l`  | **51,500** | **98.8**  |
 | `size_xl` | **60,000** | **115.1** |
   </Tab>
-  <Tab title="Community instrumentation">
+  <Tab title="OpenTelemetry community distros">
 <NodeCollectorChart instrumentation="community" />
 
 | Size      | spans/s    | span throughput (MB/second) |

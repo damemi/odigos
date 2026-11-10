@@ -115,7 +115,7 @@ configured based on your installation mode:
         <img src="/images/operator/operator-6.png" />
        </Frame>
 
-       If you have an Enterprise Token, fill in the **On Prem Token** field with your Enterprise Token.  Otherwise leave it blank to use Odigos OpenSource.
+       Fill in the **On Prem Token** field with your Odigos on-prem token.
 
        <Frame>
         <img src="/images/operator/operator-7.png" />
@@ -237,8 +237,7 @@ When `gke.autopilot=true`, the Helm chart:
 
 #### Node label limitations
 
-On standard clusters, odiglet sets `odigos.io/odiglet-oss-installed=true` (or
-`odigos.io/odiglet-enterprise-installed=true` for enterprise) on each node after
+On standard clusters, odiglet sets `odigos.io/odiglet-enterprise-installed=true` on each node after
 preparing it for instrumentation. Autopilot does not allow modifying node labels,
 so odiglet skips this step.
 

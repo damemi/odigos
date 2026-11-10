@@ -115,8 +115,8 @@
                 "group": "Node.js",
                 "icon": "node-js",
                 "pages": [
-                  "enterprise/instrumentations/nodejs/native",
                   "enterprise/instrumentations/nodejs/ebpf",
+                  "enterprise/instrumentations/nodejs/native",
                   "enterprise/instrumentations/nodejs/enrichment"
                 ]
               },
@@ -132,8 +132,8 @@
                 "group": "Java",
                 "icon": "java",
                 "pages": [
-                  "enterprise/instrumentations/java/native",
                   "enterprise/instrumentations/java/ebpf",
+                  "enterprise/instrumentations/java/native",
                   "enterprise/instrumentations/java/enrichment"
                 ]
               },
@@ -549,7 +549,8 @@
                 ]
               },
               "cloud-connectors/instrument-workloads",
-              "cloud-connectors/manage-and-remove"
+              "cloud-connectors/manage-and-remove",
+              "enterprise/api-reference/cloud-connectors.odigos.io.v1alpha1"
             ]
           },
           {

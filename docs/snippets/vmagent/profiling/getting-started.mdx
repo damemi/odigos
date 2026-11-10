@@ -39,7 +39,7 @@ Profiling only retains samples for **enabled sources**. Open `odictl`, focus the
   alt="Sources panel in odictl showing the demo services instrumented"
 />
 
-See [Sources](../../setup/configuration/add-sources) for the full walkthrough (TUI and YAML).
+See [Sources](/vmagent/setup/configuration/add-sources) for the full walkthrough (TUI and YAML).
 
 <Tip>
   Toggling a source on or off takes effect within seconds — no vm-agent restart is needed. The collector keeps streaming profiles, but only samples for currently-enabled PIDs are exported.
@@ -54,7 +54,7 @@ Open **Destinations → + Add Destination** and search for **profiles**. Any des
   alt="odictl destination type selector filtered by profiles"
 />
 
-As an example for step-by-step Pyroscope configuration, jump to [Export to Pyroscope](./export-pyroscope). For any other OTLP Profiles backend (e.g. `otlp` or `otlphttp`), follow the standard [Add destinations](../../setup/configuration/add-destinations).
+As an example for step-by-step Pyroscope configuration, jump to [Export to Pyroscope](./export-pyroscope). For any other OTLP Profiles backend (e.g. `otlp` or `otlphttp`), follow the standard [Add destinations](/vmagent/setup/configuration/add-destinations).
 
 ## Step 4: View profiles in the destination
 

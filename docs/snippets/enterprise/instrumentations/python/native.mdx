@@ -1,14 +1,8 @@
-<Info>
-  Native Instrumentation is currently the default setting of Odigos **Open-Source** version.
-
-  eBPF-Based Instrumentation is currently not supported for this language.
-</Info>
-
 ## Supported Versions
 
 Odigos uses the official [opentelemetry-python-instrumentation](https://github.com/open-telemetry/opentelemetry-python-contrib/tree/main/instrumentation) OpenTelemetry Auto Instrumentation, thus it supports the same Python versions as this project.
 
-- In the enterprise version, Odigos leverages eBPF to enhance performance in the Python instrumentation process.
+- Odigos leverages eBPF to enhance performance in the Python instrumentation process.
 
 - Odigos ships **two separate Python distros** — one for Python 3.8 and one for Python 3.9 and above. Odigos selects the correct distro automatically based on the runtime version of your workload.
 

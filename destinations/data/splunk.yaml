@@ -34,4 +34,4 @@ spec:
     type: Note
     content: |
       This legacy destination now sends traces using OTLP/HTTP because the SAPM exporter was removed upstream.
-      Existing `splunk` destinations retain their realm and access token. For new destinations, use [Splunk (OTLP)](/backends/splunkotlp).
+      Existing `splunk` destinations retain their realm and access token. For new destinations, use [Splunk (OTLP)](/enterprise/backends/splunkotlp).

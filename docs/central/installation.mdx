@@ -24,7 +24,7 @@ You can install Odigos Central using the CLI or Helm chart.
 
     | Flag | Default | Description |
     |------|---------|-------------|
-    | `--set onPremToken` | (required) | Your Odigos Enterprise license token |
+    | `--set onPremToken` | (required) | Your Odigos on-prem token |
     | `--set auth.externalUrl` | `http://localhost:8081` | Browser-accessible URL of the Central Backend for SSO redirect flows |
     | `--set auth.externalUIUrl` | (derived from `auth.externalUrl`) | Browser-accessible URL of the Central UI for OAuth `redirect_uri` (`/signin`). When empty, defaults to `auth.externalUrl`, except for local port-forward (`http://localhost:8081`) where the UI is on port 3000 |
     | `--set auth.adminPassword` | (auto-generated) | Keycloak **master** admin password for backend API access. If not provided, a random password is generated. Not used for Central UI login. See [Troubleshooting](/central/troubleshooting#admin-credentials-vs-central-ui-login) |

@@ -13,7 +13,7 @@ All install methods will deploy and configure resources in the active Kubernetes
 Before proceeding with the installation, ensure that you are targeting the correct cluster with `kubectl config current-context`.
 
 <Info>
-  Odigos enterprise data collection is done using eBPF, so Odigos requires, at minimum, platforms that have underlying Linux kernel versions of 5.4.0.
+  Odigos data collection is done using eBPF, so Odigos requires, at minimum, platforms that have underlying Linux kernel versions of 5.4.0.
 </Info>
 
 ## Odigos CLI
@@ -118,7 +118,7 @@ externalOnpremPullSecret: true
 
 Those flags only provide the pull secret in the Odigos namespace. With `k8s-init-container` on Kubernetes 1.35+, copy that secret into each instrumented namespace as well. See [Init container image pull secrets](/enterprise/instrumentations/configuration/mount-method#init-container-image-pull-secrets).
 
-Create the registry pull secret before syncing Odigos. The username is always `odigos` and the password is your enterprise token:
+Create the registry pull secret before syncing Odigos. The username is always `odigos` and the password is your on-prem token:
 
 ```shell
 kubectl create secret docker-registry odigos-enterprise-registry \

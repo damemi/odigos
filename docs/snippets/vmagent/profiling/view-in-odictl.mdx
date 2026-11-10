@@ -1,12 +1,12 @@
 import GettingHelp from '/snippets/enterprise/getting-help-section.mdx'
 
-`odictl` includes a built-in profiling view so you can inspect continuous CPU profiles directly in the terminal—without opening an external backend. Use it to find the functions consuming the most CPU in a service, and to drive [profile-driven custom instrumentation](../../setup/configuration/instrumentation-rules/instrument-from-profiles).
+`odictl` includes a built-in profiling view so you can inspect continuous CPU profiles directly in the terminal—without opening an external backend. Use it to find the functions consuming the most CPU in a service, and to drive [profile-driven custom instrumentation](/vmagent/setup/configuration/instrumentation-rules/instrument-from-profiles).
 
 ## Prerequisites
 
-- VM Agent installed and running ([Installation](../../setup/installation)).
-- At least one [source](../../setup/configuration/add-sources) enabled for the workloads you want to profile.
-- The profiling pipeline enabled. You can enable it ahead of time (see [Getting started](./getting-started) or the Configuration Editor's **Profiling** section in [odictl](../../setup/configuration/odictl)), or directly from the profiling view as described below.
+- VM Agent installed and running ([Installation](/vmagent/setup/installation)).
+- At least one [source](/vmagent/setup/configuration/add-sources) enabled for the workloads you want to profile.
+- The profiling pipeline enabled. You can enable it ahead of time (see [Getting started](./getting-started) or the Configuration Editor's **Profiling** section in [odictl](/vmagent/setup/configuration/odictl)), or directly from the profiling view as described below.
 
 ## Open the profiling view
 
@@ -70,6 +70,6 @@ Press `Tab` to focus the **Filter modules** bar at the top. It controls which mo
 
 ### Functions pane
 
-Press `Tab` again to focus the list of profiled functions for the selected service and filter. Use the arrow keys to highlight a function. From here, press `i` to instrument the highlighted function (the panel then shows **[i] remove** to undo it)—see [Instrument from Profiles](../../setup/configuration/instrumentation-rules/instrument-from-profiles) for the full workflow.
+Press `Tab` again to focus the list of profiled functions for the selected service and filter. Use the arrow keys to highlight a function. From here, press `i` to instrument the highlighted function (the panel then shows **[i] remove** to undo it)—see [Instrument from Profiles](/vmagent/setup/configuration/instrumentation-rules/instrument-from-profiles) for the full workflow.
 
 <GettingHelp />

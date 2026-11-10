@@ -44,8 +44,8 @@ var (
 
 var proCmd = &cobra.Command{
 	Use:   "pro",
-	Short: "Manage Odigos onprem tier for enterprise users",
-	Long:  `The pro command provides various operations and functionalities specifically designed for enterprise users. Use this command to access advanced features and manage your pro account.`,
+	Short: "Manage your Odigos on-prem token and advanced features",
+	Long:  `The pro command manages your Odigos on-prem token and provides advanced operations, such as updating Go offsets and managing Odigos Central.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
 		client := cmdcontext.KubeClientFromContextOrExit(ctx)
@@ -182,8 +182,8 @@ odigos pro update-offsets --from-file /path/to/local/offsets.json
 
 var centralCmd = &cobra.Command{
 	Use:   "central",
-	Short: "Manage Odigos Central (Enterprise tier)",
-	Long:  "Manage Odigos Central backend and UI components used in enterprise deployments.",
+	Short: "Manage Odigos Central",
+	Long:  "Manage Odigos Central backend and UI components.",
 }
 
 var centralInstallCmd = &cobra.Command{

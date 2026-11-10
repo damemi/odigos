@@ -8,7 +8,7 @@ import GettingHelp from '/snippets/enterprise/getting-help-section.mdx'
 ## Step 1: Enable Profiling
 
 Profiling is an **opt-in** feature controlled by a single Helm value.
-Set `profiling.enabled=true` when installing or upgrading Odigos (enterprise installs also require your on‑prem token, same as a normal Odigos install):
+Set `profiling.enabled=true` when installing or upgrading Odigos, along with your on-prem token:
 
 ```bash
 helm upgrade --install odigos oci://registry.odigos.io/charts/odigos \
@@ -18,7 +18,7 @@ helm upgrade --install odigos oci://registry.odigos.io/charts/odigos \
   --set profiling.enabled=true
 ```
 
-Export `ODIGOS_ONPREM_TOKEN` in your shell before running the command (or replace the reference with your token value). For other Helm flags, see [Enterprise installation](/enterprise/setup/installation).
+Export `ODIGOS_ONPREM_TOKEN` in your shell before running the command (or replace the reference with your token value). For other Helm flags, see [Installation](/enterprise/setup/installation).
 
 When this flag is set Odigos provisions the following automatically:
 - The eBPF profiler receiver is activated on every Data Collector

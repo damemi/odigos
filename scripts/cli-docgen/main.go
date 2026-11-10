@@ -28,7 +28,7 @@ func main() {
 
 	linkHandler := func(name string) string {
 		base := strings.TrimSuffix(name, path.Ext(name))
-		return "/cli/" + strings.ToLower(base)
+		return "/enterprise/cli/" + strings.ToLower(base)
 	}
 
 	rootCmd := cmd.RootCmd()
