@@ -12,8 +12,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/odigos-io/central-proxy/internal/config"
-	"github.com/odigos-io/central-proxy/internal/logger"
+	"github.com/odigos-io/odigos/central-proxy/internal/config"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 )
 

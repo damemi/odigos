@@ -16,7 +16,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/api"
 )
 
 // agentCoreS3Object serves one object's bytes the way S3 does: HEAD for the size, GET for a byte range.

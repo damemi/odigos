@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorownership"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 func credentialInput(secrets *fakeSecrets, hasValue bool) CredentialInput {

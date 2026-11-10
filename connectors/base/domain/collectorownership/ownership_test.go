@@ -3,8 +3,8 @@ package collectorownership
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 var self = Identity{ConnectorName: "aws", ConnectorID: "uid-1"}

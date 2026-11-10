@@ -15,4 +15,4 @@ go-licenses: $(LOCALBIN)
 .PHONY: licenses
 licenses: go-licenses
 	rm -rf $(PWD)/licenses
-	$(LOCALBIN)/go-licenses save . --save_path=licenses --ignore github.com/odigos-io/central-backend
+	$(LOCALBIN)/go-licenses save . --save_path=licenses --ignore github.com/odigos-io/odigos/central-backend

@@ -3,7 +3,7 @@ package workloadreport
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/api"
 )
 
 func TestProviderDistroCatalogReachesGraphQL(t *testing.T) {

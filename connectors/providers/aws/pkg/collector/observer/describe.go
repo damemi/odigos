@@ -12,9 +12,9 @@ import (
 	elb "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	elbtypes "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/deployer"
 )
 
 // ECSReader is the read-only slice of ECS this package uses.

@@ -8,16 +8,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
-	basecollectorsettings "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	awsingress "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/ingress"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorconfig"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorownership"
+	basecollectorsettings "github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	awsingress "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/ingress"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
 )
 
 // Clients supplies the AWS clients this package needs, per region where that matters.

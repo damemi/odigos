@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"github.com/99designs/gqlgen/graphql/handler"
-	"github.com/odigos-io/central-backend/internal/logger"
-	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
 )
 
 // Exercise the generated GraphQL transport, real provider tester and result

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/workload/store"
+	store "github.com/odigos-io/odigos/connectors/providers/azure/pkg/workload/store"
 )
 
 // EnvOdigosManaged is the ownership marker + change snapshot stamped on the app container. Defined in the

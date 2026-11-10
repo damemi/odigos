@@ -7,8 +7,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // instrumentedTaskDef returns a task definition instrumented exactly as desired for one java app container,

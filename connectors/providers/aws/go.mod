@@ -1,10 +1,6 @@
-module github.com/odigos-io/odigos-enterprise/connectors/providers/aws
+module github.com/odigos-io/odigos/connectors/providers/aws
 
 go 1.26.2
-
-replace github.com/odigos-io/odigos-enterprise/connectors => ../..
-
-replace github.com/odigos-io/odigos-enterprise/connectors/base => ../../base
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.5
@@ -20,16 +16,16 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.62.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.63.0
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.92.3
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.48.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.6
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.48.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.43.3
 	github.com/aws/smithy-go v1.28.7
 	github.com/google/go-containerregistry v0.21.7
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos-enterprise/connectors/base v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261021080422-a6844718c573
-	github.com/odigos-io/odigos/distros v1.39.0-pre3.0.20261021080422-a6844718c573
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors/base v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/distros v0.0.0-00010101000000-000000000000
 	go.uber.org/zap v1.28.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -70,7 +66,7 @@ require (
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/odigos-io/agents-api/go/server v0.32.0 // indirect
-	github.com/odigos-io/odigos/destinations v1.29.0 // indirect
+	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000 // indirect
 	github.com/open-telemetry/opamp-go v0.23.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
@@ -91,5 +87,14 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
-	sigs.k8s.io/controller-runtime v0.23.3 // indirect
 )
+
+replace github.com/odigos-io/odigos/common => ../../../common
+
+replace github.com/odigos-io/odigos/connectors => ../..
+
+replace github.com/odigos-io/odigos/connectors/base => ../../base
+
+replace github.com/odigos-io/odigos/destinations => ../../../destinations
+
+replace github.com/odigos-io/odigos/distros => ../../../distros

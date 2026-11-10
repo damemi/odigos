@@ -14,10 +14,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/computeplatform/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
+	store "github.com/odigos-io/odigos/connectors/providers/aws/pkg/computeplatform/store"
 )
 
 var log = connlog.Subsystem("aws-computeplatform-detector")

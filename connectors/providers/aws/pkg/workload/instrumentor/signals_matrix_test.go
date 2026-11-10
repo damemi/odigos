@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 func TestAllFargateRecipesSelectSignalsAndRestoreOverrides(t *testing.T) {

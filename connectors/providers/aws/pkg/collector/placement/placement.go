@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorplacement"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorplacement"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
 )
 
 // ProblemNetworkUnknown is reported when a network the plan wants a Collector on is not a VPC in the

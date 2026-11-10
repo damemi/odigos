@@ -5,8 +5,8 @@ import (
 	"slices"
 	"testing"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
 )
 
 func TestAgentCoreRegisteredAcrossModesWithoutManagedRouting(t *testing.T) {

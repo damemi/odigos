@@ -12,12 +12,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorownership"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 const (

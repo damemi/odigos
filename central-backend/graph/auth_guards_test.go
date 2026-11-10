@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/logger"
-	"github.com/odigos-io/central-backend/internal/services"
-	"github.com/odigos-io/central-backend/internal/utils"
-	"github.com/odigos-io/central-backend/internal/utils/tokentest"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/services"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/utils/tokentest"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )

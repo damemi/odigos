@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
 )
 
 func TestDefaultsAreDisabledAndRegional(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 // TestCutoverFailureSurvivesAHeldBackPass. A workload held on direct export while it waits for a batch

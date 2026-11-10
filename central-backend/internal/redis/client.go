@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/config"
-	"github.com/odigos-io/central-backend/internal/consts"
-	"github.com/odigos-io/central-backend/internal/logger"
-	"github.com/odigos-io/central-backend/internal/snapshotsummary"
-	"github.com/odigos-io/central-backend/internal/types"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/config"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/snapshotsummary"
+	"github.com/odigos-io/odigos/central-backend/internal/types"
 )
 
 const (

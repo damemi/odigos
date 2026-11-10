@@ -3,7 +3,7 @@ package ssehub
 import (
 	"testing"
 
-	"github.com/odigos-io/central-backend/internal/metrics"
+	"github.com/odigos-io/odigos/central-backend/internal/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )

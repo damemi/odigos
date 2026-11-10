@@ -8,9 +8,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/keycloak"
-	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/keycloak"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
 )
 
 func TestIdentityProvidersFromRepresentations(t *testing.T) {

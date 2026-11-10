@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/api"
 )
 
 type instructionsCentral struct{ api.CentralInterface }

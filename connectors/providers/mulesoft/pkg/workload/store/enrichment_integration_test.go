@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
 )
 
 // TestEnrichmentAgainstPostgres pins the two metadata contracts the new columns rest on: an API pairing is

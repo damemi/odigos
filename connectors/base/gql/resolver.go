@@ -11,12 +11,12 @@ import (
 	"github.com/odigos-io/agents-api/go/server/graph/generated"
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	centralapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/computeplatformreport"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/instrumentationplan"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/workloadreport"
-	gqlapi "github.com/odigos-io/odigos-enterprise/connectors/base/gql/api"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	centralapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/computeplatformreport"
+	"github.com/odigos-io/odigos/connectors/base/domain/instrumentationplan"
+	"github.com/odigos-io/odigos/connectors/base/domain/workloadreport"
+	gqlapi "github.com/odigos-io/odigos/connectors/base/gql/api"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var resolverLog = connlog.Subsystem("gql-resolver")

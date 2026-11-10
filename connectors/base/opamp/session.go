@@ -13,7 +13,7 @@ import (
 
 	"github.com/open-telemetry/opamp-go/protobufs"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
 )
 
 // Agent description attributes the managed Supervisor reports (collector/managed/supervisor.yaml).

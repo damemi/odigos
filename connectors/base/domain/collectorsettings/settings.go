@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
 )
 
 // Key is the single top-level operational config key holding the whole tree.

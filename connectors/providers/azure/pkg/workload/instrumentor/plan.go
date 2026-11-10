@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
 )
 
 // Container Apps' contribution to Wave 5: the instrumentation this connector would apply, expressed as

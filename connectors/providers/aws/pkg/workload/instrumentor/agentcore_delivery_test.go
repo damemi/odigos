@@ -11,9 +11,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ac "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
 )
 
 // newAgentCoreZIPTest is a direct-code runtime managed through the real installer, with S3 replaced by memory.

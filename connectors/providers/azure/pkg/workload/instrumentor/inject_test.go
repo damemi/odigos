@@ -7,7 +7,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/appcontainers/armappcontainers/v3"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 func testApp(image string) *armappcontainers.ContainerApp {

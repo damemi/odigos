@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
 )
 
 // HeaderMetricsAuthorization carries a metrics-only credential from the gateway

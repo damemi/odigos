@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
-	"github.com/odigos-io/central-backend/internal/config"
-	"github.com/odigos-io/central-backend/internal/consts"
-	"github.com/odigos-io/central-backend/internal/logger"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
-	"github.com/odigos-io/central-backend/internal/snapshotsummary"
+	"github.com/odigos-io/odigos/central-backend/internal/config"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/internal/snapshotsummary"
 )
 
 func setupTestPool(t *testing.T) (*miniredis.Miniredis, *redisclient.RedisClient, *WorkerPool) {

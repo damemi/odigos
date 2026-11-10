@@ -17,7 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/smithy-go"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // Discovery type names, matching the discovery types declared in connectors/spec/data/aws.yaml.

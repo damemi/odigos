@@ -12,9 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	domainsrc "github.com/odigos-io/odigos/connectors/base/domain/source"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // oneTarget is the single-container target set most of these tests exercise: multi-container

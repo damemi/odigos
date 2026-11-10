@@ -3,7 +3,7 @@ package observer
 import (
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // Observation is everything one read-only pass over AWS found about a network's Collector.

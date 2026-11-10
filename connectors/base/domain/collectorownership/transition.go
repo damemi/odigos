@@ -1,6 +1,6 @@
 package collectorownership
 
-import "github.com/odigos-io/odigos-enterprise/connectors/spec"
+import "github.com/odigos-io/odigos/connectors/spec"
 
 // Adoption is the decision to bring an object this process did not create under convergence.
 // Covers predecessor stacks (recreated CR) and manual→automatic over a customer-applied stack.

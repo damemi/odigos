@@ -14,10 +14,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
+	store "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 var log = connlog.Subsystem("aws-workload-detector")

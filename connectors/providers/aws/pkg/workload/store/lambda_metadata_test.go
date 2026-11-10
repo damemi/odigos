@@ -9,7 +9,7 @@ import (
 
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/api"
 )
 
 // buildObjectRe / jsonbSetRe locate the two forms inventory.go uses to write a metadata key:

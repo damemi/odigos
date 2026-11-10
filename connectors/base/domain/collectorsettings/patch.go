@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
 )
 
 // Writing the settings tree, as the typed counterpart to Read.

@@ -3,8 +3,8 @@ package detector
 import (
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 // PairedAPI returns the API Manager instance an application pairs with through autodiscovery, or nil.

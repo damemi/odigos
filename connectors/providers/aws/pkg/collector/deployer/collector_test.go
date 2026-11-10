@@ -10,14 +10,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorplacement"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	awsingress "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/ingress"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorplacement"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	awsingress "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/ingress"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/placement"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // fakePlans serves a plan the way placement.Resolver does: resolved by the observer's pass, read by the

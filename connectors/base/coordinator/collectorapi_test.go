@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/config"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorreport"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 type memoryCollectorResourceStore struct {

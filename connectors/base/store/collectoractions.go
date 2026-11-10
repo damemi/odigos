@@ -7,7 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoraction"
 )
 
 // ListCollectorActions returns the actions owned by a single regional Collector.

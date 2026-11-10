@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // namedObserver pairs a spec instrumentation type name with its read-only observer.

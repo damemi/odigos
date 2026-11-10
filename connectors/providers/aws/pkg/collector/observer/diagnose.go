@@ -5,17 +5,17 @@ import (
 	"sort"
 	"strings"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorreport"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/opamp"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/deployer"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // DiagnosisInput is everything a verdict depends on: what AWS says, what the row already holds, and what

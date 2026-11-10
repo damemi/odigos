@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/odigos-io/central-proxy/internal/logger"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
 	odigosclientset "github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"

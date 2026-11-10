@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint/fake"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	"github.com/odigos-io/odigos/connectors/anypoint/fake"
 )
 
 // API Manager sends instance ids as numbers and groups instances under their Exchange asset; an application's

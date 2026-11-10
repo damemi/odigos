@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorownership"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // modeGuard refuses to provision anything for a Collector that is not in automatic mode.

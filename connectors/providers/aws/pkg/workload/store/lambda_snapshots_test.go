@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
 )
 
 // An explicitly supplied disposable database must already have the connector migrations applied.

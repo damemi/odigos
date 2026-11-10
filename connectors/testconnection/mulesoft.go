@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // Discovery type names, matching the discovery types declared in connectors/spec/data/mulesoft.yaml.

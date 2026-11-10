@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 func TestAWSAssumeRoleCacheSharedAcrossConcurrentRegions(t *testing.T) {

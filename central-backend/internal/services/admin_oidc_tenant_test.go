@@ -3,7 +3,7 @@ package services
 import (
 	"testing"
 
-	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
 )
 
 func TestOidcTenantIDRequired(t *testing.T) {

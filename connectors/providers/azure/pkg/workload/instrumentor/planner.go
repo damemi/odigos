@@ -3,7 +3,7 @@ package instrumentor
 import (
 	"context"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
 )
 
 // ContainerAppsPlanner serves the Container Apps instrumentation plan for one discovered app.

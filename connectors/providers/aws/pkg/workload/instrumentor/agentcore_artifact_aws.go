@@ -8,7 +8,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
 )
 
 type agentCoreArtifactIO interface {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // cutoverMark is what one pass means for a workload's recorded cutover failure (store.CutoverFailure).

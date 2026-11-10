@@ -3,7 +3,7 @@ package snapshot
 import (
 	"time"
 
-	"github.com/odigos-io/central-proxy/kube"
+	"github.com/odigos-io/odigos/central-proxy/kube"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 )
 

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
 )
 
 const agentCoreTestManifest = `{"package":{"v":1,"language":"%s","distros":["%s-agentcore-adot"],"moduleFormat":"commonjs"},"sha256":{"a":"b"}}`

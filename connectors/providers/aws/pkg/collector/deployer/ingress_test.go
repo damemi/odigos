@@ -11,11 +11,11 @@ import (
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	elbtypes "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	awsingress "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/ingress"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	awsingress "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/ingress"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // ingressNetwork is a realistic modern VPC id — 21 characters — because the ELBv2 32-character name

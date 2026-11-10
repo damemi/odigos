@@ -10,8 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ac "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
 	actypes "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol/types"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
 )
 
 // agentCoreArtifactRef is a lossless, typed snapshot of the two supported artifact union members.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint/fake"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/anypoint/fake"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 func muleInput(srv *fake.Server, secret string) Input {

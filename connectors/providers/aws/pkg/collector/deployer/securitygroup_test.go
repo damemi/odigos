@@ -9,11 +9,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	awsingress "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/ingress"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	awsingress "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/ingress"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // workloadRules is the AWS steady-state tier, including the self-referencing NLB health rule.

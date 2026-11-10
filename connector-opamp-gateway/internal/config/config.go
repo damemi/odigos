@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connector-opamp-gateway/internal/gateway"
+	"github.com/odigos-io/odigos/connector-opamp-gateway/internal/gateway"
 )
 
 // Config is what the gateway needs to start.

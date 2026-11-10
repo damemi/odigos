@@ -10,11 +10,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	basecollectorsettings "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
+	basecollectorsettings "github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 var _ baseapi.CollectorRegionalSettingsValidator = (*Provider)(nil)

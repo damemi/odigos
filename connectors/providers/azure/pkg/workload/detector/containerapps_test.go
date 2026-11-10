@@ -6,7 +6,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/appcontainers/armappcontainers/v3"
 
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/workload/store"
+	store "github.com/odigos-io/odigos/connectors/providers/azure/pkg/workload/store"
 )
 
 func env(name, value string) *armappcontainers.EnvironmentVar {

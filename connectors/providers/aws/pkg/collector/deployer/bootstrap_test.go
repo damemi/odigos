@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorconfig"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // taskDefinitionInputWith is the workload input for a delivery a provisioning pass produced, so the

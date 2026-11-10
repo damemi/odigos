@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorplacement"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	awsstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorplacement"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	awsstore "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // Problem codes for source-to-network attribution.

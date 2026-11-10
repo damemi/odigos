@@ -18,8 +18,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // Object names. Each is derived from the connector name, so a customer reading their log groups or

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 func logGroupInput() LogGroupInput {

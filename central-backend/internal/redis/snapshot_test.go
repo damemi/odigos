@@ -6,8 +6,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/odigos-io/central-backend/internal/consts"
-	"github.com/odigos-io/central-backend/internal/snapshotsummary"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/snapshotsummary"
 )
 
 func TestSetClusterSnapshot_StoresAndClearsSummary(t *testing.T) {

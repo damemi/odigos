@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorownership"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/opamp"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/observer"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorconfig"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorownership"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/opamp"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/deployer"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/observer"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/placement"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
 )
 
 // The managed-Collector surface, and the thing to understand about it is that ONE object is registered

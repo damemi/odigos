@@ -3,8 +3,8 @@ package awsprovider
 import (
 	"context"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcutover"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/types"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcutover"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/types"
 )
 
 type cutoverPassKey struct{}

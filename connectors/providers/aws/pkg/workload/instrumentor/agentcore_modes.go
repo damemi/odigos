@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
 )
 
 // Automatic AgentCore instrumentation adopts the OpenTelemetry SDK the agent's artifact already carries and

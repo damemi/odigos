@@ -12,11 +12,11 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // ErrUnsupportedRuntime is returned by instrument when a Lambda's runtime has no Odigos OpenTelemetry

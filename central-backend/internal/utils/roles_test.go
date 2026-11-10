@@ -3,7 +3,7 @@ package utils
 import (
 	"testing"
 
-	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
 )
 
 func TestIsRoleDowngrade(t *testing.T) {

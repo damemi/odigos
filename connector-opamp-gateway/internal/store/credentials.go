@@ -16,9 +16,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/odigos-io/odigos-enterprise/connector-opamp-gateway/internal/gateway"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	"github.com/odigos-io/odigos/connector-opamp-gateway/internal/gateway"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/postgres"
 )
 
 // selectColumns is the Record's shape in table order. connector_name is deliberately absent: the

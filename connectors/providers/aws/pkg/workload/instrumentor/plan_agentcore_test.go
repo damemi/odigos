@@ -7,11 +7,11 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	dest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	dest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 func TestAgentCoreInstrumentationArtifactsMatchPlans(t *testing.T) {

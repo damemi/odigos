@@ -14,10 +14,10 @@ import (
 	runpb "cloud.google.com/go/run/apiv2/runpb"
 	"google.golang.org/api/iterator"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/gcpclient"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/gcpclient"
+	store "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/workload/store"
 )
 
 var log = connlog.Subsystem("gcp-workload-detector")

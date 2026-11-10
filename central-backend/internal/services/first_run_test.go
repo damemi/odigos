@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
 )
 
 // firstRunKeycloak serves one real user with the given realm role next to the

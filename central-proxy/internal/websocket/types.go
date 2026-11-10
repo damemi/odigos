@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
-	"github.com/odigos-io/central-proxy/internal/graphql"
+	"github.com/odigos-io/odigos/central-proxy/internal/graphql"
 )
 
 type WebSocketMessageType string

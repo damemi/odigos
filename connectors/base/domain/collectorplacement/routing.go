@@ -1,7 +1,7 @@
 package collectorplacement
 
 import (
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 // Endpoint is where one regional Collector can be reached, as the transport resolver published it.

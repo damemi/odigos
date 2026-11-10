@@ -11,7 +11,7 @@ import (
 	"golang.org/x/oauth2"
 	oauth2google "golang.org/x/oauth2/google"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/config"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/config"
 )
 
 // ImageConfig is the subset of an OCI image config used for language detection: the CNB buildpack labels

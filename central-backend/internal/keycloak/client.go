@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
 )
 
 const (

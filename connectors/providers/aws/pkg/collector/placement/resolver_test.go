@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorplacement"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorplacement"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
 )
 
 type fakeCollectors struct {

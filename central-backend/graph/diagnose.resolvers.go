@@ -8,9 +8,9 @@ package graph
 import (
 	"context"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/services"
-	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/services"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
 )
 
 // Diagnose is the resolver for the diagnose field.

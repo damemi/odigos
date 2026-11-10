@@ -10,13 +10,13 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	providerconfig "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	baseconfig "github.com/odigos-io/odigos/connectors/base/config"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	providerconfig "github.com/odigos-io/odigos/connectors/providers/aws/pkg/config"
+	"github.com/odigos-io/odigos/connectors/spec"
 
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
 )
 
 func TestCollectorInstructionsUseTheInstallationAndRegionalImage(t *testing.T) {

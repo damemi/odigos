@@ -3,7 +3,7 @@ package utils
 import (
 	"strings"
 
-	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
 )
 
 func ConvertKeycloakUserToModel(userData map[string]any, role model.Role, needsPasswordChange bool) *model.User {

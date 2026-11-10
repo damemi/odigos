@@ -1,6 +1,6 @@
 package utils
 
-import "github.com/odigos-io/central-backend/graph/model"
+import "github.com/odigos-io/odigos/central-backend/graph/model"
 
 // RolePrivilegeLevel returns a comparable privilege rank for Odigos roles.
 // Higher values are more privileged. Unknown roles rank below no-access.

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint/fake"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	"github.com/odigos-io/odigos/connectors/anypoint/fake"
 )
 
 func newClient(t *testing.T, srv *fake.Server, secret string) *anypoint.Client {

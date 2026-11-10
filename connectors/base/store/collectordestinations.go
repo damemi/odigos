@@ -7,8 +7,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var collectorDestinationsLog = connlog.Subsystem("store-collector-destinations")

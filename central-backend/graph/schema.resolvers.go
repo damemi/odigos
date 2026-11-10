@@ -11,14 +11,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/consts"
-	"github.com/odigos-io/central-backend/internal/logger"
-	"github.com/odigos-io/central-backend/internal/metrics"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
-	"github.com/odigos-io/central-backend/internal/services"
-	"github.com/odigos-io/central-backend/internal/types"
-	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/metrics"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/internal/services"
+	"github.com/odigos-io/odigos/central-backend/internal/types"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
 	"golang.org/x/sync/errgroup"
 )
 

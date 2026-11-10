@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // The ECS ownership marker is the same store.EnvOdigosManaged env var Lambda uses, stamped on the

@@ -3,8 +3,8 @@ package collectorplacement
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 func routingDestinations() []destination.Destination {

@@ -7,9 +7,9 @@ import (
 
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 const observedLayerARN = "arn:aws:lambda:us-east-1:1:layer:odigos-otel-python-x86_64:7"

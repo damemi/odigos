@@ -3,8 +3,8 @@ package instrumentor
 import (
 	"context"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
 )
 
 // CloudRunPlanner serves the Cloud Run instrumentation plan for one discovered service.

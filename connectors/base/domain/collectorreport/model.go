@@ -6,9 +6,9 @@ import (
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // The structured report, beside the prose one in report.go.

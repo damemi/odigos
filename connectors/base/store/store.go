@@ -13,7 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var storeLog = connlog.Subsystem("store")

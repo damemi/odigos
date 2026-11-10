@@ -7,7 +7,7 @@ import (
 
 	runpb "cloud.google.com/go/run/apiv2/runpb"
 
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
+	store "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/workload/store"
 )
 
 // buildpackLabels builds an io.buildpacks.build.metadata label map from a set of buildpack ids.

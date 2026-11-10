@@ -12,8 +12,8 @@ package collectorplacement
 import (
 	"fmt"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // NetworkRef identifies one network in one region.

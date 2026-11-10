@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 type overrideProvider struct{ types []string }

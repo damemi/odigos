@@ -6,7 +6,7 @@ import (
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 func valid() destination.Destination {

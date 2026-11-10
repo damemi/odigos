@@ -19,8 +19,8 @@ import (
 	run "cloud.google.com/go/run/apiv2"
 	"google.golang.org/api/option"
 
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/config"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/config"
 )
 
 var log = connlog.Subsystem("gcp-client")

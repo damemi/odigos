@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 // Manual (IaC) mode for an Omni Gateway: the customer turns the gateway's tracing on themselves — in Runtime

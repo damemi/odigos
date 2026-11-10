@@ -3,9 +3,9 @@ package services
 import (
 	"context"
 
-	"github.com/odigos-io/central-backend/internal/config"
-	"github.com/odigos-io/central-backend/internal/k8s"
-	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/config"
+	"github.com/odigos-io/odigos/central-backend/internal/k8s"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common/consts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

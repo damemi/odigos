@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 // Omni Gateway instrumentation. A gateway is instrumented by turning on its own distributed tracing with an

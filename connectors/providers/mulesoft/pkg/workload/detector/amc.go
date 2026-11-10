@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 var log = connlog.Subsystem("mulesoft-workload-detector")

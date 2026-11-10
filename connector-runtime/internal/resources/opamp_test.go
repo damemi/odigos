@@ -9,7 +9,7 @@ import (
 
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
+	"github.com/odigos-io/odigos/connectors/opamp"
 )
 
 const testUID = "3f2b1c9e-0000-4a00-8000-000000000001"

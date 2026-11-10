@@ -3,7 +3,7 @@ package awsprovider
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcutover"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcutover"
 )
 
 func TestCollectorBatchQuotaIsSharedFairlyAcrossKinds(t *testing.T) {

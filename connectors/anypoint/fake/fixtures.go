@@ -1,6 +1,6 @@
 package fake
 
-import "github.com/odigos-io/odigos-enterprise/connectors/anypoint"
+import "github.com/odigos-io/odigos/connectors/anypoint"
 
 // Fixture ids, exported so tests can address the sample content by name.
 const (

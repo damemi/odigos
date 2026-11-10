@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 var intentAt = time.Date(2026, 8, 1, 9, 30, 0, 0, time.UTC)

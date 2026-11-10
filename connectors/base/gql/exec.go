@@ -9,7 +9,7 @@ import (
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var execLog = connlog.Subsystem("gql")

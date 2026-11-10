@@ -19,8 +19,8 @@ import (
 
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
-	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/controller"
-	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/heartbeat"
+	"github.com/odigos-io/odigos/connector-runtime/internal/controller"
+	"github.com/odigos-io/odigos/connector-runtime/internal/heartbeat"
 )
 
 var scheme = runtime.NewScheme()

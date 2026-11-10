@@ -16,12 +16,12 @@ import (
 	"github.com/open-telemetry/opamp-go/protobufs"
 	servertypes "github.com/open-telemetry/opamp-go/server/types"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorconfig"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectormetrics"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/store"
 )
 
 const desiredYAML = "receivers:\n    otlp: {}\n"

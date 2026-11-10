@@ -1,4 +1,4 @@
-module github.com/odigos-io/central-backend
+module github.com/odigos-io/odigos/central-backend
 
 go 1.26.4
 
@@ -8,8 +8,8 @@ require (
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
-	github.com/odigos-io/odigos/api v1.39.0-pre3.0.20261103103244-989c24ca083f
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261103103244-989c24ca083f
+	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/vektah/gqlparser/v2 v2.5.37
 	golang.org/x/sync v0.23.0
 	k8s.io/api v0.35.4
@@ -19,7 +19,7 @@ require (
 
 require (
 	github.com/alicebob/miniredis/v2 v2.36.1
-	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	sigs.k8s.io/controller-runtime v0.23.3
 )
@@ -164,9 +164,13 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/gin-contrib/cors v1.7.5
 	github.com/gin-gonic/gin v1.10.0
-	github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
+	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000
 )
 
-replace github.com/odigos-io/odigos-enterprise/connectors => ../connectors
+replace github.com/odigos-io/odigos/api => ../api
 
-replace github.com/odigos-io/odigos/odigosauth => github.com/odigos-io/odigos/odigosauth v1.40.0-pre1.0.20261108125513-1c12a692adfd
+replace github.com/odigos-io/odigos/common => ../common
+
+replace github.com/odigos-io/odigos/connectors => ../connectors
+
+replace github.com/odigos-io/odigos/odigosauth => ../odigosauth

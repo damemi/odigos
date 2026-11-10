@@ -10,11 +10,11 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/odigos-io/central-backend/internal/keycloak"
-	"github.com/odigos-io/central-backend/internal/logger"
-	"github.com/odigos-io/central-backend/internal/services"
-	"github.com/odigos-io/central-backend/internal/utils"
-	"github.com/odigos-io/central-backend/internal/utils/tokentest"
+	"github.com/odigos-io/odigos/central-backend/internal/keycloak"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/services"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/utils/tokentest"
 )
 
 // A forged token naming a real admin's sub must not be enriched with that

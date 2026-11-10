@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // Input describes the connection to validate. The create-connector flow fills it per provider before

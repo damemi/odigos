@@ -3,10 +3,10 @@ package instrumentor
 import (
 	"context"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 // plannerInventory is what the planner reads: the connector's own database, never Anypoint.

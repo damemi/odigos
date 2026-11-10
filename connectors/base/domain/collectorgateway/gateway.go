@@ -28,8 +28,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/opamp"
 )
 
 // ForwardedHeaderPrefix is the namespace the gateway owns on a proxied request. Every header under it

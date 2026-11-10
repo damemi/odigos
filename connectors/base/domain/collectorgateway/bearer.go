@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
 )
 
 // bearerScheme is the only scheme accepted. The Supervisor sends the whole header value verbatim from

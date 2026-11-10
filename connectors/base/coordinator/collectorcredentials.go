@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // IssueManagedCollectorCredential delegates the one-time manual-mode secret issuance to the provider,

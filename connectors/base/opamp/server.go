@@ -15,13 +15,13 @@ import (
 	"github.com/open-telemetry/opamp-go/server"
 	"github.com/open-telemetry/opamp-go/server/types"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	opampendpoint "github.com/odigos-io/odigos-enterprise/connectors/opamp"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorconfig"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectormetrics"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/base/store"
+	opampendpoint "github.com/odigos-io/odigos/connectors/opamp"
 )
 
 var opampLog = connlog.Subsystem("opamp")

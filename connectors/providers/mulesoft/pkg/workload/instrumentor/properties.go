@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 // Direct Telemetry Stream property names (https://docs.mulesoft.com/mule-runtime/latest/otel-support).

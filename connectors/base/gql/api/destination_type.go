@@ -6,8 +6,8 @@ import (
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	centralapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	centralapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 // DestinationTypeAPI maps GraphQL DestinationType queries to the connector's destination catalog.

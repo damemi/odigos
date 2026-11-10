@@ -7,12 +7,12 @@ import (
 	"maps"
 	"sync"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 var log = connlog.Subsystem("mulesoft-workload-instrumentor")

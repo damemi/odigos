@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
 )
 
 // InstrumentationPlanner computes the instrumentation ONE workload needs, as anchored fragments a customer

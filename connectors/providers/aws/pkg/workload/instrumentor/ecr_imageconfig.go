@@ -15,7 +15,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
 )
 
 // ImageConfig is the subset of an OCI image config used for language detection: the CNB buildpack labels

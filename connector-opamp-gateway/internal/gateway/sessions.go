@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
 )
 
 // Session is one open, authenticated Collector connection this replica is holding.

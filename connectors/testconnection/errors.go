@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // Every probe error fails verification. A connectivity failure or unavailable

@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcutover"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
-	awstypes "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/types"
-	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcutover"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/placement"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
+	awstypes "github.com/odigos-io/odigos/connectors/providers/aws/pkg/types"
+	workloadstore "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // regionalRouteResolver joins the provider-neutral destination decision to the AWS topology snapshot.

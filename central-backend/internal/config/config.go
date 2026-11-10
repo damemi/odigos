@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
 )
 
 type AppConfig struct {

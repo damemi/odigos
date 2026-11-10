@@ -14,12 +14,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ac "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	dest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	dest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
 )
 
 type agentCoreStore interface {

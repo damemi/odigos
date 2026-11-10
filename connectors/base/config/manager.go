@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
 )
 
 var cfgLog = connlog.Subsystem("config")

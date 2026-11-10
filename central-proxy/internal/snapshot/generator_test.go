@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/odigos-io/central-proxy/internal/logger"
-	"github.com/odigos-io/central-proxy/kube"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
+	"github.com/odigos-io/odigos/central-proxy/kube"
 	odigosfake "github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/fake"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"

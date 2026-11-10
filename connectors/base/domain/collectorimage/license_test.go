@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 var now = time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)

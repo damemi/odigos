@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connector-opamp-gateway/internal/gateway"
+	"github.com/odigos-io/odigos/connector-opamp-gateway/internal/gateway"
 )
 
 func TestLoadDefaults(t *testing.T) {

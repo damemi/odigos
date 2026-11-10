@@ -5,7 +5,7 @@ import (
 
 	runpb "cloud.google.com/go/run/apiv2/runpb"
 
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
+	store "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/workload/store"
 )
 
 func env(name, value string) *runpb.EnvVar {

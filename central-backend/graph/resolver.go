@@ -1,9 +1,9 @@
 package graph
 
 import (
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
-	"github.com/odigos-io/central-backend/internal/services"
-	websocketserver "github.com/odigos-io/central-backend/internal/websocket"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/internal/services"
+	websocketserver "github.com/odigos-io/odigos/central-backend/internal/websocket"
 )
 
 type Resolver struct {

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/azureclient"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/computeplatform/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/providers/azure/pkg/azureclient"
+	store "github.com/odigos-io/odigos/connectors/providers/azure/pkg/computeplatform/store"
 )
 
 // VMDetector discovers Azure Virtual Machines across the subscription via list-all.

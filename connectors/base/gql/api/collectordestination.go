@@ -6,9 +6,9 @@ import (
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	centralapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectordestination"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	centralapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectordestination"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var collectorDestinationAPILog = connlog.Subsystem("gql-collector-destination")

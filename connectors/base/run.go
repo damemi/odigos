@@ -9,17 +9,17 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/central"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/coordinator"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/gql"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/opamp"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/central"
+	"github.com/odigos-io/odigos/connectors/base/config"
+	"github.com/odigos-io/odigos/connectors/base/coordinator"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/base/gql"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/base/opamp"
+	"github.com/odigos-io/odigos/connectors/base/store"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
 )
 
 var runLog = connlog.Subsystem("runtime")

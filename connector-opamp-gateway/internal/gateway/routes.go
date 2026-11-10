@@ -3,7 +3,7 @@ package gateway
 import (
 	"net/http"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
 )
 
 // RegisterCollectorRoutes sends configuration and own-metrics traffic through the

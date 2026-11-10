@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	domainsrc "github.com/odigos-io/odigos/connectors/base/domain/source"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var sourcesLog = connlog.Subsystem("store-sources")

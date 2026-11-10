@@ -3,7 +3,7 @@ package consts
 import (
 	"fmt"
 
-	"github.com/odigos-io/central-backend/internal/config"
+	"github.com/odigos-io/odigos/central-backend/internal/config"
 )
 
 func GetRequestsChannel(proxyID string) string {

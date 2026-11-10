@@ -11,13 +11,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoraction"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectormetrics"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorreport"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	domainsrc "github.com/odigos-io/odigos/connectors/base/domain/source"
 )
 
 // SourceOverrides carries matched-source configuration overrides surfaced on WorkloadReports.

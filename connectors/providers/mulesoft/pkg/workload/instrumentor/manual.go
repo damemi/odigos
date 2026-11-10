@@ -3,10 +3,10 @@ package instrumentor
 import (
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 // Manual (IaC) mode: the customer applies the property set themselves, from the instructions the connector

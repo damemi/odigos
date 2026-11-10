@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/types"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/types"
 )
 
 // Compute-platform kinds — managed infra Odigos is installed on (not instrumented). Kind strings match

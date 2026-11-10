@@ -7,9 +7,9 @@ import (
 
 	runpb "cloud.google.com/go/run/apiv2/runpb"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	store "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/workload/store"
 )
 
 // OpenTelemetry configuration + identity env vars the instrumentor sets on the ingress container. Unlike

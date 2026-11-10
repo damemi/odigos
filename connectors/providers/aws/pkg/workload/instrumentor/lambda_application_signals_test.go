@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/applicationsignals"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 type applicationSignalsSetupFake struct {

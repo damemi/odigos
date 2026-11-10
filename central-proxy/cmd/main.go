@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/odigos-io/central-proxy/internal/config"
-	"github.com/odigos-io/central-proxy/internal/health"
-	"github.com/odigos-io/central-proxy/internal/logger"
-	"github.com/odigos-io/central-proxy/internal/snapshot"
-	"github.com/odigos-io/central-proxy/internal/sseforwarder"
-	websocketserver "github.com/odigos-io/central-proxy/internal/websocket"
-	"github.com/odigos-io/central-proxy/kube"
+	"github.com/odigos-io/odigos/central-proxy/internal/config"
+	"github.com/odigos-io/odigos/central-proxy/internal/health"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
+	"github.com/odigos-io/odigos/central-proxy/internal/snapshot"
+	"github.com/odigos-io/odigos/central-proxy/internal/sseforwarder"
+	websocketserver "github.com/odigos-io/odigos/central-proxy/internal/websocket"
+	"github.com/odigos-io/odigos/central-proxy/kube"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
 )
 
 // parseClusterSnapshot converts Redis snapshot data to GraphQL model

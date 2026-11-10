@@ -6,7 +6,7 @@
 // and customer intent that is meaningful across providers.
 package collectoringress
 
-import "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+import "github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 
 const (
 	PortOTLPGRPC         = 4317

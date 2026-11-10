@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/opamp"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // Config is the generic configuration shared by every provider connector runtime.

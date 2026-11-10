@@ -1,8 +1,6 @@
-module github.com/odigos-io/odigos-enterprise/connectors/base
+module github.com/odigos-io/odigos/connectors/base
 
 go 1.26.2
-
-replace github.com/odigos-io/odigos-enterprise/connectors => ..
 
 require (
 	github.com/99designs/gqlgen v0.17.91
@@ -11,9 +9,9 @@ require (
 	github.com/google/go-containerregistry v0.21.7
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/odigos-io/agents-api/go/server v0.32.0
-	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261021080422-a6844718c573
-	github.com/odigos-io/odigos/destinations v1.29.0
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000
 	github.com/open-telemetry/opamp-go v0.23.0
 	github.com/stretchr/testify v1.12.1
 	github.com/vektah/gqlparser/v2 v2.5.34
@@ -51,13 +49,16 @@ require (
 	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.56.0 // indirect
-	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	sigs.k8s.io/controller-runtime v0.23.3 // indirect
 )
+
+replace github.com/odigos-io/odigos/common => ../../common
+
+replace github.com/odigos-io/odigos/connectors => ..
+
+replace github.com/odigos-io/odigos/destinations => ../../destinations

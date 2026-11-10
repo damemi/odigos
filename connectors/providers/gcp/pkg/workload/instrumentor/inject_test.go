@@ -6,7 +6,7 @@ import (
 
 	runpb "cloud.google.com/go/run/apiv2/runpb"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 const testAgentImage = "registry.odigos.io/odigos-agents:test"

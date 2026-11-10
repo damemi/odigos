@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/base/config"
+	domainsrc "github.com/odigos-io/odigos/connectors/base/domain/source"
+	"github.com/odigos-io/odigos/connectors/base/store"
 )
 
 // A source's identity is (kind, external_resource_id) — the stable cloud resource id, NOT the source_name

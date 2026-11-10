@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
+	"github.com/odigos-io/odigos/connectors/providers/azure/pkg/config"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 const planAgentImage = "agents:test"

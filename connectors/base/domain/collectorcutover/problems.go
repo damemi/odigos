@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // Problem codes this package reports. Callers branch on these, never on a message.

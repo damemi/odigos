@@ -9,10 +9,10 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ac "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
-	"github.com/odigos-io/odigos-enterprise/connectors/awsregions"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
+	"github.com/odigos-io/odigos/connectors/awsregions"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
 )
 
 type agentCoreInventory interface {

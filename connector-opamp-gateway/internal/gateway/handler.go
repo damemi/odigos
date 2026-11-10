@@ -17,8 +17,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
 )
 
 // ErrCredentialNotFound is what Credentials returns when no row matches. Distinguished from a store

@@ -9,10 +9,10 @@ import (
 	"context"
 	"time"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/azureclient"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/computeplatform/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/azure/pkg/azureclient"
+	store "github.com/odigos-io/odigos/connectors/providers/azure/pkg/computeplatform/store"
 )
 
 var log = connlog.Subsystem("azure-computeplatform-detector")

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint/fake"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	"github.com/odigos-io/odigos/connectors/anypoint/fake"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 type memInventory struct {

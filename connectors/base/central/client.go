@@ -17,8 +17,8 @@ import (
 	"github.com/99designs/gqlgen/graphql/executor"
 	"github.com/coder/websocket"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/gql"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/base/gql"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var centralLog = connlog.Subsystem("central")

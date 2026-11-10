@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
 )
 
 func TestSnapshotQueries_RequireAuthentication(t *testing.T) {

@@ -6,9 +6,9 @@ package reconciler
 import (
 	"context"
 
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/computeplatform/store"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/computeplatform/store"
 )
 
 var log = connlog.Subsystem("aws-computeplatform-reconciler")

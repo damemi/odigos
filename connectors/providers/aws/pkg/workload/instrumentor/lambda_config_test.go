@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 func TestLambdaConfigUsesReadableV2Fields(t *testing.T) {

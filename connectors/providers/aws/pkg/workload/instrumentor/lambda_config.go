@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"slices"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 const EnvLambdaConfig = "ODIGOS_LAMBDA_CONFIG"

@@ -7,13 +7,13 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/deployer"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorreport"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/deployer"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/placement"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // healthy is a Collector with nothing wrong with it: the service running its recorded revision on the

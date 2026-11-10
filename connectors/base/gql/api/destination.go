@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
-	centralapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	centralapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var destinationAPILog = connlog.Subsystem("gql-destination")

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 const (

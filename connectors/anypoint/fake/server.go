@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
+	"github.com/odigos-io/odigos/connectors/anypoint"
 )
 
 // State is the platform content the fake serves. It is also the JSON document cmd/fake-anypoint loads.

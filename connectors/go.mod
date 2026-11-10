@@ -1,4 +1,4 @@
-module github.com/odigos-io/odigos-enterprise/connectors
+module github.com/odigos-io/odigos/connectors
 
 go 1.26.2
 

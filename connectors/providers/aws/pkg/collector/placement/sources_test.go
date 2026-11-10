@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorplacement"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	collectorsettings "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/settings"
-	awsstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorplacement"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	collectorsettings "github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/settings"
+	awsstore "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 const clusterARN = "arn:aws:ecs:eu-west-1:1:cluster/prod"

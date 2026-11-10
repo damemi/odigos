@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/heartbeat"
+	"github.com/odigos-io/odigos/connector-runtime/internal/heartbeat"
 )
 
 // TestManualCleanupWaitingMessage pins the sentence a customer sees while deletion is held for manual-mode

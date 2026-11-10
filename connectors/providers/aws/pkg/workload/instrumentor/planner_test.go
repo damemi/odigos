@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
 )
 
 func TestFargatePlanRuntimePrefersOverrideThenAggregateThenUnanimousContainers(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
 )
 
 func TestCollectorImageSettingsValidationAndPersistence(t *testing.T) {

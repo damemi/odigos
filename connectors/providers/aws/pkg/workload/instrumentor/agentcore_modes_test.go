@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	dest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
+	dest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
 )
 
 // TestChooseAgentCoreSDK: adoption starts the override's SDK when the agent carries one that can run it, otherwise

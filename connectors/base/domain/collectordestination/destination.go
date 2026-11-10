@@ -22,8 +22,8 @@ import (
 	"github.com/odigos-io/odigos/common"
 	odigosdest "github.com/odigos-io/odigos/destinations"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorconfig"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorconfig"
+	"github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 // namePattern is the grammar of a Collector component id suffix. The name becomes part of every

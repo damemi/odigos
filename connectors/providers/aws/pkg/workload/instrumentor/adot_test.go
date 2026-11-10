@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 func TestADOTSignalSelectionAndSwitch(t *testing.T) {

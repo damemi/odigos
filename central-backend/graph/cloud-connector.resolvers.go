@@ -10,11 +10,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/services"
-	"github.com/odigos-io/central-backend/internal/utils"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
-	"github.com/odigos-io/odigos-enterprise/connectors/testconnection"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/services"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/testconnection"
 )
 
 // TestCloudConnectorConnection runs read-only reachability/permission checks for a

@@ -8,7 +8,7 @@ import (
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/api"
 )
 
 // ToModel converts a discovered compute platform to the agents-api ComputePlatformReport. Assignment state is applied by

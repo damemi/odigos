@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
 )
 
 // DrainState reports whether the controller has requested a graceful instrumentation drain.

@@ -7,7 +7,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redis/v8"
-	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
 )
 
 func setupTestRedis(t *testing.T) (*miniredis.Miniredis, *RedisClient) {

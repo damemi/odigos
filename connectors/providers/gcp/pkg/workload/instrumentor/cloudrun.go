@@ -27,11 +27,11 @@ import (
 	run "cloud.google.com/go/run/apiv2"
 	runpb "cloud.google.com/go/run/apiv2/runpb"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/gcpclient"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/gcpclient"
+	store "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/workload/store"
 )
 
 var log = connlog.Subsystem("gcp-workload-instrumentor")

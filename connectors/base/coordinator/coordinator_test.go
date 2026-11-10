@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/config"
+	domainsrc "github.com/odigos-io/odigos/connectors/base/domain/source"
+	"github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 var testConnectorSpec = spec.CloudConnectorSpec{

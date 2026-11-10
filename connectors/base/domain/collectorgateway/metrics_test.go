@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
 )
 
 func TestMetricsAuthorizationScope(t *testing.T) {

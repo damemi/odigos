@@ -22,7 +22,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint/fake"
+	"github.com/odigos-io/odigos/connectors/anypoint/fake"
 )
 
 func main() {

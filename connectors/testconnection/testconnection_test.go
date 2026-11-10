@@ -8,7 +8,7 @@ import (
 
 	"github.com/aws/smithy-go"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 type apiErr struct{ code string }

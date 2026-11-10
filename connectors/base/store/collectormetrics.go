@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectormetrics"
 )
 
 // The Collector's self-reported counters, on their own two columns of the managed_collectors row.

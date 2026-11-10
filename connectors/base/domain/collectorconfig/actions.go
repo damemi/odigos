@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoraction"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // renderedActions is the extra configuration a region's action set contributes.

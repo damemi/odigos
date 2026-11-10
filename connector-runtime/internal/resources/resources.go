@@ -20,8 +20,8 @@ import (
 
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/opamp"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 const (

@@ -6,11 +6,11 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/consts"
-	"github.com/odigos-io/central-backend/internal/logger"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
-	"github.com/odigos-io/central-backend/internal/snapshotsummary"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/internal/snapshotsummary"
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
 

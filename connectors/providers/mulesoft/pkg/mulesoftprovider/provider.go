@@ -8,16 +8,16 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/types"
-	workloaddetector "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/detector"
-	workloadinstrumentor "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/instrumentor"
-	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	baseconfig "github.com/odigos-io/odigos/connectors/base/config"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/config"
+	"github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/types"
+	workloaddetector "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/detector"
+	workloadinstrumentor "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/instrumentor"
+	workloadstore "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 var (

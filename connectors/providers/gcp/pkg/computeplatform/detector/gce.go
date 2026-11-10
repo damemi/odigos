@@ -9,9 +9,9 @@ import (
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	"google.golang.org/api/iterator"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/computeplatform/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/gcpclient"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	store "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/computeplatform/store"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/gcpclient"
 )
 
 // GCEInstanceDetector discovers Compute Engine instances across every zone in the project via the

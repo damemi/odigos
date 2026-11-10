@@ -7,7 +7,7 @@ import (
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/api"
 )
 
 // The instrumentor records a live phase as it works; it must surface as the progress stage so a

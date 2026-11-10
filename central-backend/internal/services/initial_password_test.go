@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
 )
 
 type fakeKeycloakUser struct {

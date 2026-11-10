@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/store"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // shutdownCompleteWriteTimeout bounds the drain-complete write. It runs on a context independent of the

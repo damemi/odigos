@@ -3,7 +3,7 @@ package observer
 import (
 	"strings"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
 )
 
 // The two classifiers in this file are pure and are the whole of the "specific diagnosis" contract:

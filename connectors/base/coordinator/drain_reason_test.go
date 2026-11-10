@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
 )
 
 // Only a manual cleanup leaves the connector running. Anything else, including a reason this runtime does

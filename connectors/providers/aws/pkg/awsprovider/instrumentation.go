@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
-	ins "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/instrumentor"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/source"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
+	ins "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/instrumentor"
 )
 
 func (p *Provider) RequiresGlobalOTLPDestination(kind string) bool { return kind == agentcore.Kind }

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // v1 is the shipping configuration: the Supervisor does not accept OpAMP connection settings, and

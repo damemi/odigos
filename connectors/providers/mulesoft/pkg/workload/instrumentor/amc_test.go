@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint/fake"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	"github.com/odigos-io/odigos/connectors/anypoint/fake"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 // memInventory is an in-memory inventory over a fixed application list.

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/central-backend/internal/types"
+	"github.com/odigos-io/odigos/central-backend/internal/types"
 )
 
 func TestCalculateBatchSize(t *testing.T) {

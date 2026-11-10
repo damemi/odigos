@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
-	centralapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
+	centralapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoraction"
 )
 
 // CollectorActionAPI adapts the generic shared Action contract to regional

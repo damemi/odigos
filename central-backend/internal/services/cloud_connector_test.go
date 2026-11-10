@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/odigos-io/central-backend/internal/k8s"
+	"github.com/odigos-io/odigos/central-backend/internal/k8s"
 	cloudv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"

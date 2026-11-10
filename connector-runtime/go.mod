@@ -1,11 +1,11 @@
-module github.com/odigos-io/odigos-enterprise/connector-runtime
+module github.com/odigos-io/odigos/connector-runtime
 
 go 1.26.2
 
 require (
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261015141927-6c6f37530030
+	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors v0.0.0-00010101000000-000000000000
 	k8s.io/api v0.35.4
 	k8s.io/apimachinery v0.35.4
 	k8s.io/client-go v0.35.4
@@ -81,8 +81,9 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/odigos-io/odigos-enterprise/connectors => ../connectors
-
 // Pulled in transitively (not a direct require here); an odigos-io/odigos module in the graph requires this
 // via its own local-only replace, which doesn't propagate across repos.
-replace github.com/odigos-io/odigos/common => github.com/odigos-io/odigos/common v1.33.0-pre4.0.20260731135555-5ab8ec59a749
+
+replace github.com/odigos-io/odigos/api => ../api
+
+replace github.com/odigos-io/odigos/connectors => ../connectors

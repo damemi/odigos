@@ -3,7 +3,7 @@ package collectorimage
 import (
 	"encoding/base64"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
 )
 
 // EnvBootstrapConfig is a base64-encoded Collector config for cold starts when OpAMP is unreachable.

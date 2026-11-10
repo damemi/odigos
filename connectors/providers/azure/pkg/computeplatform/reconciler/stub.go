@@ -7,7 +7,7 @@ package reconciler
 import (
 	"context"
 
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var log = connlog.Subsystem("azure-computeplatform-reconciler")

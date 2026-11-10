@@ -3,7 +3,7 @@ package awsprovider
 import (
 	"testing"
 
-	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	workloadstore "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 func TestCollectorRoutingProgressCountsBothAWSWorkloadKinds(t *testing.T) {

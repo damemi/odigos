@@ -10,14 +10,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base"
-	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/azureprovider"
-	computeplatformstore "github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/computeplatform/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/config"
-	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/base"
+	baseconfig "github.com/odigos-io/odigos/connectors/base/config"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/providers/azure/pkg/azureprovider"
+	computeplatformstore "github.com/odigos-io/odigos/connectors/providers/azure/pkg/computeplatform/store"
+	"github.com/odigos-io/odigos/connectors/providers/azure/pkg/config"
+	workloadstore "github.com/odigos-io/odigos/connectors/providers/azure/pkg/workload/store"
 )
 
 func main() {

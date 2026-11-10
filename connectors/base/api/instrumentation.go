@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
+	"github.com/odigos-io/odigos/connectors/base/domain/source"
 )
 
 // InstrumentationDistro is a concrete, provider-supported activation recipe.

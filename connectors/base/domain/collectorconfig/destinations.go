@@ -11,8 +11,8 @@ import (
 	odigosconfig "github.com/odigos-io/odigos/common/config"
 	odigosdest "github.com/odigos-io/odigos/destinations"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 // unavailableTypes are catalog types whose configurer renders a component the managed Collector image

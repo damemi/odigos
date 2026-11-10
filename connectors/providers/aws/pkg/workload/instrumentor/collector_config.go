@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 // The in-Lambda collector's configuration, rendered per function and delivered inline through the collector

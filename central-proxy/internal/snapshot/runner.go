@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/odigos-io/central-proxy/internal/logger"
-	websocketserver "github.com/odigos-io/central-proxy/internal/websocket"
-	"github.com/odigos-io/central-proxy/kube"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
+	websocketserver "github.com/odigos-io/odigos/central-proxy/internal/websocket"
+	"github.com/odigos-io/odigos/central-proxy/kube"
 )
 
 const (

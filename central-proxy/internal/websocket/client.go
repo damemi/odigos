@@ -11,11 +11,11 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/odigos-io/central-proxy/internal/config"
-	"github.com/odigos-io/central-proxy/internal/consts"
-	"github.com/odigos-io/central-proxy/internal/graphql"
-	"github.com/odigos-io/central-proxy/internal/logger"
-	"github.com/odigos-io/central-proxy/kube"
+	"github.com/odigos-io/odigos/central-proxy/internal/config"
+	"github.com/odigos-io/odigos/central-proxy/internal/consts"
+	"github.com/odigos-io/odigos/central-proxy/internal/graphql"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
+	"github.com/odigos-io/odigos/central-proxy/kube"
 )
 
 const (

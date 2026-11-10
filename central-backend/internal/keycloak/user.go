@@ -9,7 +9,7 @@ import (
 	neturl "net/url"
 	"strings"
 
-	"github.com/odigos-io/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // maxAvailabilityZones caps how many zones Odigos spreads a Collector across when it chooses.

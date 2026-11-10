@@ -3,8 +3,8 @@ package coordinator
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // TestCountRetainedManualInstrumentation covers what a drain reports as left behind. Getting this wrong is

@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	baseconfig "github.com/odigos-io/odigos/connectors/base/config"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
 )
 
 // Credentials holds the provider credentials the runtime uses for discovery. Either static keys or an

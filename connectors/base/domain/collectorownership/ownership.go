@@ -12,8 +12,8 @@
 package collectorownership
 
 import (
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // Origin is who created a cloud object. Orthogonal to mode.

@@ -24,9 +24,9 @@ import (
 
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
-	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/heartbeat"
-	"github.com/odigos-io/odigos-enterprise/connector-runtime/internal/resources"
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	"github.com/odigos-io/odigos/connector-runtime/internal/heartbeat"
+	"github.com/odigos-io/odigos/connector-runtime/internal/resources"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
 )
 
 const finalizer = "odigos.io/connector-runtime"

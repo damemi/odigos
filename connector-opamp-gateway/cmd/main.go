@@ -30,12 +30,12 @@ import (
 
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 
-	"github.com/odigos-io/odigos-enterprise/connector-opamp-gateway/internal/config"
-	"github.com/odigos-io/odigos-enterprise/connector-opamp-gateway/internal/gateway"
-	"github.com/odigos-io/odigos-enterprise/connector-opamp-gateway/internal/registry"
-	"github.com/odigos-io/odigos-enterprise/connector-opamp-gateway/internal/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorgateway"
-	"github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	"github.com/odigos-io/odigos/connector-opamp-gateway/internal/config"
+	"github.com/odigos-io/odigos/connector-opamp-gateway/internal/gateway"
+	"github.com/odigos-io/odigos/connector-opamp-gateway/internal/registry"
+	"github.com/odigos-io/odigos/connector-opamp-gateway/internal/store"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorgateway"
+	"github.com/odigos-io/odigos/connectors/postgres"
 )
 
 // shutdownGrace bounds the drain after open sessions have been closed. Short on purpose: the sessions

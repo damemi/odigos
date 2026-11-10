@@ -3,8 +3,8 @@ package instrumentor
 import (
 	"testing"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 func TestDestinationSignalsConvergeAcrossTransitions(t *testing.T) {

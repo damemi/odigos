@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sort"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	workloadstore "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // CollectorRoutingProgress reads applied workload routing from the AWS inventory. It is a

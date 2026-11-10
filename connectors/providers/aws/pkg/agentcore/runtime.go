@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ac "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
 	actypes "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol/types"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/awsclient"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
 )
 
 const (

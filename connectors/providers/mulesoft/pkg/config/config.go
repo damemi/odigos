@@ -8,9 +8,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/anypoint"
-	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	"github.com/odigos-io/odigos/connectors/anypoint"
+	baseconfig "github.com/odigos-io/odigos/connectors/base/config"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
 )
 
 // Config is the MuleSoft connector configuration: the generic base config plus Anypoint-specific fields.

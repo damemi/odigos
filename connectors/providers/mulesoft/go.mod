@@ -1,15 +1,11 @@
-module github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft
+module github.com/odigos-io/odigos/connectors/providers/mulesoft
 
 go 1.26.2
 
-replace github.com/odigos-io/odigos-enterprise/connectors => ../..
-
-replace github.com/odigos-io/odigos-enterprise/connectors/base => ../../base
-
 require (
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos-enterprise/connectors/base v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors/base v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -34,8 +30,8 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/odigos-io/agents-api/go/server v0.32.0 // indirect
-	github.com/odigos-io/odigos/common v1.39.0-pre3.0.20261021080422-a6844718c573 // indirect
-	github.com/odigos-io/odigos/destinations v1.29.0 // indirect
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000 // indirect
 	github.com/open-telemetry/opamp-go v0.23.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/sosodev/duration v1.4.0 // indirect
@@ -55,5 +51,12 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	sigs.k8s.io/controller-runtime v0.23.3 // indirect
 )
+
+replace github.com/odigos-io/odigos/common => ../../../common
+
+replace github.com/odigos-io/odigos/connectors => ../..
+
+replace github.com/odigos-io/odigos/connectors/base => ../../base
+
+replace github.com/odigos-io/odigos/destinations => ../../../destinations

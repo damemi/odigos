@@ -8,12 +8,12 @@ import (
 	"sort"
 	"strings"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	dest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	dest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/config"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 // AgentCore manual-mode plan: the same environment recipe automatic mode applies and the observer compares, plus the

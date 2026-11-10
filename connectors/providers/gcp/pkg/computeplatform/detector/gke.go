@@ -11,10 +11,10 @@ import (
 
 	containerpb "cloud.google.com/go/container/apiv1/containerpb"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/computeplatform/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/gcpclient"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	store "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/computeplatform/store"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/gcpclient"
 )
 
 var log = connlog.Subsystem("gcp-computeplatform-detector")

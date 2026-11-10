@@ -8,7 +8,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ac "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
-	"github.com/odigos-io/odigos-enterprise/connectors/awsregions"
+	"github.com/odigos-io/odigos/connectors/awsregions"
 )
 
 func probeAgentCoreRegions(ctx context.Context, base aws.Config, regions []string) []string {

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/opamp"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // CheckEndpoint reports whether this connector can point a Collector at Central.

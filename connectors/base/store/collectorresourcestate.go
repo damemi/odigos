@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	"github.com/odigos-io/odigos/connectors/postgres"
 )
 
 // CollectorResourceState records whether Odigos may have created cloud resources

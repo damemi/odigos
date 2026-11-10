@@ -3,7 +3,7 @@ package graph
 import (
 	"testing"
 
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
 )
 
 func TestParseClusterSnapshot_Disabled(t *testing.T) {

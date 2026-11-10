@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // observingProvider is a fakeProvider that also implements the optional api.WorkloadObserverRegistry, which is

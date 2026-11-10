@@ -3,7 +3,7 @@ package graph
 import (
 	"context"
 
-	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
 )
 
 // requireIdentityProviderAccess allows identity provider changes by ADMIN/OWNER.

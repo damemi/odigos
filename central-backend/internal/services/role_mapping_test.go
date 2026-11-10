@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odigos-io/central-backend/internal/keycloak"
+	"github.com/odigos-io/odigos/central-backend/internal/keycloak"
 )
 
 func TestRowIDRoundTrip(t *testing.T) {

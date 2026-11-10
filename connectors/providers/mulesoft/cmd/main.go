@@ -10,13 +10,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base"
-	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/mulesoftprovider"
-	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/base"
+	baseconfig "github.com/odigos-io/odigos/connectors/base/config"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/config"
+	"github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/mulesoftprovider"
+	workloadstore "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 func main() {

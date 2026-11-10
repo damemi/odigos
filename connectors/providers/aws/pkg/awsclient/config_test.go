@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/config"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/config"
 )
 
 // An empty expected account id means the boundary cannot be enforced — VerifyAccount must reject it

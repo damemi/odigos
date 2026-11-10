@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/odigos-io/central-backend/internal/config"
-	"github.com/odigos-io/central-backend/internal/consts"
-	"github.com/odigos-io/central-backend/internal/k8s"
+	"github.com/odigos-io/odigos/central-backend/internal/config"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/k8s"
 )
 
 type CredentialsService struct {

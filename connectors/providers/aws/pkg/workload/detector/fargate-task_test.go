@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
 )
 
 // Only Fargate workloads may enter the inventory: EC2-launch-type ECS belongs to the cluster agent.

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	domainsrc "github.com/odigos-io/odigos/connectors/base/domain/source"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/base/store"
 )
 
 var apiLog = connlog.Subsystem("coordinator-api")

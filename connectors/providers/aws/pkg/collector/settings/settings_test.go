@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	base "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+	base "github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
 )
 
 func TestExecutionRoleARNIsReadFromProviderSettings(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/source"
 )
 
 func TestFargateDistroValidationUsesRuntimeAliasesAndContainerDetection(t *testing.T) {

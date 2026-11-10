@@ -17,8 +17,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcredential"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
 )
 
 // The destructive half of the fakes, kept in its own file for the same reason the destructive CLIENTS

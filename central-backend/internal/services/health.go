@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
-	"github.com/odigos-io/central-backend/internal/ssehub"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/internal/ssehub"
 )
 
 type HealthService struct {

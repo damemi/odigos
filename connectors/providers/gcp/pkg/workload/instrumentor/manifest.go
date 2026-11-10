@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
+	store "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/workload/store"
 )
 
 // EnvOdigosManaged is the ownership marker + change snapshot the instrumentor stamps on the ingress

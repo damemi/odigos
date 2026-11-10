@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/central-backend/internal/keycloak"
-	"github.com/odigos-io/central-backend/internal/services"
-	"github.com/odigos-io/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/keycloak"
+	"github.com/odigos-io/odigos/central-backend/internal/services"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
 )
 
 // Opening a cluster fires ~12 GraphQL requests at once. With a cold cache they

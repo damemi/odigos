@@ -6,9 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odigos-io/central-backend/internal/logger"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
-	"github.com/odigos-io/central-backend/internal/snapshotsummary"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/internal/snapshotsummary"
 )
 
 type SnapshotJob struct {

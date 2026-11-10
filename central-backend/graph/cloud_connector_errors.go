@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
-	"github.com/odigos-io/central-backend/internal/logger"
-	"github.com/odigos-io/odigos-enterprise/connectors/testconnection"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/connectors/testconnection"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 

@@ -7,11 +7,11 @@ import (
 
 	runpb "cloud.google.com/go/run/apiv2/runpb"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/config"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // allSignalsDest is a destination that accepts every signal, which is the shape the plan's exporter values

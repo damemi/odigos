@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 

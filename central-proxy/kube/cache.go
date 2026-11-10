@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/odigos-io/central-proxy/internal/logger"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
 	odigosinformers "github.com/odigos-io/odigos/api/generated/odigos/informers/externalversions"
 	odigosv1alpha1informer "github.com/odigos-io/odigos/api/generated/odigos/informers/externalversions/odigos/v1alpha1"
 	odigoslisters "github.com/odigos-io/odigos/api/generated/odigos/listers/odigos/v1alpha1"

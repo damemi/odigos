@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
 )
 
 // TestDrainRequestsKeepTheirReason runs the drain SQL against a real, migrated Postgres. Opt in with

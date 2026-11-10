@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"slices"
 
-	store "github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/workload/store"
+	store "github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/workload/store"
 )
 
 const manifestVersion = 1

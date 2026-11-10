@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	cpg "github.com/odigos-io/odigos-enterprise/connectors/postgres"
+	cpg "github.com/odigos-io/odigos/connectors/postgres"
 )
 
 type Snapshot struct {

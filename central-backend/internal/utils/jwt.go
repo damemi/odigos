@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
 	"golang.org/x/sync/singleflight"
 )
 

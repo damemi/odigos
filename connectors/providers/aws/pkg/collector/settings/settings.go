@@ -4,9 +4,9 @@
 package collectorsettings
 
 import (
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoringress"
-	base "github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoringress"
+	base "github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
 )
 
 const (

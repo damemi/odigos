@@ -7,11 +7,11 @@ import (
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	centralapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorreport"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	centralapi "github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectormetrics"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorreport"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var collectorAPILog = connlog.Subsystem("gql-managed-collector")

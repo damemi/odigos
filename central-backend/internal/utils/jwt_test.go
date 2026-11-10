@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/odigos-io/central-backend/internal/utils"
-	"github.com/odigos-io/central-backend/internal/utils/tokentest"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/utils/tokentest"
 )
 
 func newVerifier(t *testing.T, realm *tokentest.Realm, edit func(*utils.TokenVerifierConfig)) *utils.TokenVerifier {

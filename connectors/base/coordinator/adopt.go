@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domainsrc "github.com/odigos-io/odigos-enterprise/connectors/base/domain/source"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	domainsrc "github.com/odigos-io/odigos/connectors/base/domain/source"
+	"github.com/odigos-io/odigos/connectors/base/store"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // adoptLoop periodically creates a source for any discovered workload that already carries live Odigos

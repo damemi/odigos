@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/mulesoft/pkg/types"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/providers/mulesoft/pkg/types"
 )
 
 // SoftDeleteRetention is how long a soft-deleted inventory row is kept before the purge hard-deletes it.

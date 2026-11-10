@@ -9,8 +9,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var collectorsLog = connlog.Subsystem("store-managed-collectors")

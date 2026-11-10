@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 func TestAgentCoreDiscoveryAndInstrumentationReachCreationCatalog(t *testing.T) {

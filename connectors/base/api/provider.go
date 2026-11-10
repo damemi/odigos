@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorsettings"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorsettings"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // Provider is what a cloud provider implements to get a full connector runtime from the base framework.

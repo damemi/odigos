@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/azure/pkg/types"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/providers/azure/pkg/types"
 )
 
 // Workload kinds — directly-instrumentable resources. Kind strings match the spec type names so the

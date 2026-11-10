@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/instrumentationplan"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/instrumentationplan"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 type instructionStore struct{ fn store.LambdaFunction }

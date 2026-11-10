@@ -13,13 +13,13 @@ import (
 	"github.com/coder/websocket"
 	"github.com/google/uuid"
 
-	"github.com/odigos-io/central-backend/internal/consts"
-	"github.com/odigos-io/central-backend/internal/logger"
-	redisclient "github.com/odigos-io/central-backend/internal/redis"
-	"github.com/odigos-io/central-backend/internal/snapshotsummary"
-	"github.com/odigos-io/central-backend/internal/snapshotworker"
-	"github.com/odigos-io/central-backend/internal/ssehub"
-	"github.com/odigos-io/central-backend/internal/types"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/logger"
+	redisclient "github.com/odigos-io/odigos/central-backend/internal/redis"
+	"github.com/odigos-io/odigos/central-backend/internal/snapshotsummary"
+	"github.com/odigos-io/odigos/central-backend/internal/snapshotworker"
+	"github.com/odigos-io/odigos/central-backend/internal/ssehub"
+	"github.com/odigos-io/odigos/central-backend/internal/types"
 )
 
 const ProxyIDQueryParam = "proxyID"

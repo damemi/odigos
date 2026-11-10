@@ -3,9 +3,9 @@ package graph
 import (
 	"fmt"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
-	"github.com/odigos-io/odigos-enterprise/connectors/testconnection"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/testconnection"
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 )
 

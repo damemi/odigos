@@ -1,18 +1,14 @@
-module github.com/odigos-io/odigos-enterprise/connector-opamp-gateway
+module github.com/odigos-io/odigos/connector-opamp-gateway
 
 go 1.26.2
-
-replace github.com/odigos-io/odigos-enterprise/connectors => ../connectors
-
-replace github.com/odigos-io/odigos-enterprise/connectors/base => ../connectors/base
 
 require (
 	github.com/coder/websocket v1.8.15
 	github.com/go-logr/logr v1.4.4
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/odigos-io/odigos-enterprise/connectors v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos-enterprise/connectors/base v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/api v1.39.0-pre1.0.20261015141927-6c6f37530030
+	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/connectors/base v0.0.0-00010101000000-000000000000
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v0.37.0
@@ -80,3 +76,9 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/odigos-io/odigos/api => ../api
+
+replace github.com/odigos-io/odigos/connectors => ../connectors
+
+replace github.com/odigos-io/odigos/connectors/base => ../connectors/base

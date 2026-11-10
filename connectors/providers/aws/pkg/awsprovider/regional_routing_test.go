@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	domaindest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/collector/placement"
-	awstypes "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/types"
-	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/collector/placement"
+	awstypes "github.com/odigos-io/odigos/connectors/providers/aws/pkg/types"
+	workloadstore "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 func testDirectRouting(reason domaindest.Reason) domaindest.Routing {

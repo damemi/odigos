@@ -10,14 +10,14 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base"
-	baseconfig "github.com/odigos-io/odigos-enterprise/connectors/base/config"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
-	basestore "github.com/odigos-io/odigos-enterprise/connectors/base/store"
-	computeplatformstore "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/computeplatform/store"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/config"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/gcpprovider"
-	workloadstore "github.com/odigos-io/odigos-enterprise/connectors/providers/gcp/pkg/workload/store"
+	"github.com/odigos-io/odigos/connectors/base"
+	baseconfig "github.com/odigos-io/odigos/connectors/base/config"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
+	basestore "github.com/odigos-io/odigos/connectors/base/store"
+	computeplatformstore "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/computeplatform/store"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/config"
+	"github.com/odigos-io/odigos/connectors/providers/gcp/pkg/gcpprovider"
+	workloadstore "github.com/odigos-io/odigos/connectors/providers/gcp/pkg/workload/store"
 )
 
 func main() {

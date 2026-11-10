@@ -8,7 +8,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/executor"
 	"github.com/coder/websocket"
 
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var cliLog = connlog.Subsystem("cli")

@@ -21,8 +21,8 @@ import (
 
 	"github.com/odigos-io/agents-api/go/server/graph/model"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/plan"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/base/domain/plan"
 )
 
 // VariantManual is the delivery variant for a rendering that is prose rather than a tool's syntax. It is what

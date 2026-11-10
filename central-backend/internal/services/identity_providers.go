@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/odigos-io/central-backend/graph/model"
-	"github.com/odigos-io/central-backend/internal/consts"
-	"github.com/odigos-io/central-backend/internal/keycloak"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/internal/consts"
+	"github.com/odigos-io/odigos/central-backend/internal/keycloak"
 )
 
 // IdentityProviderCallbackURL is the redirect URI to register in the identity provider.

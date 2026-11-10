@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/odigos-io/central-proxy/internal/config"
-	"github.com/odigos-io/central-proxy/internal/logger"
-	sseclient "github.com/odigos-io/central-proxy/internal/sseclient"
-	websocketserver "github.com/odigos-io/central-proxy/internal/websocket"
+	"github.com/odigos-io/odigos/central-proxy/internal/config"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
+	sseclient "github.com/odigos-io/odigos/central-proxy/internal/sseclient"
+	websocketserver "github.com/odigos-io/odigos/central-proxy/internal/websocket"
 )
 
 // Start connects to the frontend backend SSE endpoint and forwards events over the websocket client.

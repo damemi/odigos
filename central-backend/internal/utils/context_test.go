@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/central-backend/internal/utils"
-	"github.com/odigos-io/central-backend/internal/utils/tokentest"
+	"github.com/odigos-io/odigos/central-backend/internal/utils"
+	"github.com/odigos-io/odigos/central-backend/internal/utils/tokentest"
 )
 
 func TestRequireAuthRequiresOdigosRole(t *testing.T) {

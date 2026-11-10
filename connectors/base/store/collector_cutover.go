@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcutover"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorcutover"
 )
 
 // CutoverAnnouncement records the precise destination and Collector readiness event for which

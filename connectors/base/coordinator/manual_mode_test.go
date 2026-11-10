@@ -3,8 +3,8 @@ package coordinator
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	"github.com/odigos-io/odigos/connectors/spec"
 )
 
 // TestMarkInstrumentationAvailabilityResolvesMode covers the split that keeps manual mode reportable without

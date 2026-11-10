@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/odigos/central-backend/graph/model"
 )
 
 // Single diagnose output — replaced on each new prepare (same model as OSS frontend).

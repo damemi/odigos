@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	ac "github.com/aws/aws-sdk-go-v2/service/bedrockagentcorecontrol"
-	baseapi "github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	dest "github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
-	"github.com/odigos-io/odigos-enterprise/connectors/providers/aws/pkg/agentcore"
+	baseapi "github.com/odigos-io/odigos/connectors/base/api"
+	dest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/agentcore"
 )
 
 const agentCoreRecipeVersion = "1"

@@ -10,8 +10,8 @@ import (
 	"github.com/odigos-io/agents-api/go/server/graph/generated"
 	"github.com/vektah/gqlparser/v2/ast"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/api"
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	"github.com/odigos-io/odigos/connectors/base/api"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var httpLog = connlog.Subsystem("gql-http")

@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/odigos-io/central-backend/internal/k8s"
+	"github.com/odigos-io/odigos/central-backend/internal/k8s"
 	cloudconnectorsv1 "github.com/odigos-io/odigos/api/cloud-connectors/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"

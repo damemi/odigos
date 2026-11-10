@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectormetrics"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectormetrics"
 )
 
 func TestWaitForNextCollectorMetricsMarksOnlyNewReportLive(t *testing.T) {

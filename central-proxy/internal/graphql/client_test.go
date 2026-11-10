@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/central-proxy/internal/logger"
+	"github.com/odigos-io/odigos/central-proxy/internal/logger"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 )
 

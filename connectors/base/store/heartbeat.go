@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	connlog "github.com/odigos-io/odigos-enterprise/connectors/base/log"
+	connlog "github.com/odigos-io/odigos/connectors/base/log"
 )
 
 var heartbeatLog = connlog.Subsystem("store-heartbeat")

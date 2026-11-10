@@ -8,8 +8,8 @@ import (
 	odigosconfig "github.com/odigos-io/odigos/common/config"
 	odigosdest "github.com/odigos-io/odigos/destinations"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectoraction"
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectoraction"
+	"github.com/odigos-io/odigos/connectors/base/domain/destination"
 )
 
 // builderConfig is the OpenTelemetry Collector Builder manifest for the enterprise Collector — the list

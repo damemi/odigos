@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorstatus"
+	"github.com/odigos-io/odigos/connectors/base/domain/collectorstatus"
 )
 
 // bootstrapDocument and encodedBootstrapDocument pin the WIRE FORMAT across a module boundary. This
