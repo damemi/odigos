@@ -535,17 +535,6 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          ref: ${{ env.TAG }} # checkout the tag we are releasing (main might have been updated since the tag was created)
-
-      - name: Configure Git
-        run: |
-          git config --global user.email "bot@odigos.io"
-          git config --global user.name "Odigos Release Bot"
-
       - name: Install Helm
         uses: azure/setup-helm@v4.2.0
         with:
@@ -557,10 +546,64 @@ jobs:
           name: odigos-chart
           path: helm/
 
-      - name: Publish Helm charts
+      - id: gcp-auth
+        name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          access_token_lifetime: 1200s
+
+      # cosign (in sign-oci) reads the docker keychain, helm keeps its own
+      # registry config, so log in to both.
+      - name: Login to Artifact Registry
+        uses: docker/login-action@v3
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.gcp-auth.outputs.access_token }}
+
+      - name: Push Helm charts to private OCI registry
+        id: helm-oci
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
-        run: bash ./scripts/publish-charts.sh
+          ACCESS_TOKEN: ${{ steps.gcp-auth.outputs.access_token }}
+          OCI_REPO: oci://us-central1-docker.pkg.dev/odigos-cloud/components-private/charts
+        run: |
+          set -euo pipefail
+          echo "$ACCESS_TOKEN" | helm registry login us-central1-docker.pkg.dev \
+            --username oauth2accesstoken --password-stdin
+
+          # helm push prints "Digest: sha256:..."; capture it so each chart can
+          # be signed by digest rather than by mutable tag.
+          for chart in odigos odigos-central; do
+            OUT=$(helm push "helm/${chart}-${TAG#v}.tgz" "$OCI_REPO" 2>&1)
+            echo "$OUT"
+            DIGEST=$(echo "$OUT" | sed -n 's/^Digest: //p')
+            if [[ ! "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+              echo "::error::helm push did not report a digest for ${chart}"
+              exit 1
+            fi
+            echo "digest-${chart}=${DIGEST}" >> "$GITHUB_OUTPUT"
+          done
+
+      # A chart is a single-manifest OCI artifact with no filesystem to scan,
+      # so sign without --recursive and without an SBOM.
+      - name: Sign odigos chart
+        uses: odigos-io/ci-core/sign-oci@main
+        with:
+          refs: us-central1-docker.pkg.dev/odigos-cloud/components-private/charts/odigos
+          digest: ${{ steps.helm-oci.outputs.digest-odigos }}
+          recursive: "false"
+          sbom: "false"
+
+      - name: Sign odigos-central chart
+        uses: odigos-io/ci-core/sign-oci@main
+        with:
+          refs: us-central1-docker.pkg.dev/odigos-cloud/components-private/charts/odigos-central
+          digest: ${{ steps.helm-oci.outputs.digest-odigos-central }}
+          recursive: "false"
+          sbom: "false"
 
       - name: Notify Slack
         if: always()
