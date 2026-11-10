@@ -22,6 +22,7 @@ updates:
       - /instrumentor
       - /k8sutils
       - /odiglet
+      - /odiglet/enterprise
       - /odigosauth
       - /opampserver
       - /operator
@@ -75,10 +76,11 @@ updates:
   - package-ecosystem: docker
     directories:
       - /
-      - /collector
-      - /frontend
-      - /odiglet
+      - /collector/enterprise
+      - /instrumentor/enterprise
+      - /odiglet/enterprise
       - /operator
+      - /ui
     schedule:
       day: sunday
       interval: weekly
