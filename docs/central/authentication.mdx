@@ -44,7 +44,7 @@ For SSO redirects to work, Keycloak and the Central Backend must know the **brow
     Or via `--set`:
 
     ```bash
-    helm upgrade --install odigos-central odigos/odigos-central \
+    helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
       --namespace odigos-central \
       --create-namespace \
       --set onPremToken=<token> \

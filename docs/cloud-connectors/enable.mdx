@@ -67,7 +67,7 @@ When `cloudConnectors.enabled` is `true` and the Central install secret exists, 
     Enable with `--set`:
 
     ```bash
-    helm upgrade --install odigos-central odigos/odigos-central \
+    helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
       --namespace odigos-central \
       --reuse-values \
       --set cloudConnectors.enabled=true \
@@ -93,7 +93,7 @@ When `cloudConnectors.enabled` is `true` and the Central install secret exists, 
     Then apply:
 
     ```bash
-    helm upgrade --install odigos-central odigos/odigos-central \
+    helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
       --namespace odigos-central \
       --create-namespace \
       -f values.yaml
@@ -184,7 +184,7 @@ The AWS [regional Collector](/cloud-connectors/aws/regional-collector) runs in y
 
   <Tab title="Helm">
     ```bash
-    helm upgrade --install odigos-central odigos/odigos-central \
+    helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
       --namespace odigos-central \
       --reuse-values \
       --set cloudConnectors.managedCollectors.enabled=true \
