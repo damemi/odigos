@@ -23,7 +23,7 @@ import (
 //
 // A container the instrumentor did not enable has no distro of its own, and one
 // that landed on a distro the page does not list (a version fallback such as
-// nodejs-community-14) would otherwise vanish from the totals. Both are counted
+// nodejs-enterprise-14) would otherwise vanish from the totals. Both are counted
 // against the language's default distro, which is the row that answers "what
 // would this container run".
 func distroSourceCounts(ctx context.Context, k8sCacheClient client.Client, defaults map[common.ProgrammingLanguage]string, listed map[string]bool) (map[string]int, error) {

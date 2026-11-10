@@ -13,7 +13,17 @@ import (
 	agentInjectionEnabled "github.com/odigos-io/odigos/status/instrumentationconfig/generated"
 )
 
+// Distros that were removed, mapped to the distro that replaces them, so a source
+// override that still names one keeps the container instrumented.
+var removedDistroReplacements = map[string]string{
+	"nodejs-community":    "nodejs-enterprise",
+	"nodejs-community-14": "nodejs-enterprise-14",
+}
+
 func resolveDistroByOverride(overwriteDistroName string, distroGetter *distros.Getter, containerLanguage common.ProgrammingLanguage) (*distro.OtelDistro, *odigosv1.AgentDisabledInfo) {
+	if replacement, ok := removedDistroReplacements[overwriteDistroName]; ok {
+		overwriteDistroName = replacement
+	}
 	distro := distroGetter.GetDistroByName(overwriteDistroName)
 	if distro == nil { // not expected to happen, here for safety net
 		message := fmt.Sprintf("requested otel distro %s is not available in this odigos tier", overwriteDistroName)

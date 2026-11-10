@@ -7,6 +7,7 @@ import (
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 	"github.com/odigos-io/odigos/distros"
+	enterprisedistros "github.com/odigos-io/odigos/distros/enterprise"
 	agentInjectionEnabled "github.com/odigos-io/odigos/status/instrumentationconfig/generated"
 	"github.com/stretchr/testify/require"
 )
@@ -72,6 +73,28 @@ func TestResolveDistroForContainer_wildcardOverrideAcceptsMismatchedContainerLan
 	require.NotNil(t, d)
 	require.Equal(t, obiDistroName, d.Name)
 	require.True(t, common.IsProgrammingLanguageWildcard(d.Language), "OBI should report wildcard language in spec")
+}
+
+func TestResolveDistroForContainer_removedDistroOverrideUsesReplacement(t *testing.T) {
+	provider, err := enterprisedistros.NewEnterpriseProvider()
+	require.NoError(t, err)
+	config := &common.OdigosConfiguration{}
+	rt := &odigosv1.RuntimeDetailsByContainer{
+		Language:       common.JavascriptProgrammingLanguage,
+		RuntimeVersion: "20.0.0",
+	}
+	dpl := map[common.ProgrammingLanguage]string{common.JavascriptProgrammingLanguage: "nodejs-enterprise"}
+
+	for removed, replacement := range map[string]string{
+		"nodejs-community":    "nodejs-enterprise",
+		"nodejs-community-14": "nodejs-enterprise-14",
+	} {
+		co := &odigosv1.ContainerOverride{OtelDistroName: &removed}
+		d, info := ResolveDistroForContainer(config, rt, dpl, provider.Getter, co, "c1")
+		require.Nil(t, info, removed)
+		require.NotNil(t, d, removed)
+		require.Equal(t, replacement, d.Name)
+	}
 }
 
 func TestResolveDistroForContainer_wildcardDistroSkipsRuntimeSemver(t *testing.T) {
