@@ -1,6 +1,6 @@
 # Odigos Documentation
 
-Source for the public Open Source documentation at [docs.odigos.io](https://docs.odigos.io). This site documents the Kubernetes Agent Open Source edition, plus overview pages for Odigos Central, the VM Agent, Cloud Connectors, the Enterprise MCP server, and continuous profiling. The full enterprise documentation is published from the odigos-enterprise repository at [enterprise.docs.odigos.io](https://enterprise.docs.odigos.io).
+Source for [enterprise.docs.odigos.io](https://enterprise.docs.odigos.io), where every page (Open Source included) is behind enterprise API key sign-in. The Kubernetes Agent has two tabs: Open Source (`oss/`) and Enterprise (`enterprise/`). Odigos Central (`central/`), the VM Agent and ECS Agent (`vmagent/`), and Cloud Connectors (`cloud-connectors/`) are documented in full.
 
 ### Development
 
@@ -22,10 +22,10 @@ cd api && make docgen
 cd docs && python sync-dest-doc.py
 ```
 
-`sync-dest-doc.py` updates Open Source destination pages and skips Pyroscope, which is documented only on the enterprise site. Copy changed generated snippets into the enterprise repository's `snippets/enterprise` tree when those pages should stay in sync.
+`sync-dest-doc.py` updates Open Source destination pages and skips Pyroscope, which is documented only in the Enterprise tab. Enterprise pages import their own copies from `snippets/enterprise`; copy changed generated snippets there when those pages should stay in sync.
 
 ### Publishing Changes
 
-Changes will be deployed to production automatically after pushing to the default branch.
+Merging to `main` publishes through Mintlify. The Mintlify site is password-protected (Mintlify Dashboard → Access → Password), so its own hostname shows nothing without the docs password, which is never given to customers. Readers use enterprise.docs.odigos.io, a CloudFront gate in front of Mintlify: they sign in with an enterprise API key and the gate fetches pages with a shared Mintlify session. The gate is defined in `odigos-io/cloud-infra` (`aws/docs-gate`) and builds its sign-in on `odigosauth/docslogin` from this repository.
 
-You can also preview changes using PRs, which generates a preview link of the docs.
+Pull requests get Mintlify preview deployments. While the site requires a password, Mintlify requires it on previews too; without it, preview URLs are public.

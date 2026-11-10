@@ -1,0 +1,177 @@
+---
+title: 'Instrument Cloud Workloads'
+description: 'Create Sources from discovered cloud workloads, configure an OTLP destination, and track instrumentation progress.'
+sidebarTitle: 'Instrument Workloads'
+---
+
+Once a Cloud Connector is online, browse the workloads it discovered and create **Sources** for the ones you want to observe. Enabling a Source tells the connector to apply provider-specific instrumentation and export telemetry to the OTLP destination(s) on that connector.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Healthy connector">
+    A Cloud Connector with discovery enabled for the workload types you want.
+  </Step>
+  <Step title="OTLP destination">
+    At least one enabled **OTLP destination** on that connector. See [Add an OTLP destination](#add-an-otlp-destination). Workload instrumentation is destination-gated; without a usable OTLP endpoint the connector will not attach instrumentation.
+  </Step>
+  <Step title="Reachable endpoint">
+    Instrumented workloads export OTLP to that destination from the cloud environment (for example from your Lambda functions or Fargate tasks). Point the destination at an endpoint those workloads can reach — for example a collector or backend with appropriate public or VPC access. See [Telemetry export](/cloud-connectors/overview#telemetry-export).
+  </Step>
+</Steps>
+
+## Add an OTLP destination
+
+Before you create Sources, add at least one destination on the connector so instrumented workloads have somewhere to export telemetry.
+
+Lambda and Fargate support OTLP destinations only. For more information, see [Telemetry export](/cloud-connectors/overview#telemetry-export).
+
+Follow the [Destinations overview](/enterprise/backends-overview) for how to add and configure a destination, then apply that setup on the connector in Central. The endpoint must be reachable from the cloud workloads themselves (not only from the Central cluster).
+
+For a cloud connector, the destinations you can add are **OTLP gRPC** and **OTLP http** (both under **Self hosted**). The connector exports to the **first enabled** OTLP destination. A destination you disable with its **Enable/Disable** toggle keeps its configuration but is not used.
+
+On AWS, you can also add the **Odigos Managed Regional Collector** destination, which routes workloads in one region through a Collector that runs in your account. It is optional, and works alongside a regular OTLP destination rather than replacing it. See [Regional Collector](/cloud-connectors/aws/regional-collector#route-workloads-to-the-collector).
+
+## Destination signals
+
+The destination's **This connection will monitor** checkboxes (**Logs**, **Metrics**, **Traces**, **Profiles**) are the desired state for every workload on the connector.
+
+<img
+  src="/images/cloud-connectors/aws-otlp-destination.png"
+  alt="OTLP destination form on an AWS connector with the Logs, Metrics, and Traces checkboxes under This connection will monitor"
+/>
+
+Each workload exports the enabled signals its agent can produce. Odigos writes every exporter explicitly, so a signal you don't enable is switched off rather than left to defaults. Changing the checkboxes changes what Odigos-managed workloads export.
+
+| Workload | Traces | Metrics | Logs |
+| --- | --- | --- | --- |
+| Lambda: Java, Node.js, Python | Yes | Yes | Yes |
+| Lambda: Java lightweight wrappers | Yes | Only metrics your code records | From function output (stdout/stderr) |
+| Lambda: Ruby | Yes | No | From function output (stdout/stderr) |
+| Fargate: Java, Python, Node.js, .NET, PHP | Yes | Yes | Yes |
+| Fargate: Ruby | Yes | No | No |
+
+No workload type produces **profiles**. For the per-distro details on Lambda, see [Lambda distros](/cloud-connectors/aws/workloads/lambda/distros#signals-each-distro-produces).
+
+- **Workload note.** When a destination enables signals a workload can't produce, the workload shows a note with what it is actually collecting, such as **Collecting traces** or **Collecting logs, metrics and traces**.
+- **Profiles only.** A destination that enables only profiles can't be used on Lambda. The source reports `destination selects only profiles: the bundled Lambda layer cannot generate or forward OTLP profiles`.
+- **Self-managed workloads must match exactly.** The signals you configure in your IaC must be the ones the destination enables. A missing signal and an extra signal are both a mismatch, and the source shows **Instrumentation does not match**. Update your IaC and the destination together.
+- **Disabled destination.** If you disable the destination, its configuration is kept but the connector no longer uses it. See [Check Source status](#check-source-status) for what workloads show in that case.
+
+## Browse discovered workloads
+
+Open the connector in Central and review discovered workloads. Each candidate typically includes kind, name, region/location, and whether it is already a Source or instrumented.
+
+## Create Sources
+
+Select the workloads to instrument and create Sources. To add Sources by hand, use **Add Source** on the connector. Pick a kind (`aws.lambda` or `aws.fargate-task` for AWS), choose the functions or services, and click **Save**.
+
+<img
+  src="/images/cloud-connectors/aws-add-lambda-sources.png"
+  alt="Add Source dialog for an AWS connector, with the workload kind selected and a list of Lambda functions to choose from"
+/>
+
+A Source is the instrumentation intent for one cloud resource. Identity includes:
+
+- **Name**: the provider resource name
+- **Kind**: for example `aws.lambda` or `gcp.cloud-run`
+- **Region**: the resource's region or location
+
+Enable the Source so the connector applies instrumentation to that workload. That typically means adding the Odigos OTEL SDK and collector components the runtime needs, configuring them for the workload, and configuring where telemetry is sent (the OTLP destination on the connector).
+
+See [Supported languages](/cloud-connectors/overview#supported-languages) for which runtimes each workload type can instrument.
+
+For a Lambda Source, Odigos picks a default distro for the function's language. To use a different one, such as a lightweight Java wrapper or AWS ADOT, override it on that Source. See [Lambda distros](/cloud-connectors/aws/workloads/lambda/distros#switch-distros).
+
+## Check Source status
+
+After you create a Source, it appears under **Sources** in Central. Open it to see details and health.
+
+The Source details typically include:
+
+- **Identity**: kind (e.g. AWS Lambda), name, region, and service name, plus whether the Source is **Enabled**
+- **Health**: a status banner such as **Success And Emitting Telemetry** when the Source is instrumented, healthy, and telemetry has been observed
+- **Instrumentation**: detected language and version (e.g. `python • 3.13`), and whether the workload is **Instrumented**
+
+### Statuses and messages
+
+| Status | What it means |
+| --- | --- |
+| **Waiting for destination** | The workload is marked for instrumentation, but the connector has no enabled OTLP destination to export to. Message: `waiting for a destination: this workload is marked for instrumentation, but the connector has no OTLP destination to export telemetry to. Instrumentation starts automatically once a destination is configured.` It starts on its own once you add or enable a destination. |
+| **Failed**: `No applicable destination: ...` | The workload is already instrumented, but there is no destination for it to export to (for example `no global OTLP destination is configured, so this workload cannot export telemetry`). The existing instrumentation is not rolled back. Add or enable a destination. |
+| **Applying instrumentation**, then **Instrumented** | The connector is applying the change. A Source normally settles on **Instrumented** within about one reconcile cycle. |
+| **Not supported** | The runtime or configuration can't be instrumented, for example a Lambda runtime with no Odigos layer. |
+| **Instrumentation does not match** | Self-managed workloads only. What you deployed is incomplete or out of date compared with what Central expects, such as a missing layer or wrapper, or signals that don't match the destination. Odigos doesn't change self-managed workloads, so re-apply the instrumentation through your IaC. |
+
+When a workload exports through the regional Collector, or falls back to the destination directly, the Source shows a routing note that says why. See [Regional Collector](/cloud-connectors/aws/regional-collector#which-workloads-use-it).
+
+For a self-managed workload, open the Source drawer and use the **How to instrument this workload** panel. It has ready-to-paste **Terraform**, **CloudFormation**, and **AWS CDK** tabs for that workload and its destination, plus an **AWS CLI** tab for Lambda. For Lambda, see [Instrument Lambda](/cloud-connectors/aws/workloads/lambda/instrument).
+
+If something else is wrong (for example missing permissions), use the health message on the Source details to diagnose.
+
+## Uninstrument workloads
+
+Keep the connector running and its cloud permissions available until rollback is verified. Removing a destination or deleting the connector first can leave instrumentation deployed without a working telemetry path.
+
+### Odigos-managed Sources
+
+Select the Sources with the checkboxes and click **Uninstrument**. The connector restores the original configuration it saved when it instrumented the workload. Wait for rollback and any application rollout to finish, then verify the application still works. Remove the Source configuration separately if retiring it.
+
+Keep the connector's database available until rollback finishes, because the saved configuration lives there. Don't remove the ownership markers by hand first: on Lambda the `odigos:managed` and `odigos:pending` tags point at that saved configuration. Shared prerequisites and immutable deployment history need separate cleanup:
+
+| AWS workload | Managed rollback | Items to review separately |
+| --- | --- | --- |
+| Lambda | Restores the saved environment, detaches the layers it attached, and removes its tags, on `$LATEST` only | Published function versions and every alias or weighted traffic target; unused layer versions and SAR stacks; the shared Application Signals role attachment and account setup; logs and telemetry |
+| Fargate service | Registers a clean task-definition revision and updates the existing application service | Old service tasks and failed-rollout reversions; other services/scheduled/standalone tasks using instrumented revisions; inactive task definitions; mirrored image/pull permissions; logs and telemetry |
+
+For AWS, finish the detailed [Lambda](/cloud-connectors/aws/workloads/lambda/instrument#bill-of-materials-and-uninstall) or [Fargate](/cloud-connectors/aws/workloads/fargate/instrument#bill-of-materials-and-uninstall) procedure. Workload rollback preserves application functions, ECS services, task roles, and shared infrastructure. Regional Collectors are [uninstalled separately](/cloud-connectors/aws/regional-collector#uninstall).
+
+### Self-managed Sources
+
+Disable the Source, then remove instrumentation using the same IaC or cloud configuration that installed it. Odigos observes customer-owned configuration and does not undo it. Restore prior loader/export settings and unrelated configuration, deploy the update, and verify clean traffic-serving releases before deleting the Source.
+
+For AWS, the [Lambda guide](/cloud-connectors/aws/workloads/lambda/instrument#uninstall-self-managed-instrumentation) covers CloudFormation, Terraform/OpenTofu, CDK, and AWS CLI; the [Fargate guide](/cloud-connectors/aws/workloads/fargate/instrument#uninstall-self-managed-instrumentation) covers CloudFormation, Terraform/OpenTofu, CDK, and raw ECS. Follow the [complete AWS removal order](/cloud-connectors/aws/uninstall) before revoking connector credentials.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="No instrumentation applied">
+    Confirm an [OTLP destination](#add-an-otlp-destination) exists on the connector and the Source is enabled. See [Destinations overview](/enterprise/backends-overview) for how to add and configure destinations.
+  </Accordion>
+  <Accordion title="GCP: permission denied on update">
+    Grant `iam.serviceAccounts.actAs` (or `roles/iam.serviceAccountUser` on the runtime service account). See [Add GCP connector](/cloud-connectors/add-connectors/add-gcp-connector).
+  </Accordion>
+  <Accordion title="GCP: traces missing intermittently">
+    Cloud Run CPU throttling or scale-to-zero can delay or drop background OTLP export. Prefer a reachable destination and, if needed, keep CPU allocated or a minimum instance warm on low-traffic services.
+  </Accordion>
+  <Accordion title="AWS: test connection passed but instrumentation fails">
+    Test connection validates discovery permissions only. Grant the instrumentation IAM actions for the workload types you instrument, including `lambda:TagResource` and `lambda:UntagResource` for Lambda. See [IAM permissions](/cloud-connectors/add-connectors/add-aws-connector#iam-permissions).
+  </Accordion>
+  <Accordion title="Lambda keeps showing Applying instrumentation">
+    After tagging a function, the connector reads it again before updating it, so a change normally settles within about one reconcile cycle. If you deploy the function at the same time, the update is retried.
+  </Accordion>
+  <Accordion title="Lambda reports that an alias invokes a version with different instrumentation">
+    Odigos changes `$LATEST` only and never publishes a version or moves an alias. Publish a version through your
+    deployment process and update the alias and any canary weights. See
+    [Published versions, aliases, and canaries](/cloud-connectors/aws/workloads/lambda/instrument#published-versions-aliases-and-canaries).
+  </Accordion>
+  <Accordion title="Lambda traces missing or partial">
+    - For Java, the default full agent flushes telemetry before Lambda freezes the sandbox. If you chose a lightweight wrapper, make sure it matches your handler type. See [Lambda distros](/cloud-connectors/aws/workloads/lambda/distros#choosing-a-java-distro).
+    - Confirm the function runs the distro you expect. The status badge on the Source shows the distro in use.
+    - Make sure the destination endpoint is reachable from the function.
+    - For low-traffic functions, telemetry is flushed before the sandbox freezes, so you don't need to keep the function warm.
+  </Accordion>
+  <Accordion title="A signal is missing">
+    Check the **This connection will monitor** checkboxes on the destination, then check [Destination signals](#destination-signals) to confirm the workload's language can produce that signal. Ruby has no metrics on Lambda, and Ruby on Fargate exports traces only.
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<Card
+  title="Manage and remove"
+  icon="trash"
+  href="/cloud-connectors/manage-and-remove"
+>
+  Understand connector health and how deletion policies affect cloud instrumentation.
+</Card>
