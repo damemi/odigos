@@ -98,3 +98,17 @@ replace github.com/odigos-io/odigos/frontend => ../frontend
 replace github.com/odigos-io/odigos/k8sutils => ../k8sutils
 
 replace github.com/odigos-io/odigos/status => ../status
+
+replace github.com/odigos-io/odigos/actions => ../actions
+
+replace github.com/odigos-io/odigos/config => ../config
+
+replace github.com/odigos-io/odigos/destinations => ../destinations
+
+replace github.com/odigos-io/odigos/distros => ../distros
+
+replace github.com/odigos-io/odigos/instrumentationrules => ../instrumentationrules
+
+replace github.com/odigos-io/odigos/odigosauth => ../odigosauth
+
+replace github.com/odigos-io/odigos/recommendations => ../recommendations

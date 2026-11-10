@@ -33,3 +33,8 @@ yalc.lock
 cli/pkg/helm/embedded/*.tgz
 
 kubeconfig
+# Connectors: never commit compiled connector binaries or local build context. The connector specs
+# and migrations are source and stay tracked.
+connectors/*/build/
+connector-runtime/build/
+connector-postgres/build/

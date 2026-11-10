@@ -87,3 +87,5 @@ require (
 replace github.com/odigos-io/odigos/api => ../api
 
 replace github.com/odigos-io/odigos/connectors => ../connectors
+
+replace github.com/odigos-io/odigos/common => ../common

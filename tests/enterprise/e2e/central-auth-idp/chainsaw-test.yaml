@@ -19,7 +19,7 @@ spec:
             timeout: 1m10s
             content: |
               helm upgrade --install odigos-central \
-                ../../../../odigos/helm/odigos-central \
+                ../../../../helm/odigos-central \
                 --create-namespace \
                 --namespace odigos-central \
                 --set image.tag=$IMAGE_TAG \

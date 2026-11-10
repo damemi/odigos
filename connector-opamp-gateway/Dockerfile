@@ -5,19 +5,15 @@
 #
 # Build from the repository root:
 #   docker build -f connector-opamp-gateway/Dockerfile .
-#
-# Unlike connector-runtime this needs no odigos build context. go.mod replaces only ../connectors and
-# ../connectors/base; odigos/api comes from the module proxy, so there is nothing to mount from a
-# sibling checkout and nothing that goes stale when one is missing.
 
 FROM --platform=$BUILDPLATFORM golang:1.26.2 AS builder
 ARG TARGETARCH
 ARG LD_FLAGS
 WORKDIR /workspace
-COPY connector-opamp-gateway/ connector-opamp-gateway/
-# The two replaced modules, at the relative paths go.mod names: `../connectors` -> /workspace/connectors
-# and `../connectors/base` under it.
+# connector-opamp-gateway replaces these modules with local paths.
+COPY api/ api/
 COPY connectors/ connectors/
+COPY connector-opamp-gateway/ connector-opamp-gateway/
 WORKDIR /workspace/connector-opamp-gateway
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/go/pkg \

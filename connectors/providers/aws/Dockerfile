@@ -43,6 +43,10 @@ ENV GOWORK=off
 ARG TARGETARCH
 ARG LD_FLAGS
 WORKDIR /workspace
+# The connector modules replace these odigos modules with local paths.
+COPY common/ common/
+COPY destinations/ destinations/
+COPY distros/ distros/
 COPY connectors/ connectors/
 WORKDIR /workspace/connectors/providers/aws
 # The agents-api branch is private. The Makefile passes github_token as a BuildKit secret;

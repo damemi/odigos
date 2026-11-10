@@ -14,12 +14,12 @@ spec:
     - name: Install - Jaeger
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/install-jaeger.yaml
+            file: ../../../../tests/common/apply/install-jaeger.yaml
 
     - name: Install - Simple Demo Apps
       try:
         - apply:
-            file: ../../../../odigos/tests/common/apply/install-simple-demo.yaml
+            file: ../../../../tests/common/apply/install-simple-demo.yaml
 
     # Install Odigos as a Central Proxy. Mirrors the helm flow documented at
     #   https://docs.odigos.io/central/adding-connections/remote-clusters
@@ -31,7 +31,7 @@ spec:
             timeout: 1m10s
             content: |
               helm upgrade --install odigos \
-                ../../../../odigos/helm/odigos \
+                ../../../../helm/odigos \
                 --create-namespace \
                 --namespace odigos-test \
                 --set image.tag=$IMAGE_TAG \
@@ -90,7 +90,7 @@ spec:
             timeout: 1m10s
             content: |
               helm upgrade --install odigos-central \
-                ../../../../odigos/helm/odigos-central \
+                ../../../../helm/odigos-central \
                 --create-namespace \
                 --namespace odigos-central \
                 --set image.tag=$IMAGE_TAG \
@@ -136,13 +136,13 @@ spec:
     - name: Verify - Jaeger Installed
       try:
         - assert:
-            file: ../../../../odigos/tests/common/assert/jaeger-installed.yaml
+            file: ../../../../tests/common/assert/jaeger-installed.yaml
 
     - name: Assert - Simple Demo Apps Installed
       try:
         - assert:
             timeout: 1m10s
-            file: ../../../../odigos/tests/common/assert/simple-demo-installed.yaml
+            file: ../../../../tests/common/assert/simple-demo-installed.yaml
 
     - name: Wait for Central Backend Ready
       try:
@@ -303,7 +303,7 @@ spec:
                 exit 1
               fi
 
-              cd ../../../central-ui
+              cd ../../../../central-ui
               # Direct redirect (not `| tee`) so the command's exit code propagates and a failing install / cypress run fails the step.
               # The `catch:` block below tails these files for diagnostics.
               yarn install > yarn-install.log 2>&1
@@ -321,13 +321,13 @@ spec:
               kubectl get svc central-ui -n odigos-central -o wide || true
               echo "==== yarn install (last 50 lines) ===="
               tail -n 50 central-ui/yarn-install.log 2>/dev/null \
-                || tail -n 50 ../../../central-ui/yarn-install.log 2>/dev/null || true
+                || tail -n 50 ../../../../central-ui/yarn-install.log 2>/dev/null || true
               echo "==== yarn global add cypress (last 50 lines) ===="
               tail -n 50 central-ui/yarn-add-cypress.log 2>/dev/null \
-                || tail -n 50 ../../../central-ui/yarn-add-cypress.log 2>/dev/null || true
+                || tail -n 50 ../../../../central-ui/yarn-add-cypress.log 2>/dev/null || true
               echo "==== cypress run (full log) ===="
               cat central-ui/cy-run.log 2>/dev/null \
-                || cat ../../../central-ui/cy-run.log 2>/dev/null || true
+                || cat ../../../../central-ui/cy-run.log 2>/dev/null || true
               echo "==== central-ui pod logs ===="
               kubectl logs deploy/central-ui -n odigos-central --tail=300 || true
               echo "==== central-backend pod logs ===="
