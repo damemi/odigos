@@ -8,14 +8,192 @@ import EnterpriseTier from '/snippets/oss/enterprise-tier.mdx'
 
 <EnterpriseTier />
 
-Cloud Connectors are the third connection type in [Odigos Central](/central/overview), alongside [VM Agent](/vmagent/overview).
+Cloud Connectors are the third connection type in Odigos Central, alongside [Remote Clusters](/central/adding-connections/remote-clusters) and [VM Agent](/central/adding-connections/vmagent).
 
 Each connector manages **one** cloud account boundary (for example an AWS account, a GCP project, or another supported provider). From Central you discover workloads in that account, create Sources for the ones you want to observe, and track instrumentation progress.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install Odigos Central">
+    Follow the [Central installation](/central/installation) guide.
+  </Step>
+  <Step title="Enable Cloud Connectors">
+    Set `cloudConnectors.enabled=true`. See [Enable Cloud Connectors](/cloud-connectors/enable).
+  </Step>
+  <Step title="Prepare cloud access">
+    Create a cloud identity (e.g. IAM role or service account) with only the permissions you want the connector to have. See [You control the access scope](#you-control-the-access-scope).
+  </Step>
+</Steps>
 
 ## Why use Cloud Connectors?
 
 - **Unified management** — Manage serverless and cloud workloads alongside Kubernetes clusters and VM hosts from the same Central UI
 - **Automatic discovery** — Surface instrumentable workloads in the account boundary without hunting for each resource by hand
 - **Flexible scale** — Instrument one workload or many at once from discovery; nothing is instrumented until you choose
-- **Less operational overhead** — Avoid manually attaching layers, agents, or env vars on every Lambda or Cloud Run service
+- **Less operational overhead** — Avoid manually attaching layers, agents, or env vars to every Lambda function or Fargate service
 - **Centralized credentials** — Cloud credentials live as Secrets in the Central cluster; one connector owns one account boundary for clear blast radius and ownership
+
+## You control the access scope
+
+Cloud Connectors do **not** get blanket access to your cloud environment. What each connector can discover and instrument is limited by the access you grant.
+
+<Info>
+  Scope is defined by your cloud permissions (e.g. IAM policies or service account
+  roles), plus the resource types you enable on the connector. Odigos only acts
+  within that boundary.
+</Info>
+
+Three layers work together:
+
+1. **Cloud credentials and permissions** — The role or service account you attach decides which APIs and resources the connector can call. Narrow policies mean a narrower discovery and instrumentation footprint.
+2. **Connector capabilities** — When you add a connector, you choose which resource types may be discovered and which may be instrumented (per-type capabilities).
+3. **Sources** — Even after discovery, nothing is instrumented until you create Sources for the workloads you select.
+
+Provider-specific permission lists are covered on the corresponding Add connector pages (for example [Add AWS](/cloud-connectors/add-connectors/add-aws-connector)).
+
+## Workloads and compute platforms
+
+Connectors organize resources into two domains:
+
+- **Workloads** — resources Odigos discovers and can instrument directly (for example AWS Lambda functions or ECS Fargate services).
+- **Compute platforms** — managed environments such as Amazon ECS clusters. These are reported for coverage only; the connector does not install an agent onto them, and they are not offered by the access levels in the Create Cloud Connector UI. To instrument ECS tasks on **EC2** container instances, use the [Odigos ECS Agent](/vmagent/ecs/overview).
+
+You choose which resource types to discover and instrument when you add a connector (per-type capabilities).
+
+## Odigos-managed vs. self-managed instrumentation
+
+When adding a connector, choose an instrumentation method for each workload type:
+
+| Discovery | Instrumentation | Mode | Who applies the change |
+| --- | --- | --- | --- |
+| On | On | **Odigos-managed (automatic)** | Odigos attaches instrumentation for you (for Lambda, the distro's layer(s), two environment variables, and tags on the function; for Fargate, a sidecar injected into the ECS task definition) and keeps it in place on every reconcile cycle. |
+| On | Off | **Self-managed (IaC)** | You apply the change yourself — CloudFormation, CDK, Terraform, or by hand. Odigos only discovers and reports status; it never modifies the resource. |
+| Off | — | Not discovered | The type is not surfaced at all. |
+
+Rather than using a dedicated mode toggle, Odigos controls access through per-type instrumentation settings. This ensures self-managed workloads are safe by default—Odigos cannot touch or configure a resource unless its instrumentation capability is active.
+
+<Tip>
+  Pick self-managed when your organization already provisions Lambda functions or ECS
+  task definitions through CloudFormation, CDK, or Terraform and you want that
+  pipeline to stay the source of truth. Pick Odigos-managed when you want instrumentation
+  applied and kept up to date without changing your IaC.
+</Tip>
+
+A self-managed workload shows as **Waiting for you to apply the instrumentation** until Odigos observes that you've applied its instrumentation, then it flips to **Instrumented** on its own — there is nothing to click on the Odigos side. If a self-managed workload is later disabled as a Source or its Source is deleted while your instrumentation is still applied, it reports an error rather than silently going dark — Odigos never removes instrumentation it did not apply, so taking it back out is yours to do.
+
+<Warning>
+  Instrument a given workload **one way, not both**. A function or service you
+  instrument yourself and also enable as an Odigos-managed Source is owned by
+  both sides — every IaC deploy reasserts your configuration, every Odigos
+  reconcile reasserts its own, and you get a new function version or task
+  revision on every round trip.
+</Warning>
+
+For AWS specifically, see [AWS Connector](/cloud-connectors/aws/overview) for how to instrument Lambda and Fargate yourself with CloudFormation or CDK, and how to preload artifacts into your own account first.
+
+## Resource coverage
+
+Current coverage includes the following providers and resource types. Additional providers may be added over time.
+
+| Provider | Discover | Instrument |
+| --- | --- | --- |
+| AWS Lambda (`aws.lambda`) | Yes | Yes — Odigos-managed or self-managed |
+| Amazon ECS Fargate tasks (`aws.fargate-task`) | Yes | Yes — Odigos-managed or self-managed |
+| Amazon ECS clusters (`aws.ecs-cluster`, `aws.fargate-cluster`) | Yes | n/a (coverage/grouping only). ECS on EC2 is instrumented by the [Odigos ECS Agent](/vmagent/ecs/overview) |
+| Odigos Collector on ECS Fargate (`aws.fargate-collector`) | Observes a Collector you deploy | Installs and manages it for you (optional); see [Regional Collector](/cloud-connectors/aws/regional-collector) |
+| GCP Cloud Run (`gcp.cloud-run`) | Yes | Yes |
+| GKE (`gcp.gke`) / Compute Engine (`gcp.gce`) | Yes | Coming soon |
+| MuleSoft CloudHub 2.0 shared spaces (`mulesoft.cloudhub2-app`) | Yes | Yes — Odigos-managed or self-managed |
+| MuleSoft CloudHub 2.0 private spaces (`mulesoft.private-space-app`) | Yes | Coming soon |
+| MuleSoft Runtime Fabric (`mulesoft.rtf-app`) | Yes | Coming soon |
+| MuleSoft hybrid servers (`mulesoft.hybrid-app`) | Yes | Configured per server by you |
+| MuleSoft Omni Gateway (`mulesoft.omni-gateway`) | Yes | Yes — Odigos-managed or self-managed on a Managed Omni Gateway; self-managed only on a gateway you host |
+
+## Supported languages
+
+Direct instrumentation depends on the workload type:
+
+| Workload | Supported languages |
+| --- | --- |
+| AWS Lambda (`aws.lambda`) | Java, Python, Node.js, Ruby |
+| Amazon ECS Fargate tasks (`aws.fargate-task`) | Java, Python, Node.js, .NET, PHP, Ruby |
+| GCP Cloud Run (`gcp.cloud-run`) | Java, Python, Node.js, .NET |
+| MuleSoft CloudHub 2.0 (`mulesoft.cloudhub2-app`) | Mule 4.11+ (metrics 4.12+), through Mule's built-in Direct Telemetry Stream |
+
+For Lambda you can choose which OpenTelemetry distro instruments each function: the full OpenTelemetry agent is the default for Java and the upstream OpenTelemetry layer for Node.js, Python, and Ruby, Java also offers lightweight handler wrappers, and Java, Node.js, and Python can run AWS ADOT instead. See [Lambda distros](/cloud-connectors/aws/workloads/lambda/distros).
+
+Other Lambda runtimes (for example Go or .NET) can still be discovered; they are not instrumented until support for those runtimes is added. On Fargate, Go and any other eBPF-based language cannot be instrumented at all — Fargate does not allow the privileged containers eBPF needs — and a task with no other instrumentable container is reported unsupported.
+
+Fargate PHP and Ruby support OTLP HTTP only. See [Telemetry export](#telemetry-export) for destination protocol limits.
+
+Not every language produces every signal. See [Destination signals](/cloud-connectors/instrument-workloads#destination-signals).
+
+## Telemetry export
+
+Instrumented workloads export OpenTelemetry data to an **OTLP endpoint** you configure on the connector. That endpoint must be reachable from the cloud environment (for example from your Lambda functions or Fargate tasks).
+
+Lambda and Fargate support **OTLP destinations only**. On the connector, the export target is the first enabled OTLP destination, and the signals you enable on it (logs, metrics, traces) decide what each workload exports. See [Destination signals](/cloud-connectors/instrument-workloads#destination-signals).
+
+- **Lambda** functions run a collector inside the Odigos layer. The function's SDK exports to that in-function collector, which forwards to your destination, or to the regional Collector when the function is attached to a VPC that can reach one.
+- **Fargate** tasks export **directly** to the destination, or through the regional Collector when one is set up in the task's region and the task can reach it. Without a regional Collector there is no node-local collector on ECS, so the destination endpoint must be reachable from the task's VPC.
+
+The **Odigos Managed Regional Collector** is an optional Collector that runs in your AWS account, one per region. See [Regional Collector](/cloud-connectors/aws/regional-collector).
+
+Protocol support for AWS Lambda: **OTLP gRPC and OTLP HTTP for every supported language**, because the in-function collector handles the export.
+
+Protocol support for Amazon ECS Fargate:
+
+- **Java, Python, Node.js, .NET** — prefer OTLP HTTP but honor OTLP gRPC if that's all the destination offers
+- **PHP, Ruby** — OTLP HTTP only; without an OTLP HTTP endpoint on the destination these languages cannot be instrumented at all
+
+GCP Cloud Run supports OTLP gRPC and OTLP HTTP.
+
+See [Add an OTLP destination](/cloud-connectors/instrument-workloads#add-an-otlp-destination). For how to add and configure destinations, see the [Destinations overview](/enterprise/backends-overview).
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card
+    title="Enable Cloud Connectors"
+    icon="toggle-on"
+    href="/cloud-connectors/enable"
+  >
+    Turn on the feature in Helm or the CLI, including Postgres settings.
+  </Card>
+  <Card
+    title="Add AWS connector"
+    icon="aws"
+    href="/cloud-connectors/add-connectors/add-aws-connector"
+  >
+    Connect an AWS account and discover Lambda and ECS resources.
+  </Card>
+  <Card
+    title="Add GCP connector"
+    icon="google"
+    href="/cloud-connectors/add-connectors/add-gcp-connector"
+  >
+    Connect a Google Cloud project and discover Cloud Run services.
+  </Card>
+  <Card
+    title="Add MuleSoft connector"
+    icon="plug"
+    href="/cloud-connectors/add-connectors/add-mulesoft-connector"
+  >
+    Connect an Anypoint organization and discover Mule applications.
+  </Card>
+  <Card
+    title="Instrument workloads"
+    icon="microchip"
+    href="/cloud-connectors/instrument-workloads"
+  >
+    Create Sources and track instrumentation after a connector is online.
+  </Card>
+  <Card
+    title="AWS Connector"
+    icon="aws"
+    href="/cloud-connectors/aws/overview"
+  >
+    Full AWS connector reference: flows, Lambda distros, the regional Collector, artifact preloading, and CDK/CloudFormation for every instrumentation type.
+  </Card>
+</CardGroup>
