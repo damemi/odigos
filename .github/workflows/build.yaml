@@ -4,13 +4,15 @@ on:
   merge_group:
   pull_request:
     branches: [main, "releases/**"]
+    # labeled/unlabeled re-run the build when a "build: no-cache" label is added or removed.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 jobs:
   build-and-test-autoscaler:
     name: build-and-test-autoscaler
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Build Autoscaler Image
@@ -54,7 +56,7 @@ jobs:
     name: build-agents
     runs-on: depot-ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Build Agents Image
@@ -97,34 +99,47 @@ jobs:
           path: /tmp/scan-results/odigos-agents.json
           retention-days: 30
 
-  build-and-test-instrumentor:
-    name: build-and-test-instrumentor
-    runs-on: ubuntu-latest
+  build-instrumentor:
+    name: build-instrumentor
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/build-push-action authenticate to Depot over OIDC;
+    # pull-requests lets resolve-build-labels read the PR's labels.
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
+    env:
+      IMAGE_TAG: pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v5
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - uses: actions/setup-go@v7
-        with:
-          go-version: "1.26.6"
+      - uses: actions/checkout@v7
+
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+
+      - uses: depot/setup-action@v1
+
+      # Builds on Depot's remote builder, whose persistent layer cache also
+      # keeps the Dockerfile's --mount=type=cache Go caches between runs.
       - name: Build Instrumentor Image
-        uses: docker/build-push-action@v7
+        uses: depot/build-push-action@v1
         with:
           platforms: linux/amd64
+          no-cache: ${{ steps.build-opts.outputs.no-cache }}
           push: false
-          tags: instrumentor:pr-${{ github.event.number || github.run_number }}
+          load: true
+          tags: instrumentor:${{ env.IMAGE_TAG }}
           provenance: false
           file: instrumentor/enterprise/Dockerfile
-          outputs: type=docker,dest=/tmp/instrumentor.tar
-      - name: Load Docker image for scanning
-        run: docker load -i /tmp/instrumentor.tar
+
       - name: Scan image for vulnerabilities
         id: scan-instrumentor
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          image: instrumentor:pr-${{ github.event.number || github.run_number }}
+          image: instrumentor:${{ env.IMAGE_TAG }}
           severity-cutoff: "CRITICAL"
         continue-on-error: true
+
       - name: Save instrumentor scan JSON
         if: always()
         env:
@@ -135,7 +150,8 @@ jobs:
             echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
             exit 1
           fi
-          jq --arg img "odigos-instrumentor" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-instrumentor.json
+          jq --arg img "odigos-instrumentor" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-instrumentor.json
+
       - name: Upload instrumentor scan results
         if: always()
         uses: actions/upload-artifact@v4
@@ -143,36 +159,120 @@ jobs:
           name: vuln-scan-result-instrumentor-${{ github.sha }}.json
           path: /tmp/scan-results/odigos-instrumentor.json
           retention-days: 30
-      - name: run tests
+
+  test-instrumentor:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: instrumentor/go.mod
+      - name: Test instrumentor module
         working-directory: ./instrumentor
         run: |
           make test
 
-  build-and-test-odigos-collector:
-    name: build-and-test-odigos-collector
-    runs-on: depot-ubuntu-24.04-8
+  build-insights:
+    name: build-insights
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/build-push-action authenticate to Depot over OIDC;
+    # pull-requests lets resolve-build-labels read the PR's labels.
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
+    env:
+      IMAGE_TAG: pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
     steps:
-      - uses: actions/checkout@v5
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: build Odigos Collector Image
-        uses: docker/build-push-action@v7
+      - uses: actions/checkout@v7
+
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+
+      - uses: depot/setup-action@v1
+
+      - name: Build Insights Image
+        uses: depot/build-push-action@v1
         with:
           platforms: linux/amd64
+          no-cache: ${{ steps.build-opts.outputs.no-cache }}
           push: false
-          tags: odigos-collector:pr-${{ github.event.number || github.run_number }}
+          load: true
+          tags: insights:${{ env.IMAGE_TAG }}
+          provenance: false
+          file: insights/Dockerfile
+          context: .
+
+      - name: Scan image for vulnerabilities
+        id: scan-insights
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          image: insights:${{ env.IMAGE_TAG }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save insights scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan-insights.outputs.results-file }}
+        run: |
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-insights" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-insights.json
+
+      - name: Upload insights scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-insights-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-insights.json
+          retention-days: 30
+
+  build-odigos-collector:
+    name: build-odigos-collector
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/build-push-action authenticate to Depot over OIDC;
+    # pull-requests lets resolve-build-labels read the PR's labels.
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
+    env:
+      IMAGE_TAG: pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+
+      - uses: depot/setup-action@v1
+
+      # Builds on Depot's remote builder, whose persistent layer cache also
+      # keeps the Dockerfile's --mount=type=cache Go caches between runs.
+      - name: Build Odigos Collector Image
+        uses: depot/build-push-action@v1
+        with:
+          platforms: linux/amd64
+          no-cache: ${{ steps.build-opts.outputs.no-cache }}
+          push: false
+          load: true
+          tags: odigos-collector:${{ env.IMAGE_TAG }}
           provenance: false
           file: collector/enterprise/Dockerfile
-          outputs: type=docker,dest=/tmp/odigos-collector.tar
-      - name: Load Docker image for scanning
-        run: docker load -i /tmp/odigos-collector.tar
+
       - name: Scan image for vulnerabilities
         id: scan-collector
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          image: odigos-collector:pr-${{ github.event.number || github.run_number }}
+          image: odigos-collector:${{ env.IMAGE_TAG }}
           severity-cutoff: "CRITICAL"
         continue-on-error: true
+
       - name: Save collector scan JSON
         if: always()
         env:
@@ -183,7 +283,8 @@ jobs:
             echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
             exit 1
           fi
-          jq --arg img "odigos-collector" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-collector.json
+          jq --arg img "odigos-collector" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-collector.json
+
       - name: Upload collector scan results
         if: always()
         uses: actions/upload-artifact@v4
@@ -191,7 +292,17 @@ jobs:
           name: vuln-scan-result-collector-${{ github.sha }}.json
           path: /tmp/scan-results/odigos-collector.json
           retention-days: 30
-      - name: run tests
+
+  # The collector has no root go.mod; take the Go version from the module
+  # that builds the collector binary.
+  test-odigos-collector:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: collector/enterprise/odigosotelcol/go.mod
+      - name: Test collector modules
         working-directory: ./collector
         run: |
           make test
@@ -200,7 +311,7 @@ jobs:
     name: build-and-test-odiglet
     runs-on: depot-ubuntu-24.04-2
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Set up QEMU
@@ -262,7 +373,7 @@ jobs:
     env:
       NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # webapp is scanned separately because it runs with yarn, while the rest of the frontend runs with golang.
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -353,7 +464,7 @@ jobs:
     name: build-operator
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
       - name: Build Operator Image
@@ -401,8 +512,9 @@ jobs:
     needs:
       - build-and-test-autoscaler
       - build-agents
-      - build-and-test-instrumentor
-      - build-and-test-odigos-collector
+      - build-instrumentor
+      - build-insights
+      - build-odigos-collector
       - build-and-test-odiglet
       - build-frontend
       - build-operator
@@ -436,7 +548,7 @@ jobs:
   build-cli:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
@@ -450,7 +562,7 @@ jobs:
   test-k8sutils:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.6"
@@ -462,7 +574,7 @@ jobs:
   test-common:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.6"
@@ -474,7 +586,7 @@ jobs:
   test-procdiscovery:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.6"
@@ -486,7 +598,7 @@ jobs:
   test-destinations:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.6"
@@ -516,7 +628,7 @@ jobs:
           - collector/enterprise/processors/odigosvmprofileattrsprocessor
           - collector/enterprise/receivers/odigosebpfreceiver
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.6"
