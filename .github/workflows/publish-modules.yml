@@ -472,3 +472,93 @@ jobs:
           success-description: "Odigos image ${{ matrix.image }}${{ matrix.extended && ' (extended)' || '' }} released successfully"
           failure-description: "ERROR: Odigos image ${{ matrix.image }}${{ matrix.extended && ' (extended)' || '' }} release failed"
           tag: ${{ steps.extract_tag.outputs.tag }}
+
+  # odigos-enterprise triggered the CLI and Helm chart release (release.yml) after publishing its images. Tags that
+  # carry Central and the cloud connectors are released only from this repo, so this repo triggers it once its images
+  # are published; older tags still get it from odigos-enterprise.
+  trigger-cli-release:
+    needs: [decide, publish-images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check whether this repo releases the tag
+        id: layout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "repos/${REPO}/contents/central-backend?ref=${TAG}" --silent 2>/dev/null; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${TAG} predates the move; odigos-enterprise triggers its CLI release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # promote-rc-to-stable already dispatches release_cli for a first stable; a second run would fail on the
+      # CLI archives it already uploaded.
+      - name: Skip CLI dispatch if GitHub release already has CLI assets
+        if: steps.layout.outputs.release == 'true'
+        id: skip-cli
+        env:
+          TAG: ${{ needs.decide.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          VERSION="${TAG#v}"
+          EXPECTED=(
+            "cli_${VERSION}_darwin_amd64.tar.gz"
+            "cli_${VERSION}_darwin_arm64.tar.gz"
+            "cli_${VERSION}_linux_amd64.tar.gz"
+            "cli_${VERSION}_linux_arm64.tar.gz"
+            "cli_${VERSION}_windows_amd64.tar.gz"
+            "cli_${VERSION}_windows_arm64.tar.gz"
+            "checksums.txt"
+          )
+          if ! assets=$(gh api "repos/${REPO}/releases/tags/${TAG}" --jq '[.assets[].name]' 2>/dev/null); then
+            echo "No GitHub release for $TAG — will trigger CLI release"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          missing=()
+          for name in "${EXPECTED[@]}"; do
+            if ! jq -e --arg n "$name" 'index($n) != null' <<< "$assets" >/dev/null; then
+              missing+=("$name")
+            fi
+          done
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "CLI archives already on $TAG — skipping duplicate CLI trigger"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Missing CLI assets on $TAG: ${missing[*]} — will trigger CLI release"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get sts token to trigger the release
+        if: steps.layout.outputs.release == 'true' && steps.skip-cli.outputs.skip != 'true'
+        id: sts-release
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: trigger-release
+          output-git-config: "false"
+
+      - name: Trigger CLI and Helm chart release
+        if: steps.layout.outputs.release == 'true' && steps.skip-cli.outputs.skip != 'true'
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ steps.sts-release.outputs.GH_TOKEN }}
+          repository: odigos-io/odigos
+          event-type: release_cli
+          client-payload: '{"tag": "${{ needs.decide.outputs.tag }}"}'
+
+      - name: Notify Slack
+        if: always() && steps.layout.outputs.release == 'true'
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        with:
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: ${{ steps.skip-cli.outputs.skip == 'true' && 'All Odigos images published. CLI GitHub release already has assets; skipped duplicate CLI trigger' || 'All Odigos images published. Triggered the CLI and Helm chart release' }}
+          failure-description: "ERROR: failed to trigger the CLI and Helm chart release"
+          tag: ${{ needs.decide.outputs.tag }}
