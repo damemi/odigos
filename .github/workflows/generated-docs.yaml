@@ -16,6 +16,8 @@ jobs:
           go work init && go work use -r .
           # odiglet/enterprise needs private instrumentation repos this job cannot download.
           go work edit -dropuse=./odiglet/enterprise
+          # The cloud connector modules read the private agents-api module.
+          go work edit -dropuse=./connectors/base -dropuse=./connectors/providers/aws -dropuse=./connectors/providers/azure -dropuse=./connectors/providers/gcp -dropuse=./connectors/providers/mulesoft -dropuse=./connector-opamp-gateway
           cd api
           make docgen
       - name: Check for changes in CRD API docs
