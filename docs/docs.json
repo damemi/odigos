@@ -55,6 +55,7 @@
                     "pages": [
                       "enterprise/setup/installation",
                       "enterprise/setup/installation-options",
+                      "enterprise/setup/helm-values",
                       "enterprise/setup/docker-registry",
                       "enterprise/setup/odigos-with-argocd",
                       "enterprise/setup/odigos-with-karpenter"
@@ -435,6 +436,7 @@
               "central/architecture",
               "central/prerequisites",
               "central/installation",
+              "central/helm-values",
               "central/ui",
               {
                 "group": "Adding Connections",

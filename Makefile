@@ -78,6 +78,10 @@ lint-fix: lint
 rbac-docs:
 	cd scripts/rbac-docgen && go run main.go
 
+.PHONY: helm-values-docs
+helm-values-docs:
+	./scripts/helm-values-docgen.sh
+
 TOOLS_DIR := .tools
 HELM_SCHEMA_VERSION := latest
 HELM_SCHEMA_BIN := $(TOOLS_DIR)/helm-schema

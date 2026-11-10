@@ -62,6 +62,22 @@ jobs:
             exit 1
           fi
 
+  check-helm-values-doc-change:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Generate Helm values docs
+        run: |
+          make helm-values-docs
+      - name: Check for changes in Helm values docs
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            git diff
+            echo "Helm values docs need to be updated. Please run 'make helm-values-docs', then commit the changes."
+            exit 1
+          fi
+
   check-destination-doc-change:
     runs-on: ubuntu-latest
     steps:
