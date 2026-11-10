@@ -77,18 +77,21 @@ At this point, odigos is installed in your cluster. You can now add sources and 
 
 ## Helm Chart
 
-### Add Helm Repository
+### Log In to the Odigos Registry
+
+The Odigos Helm charts are hosted as OCI artifacts on the private registry `registry.odigos.io`. Log in with your on-prem token. The username is always `odigos`; the password is your on-prem token:
 
 ```shell
-helm repo add odigos https://odigos-io.github.io/odigos/
+echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
 ```
 
 ### Install Odigos
 
 ```shell
-helm repo update
-helm upgrade --install odigos odigos/odigos --namespace odigos-system --create-namespace --set onPremToken=$ODIGOS_TOKEN
+helm upgrade --install odigos oci://registry.odigos.io/charts/odigos --namespace odigos-system --create-namespace --set onPremToken=$ODIGOS_TOKEN
 ```
+
+To install a specific version, add `--version <VERSION>` (for example `--version 1.40.0`, without a leading `v`).
 
 The license token can also be provided by creating a secret in kubernetes before installing Odigos.
 

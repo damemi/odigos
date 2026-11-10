@@ -156,7 +156,7 @@ odigos set config karpenter-enabled=true
 If installing or upgrading using helm:
 
 ```bash
-helm upgrade --install odigos odigos/odigos \
+helm upgrade --install odigos oci://registry.odigos.io/charts/odigos \
   --namespace odigos-system \
   --set karpenter.enabled=true
 ```

@@ -65,18 +65,17 @@ odigos upgrade
 <Tabs>
   <Tab title="Upgrade to Latest Version">
     ```shell
-    helm repo update
-    helm upgrade odigos odigos/odigos --namespace odigos-system
+    echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+    helm upgrade odigos oci://registry.odigos.io/charts/odigos --namespace odigos-system
     ```
   </Tab>
   <Tab title="Upgrade to Specific Version">
     ```shell
-    helm repo update
-    helm search repo odigos --versions ## list all available versions
-    helm upgrade --install odigos odigos/odigos \
-    --namespace odigos-test \
+    echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+    helm upgrade --install odigos oci://registry.odigos.io/charts/odigos \
+    --namespace odigos-system \
     --create-namespace \
-    --version <VERSION>
+    --version <VERSION> ## without a leading "v", e.g. 1.40.0
     ```
   </Tab>
 </Tabs>

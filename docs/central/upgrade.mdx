@@ -31,8 +31,8 @@ odigos pro central upgrade --version v1.2.0 --yes
 ## Using Helm
 
 ```bash
-helm repo update
-helm upgrade odigos-central odigos/odigos-central \
+echo "<token>" | helm registry login registry.odigos.io -u odigos --password-stdin
+helm upgrade odigos-central oci://registry.odigos.io/charts/odigos-central \
   --namespace odigos-central \
   --reuse-values \
   --version <chart-version>

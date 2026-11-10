@@ -11,7 +11,7 @@ Profiling is an **opt-in** feature controlled by a single Helm value.
 Set `profiling.enabled=true` when installing or upgrading Odigos (enterprise installs also require your on‑prem token, same as a normal Odigos install):
 
 ```bash
-helm upgrade --install odigos odigos/odigos \
+helm upgrade --install odigos oci://registry.odigos.io/charts/odigos \
   --namespace odigos-system \
   --create-namespace \
   --set onPremToken=$ODIGOS_ONPREM_TOKEN \

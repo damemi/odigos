@@ -31,7 +31,7 @@ The metrics store is disabled by default to keep the Odigos footprint minimal on
   </Tab>
   <Tab title="Helm command">
     ```bash
-    helm upgrade --install odigos odigos/odigos \
+    helm upgrade --install odigos oci://registry.odigos.io/charts/odigos \
       --namespace odigos-system \
       --reuse-values \
       --set ownTelemetry.metricsStore.disabled=false

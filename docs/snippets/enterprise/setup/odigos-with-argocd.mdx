@@ -8,21 +8,38 @@ Before you begin, make sure you have:
 * Argo CD installed and configured in the cluster
 * Helm CLI installed (optional but useful for inspection and verification)
 
-## Step 1: Add the Odigos Helm Repository
+## Step 1: Give Argo CD Access to the Odigos Registry
 
-Add the Odigos Helm repository to your Helm configuration:
+The Odigos Helm chart is hosted as an OCI artifact on the private registry `registry.odigos.io`. Create an Argo CD repository secret so Argo CD can pull it. The username is always `odigos`; the password is your on-prem token:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: odigos-helm-registry
+  namespace: <ARGOCD_NAMESPACE>  # <- Replace with your Argo CD namespace
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  type: helm
+  name: odigos
+  url: registry.odigos.io/charts
+  enableOCI: "true"
+  username: odigos
+  password: <TOKEN>
+```
 
 ```bash
-helm repo add odigos https://odigos-io.github.io/odigos --force-update
-helm repo update
+kubectl apply -f odigos-helm-registry.yaml
 ```
 
 ## Step 2: Identify the Helm Chart Version
 
-Check available versions of the Odigos chart to determine the desired `targetRevision`:
+Choose the chart version to use as `targetRevision`, without a leading `v` (for example `1.40.0`). To see the latest version, log in with Helm and show the chart:
 
 ```bash
-helm search repo odigos --versions
+echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+helm show chart oci://registry.odigos.io/charts/odigos | grep '^version:'
 ```
 
 ## Step 3: Define the Argo CD Application Manifest
@@ -41,9 +58,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://odigos-io.github.io/odigos
+    repoURL: registry.odigos.io/charts
     chart: odigos
-    targetRevision:  # REQUIRED: set the version from 'helm search repo odigos --versions'
+    targetRevision:  # REQUIRED: set the chart version from Step 2
     helm:
       releaseName: odigos
       values: |
