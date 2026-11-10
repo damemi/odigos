@@ -233,8 +233,8 @@ odigos install --image-prefix=$CUSTOM_DOCKER_REGISTRY --onprem-token $ODIGOS_TOK
   </Tab>
   <Tab title="Helm Chart">
 ```bash
-helm repo update
-helm upgrade --install odigos odigos/odigos --namespace odigos-system --create-namespace --set imagePrefix=$CUSTOM_DOCKER_REGISTRY --set onPremToken=$ODIGOS_TOKEN
+echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+helm upgrade --install odigos oci://registry.odigos.io/charts/odigos --namespace odigos-system --create-namespace --set imagePrefix=$CUSTOM_DOCKER_REGISTRY --set onPremToken=$ODIGOS_TOKEN
 kubectl label namespace odigos-system odigos.io/system-object="true"
 ```
   </Tab>

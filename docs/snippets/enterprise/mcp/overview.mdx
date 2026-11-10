@@ -73,7 +73,7 @@ Control MCP behavior during install or upgrade:
     ```
 
     ```bash
-    helm upgrade odigos odigos/odigos \
+    helm upgrade odigos oci://registry.odigos.io/charts/odigos \
       --namespace odigos-system \
       --reuse-values \
       --set ui.mcpAccessMode=read-write

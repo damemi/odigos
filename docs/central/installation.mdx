@@ -44,12 +44,11 @@ You can install Odigos Central using the CLI or Helm chart.
 
   </Tab>
   <Tab title="Helm">
-    Add the Odigos Helm repository and install:
+    The Odigos Helm charts are hosted as OCI artifacts on the private registry `registry.odigos.io`. Log in with your on-prem token (the username is always `odigos`), then install:
 
     ```bash
-    helm repo add odigos https://odigos-io.github.io/odigos/
-    helm repo update
-    helm upgrade --install odigos-central odigos/odigos-central \
+    echo "<token>" | helm registry login registry.odigos.io -u odigos --password-stdin
+    helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
       --namespace odigos-central \
       --create-namespace \
       --set onPremToken=<token>
@@ -94,7 +93,7 @@ You can install Odigos Central using the CLI or Helm chart.
 
     Then install with:
     ```bash
-    helm upgrade --install odigos-central odigos/odigos-central \
+    helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
       --namespace odigos-central \
       --create-namespace \
       -f values.yaml
@@ -147,7 +146,7 @@ docker push $CUSTOM_DOCKER_REGISTRY/keycloak:$KEYCLOAK_TAG
 ```
 
 ```bash
-helm upgrade --install odigos-central odigos/odigos-central \
+helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
   --namespace odigos-central \
   --create-namespace \
   --set onPremToken=$ODIGOS_TOKEN \
@@ -207,7 +206,7 @@ Cloud Connectors are disabled by default. To discover and instrument cloud workl
   </Tab>
   <Tab title="Helm">
     ```bash
-    helm upgrade --install odigos-central odigos/odigos-central \
+    helm upgrade --install odigos-central oci://registry.odigos.io/charts/odigos-central \
       --namespace odigos-central \
       --reuse-values \
       --set cloudConnectors.enabled=true \

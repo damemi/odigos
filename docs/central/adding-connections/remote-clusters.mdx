@@ -52,7 +52,7 @@ Set **`centralProxy.centralBackendURL`** (and **`clusterName`**). That URL is wh
     Then install:
 
     ```bash
-    helm upgrade --install odigos odigos/odigos \
+    helm upgrade --install odigos oci://registry.odigos.io/charts/odigos \
       --namespace odigos-system \
       --create-namespace \
       -f values.yaml

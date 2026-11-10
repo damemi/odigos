@@ -45,8 +45,8 @@ To get started with OIDC, you need to configure the Odigos UI to use an external
         Alternatively, you can use the `--set` flag when installing/upgrading the Odigos Helm chart:
 
         ```bash
-        helm repo update
-        helm upgrade odigos odigos/odigos --namespace odigos-system --set ui.oidcTenantUrl=<value> --set ui.oidcClientId=<value> --set ui.oidcClientSecret=<value>
+        echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+        helm upgrade odigos oci://registry.odigos.io/charts/odigos --namespace odigos-system --set ui.oidcTenantUrl=<value> --set ui.oidcClientId=<value> --set ui.oidcClientSecret=<value>
         ```
       </Tab>
     </Tabs>
@@ -73,8 +73,8 @@ To get started with OIDC, you need to configure the Odigos UI to use an external
         Alternatively, you can use the `--set` flag when installing/upgrading the Odigos Helm chart:
 
         ```bash
-        helm repo update
-        helm upgrade odigos odigos/odigos --namespace odigos-system --set ui.uiRemoteUrl=<value>
+        echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+        helm upgrade odigos oci://registry.odigos.io/charts/odigos --namespace odigos-system --set ui.uiRemoteUrl=<value>
         ```
       </Tab>
     </Tabs>
