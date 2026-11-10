@@ -1,0 +1,29 @@
+export const ROUTES = {
+  // Out-of-proxy pages
+  ROOT: '/',
+  SIGN_IN: '/signin',
+  UPDATE_YOUR_PASSWORD: '/update-password',
+  ACCESS_MANAGEMENT: '/access-management',
+  CONNECTIONS: '/connections',
+
+  // In-proxy pages
+  OVERVIEW: '/overview',
+  SERVICE_MAP: '/service-map',
+  COLLECTORS: '/collectors',
+  SAMPLING: '/sampling',
+  PROFILING: '/profiling',
+  URL_TEMPLATIZATION: '/url-templatization',
+  INSTRUMENTATION_AGENTS: '/instrumentation-agents',
+  SETTINGS: '/settings',
+};
+
+const ORIGIN = typeof window !== 'undefined' ? window.location.origin : '';
+const WS_ORIGIN = typeof window !== 'undefined' ? `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}` : '';
+
+export const API = {
+  GRAPHQL_WS: `${WS_ORIGIN}/graphql`,
+  GRAPHQL_HTTP: `${ORIGIN}/graphql`,
+  SSE_EVENTS: `${ORIGIN}/sse/events`,
+};
+
+export const getSSEEventsUrl = (clusterID: string) => `${ORIGIN}/sse/events?clusterID=${encodeURIComponent(clusterID)}`;

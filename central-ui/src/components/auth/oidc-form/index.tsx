@@ -1,0 +1,207 @@
+import React, { useState, type Dispatch, type SetStateAction, useMemo } from 'react';
+import styled from 'styled-components';
+import { StatusType } from '@odigos/ui-kit/types';
+import { VSquareIcon } from '@odigos/ui-kit/icons';
+import * as STRINGS from '@/utils/constants/strings';
+import { useGenericForm } from '@odigos/ui-kit/hooks';
+import { VisualGreenRings } from '@odigos/ui-kit/visuals';
+import { FlexColumn, Tooltip } from '@odigos/ui-kit/components';
+import { AUTH_PROVIDERS, isOidcTenantIdRequired } from '@/utils/constants/auth-providers';
+import { LoginTypeSegment } from '@/components/auth/login-type-segment';
+import { Button, ButtonTab, CliCommand, Input, Note } from '@odigos/ui-kit/components';
+import { ConstrainedWidth, ErrorText, FormContainer, FormSubtitle, FormTitle } from '../styled';
+import { AuthProviderId, LoginType, OidcIdentityProviderInput, EnsureOidcIdentityProvider } from '@/types';
+
+interface OidcFormProps {
+  providerId: AuthProviderId;
+  loading?: boolean;
+  error?: string;
+  onCreate: EnsureOidcIdentityProvider;
+  isCreateSuccess: boolean;
+  setIsCreateSuccess: Dispatch<SetStateAction<boolean>>;
+  onLogin: (providerId: AuthProviderId, loginType: LoginType) => void;
+  onLoginTypeChange: (loginType: LoginType) => void;
+}
+
+const VisualWrapper = styled.div`
+  margin: 36px 0;
+`;
+
+const FullWidthTooltip = styled.div`
+  width: 100%;
+  & > div {
+    width: 100%;
+  }
+`;
+
+type OidcFormField = {
+  name: keyof OidcIdentityProviderInput;
+  type?: string;
+  label: string;
+  tooltip: string;
+  required: boolean;
+};
+
+const OIDC_FORM_FIELDS: OidcFormField[] = [
+  {
+    name: 'discoveryUrl',
+    label: STRINGS.DISCOVERY_URL,
+    tooltip: STRINGS.DISCOVERY_URL_TOOLTIP,
+    required: true,
+  },
+  {
+    name: 'tenantId',
+    label: STRINGS.TENANT_ID,
+    tooltip: STRINGS.TENANT_ID_TOOLTIP,
+    required: false, // computed dynamically from discovery URL / provider
+  },
+  {
+    name: 'clientId',
+    label: STRINGS.CLIENT_ID,
+    tooltip: STRINGS.CLIENT_ID_TOOLTIP,
+    required: true,
+  },
+  {
+    name: 'clientSecret',
+    type: 'password',
+    label: STRINGS.CLIENT_SECRET,
+    tooltip: STRINGS.CLIENT_SECRET_TOOLTIP,
+    required: true,
+  },
+];
+
+const OidcForm: React.FC<OidcFormProps> = ({ providerId, loading, error, onCreate, isCreateSuccess, setIsCreateSuccess, onLogin, onLoginTypeChange }) => {
+  const [callbackUrl, setCallbackUrl] = useState<string | undefined>();
+  const [hasCopiedCallbackUrl, setHasCopiedCallbackUrl] = useState(false);
+  const provider = useMemo(() => AUTH_PROVIDERS.find((p) => p.providerId === providerId), [providerId]);
+
+  const { formData, handleFormChange, formErrors, handleErrorChange } = useGenericForm<OidcIdentityProviderInput>({
+    providerId,
+    clientId: '',
+    clientSecret: '',
+    discoveryUrl: provider?.discoveryUrl || '',
+    tenantId: '',
+  });
+
+  const tenantIdRequired = isOidcTenantIdRequired(formData.discoveryUrl, providerId);
+
+  const validateForm = (values: typeof formData): boolean => {
+    const errors: typeof formErrors = {};
+
+    if (!values.clientId) {
+      errors.clientId = STRINGS.CLIENT_ID_REQUIRED;
+    }
+    if (!values.clientSecret) {
+      errors.clientSecret = STRINGS.CLIENT_SECRET_REQUIRED;
+    }
+    if (!values.discoveryUrl) {
+      errors.discoveryUrl = STRINGS.DISCOVERY_URL_REQUIRED;
+    }
+    if (isOidcTenantIdRequired(values.discoveryUrl, providerId) && !values.tenantId) {
+      errors.tenantId = STRINGS.TENANT_ID_REQUIRED;
+    }
+
+    handleErrorChange(undefined, undefined, errors);
+    const isValid = Object.keys(errors).length === 0;
+    return isValid;
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    const isValid = validateForm(formData);
+    if (!isValid) return;
+
+    const res = await onCreate(formData);
+    if (res?.success) {
+      setCallbackUrl(res.callbackUrl);
+      setIsCreateSuccess(true);
+      // if we want to auto-redirect to the login page after creating the provider, we can do it here
+      // onLogin(providerId);
+    }
+  };
+
+  if (provider && isCreateSuccess) {
+    return (
+      <FormContainer $gap={59}>
+        <FlexColumn $alignItems='center'>
+          <VisualWrapper>
+            <VisualGreenRings scale={2.8} icon={VSquareIcon} />
+          </VisualWrapper>
+
+          <FlexColumn $gap={16}>
+            <FormTitle>{STRINGS.PROVIDER_CREATED_SUCCESS}</FormTitle>
+            <FormSubtitle>{STRINGS.PROVIDER_CREATED_SUCCESS_SUBTITLE(provider.displayName)}</FormSubtitle>
+          </FlexColumn>
+        </FlexColumn>
+
+        <ConstrainedWidth>
+          <FlexColumn $gap={16}>
+            {callbackUrl && (
+              <FlexColumn $gap={8}>
+                <Note status={StatusType.Default} message={STRINGS.CALLBACK_URL_INSTRUCTIONS(provider.displayName)} />
+                <CliCommand value={callbackUrl} onDone={() => setHasCopiedCallbackUrl(true)} />
+              </FlexColumn>
+            )}
+
+            <FlexColumn $gap={8}>
+              <FullWidthTooltip>
+                <Tooltip text={!!callbackUrl && !hasCopiedCallbackUrl ? STRINGS.COPY_CALLBACK_URL_TOOLTIP : undefined}>
+                  <ButtonTab
+                    label={`${STRINGS.LOGIN_WITH} ${provider.displayName}`}
+                    icon={provider.icon}
+                    loading={loading}
+                    disabled={!!callbackUrl && !hasCopiedCallbackUrl}
+                    onClick={() => onLogin(provider.providerId, LoginType.OIDC)}
+                  />
+                </Tooltip>
+              </FullWidthTooltip>
+              <Note status={StatusType.Default} message={STRINGS.PROVIDER_REDIRECT_NOTICE(provider.displayName)} />
+            </FlexColumn>
+          </FlexColumn>
+        </ConstrainedWidth>
+      </FormContainer>
+    );
+  }
+
+  return (
+    <FormContainer $gap={41} onSubmit={handleSubmit}>
+      <FlexColumn $gap={16}>
+        <FormTitle>{STRINGS.CREATE_PROVIDER}</FormTitle>
+        <FormSubtitle>{STRINGS.CREATE_PROVIDER_SUBTITLE}</FormSubtitle>
+      </FlexColumn>
+
+      <ConstrainedWidth>
+        <FlexColumn $gap={12}>
+          <LoginTypeSegment selected={LoginType.OIDC} setSelected={onLoginTypeChange} />
+          <Note status={StatusType.Default} message={STRINGS.SIGN_UP_ADMIN_DISCLAIMER} />
+          {OIDC_FORM_FIELDS.map((field) => {
+            const required = field.name === 'tenantId' ? tenantIdRequired : field.required;
+            const tooltip =
+              field.name === 'tenantId' ? (tenantIdRequired ? STRINGS.TENANT_ID_TOOLTIP : STRINGS.TENANT_ID_OPTIONAL_TOOLTIP) : field.tooltip;
+            return (
+              <Input
+                key={field.name}
+                type={field.type}
+                name={field.name}
+                value={formData[field.name]}
+                onChange={(e) => handleFormChange(e.target.name, e.target.value)}
+                errorMessage={formErrors[field.name]}
+                label={field.label}
+                tooltip={tooltip}
+                required={required}
+              />
+            );
+          })}
+        </FlexColumn>
+      </ConstrainedWidth>
+
+      <FlexColumn>
+        {error && <ErrorText>{error}</ErrorText>}
+        <Button type='submit' loading={loading} label={STRINGS.CREATE_PROVIDER} />
+      </FlexColumn>
+    </FormContainer>
+  );
+};
+
+export { OidcForm, type OidcFormProps };

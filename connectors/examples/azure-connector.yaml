@@ -1,0 +1,88 @@
+# OdigosCloudConnector installs one Azure connector runtime (one subscription boundary).
+#
+# Everything provider-specific is declared in the connector spec (connectors/spec/data/azure.yaml),
+# not in this CR — the CR only references it:
+#   spec.account.id              -> the connector.field "subscriptionId" (stamped as ODIGOS_AZURE_SUBSCRIPTION_ID)
+#   spec.workloads / spec.computePlatforms -> per-type discovery/instrumentation allow-lists (see below)
+#   the credentials Secret keys  -> auth.methods[].fields[].name (see below)
+# The connector scans every resource group in the subscription; there is no resource-group selection.
+#
+# How credentials flow (no Azure-specific wiring in the controller beyond the boundary env):
+#   1. The keys in the Secret below match the spec's auth field NAMES (tenantId/clientId/clientSecret).
+#   2. connector-runtime reads the spec and, for each auth field, injects its Secret value into the
+#      env var the field declares (envVar), e.g. clientId -> AZURE_CLIENT_ID.
+#   3. central-backend's testConnectionForCloudConnector runs the same checks in-memory (credentials
+#      keyed by these same field names) BEFORE this CR/Secret is applied; on success you apply this.
+#
+# Apply the credentials Secret in the same namespace before (or with) this CR.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: odigos-connector-azure-prod-credentials
+  namespace: odigos-central
+type: Opaque
+stringData:
+  # Provide the keys for exactly ONE auth path (keys = connectors/spec/data/azure.yaml auth.methods[].fields[].name).
+  # Leave the Secret empty to use workload-identity (Azure Workload Identity / Managed Identity) — no keys required.
+  #
+  # --- service-principal ---
+  # tenantId: "00000000-0000-0000-0000-000000000001"
+  # clientId: "00000000-0000-0000-0000-000000000002"
+  # clientSecret: "replace-me"
+---
+apiVersion: odigos.io/v1alpha1
+kind: OdigosCloudConnector
+metadata:
+  name: azure-prod
+  namespace: odigos-central
+  labels:
+    odigos.io/platform-type: connector
+    odigos.io/provider: azure
+  annotations:
+    odigos.io/deletion-policy: cleanup
+spec:
+  provider: azure
+  displayName: Azure Production
+
+  # Provider boundary -> connectors/spec/data/azure.yaml connector.field "subscriptionId". The connector
+  # scans every resource group in the subscription, so there is no resource-group selection here.
+  account:
+    id: "00000000-0000-0000-0000-000000000000"
+    displayName: Odigos Azure subscription
+
+  # Credentials live in a Secret — never in the CR. Supported auth paths (connectors/spec/data/azure.yaml
+  # auth.methods); the keys provided in the Secret select which one applies:
+  #   workload-identity  — Azure Workload Identity / Managed Identity; no keys required
+  #   service-principal  — tenantId + clientId + clientSecret
+  credentialsSecretRef:
+    name: odigos-connector-azure-prod-credentials
+
+  # Connector runtime image. For local/dev this is the image you built + loaded into kind (README:
+  # `make build-connector-azure load-to-kind-connector-azure TAG=dev`). In a managed install the controller
+  # supplies a default via CONNECTOR_AZURE_IMAGE and you can omit this block.
+  runtime:
+    image: registry.odigos.io/odigos-enterprise-connector-azure:dev
+
+# Per-type allow-lists, split into the two domains (mirrors connectors/spec/data/azure.yaml). The connector
+# intersects these with the types its spec supports; a type it does not support is ignored.
+#
+# Workloads — directly-instrumentable resources:
+#   discovery       — enumerate workloads of this type (azure.container-apps)
+#   instrumentation — instrument them in place (not built yet; leave unset or true — reports NotImplemented)
+  workloads:
+    - type: azure.container-apps
+      discovery: true
+      instrumentation: true
+
+# ComputePlatforms — managed environments (azure.aks, azure.vm):
+#   discovery    — detect compute platforms of this type
+#   installation — install a separate Odigos agent onto one (not supported yet; leave unset)
+  computePlatforms:
+    - type: azure.aks
+      discovery: true
+    - type: azure.vm
+      discovery: true
+
+  discovery:
+    refreshInterval: 10m

@@ -1,0 +1,576 @@
+package services
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/odigos-io/central-backend/graph/model"
+	"github.com/odigos-io/central-backend/internal/keycloak"
+	"github.com/odigos-io/central-backend/internal/logger"
+	"github.com/odigos-io/central-backend/internal/utils"
+)
+
+type UserService struct {
+	adminService *AdminService
+	kcUser       *keycloak.KeycloakUserService
+	kcTeam       *keycloak.KeycloakTeamService
+}
+
+func NewUserService(adminService *AdminService) *UserService {
+	return &UserService{
+		adminService: adminService,
+		kcUser:       keycloak.NewKeycloakUserService(),
+		kcTeam:       keycloak.NewKeycloakTeamService(),
+	}
+}
+
+func (svc *UserService) CheckUserExists(email string) (bool, error) {
+	exists := false
+	err := svc.adminService.WithAdminToken(func(adminToken string) error {
+		users, err := svc.kcUser.FindUsersByEmail(adminToken, email)
+		if err != nil {
+			return err
+		}
+		exists = len(users) > 0
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func (svc *UserService) CreateUser(ctx context.Context, input *model.WriteUserInput) (*model.CreateUserResult, error) {
+	email := input.Email
+	role := input.Role
+
+	if email == nil {
+		return nil, fmt.Errorf("email is required")
+	}
+	if role == nil {
+		return nil, fmt.Errorf("role is required")
+	}
+
+	userExists, err := svc.CheckUserExists(*email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate user email: %w", err)
+	}
+	if userExists {
+		return nil, fmt.Errorf("user with email '%s' already exists", *email)
+	}
+
+	tempPassword, generatedPassword := svc.preparePassword(input.Password)
+
+	// AddUserToRealm is the call that 401s when the cached admin token's session
+	// is gone. Retry once with a new grant, then reuse that token below.
+	err = svc.adminService.WithAdminToken(func(token string) error {
+		return svc.kcUser.AddUserToRealm(token, *email, *email, tempPassword)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user in Keycloak: %w", err)
+	}
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+	err = svc.kcUser.SetUserPasswordRequirement(adminToken, *email, input.Password == nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set password requirement: %w", err)
+	}
+	err = svc.kcUser.AddRealmRoleToUser(adminToken, *email, strings.ToLower(string(*role)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign role: %w", err)
+	}
+
+	user, err := svc.GetUserByEmail(ctx, *email)
+	if err != nil {
+		return nil, err
+	}
+	userID := user.ID
+
+	if len(input.AddTeamIds) > 0 {
+		err = svc.kcTeam.AssignTeamsToUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.AddTeamIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(input.RemoveTeamIds) > 0 {
+		err = svc.kcTeam.RemoveTeamsFromUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.RemoveTeamIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(input.AddComputePlatformIds) > 0 {
+		err := svc.kcUser.AssignComputePlatformsToUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.AddComputePlatformIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(input.RemoveComputePlatformIds) > 0 {
+		err := svc.kcUser.RemoveComputePlatformsFromUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.RemoveComputePlatformIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &model.CreateUserResult{
+		Success:           true,
+		UserID:            userID,
+		GeneratedPassword: generatedPassword,
+	}, nil
+}
+
+func (svc *UserService) UpdateUser(ctx context.Context, userID string, input *model.WriteUserInput) (*model.GeneralResult, error) {
+	email := input.Email
+	newRole := input.Role
+
+	if email == nil {
+		return nil, fmt.Errorf("email is required")
+	}
+	if newRole == nil {
+		return nil, fmt.Errorf("role is required")
+	}
+
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin token: %w", err)
+	}
+
+	user, err := svc.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	oldRole := user.Role
+	err = svc.kcUser.RemoveRealmRoleFromUser(adminToken, *email, strings.ToLower(string(oldRole)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to remove role: %w", err)
+	}
+	err = svc.kcUser.AddRealmRoleToUser(adminToken, *email, strings.ToLower(string(*newRole)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to assign role: %w", err)
+	}
+
+	if utils.IsRoleDowngrade(oldRole, *newRole) {
+		if err := svc.revokeUserAccess(adminToken, userID); err != nil {
+			logger.Log.Warn("Failed to revoke sessions after role downgrade",
+				"userID", userID, "oldRole", oldRole, "newRole", *newRole, "error", err)
+		}
+	}
+
+	if len(input.AddTeamIds) > 0 {
+		err = svc.kcTeam.AssignTeamsToUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.AddTeamIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(input.RemoveTeamIds) > 0 {
+		err = svc.kcTeam.RemoveTeamsFromUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.RemoveTeamIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(input.AddComputePlatformIds) > 0 {
+		err = svc.kcUser.AssignComputePlatformsToUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.AddComputePlatformIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(input.RemoveComputePlatformIds) > 0 {
+		err = svc.kcUser.RemoveComputePlatformsFromUser(adminToken, userID, utils.ConvertStringPtrsToStrings(input.RemoveComputePlatformIds))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &model.GeneralResult{Success: true, Error: nil}, nil
+}
+
+// revokeUserAccess ends Keycloak sessions and sets a not-before so existing
+// access JWTs are rejected immediately by per-request auth checks.
+func (svc *UserService) revokeUserAccess(adminToken, userID string) error {
+	notBefore := time.Now().Unix()
+	utils.RevokeUserTokens(userID, notBefore)
+	utils.InvalidateAuthCaches(userID)
+
+	if err := svc.kcUser.SetUserNotBefore(adminToken, userID, notBefore); err != nil {
+		return fmt.Errorf("set notBefore: %w", err)
+	}
+	if err := svc.kcUser.LogoutUserSessions(adminToken, userID); err != nil {
+		return fmt.Errorf("logout sessions: %w", err)
+	}
+	return nil
+}
+
+func (svc *UserService) DeleteUser(ctx context.Context, userID string) (*model.GeneralResult, error) {
+	if callerID, ok := utils.GetSubjectFromContext(ctx); ok && callerID == userID {
+		errorMsg := "you cannot delete your own user"
+		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	user, err := svc.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user.Role == model.RoleOwner && !utils.IsUserOwner(ctx) {
+		errorMsg := "only an owner can delete an owner"
+		return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	// With no admin or owner left, Central would reopen first-run admin setup.
+	if user.Role == model.RoleAdmin || user.Role == model.RoleOwner {
+		hasOther, err := svc.hasOtherAdmin(adminToken, userID)
+		if err != nil {
+			return nil, err
+		}
+		if !hasOther {
+			errorMsg := "the last admin cannot be deleted"
+			return &model.GeneralResult{Success: false, Error: &errorMsg}, nil
+		}
+	}
+
+	// Removing the account from Keycloak does not invalidate access tokens already
+	// issued to it: authz here is offline, so a deleted user's JWT keeps satisfying
+	// role checks from its own claims for the rest of its lifetime (12h by default,
+	// see consts.GetAccessTokenLifespanSeconds). Revoke first — while the account
+	// still exists for the Keycloak-side calls — so the deleted user is locked out
+	// immediately, the same way a role downgrade already is.
+	if err := svc.revokeUserAccess(adminToken, userID); err != nil {
+		logger.Log.Warn("Failed to revoke access before deleting user", "userID", userID, "error", err)
+	}
+
+	err = svc.kcUser.DeleteUserByID(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.GeneralResult{Success: true, Error: nil}, nil
+}
+
+// ResetUserPassword replaces the user's password with a generated one-time
+// password and requires a new one at next sign-in, the same state an invited
+// user starts in, then ends their sessions.
+func (svc *UserService) ResetUserPassword(ctx context.Context, userID string) (*model.ResetUserPasswordResult, error) {
+	if callerID, ok := utils.GetSubjectFromContext(ctx); ok && callerID == userID {
+		errorMsg := "you cannot reset your own password"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	kcUser, err := svc.kcUser.GetUserByID(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+	// Central signs in to Keycloak as the built-in admin, so changing its password would lock Central out.
+	if ShouldIgnoreKeycloakUser(kcUser, svc.adminService.GetAdminUsername()) {
+		errorMsg := "this user cannot be managed from Central"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+	// setInitialPassword only accepts users whose username is their email.
+	if !strings.EqualFold(getString(kcUser, "username"), getString(kcUser, "email")) {
+		errorMsg := "this user was not created in Central; reset their password in Keycloak"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	// Owners rank above Admins, so an Admin cannot take over an Owner's account.
+	targetRole, err := svc.kcUser.GetUserRole(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+	if utils.ConvertStringRoleToModel(targetRole) == model.RoleOwner && !utils.IsUserOwner(ctx) {
+		errorMsg := "you cannot reset the password of a user with a higher role than yours"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	// A local password would let an SSO user sign in without their identity provider.
+	federated, err := svc.kcUser.HasFederatedIdentity(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+	if federated {
+		errorMsg := "this user signs in with SSO; reset their password in your identity provider"
+		return &model.ResetUserPasswordResult{Success: false, Error: &errorMsg}, nil
+	}
+
+	oneTimePassword := utils.GenerateRandomPassword(12)
+	if err := svc.kcUser.UpdateUserPasswordByID(adminToken, userID, oneTimePassword); err != nil {
+		return nil, err
+	}
+	// Revoke before setting the requirement: revoking writes back the user
+	// representation it reads, which would otherwise race the requirement.
+	if err := svc.revokeUserAccess(adminToken, userID); err != nil {
+		logger.Log.Warn("Failed to revoke access after resetting password", "userID", userID, "error", err)
+	}
+	if err := svc.kcUser.SetUserPasswordRequirementByID(adminToken, userID, true); err != nil {
+		return nil, fmt.Errorf("the password was changed but the user was not asked to replace it, reset it again: %w", err)
+	}
+
+	return &model.ResetUserPasswordResult{Success: true, GeneratedPassword: &oneTimePassword}, nil
+}
+
+// hasOtherAdmin reports whether a real user other than excludeUserID holds the
+// admin or owner role. Role lookup errors fail closed so a delete is never let
+// through on an unknown role.
+func (svc *UserService) hasOtherAdmin(adminToken, excludeUserID string) (bool, error) {
+	users, err := svc.kcUser.ListUsers(adminToken)
+	if err != nil {
+		return false, err
+	}
+	adminUsername := svc.adminService.GetAdminUsername()
+	for _, u := range users {
+		if ShouldIgnoreKeycloakUser(u, adminUsername) {
+			continue
+		}
+		id, _ := u["id"].(string)
+		if id == "" || id == excludeUserID {
+			continue
+		}
+		role, err := svc.kcUser.GetUserRole(adminToken, id)
+		if err != nil {
+			return false, err
+		}
+		if role == keycloak.RoleAdmin || role == keycloak.RoleOwner {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (svc *UserService) GetUsers(ctx context.Context) ([]*model.User, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	users, err := svc.kcUser.ListUsers(adminToken)
+	if err != nil {
+		return nil, err
+	}
+
+	adminUsername := svc.adminService.GetAdminUsername()
+
+	var result []*model.User
+	for _, userData := range users {
+		// Skip system admin and service accounts
+		if ShouldIgnoreKeycloakUser(userData, adminUsername) {
+			continue
+		}
+
+		user, err := svc.mapKeycloakUserToModel(userData, adminToken)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, user)
+	}
+
+	return result, nil
+}
+
+func (svc *UserService) GetUserByID(ctx context.Context, userID string) (*model.User, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	userData, err := svc.kcUser.GetUserByID(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return svc.mapKeycloakUserToModel(userData, adminToken)
+}
+
+func (svc *UserService) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	users, err := svc.kcUser.FindUsersByEmail(adminToken, email)
+	if err != nil || len(users) == 0 {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	return svc.mapKeycloakUserToModel(users[0], adminToken)
+}
+
+func (svc *UserService) AssignTeamsToUser(ctx context.Context, userID string, teamIDs []string) (*model.GeneralResult, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	err = svc.kcTeam.AssignTeamsToUser(adminToken, userID, teamIDs)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to assign teams: %s", err)
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
+	}
+
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}
+
+func (svc *UserService) RemoveTeamsFromUser(ctx context.Context, userID string, teamIDs []string) (*model.GeneralResult, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	err = svc.kcTeam.RemoveTeamsFromUser(adminToken, userID, teamIDs)
+	if err != nil {
+		errorMsg := fmt.Sprintf("Failed to remove teams: %s", err)
+		return &model.GeneralResult{
+			Success: false,
+			Error:   &errorMsg,
+		}, nil
+	}
+
+	return &model.GeneralResult{
+		Success: true,
+	}, nil
+}
+
+func (svc *UserService) GetTeamsForUser(ctx context.Context, userID string) ([]*model.Team, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	teams, err := svc.kcTeam.GetTeamsByUserID(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return teams, nil
+}
+
+func (svc *UserService) AssignComputePlatformsToUser(ctx context.Context, userID string, computePlatformIDs []string) error {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return err
+	}
+
+	return svc.kcUser.AssignComputePlatformsToUser(adminToken, userID, computePlatformIDs)
+}
+
+func (svc *UserService) RemoveComputePlatformsFromUser(ctx context.Context, userID string, computePlatformIDs []string) error {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return err
+	}
+
+	return svc.kcUser.RemoveComputePlatformsFromUser(adminToken, userID, computePlatformIDs)
+}
+
+func (svc *UserService) GetComputePlatformsForUser(ctx context.Context, userID string) ([]*model.ComputePlatform, error) {
+	adminToken, err := svc.adminService.GetAdminToken()
+	if err != nil {
+		return nil, err
+	}
+
+	computePlatforms, err := svc.kcUser.GetComputePlatformIdsForUser(adminToken, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	var computePlatformModels []*model.ComputePlatform
+	for _, cpID := range computePlatforms {
+		computePlatformModels = append(computePlatformModels, &model.ComputePlatform{ID: cpID})
+	}
+
+	return computePlatformModels, nil
+}
+
+// Helper methods
+
+func (svc *UserService) preparePassword(password *string) (string, *string) {
+	tempPassword := password
+	var generatedPassword *string
+
+	if tempPassword == nil {
+		tmp := utils.GenerateRandomPassword(12)
+		tempPassword = &tmp
+		generatedPassword = &tmp
+	}
+
+	return *tempPassword, generatedPassword
+}
+
+func (svc *UserService) mapKeycloakUserToModel(userData map[string]any, adminToken string) (*model.User, error) {
+	id, ok := userData["id"].(string)
+	if !ok || id == "" {
+		return nil, fmt.Errorf("invalid user ID")
+	}
+
+	username, ok := userData["username"].(string)
+	if !ok || username == "" {
+		return nil, fmt.Errorf("invalid username")
+	}
+
+	email, ok := userData["email"].(string)
+	if !ok || email == "" {
+		logger.Log.Warn("User email is missing or empty, falling back to username",
+			"userID", id,
+			"username", username,
+			"emailFound", ok,
+			"emailValue", email)
+		email = username
+	}
+
+	role, err := svc.kcUser.GetUserRole(adminToken, id)
+	if err != nil {
+		logger.Log.Error("Failed to get user role", "userID", id, "error", err)
+		role = ""
+	}
+
+	modelRole := utils.ConvertStringRoleToModel(role)
+
+	needsPasswordChange, err := svc.kcUser.CheckUserNeedsPasswordChange(adminToken, email)
+	if err != nil {
+		needsPasswordChange = false
+	}
+
+	teams, err := svc.kcTeam.GetTeamsByUserID(adminToken, id)
+	if err != nil {
+		logger.Log.Error("Failed to get user teams", "userID", id, "error", err)
+		teams = []*model.Team{}
+	}
+
+	computePlatformIds, err := svc.kcUser.GetComputePlatformIdsForUser(adminToken, id)
+	if err != nil {
+		logger.Log.Error("Failed to get user compute platforms", "userID", id, "error", err)
+		computePlatformIds = []string{}
+	}
+
+	var computePlatformModels []*model.ComputePlatform
+	for _, cpID := range computePlatformIds {
+		computePlatformModels = append(computePlatformModels, &model.ComputePlatform{ID: cpID})
+	}
+
+	return &model.User{
+		ID:                  id,
+		Email:               email,
+		Username:            username,
+		Role:                modelRole,
+		NeedsPasswordChange: needsPasswordChange,
+		Teams:               teams,
+		ComputePlatforms:    computePlatformModels,
+	}, nil
+}

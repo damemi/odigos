@@ -1,0 +1,35 @@
+# =====================
+# Diagnose
+# On-demand collection of diagnostic data from a connected proxy (VM agent).
+# Mirrors the OSS frontend GraphQL diagnose + GET /diagnose/download flow:
+# this query prepares/caches the archive on Central Backend; the browser then
+# downloads via GET /diagnose/download (no Next.js API routes, no base64 in UI).
+# =====================
+
+input DiagnoseInput {
+  includeProfiles: Boolean
+  includeMetrics: Boolean
+  includeSourceWorkloads: Boolean
+  sourceWorkloadNamespaces: [String!]
+}
+
+type DiagnoseStats {
+  fileCount: Int!
+  totalSizeBytes: Int!
+  totalSizeHuman: String!
+}
+
+type DiagnoseResponse {
+  stats: DiagnoseStats!
+  includeProfiles: Boolean!
+  includeMetrics: Boolean!
+  includeSourceWorkloads: Boolean!
+  sourceWorkloadNamespaces: [String!]!
+}
+
+extend type Query {
+  # Prepare a diagnose bundle for the given proxy (VM agent via remoteFetch).
+  # dryRun skips generation and returns empty stats. On success the archive is
+  # cached for GET /diagnose/download.
+  diagnose(proxyID: String!, input: DiagnoseInput, dryRun: Boolean): DiagnoseResponse!
+}

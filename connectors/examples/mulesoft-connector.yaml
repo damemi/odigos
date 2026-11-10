@@ -1,0 +1,72 @@
+# OdigosCloudConnector installs one MuleSoft connector runtime (one Anypoint organization boundary).
+#
+# Everything provider-specific is declared in the connector spec (connectors/spec/data/mulesoft.yaml), not in
+# this CR — the CR only references it:
+#   spec.account.id        -> the connector.field "organizationId" (stamped as ODIGOS_MULESOFT_ORG_ID)
+#   spec.bootstrapRegion   -> the Anypoint CONTROL PLANE: us (anypoint.mulesoft.com) or eu (eu1.anypoint.mulesoft.com)
+#   spec.workloads         -> per-type discovery/instrumentation allow-lists (see below)
+#   the credentials Secret -> auth.methods[].fields[].name (clientId, clientSecret)
+# The connector scans every environment the Connected App's scopes include; there is no environment selection.
+#
+# Apply the credentials Secret in the same namespace before (or with) this CR.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: odigos-connector-mulesoft-prod-credentials
+  namespace: odigos-central
+type: Opaque
+stringData:
+  # A Connected App that acts on its own behalf (client credentials).
+  clientId: "<connected-app-client-id>"
+  clientSecret: "<connected-app-client-secret>"
+---
+apiVersion: odigos.io/v1alpha1
+kind: OdigosCloudConnector
+metadata:
+  name: mulesoft-prod
+  namespace: odigos-central
+  labels:
+    odigos.io/platform-type: connector
+    odigos.io/provider: mulesoft
+  annotations:
+    odigos.io/deletion-policy: cleanup
+spec:
+  provider: mulesoft
+  displayName: MuleSoft Production
+
+  # The Anypoint control plane, not a cloud region: us or eu.
+  bootstrapRegion: us
+
+  # Provider boundary -> connectors/spec/data/mulesoft.yaml connector.field "organizationId".
+  account:
+    id: "<anypoint-organization-id>"
+    displayName: Acme Anypoint
+
+  credentialsSecretRef:
+    name: odigos-connector-mulesoft-prod-credentials
+
+  # For local/dev this is the image you built + loaded into kind
+  # (`make deploy-connector-mulesoft TAG=dev`). In a managed install the controller supplies a default via
+  # CONNECTOR_MULESOFT_IMAGE and you can omit this block.
+  runtime:
+    image: registry.odigos.io/odigos-enterprise-connector-mulesoft:dev
+
+# Workloads — Mule applications:
+#   discovery       — enumerate applications of this type
+#   instrumentation — Odigos sets the Direct Telemetry Stream properties itself (automatic mode). Leave it unset
+#                     to apply the published properties yourself (manual mode). Hybrid apps are discovery only.
+  workloads:
+    - type: mulesoft.cloudhub2-app
+      discovery: true
+      instrumentation: true
+    # Private spaces and Runtime Fabric are discovered only; their instrumentation is not available yet.
+    - type: mulesoft.private-space-app
+      discovery: true
+    - type: mulesoft.rtf-app
+      discovery: true
+    - type: mulesoft.hybrid-app
+      discovery: true
+
+  discovery:
+    refreshInterval: 10m

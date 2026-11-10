@@ -1,0 +1,186 @@
+// Package config holds the provider-agnostic connector runtime configuration. A provider embeds this
+// Config in its own and adds provider-specific fields. The connector-runtime controller stamps these
+// variables onto the connector Deployment it creates.
+package config
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorcredential"
+	"github.com/odigos-io/odigos-enterprise/connectors/base/domain/collectorimage"
+	"github.com/odigos-io/odigos-enterprise/connectors/opamp"
+	"github.com/odigos-io/odigos-enterprise/connectors/spec"
+)
+
+// Config is the generic configuration shared by every provider connector runtime.
+type Config struct {
+	// ConnectorName is the connector identity (row discriminator across all platform/provider tables) and
+	// the human-facing platform name shown in Central.
+	ConnectorName string
+	// PlatformID is the STABLE, cluster-unique id used as the Central proxy/routing id (the CR UID injected
+	// by the controller). It must be unique so two clusters that each name their connector "aws" do not
+	// collide on one routing entry in Central (last-writer-wins would flip routing between them). Falls
+	// back to ConnectorName when unset (local runs). Distinct from ConnectorName, which stays the display
+	// name and the Postgres row key.
+	PlatformID string
+	// PlatformIDFromCR reports whether PlatformID is the CR UID the controller stamped, rather than the
+	// ConnectorName fallback below.
+	//
+	// It exists because the fallback is safe for routing and dangerous for identity. A managed
+	// Collector's credential is bound to the CR UID at issue, and anything comparing a live credential
+	// against PlatformID to decide the connector was recreated would, under the fallback, find that no
+	// credential matches and conclude the whole fleet needs revoking. Callers making that comparison
+	// must require this flag.
+	PlatformIDFromCR bool
+	// Provider is the provider key; informational.
+	Provider string
+	// BootstrapRegion controls initial API calls, independently of discovery scope.
+	BootstrapRegion string
+	// AccountID is the provider account boundary this connector owns (AWS account, GCP project, Azure
+	// subscription). Part of every managed-Collector credential binding, so the connector can check that
+	// a routed connection belongs to its own account.
+	AccountID string
+	// Schema is the provider's Postgres schema used for sources/destinations.
+	Schema string
+	// DatabaseURL is the Postgres DSN.
+	DatabaseURL string
+	// Capabilities mirrors the CRD spec workloads/computePlatforms allow-lists (the customer's per-type
+	// allow-list, split by domain). It selects, together with the provider spec, which detectors/reconcilers
+	// the base runs. This is CRD/bootstrap config (a permission set by the platform admin), NOT the
+	// DB-backed operational config.
+	Capabilities spec.Capabilities
+
+	// GraphQLAddr is the GraphQL + health listen address.
+	GraphQLAddr string
+	// CLIAddr is the odictl CLI WebSocket (/ws) listen address (odictl defaults to :23678).
+	CLIAddr   string
+	PodName   string
+	RuntimeID string
+	Version   string
+
+	// CentralBackendURL is the central-backend base URL dialed for the reverse-WebSocket agents-api
+	// connection (http(s):// or ws(s)://, host[:port]). Empty runs local-only (no Central).
+	CentralBackendURL string
+	// OpAMPEndpoint is the PUBLIC endpoint a managed Collector in the customer's cloud account connects
+	// back to, stamped by connector-runtime from the Central installation's configuration. Distinct from
+	// CentralBackendURL, which is an in-cluster address this connector dials outward: this one is dialled
+	// inward, from outside the cluster, by a workload Odigos does not run on.
+	//
+	// Empty means managed-Collector deployment is off — collectorgateway.CheckEndpoint reports why, and
+	// only for a connector that was actually allowed to manage one.
+	OpAMPEndpoint string
+	// CollectorImage is selected by Helm/install, not by the connector binary's release.
+	CollectorImage collectorimage.Pin
+	// OnPremToken is this install's enterprise licence token — the same odigos-pro value every other
+	// enterprise component here uses. A managed Collector needs one to start at all
+	// (odigosenterpriseauthextension refuses without it), and settles whose
+	// it is: the connector copies THIS value into the customer's own secret store, so no Odigos-vendor
+	// licence material ever enters a customer account and no token crosses between installs.
+	//
+	// Held as a collectorcredential.Secret rather than a string. It is signed, it expires, and it is
+	// worth an enterprise licence to whoever takes it, so the type that closes every implicit path out
+	// — fmt renders "<redacted>", JSON and text marshalling fail — is the right one for it as much as
+	// for an OpAMP credential.
+	//
+	// Empty on a community install and on a connector whose Deployment was not stamped with it. That is
+	// reported per Collector rather than refused at startup: every other domain works without it.
+	OnPremToken collectorcredential.Secret
+}
+
+// FromEnv builds the generic Config from environment variables, validating the universally-required
+// values (connector name, database URL). Providers call this, then read their own env vars.
+func FromEnv() (Config, error) {
+	c := Config{
+		ConnectorName:     os.Getenv("ODIGOS_CONNECTOR_NAME"),
+		Provider:          os.Getenv("ODIGOS_PROVIDER"),
+		BootstrapRegion:   os.Getenv("ODIGOS_BOOTSTRAP_REGION"),
+		Schema:            os.Getenv("ODIGOS_DB_SCHEMA"),
+		DatabaseURL:       os.Getenv("DATABASE_URL"),
+		GraphQLAddr:       GetenvDefault("ODIGOS_GQL_ADDR", ":8080"),
+		CLIAddr:           GetenvDefault("ODIGOS_CLI_ADDR", "127.0.0.1:23678"),
+		PodName:           os.Getenv("POD_NAME"),
+		Version:           GetenvDefault("ODIGOS_RUNTIME_VERSION", "dev"),
+		CentralBackendURL: os.Getenv("ODIGOS_CENTRAL_BACKEND_URL"),
+		OpAMPEndpoint:     os.Getenv(opamp.EnvEndpoint),
+		// Wrapped at the boundary, which is the only place it is ever a bare string.
+		OnPremToken: collectorcredential.NewSecret(os.Getenv(collectorimage.EnvOnPremToken)),
+	}
+	if ref := os.Getenv(collectorimage.EnvImage); ref != "" {
+		var err error
+		c.CollectorImage, err = collectorimage.FromReference(ref)
+		if err != nil {
+			return c, fmt.Errorf("%s: %w", collectorimage.EnvImage, err)
+		}
+	}
+	// Operational tunables (discovery/heartbeat/reconcile intervals, shutdown timeout, discovery tags) are
+	// NOT read here — they are DB-backed and served live by config.Manager, tunable via the agents-api
+	// config/updateConfig operations without a pod restart.
+
+	if v := os.Getenv("ODIGOS_CAPABILITIES"); v != "" {
+		if err := json.Unmarshal([]byte(v), &c.Capabilities); err != nil {
+			return c, fmt.Errorf("parse ODIGOS_CAPABILITIES: %w", err)
+		}
+		// A contradictory allow-list is as unusable as malformed JSON, and failing here is the only place it can
+		// be caught: nothing upstream (the CRD list, the GraphQL input, connector-runtime's marshal) enforces one
+		// entry per type. Refusing to start is deliberate — the alternative is guessing, and the guess the
+		// reconciler gate would make is that Odigos may mutate a workload the customer may have meant to own.
+		if err := c.Capabilities.Validate(); err != nil {
+			return c, fmt.Errorf("invalid ODIGOS_CAPABILITIES: %w", err)
+		}
+	}
+
+	c.RuntimeID = c.PodName
+	if c.RuntimeID == "" {
+		c.RuntimeID = c.ConnectorName
+	}
+
+	// The controller stamps the SAME account id into every provider variable — a connector reads
+	// only its own and the others are harmless no-ops (connector-runtime resources.go). Reading the
+	// first non-empty therefore gives this connector's account without base needing to know which
+	// provider it is running as.
+	for _, key := range []string{"ODIGOS_AWS_ACCOUNT_ID", "ODIGOS_GCP_PROJECT_ID", "ODIGOS_AZURE_SUBSCRIPTION_ID", "ODIGOS_MULESOFT_ORG_ID"} {
+		if v := os.Getenv(key); v != "" {
+			c.AccountID = v
+			break
+		}
+	}
+
+	c.PlatformID = os.Getenv("ODIGOS_CONNECTOR_ID")
+	c.PlatformIDFromCR = c.PlatformID != ""
+	if c.PlatformID == "" {
+		// Local runs and older controllers. Fine as a routing id; not an identity — see PlatformIDFromCR.
+		c.PlatformID = c.ConnectorName
+	}
+
+	if c.ConnectorName == "" {
+		return c, fmt.Errorf("ODIGOS_CONNECTOR_NAME is required")
+	}
+	if c.DatabaseURL == "" {
+		return c, fmt.Errorf("DATABASE_URL is required")
+	}
+	return c, nil
+}
+
+// GetenvDefault returns the env var value or def when unset/empty.
+func GetenvDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// ResolveBootstrapRegion applies provider defaults and validates the non-secret bootstrap setting.
+func (c *Config) ResolveBootstrapRegion(provider string) error {
+	providerSpec, ok := spec.Get(provider)
+	if !ok {
+		return fmt.Errorf("unsupported connector provider %q", provider)
+	}
+	region, err := providerSpec.Connector.BootstrapRegion.Resolve(c.BootstrapRegion)
+	if err != nil {
+		return err
+	}
+	c.BootstrapRegion = region
+	return nil
+}

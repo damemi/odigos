@@ -1,0 +1,6 @@
+/central-backend
+/bin
+/licenses
+.gocache/
+.gomodcache/
+cmd/odigos-backend
