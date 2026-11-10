@@ -1,4 +1,4 @@
-# Node.js tail-sampling app (nodejs-community instrumentation).
+# Node.js tail-sampling app (nodejs-enterprise instrumentation).
 # Image: us-central1-docker.pkg.dev/odigos-cloud/components/nodejs-tail-sampling:v0.0.3
 # (built from tests/common/services/nodejs-tail-sampling).
 apiVersion: apps/v1

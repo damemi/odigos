@@ -1,4 +1,4 @@
-# Python head-sampling-http app (python-community instrumentation).
+# Python head-sampling-http app (python-enterprise instrumentation).
 # Image: us-central1-docker.pkg.dev/odigos-cloud/components/python-head-sampling:v0.0.1
 # (built from tests/common/services/python-head-sampling).
 apiVersion: apps/v1
