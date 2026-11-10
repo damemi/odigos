@@ -1,4 +1,4 @@
-# Node.js head-sampling-http app (nodejs-community instrumentation).
+# Node.js head-sampling-http app (nodejs-enterprise instrumentation).
 # Image: us-central1-docker.pkg.dev/odigos-cloud/components/nodejs-head-sampling:v0.0.1
 # (built from tests/common/services/nodejs-head-sampling).
 apiVersion: apps/v1
