@@ -14,7 +14,7 @@ import (
 
 // builderConfig is the OpenTelemetry Collector Builder manifest for the enterprise Collector — the list
 // of components actually compiled into the image a managed Collector runs.
-const builderConfig = "../../../../collector/enterprise/builder-config.yaml"
+const builderConfig = "../../../../collector/builder-config.yaml"
 
 // TestEveryRenderedComponentIsCompiledIn.
 //

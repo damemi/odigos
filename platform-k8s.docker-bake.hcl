@@ -55,7 +55,7 @@ target "insights" {
 
 target "collector" {
   inherits   = ["_platform-k8s"]
-  dockerfile = "collector/enterprise/Dockerfile"
+  dockerfile = "collector/Dockerfile"
   args = {
     BUILDKIT_CACHE_MOUNT_NS = "collector"
   }

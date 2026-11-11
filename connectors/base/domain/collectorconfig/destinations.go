@@ -16,7 +16,7 @@ import (
 )
 
 // unavailableTypes are catalog types whose configurer renders a component the managed Collector image
-// does not ship (collector/enterprise/builder-config.yaml). A document naming one is refused by the Collector as a
+// does not ship (collector/builder-config.yaml). A document naming one is refused by the Collector as a
 // whole, so these are neither offered nor accepted. TestEveryCatalogTypeRendersCompiledInComponents keeps
 // this list honest in both directions.
 var unavailableTypes = map[common.DestinationType]string{}

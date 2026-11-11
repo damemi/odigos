@@ -76,7 +76,7 @@ updates:
   - package-ecosystem: docker
     directories:
       - /
-      - /collector/enterprise
+      - /collector
       - /instrumentor/enterprise
       - /odiglet/enterprise
       - /operator

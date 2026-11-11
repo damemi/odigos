@@ -1,26 +1,23 @@
 
-SRC_ROOT := $(shell git rev-parse --show-toplevel)/collector
+# not `git rev-parse`: the image build copies this directory without the repository
+SRC_ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
 TOOLS_BIN_DIR    := $(SRC_ROOT)/.tools
 
-# Define the tool version
 BUILDER_VERSION = 0.159.0
 BUILDER := $(TOOLS_BIN_DIR)/builder_$(BUILDER_VERSION)
-X_TOOLS_VERSION ?= v0.43.0
-GOVULNCHECK_VERSION ?= v1.1.4
+OPAMP_SUPERVISOR_DIR := $(SRC_ROOT)/cmd/odigosopampsupervisor
+# mdatagen must track BUILDER_VERSION; it and goimports are pinned in internal/tools/go.mod
+GO_LICENSES_VERSION = v1.6.0
 
-# Determine the current operating system and architecture
 CURRENT_OS := $(shell go env GOOS)
 CURRENT_ARCH := $(shell go env GOHOSTARCH)
-GOBIN := $(shell go env GOPATH)/bin
+TARGET_OS ?= $(CURRENT_OS)
+TARGET_ARCH ?= $(shell go env GOARCH)
 
-# Define the URL format for the tool executable
 BUILDER_URL = https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/cmd%2Fbuilder%2Fv$(BUILDER_VERSION)/ocb_$(BUILDER_VERSION)_$(CURRENT_OS)_$(CURRENT_ARCH)
 
 GOCMD?= go
-MDATAGENCMD?= mdatagen
-
-TAILSAMPLING_PROCESSOR_DIR := processors/odigostailsamplingprocessor
 
 .PHONY: download_builder
 download_builder:
@@ -30,69 +27,109 @@ download_builder:
 		chmod +x $(BUILDER); \
 	fi
 
-.PHONY: test-odigostailsamplingprocessor
-test-odigostailsamplingprocessor:
-	@echo "Running tests for odigostailsamplingprocessor at $(TAILSAMPLING_PROCESSOR_DIR)"
-	cd $(TAILSAMPLING_PROCESSOR_DIR) && GOOS=$(HOST_GOOS) GOARCH=$(HOST_GOARCH) $(GOCMD) test ./...
+.PHONY: genodigoscol
+genodigoscol: download_builder
+	# GOWORK=off is needed to avoid pulling errors from other unrelated workspaces modules
+	GOWORK=off $(BUILDER) --ldflags="-checklinkname=0" --config builder-config.yaml --skip-compilation
 
+.PHONY: build-odigoscol
+build-odigoscol: download_builder
+	GOWORK=off $(BUILDER) \
+	--ldflags="-s -w -checklinkname=0" \
+	--config builder-config.yaml \
+	--skip-generate \
+	--skip-get-modules
+
+# The Supervisor is a separate process and can move independently from the Collector component
+# version. The v0.159.0 pin includes pre-apply validation, startup fallback, automatic
+# last-known-good rollback, and the corresponding upstream process-management fixes.
+.PHONY: build-opamp-supervisor
+build-opamp-supervisor:
+	cd $(OPAMP_SUPERVISOR_DIR) && GOWORK=off CGO_ENABLED=0 GOOS=$(TARGET_OS) GOARCH=$(TARGET_ARCH) \
+		$(GOCMD) build -trimpath -ldflags="-s -w" -o odigosopampsupervisor .
+
+# the components; odigosotelcol is generated and internal/tools holds no buildable package, so both
+# are excluded here and handled separately
+OWNED_GO_MODS := $(shell find . -type f -name 'go.mod' ! -path './odigosotelcol/*' ! -path './.tools/*' ! -path './internal/tools/*' | sort)
+OWNED_METADATA := $(shell find . -type f -name 'metadata.yaml' ! -path './odigosotelcol/*' ! -path './.tools/*' ! -path './internal/tools/*' | sort)
+# the cloud storage exporters' tests are not run
+TESTED_GO_MODS := $(filter-out ./exporters/googlecloudstorageexporter/go.mod ./exporters/azureblobstorageexporter/go.mod,$(OWNED_GO_MODS))
+
+# resolved through internal/tools because mdatagen's own go.mod carries replace directives, which
+# `go install` refuses to honour for a module named directly
 .PHONY: install-tools
 install-tools:
-	cd ./internal/tools && go install github.com/client9/misspell/cmd/misspell
-	cd ./internal/tools && go install github.com/golangci/golangci-lint/cmd/golangci-lint
-	cd ./internal/tools && go install github.com/google/addlicense
-	cd ./internal/tools && go install github.com/jstemmer/go-junit-report
-	cd ./internal/tools && go install go.opentelemetry.io/collector/cmd/mdatagen
-	cd ./internal/tools && go install github.com/ory/go-acc
-	cd ./internal/tools && go install github.com/pavius/impi/cmd/impi
-	cd ./internal/tools && go install github.com/tcnksm/ghr
-	cd ./internal/tools && go install golang.org/x/tools/cmd/goimports@$(X_TOOLS_VERSION)
-	cd ./internal/tools && go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@$(X_TOOLS_VERSION)
-	cd ./internal/tools && go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	mkdir -p $(TOOLS_BIN_DIR)
+	cd ./internal/tools && GOWORK=off GOBIN=$(TOOLS_BIN_DIR) go install go.opentelemetry.io/collector/cmd/mdatagen
+	cd ./internal/tools && GOWORK=off GOBIN=$(TOOLS_BIN_DIR) go install golang.org/x/tools/cmd/goimports
 
+# regenerates internal/metadata from each component's metadata.yaml; unlike the targets above this
+# one needs the repository, but it only ever runs in development and CI, never in the image build
 .PHONY: generate
 generate: install-tools
-	# mdatagen resolves import root by running:
-	#   git rev-parse --show-toplevel
-	# and then reading go.mod at that path.
-	#
-	# This repository is multi-module and does not have a root go.mod, so we
-	# scope each mdatagen invocation to the nearest module root by overriding
-	# GIT_WORK_TREE (while keeping GIT_DIR pointing to the real repo .git).
-	# This avoids creating any temporary go.mod files.
+	# mdatagen resolves the import root by running `git rev-parse --show-toplevel` and reading the
+	# go.mod there; this repo has no root go.mod, so point GIT_WORK_TREE at the component instead
 	@REPO_ROOT="$$(git rev-parse --show-toplevel)"; \
-	find . -type f -name 'metadata.yaml' ! -path './enterprise/*' -print0 | while IFS= read -r -d '' META_FILE; do \
+	for META_FILE in $(OWNED_METADATA); do \
 		META_DIR="$$(dirname "$$META_FILE")"; \
 		MOD_ROOT="$$META_DIR"; \
 		while [ "$$MOD_ROOT" != "." ] && [ "$$MOD_ROOT" != "/" ] && [ ! -f "$$MOD_ROOT/go.mod" ]; do \
 			MOD_ROOT="$$(dirname "$$MOD_ROOT")"; \
 		done; \
 		if [ ! -f "$$MOD_ROOT/go.mod" ]; then \
-			echo "No go.mod found for $$META_FILE"; \
+			echo "no go.mod found for $$META_FILE"; \
 			exit 1; \
 		fi; \
 		MOD_ROOT_ABS="$$(cd "$$MOD_ROOT" && pwd)"; \
-		( cd "$$META_DIR" && GIT_DIR="$$REPO_ROOT/.git" GIT_WORK_TREE="$$MOD_ROOT_ABS" $(GOBIN)/mdatagen metadata.yaml ) || exit 1; \
+		( cd "$$META_DIR" && GOWORK=off GIT_DIR="$$REPO_ROOT/.git" GIT_WORK_TREE="$$MOD_ROOT_ABS" \
+			$(TOOLS_BIN_DIR)/mdatagen metadata.yaml ) || exit 1; \
 	done
 	$(MAKE) fmt
 
-# enterprise/ holds the collector imported from odigos-enterprise, which has its own build until the two are merged.
-ALL_GO_MOD_DIRS := $(shell find . -type f -name 'go.mod' -exec dirname {} \; | sort | grep -E '^./' | grep -v "licenses" | grep -v '^./enterprise/')
+# mdatagen does not group imports, so the generated files are only stable once goimports has run
 .PHONY: fmt
-fmt: $(ALL_GO_MOD_DIRS:%=fmt/%)
+fmt: $(OWNED_GO_MODS:%=fmt/%)
+fmt/%: GO_MOD=$*
 fmt/%: install-tools
-	cd $* && $(GOBIN)/goimports -w -local github.com/odigos-io ./
+	cd $(shell dirname $(GO_MOD)) && $(TOOLS_BIN_DIR)/goimports -w -local github.com/odigos-io ./
 
-ALL_GO_MODS := $(shell find . -type f -name 'go.mod' ! -path './exporters/googlecloudstorageexporter/*' ! -path './exporters/azureblobstorageexporter/*' ! -path './internal/tools/*' ! -path './enterprise/*' | sort | grep -v "LICENSES")
-GO_MODS_TO_TEST := $(ALL_GO_MODS:%=test/%)
+# tidies each owned component module so its (indirect) odigos-io deps track the local-replaced
+# siblings after a dependency bump; without this, `generate`'s mdatagen
+# `go list` fails with "updates to go.mod needed" once the sibling's odigos/common version changes
+.PHONY: tidy
+tidy: $(OWNED_GO_MODS:%=tidy/%)
+tidy/%: GO_MOD=$*
+tidy/%:
+	cd $(shell dirname $(GO_MOD)) && GOWORK=off $(GOCMD) mod tidy
 
 .PHONY: test
-test: $(GO_MODS_TO_TEST)
+test: $(TESTED_GO_MODS:%=test/%)
+	cd odigosotelcol && GOWORK=off $(GOCMD) test --ldflags="-checklinkname=0" -v ./...
+
 test/%: GO_MOD=$*
 test/%:
-	cd $(shell dirname $(GO_MOD)) && $(GOCMD) test --ldflags="-checklinkname=0" -v ./...
+	cd $(shell dirname $(GO_MOD)) && GOWORK=off $(GOCMD) test --ldflags="-checklinkname=0" -v ./...
 
 .PHONY: go-licenses
 go-licenses:
 	mkdir -p $(TOOLS_BIN_DIR)
-	GOBIN=$(TOOLS_BIN_DIR) go install github.com/google/go-licenses@latest
+	GOBIN=$(TOOLS_BIN_DIR) go install github.com/google/go-licenses@$(GO_LICENSES_VERSION)
 
+.PHONY: licenses
+licenses: go-licenses
+	# ignored: segmentio/asm is MIT-0 (undetected in subpackages), and the distribution itself is
+	# Odigos-licensed, so odigosotelcol/LICENSE ships in the image directly (the Dockerfile copies it
+	# into /licenses)
+	@if [ -d "$(SRC_ROOT)/odigosotelcol/licenses" ]; then \
+		rm -rf $(SRC_ROOT)/odigosotelcol/licenses; \
+	fi
+	@if [ -d "$(OPAMP_SUPERVISOR_DIR)/licenses" ]; then \
+		rm -rf $(OPAMP_SUPERVISOR_DIR)/licenses; \
+	fi
+	cd odigosotelcol && $(TOOLS_BIN_DIR)/go-licenses save . --save_path=licenses --ignore=github.com/segmentio/asm --ignore=odigos.io/opentelemetry-collector --ignore=github.com/odigos-io/odigos-enterprise
+	cd $(OPAMP_SUPERVISOR_DIR) && $(TOOLS_BIN_DIR)/go-licenses save . --save_path=licenses --ignore=github.com/odigos-io/odigos-enterprise
+	cp -R $(OPAMP_SUPERVISOR_DIR)/licenses/. $(SRC_ROOT)/odigosotelcol/licenses/
+	rm -rf $(OPAMP_SUPERVISOR_DIR)/licenses
+
+.PHONY: build
+build: genodigoscol build-odigoscol build-opamp-supervisor

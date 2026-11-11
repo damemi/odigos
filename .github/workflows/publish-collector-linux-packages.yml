@@ -1,5 +1,5 @@
 # Builds and publishes the VM-agent collector (odigos-otelcol deb/rpm +
-# agents-collector image) from collector/enterprise. Triggered by otelcol-linux/v* tags.
+# agents-collector image) from collector. Triggered by otelcol-linux/v* tags.
 name: Publish Collector Linux Packages
 
 on:
@@ -80,12 +80,12 @@ jobs:
             LD_FLAGS=-s -w
             RHEL=false
           platforms: linux/amd64,linux/arm64
-          file: collector/enterprise/Dockerfile
+          file: collector/Dockerfile
 
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: collector/enterprise/odigosotelcol/go.mod
+          go-version-file: collector/odigosotelcol/go.mod
 
       - name: Set GoReleaser tag
         run: |
@@ -117,7 +117,7 @@ jobs:
           distribution: goreleaser
           version: latest
           args: release --clean
-          workdir: collector/enterprise
+          workdir: collector
 
       - name: Remove package signing key
         if: always()
@@ -132,7 +132,7 @@ jobs:
           gcp-project-id: ${{ secrets.GCP_PROJECT_ID }}
           gcp-workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           gcp-service-account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          package-directory: 'collector/enterprise/dist'
+          package-directory: 'collector/dist'
           repository: odigos
 
       - name: Upload Linux Packages to AWS S3
@@ -143,7 +143,7 @@ jobs:
           bucket-name: odigos-releases
           agent-type: 'otelcol'
           version: ${{ steps.extract_tag.outputs.version }}
-          package-directory: 'collector/enterprise/dist'
+          package-directory: 'collector/dist'
 
       - name: Notify Slack Success
         if: always()

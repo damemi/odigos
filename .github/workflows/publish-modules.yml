@@ -268,7 +268,7 @@ jobs:
             description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
           - service: collector
             image: odigos-enterprise-collector
-            file: collector/enterprise/Dockerfile
+            file: collector/Dockerfile
             runner: depot-ubuntu-24.04-16
             summary: 'Odigos Collector'
             description: 'The Odigos build of the OpenTelemetry Collector.'

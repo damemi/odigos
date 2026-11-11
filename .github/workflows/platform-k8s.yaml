@@ -408,48 +408,18 @@ jobs:
     runs-on: depot-ubuntu-24.04-2
     permissions:
       contents: read
-    env:
-      MODULES: >-
-        collector
-        collector/enterprise/cmd/odigosopampsupervisor
-        collector/enterprise/exporters/odigosurltemplatizationexporter
-        collector/enterprise/extension/odigosconfigconnectorextension
-        collector/enterprise/extension/odigosconfigvmextension
-        collector/enterprise/extension/odigosenterpriseauthextension
-        collector/enterprise/processors/odigosprofilesprocessor
-        collector/enterprise/processors/odigossymbolizeprocessor
-        collector/enterprise/processors/odigosvmprofileattrsprocessor
-        collector/enterprise/receivers/odigosebpfreceiver
     steps:
       - uses: actions/checkout@v7
       # The collector has no root go.mod; take the Go version from the module
       # that builds the collector binary.
       - uses: actions/setup-go@v7
         with:
-          go-version-file: collector/enterprise/odigosotelcol/go.mod
+          go-version-file: collector/odigosotelcol/go.mod
           cache-dependency-path: "collector/**/go.sum"
-      # Tests every module even after a failure, then fails if any module failed.
+      # Tests every collector module and the distribution; -k keeps going after a module fails.
       - name: Test modules
-        run: |
-          failed=()
-          for module in $MODULES; do
-            echo "::group::$module"
-            case "$module" in
-              # Its Makefile tests every collector module but the enterprise ones.
-              collector) cmd=(make test) ;;
-              # go-rtml (odigosebpfreceiver) links against runtime internals.
-              *) cmd=(go test -ldflags=-checklinkname=0 ./...) ;;
-            esac
-            if ! (cd "$module" && "${cmd[@]}"); then
-              echo "::error::Unit tests failed in $module"
-              failed+=("$module")
-            fi
-            echo "::endgroup::"
-          done
-          if [ ${#failed[@]} -gt 0 ]; then
-            echo "::error::Failed modules: ${failed[*]}"
-            exit 1
-          fi
+        working-directory: ./collector
+        run: make -k test
 
   # The single required check for this workflow. It always runs, and passes when every job succeeded.
   platform-k8s-ci:

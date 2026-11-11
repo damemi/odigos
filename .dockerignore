@@ -55,5 +55,5 @@ odiglet/debug.Dockerfile
 tests-infrastructure/
 **/.obi/
 insights/sendtrace
-collector/enterprise/odigosotelcol/odigosotelcol
-collector/enterprise/cmd/odigosopampsupervisor/odigosopampsupervisor
+collector/odigosotelcol/odigosotelcol
+collector/cmd/odigosopampsupervisor/odigosopampsupervisor
