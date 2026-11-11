@@ -1,0 +1,293 @@
+# PR checks for the cloud connectors (connectors, connector-opamp-gateway, connector-runtime, connector-postgres):
+# - Builds the connector images on Depot from connectors.docker-bake.hcl and scans each for vulnerabilities.
+# - Runs the unit tests of every connector module.
+#
+# The jobs run only when a connector, a local module it depends on, or this workflow changed.
+# PRs to release branches always run them, building both platforms without the layer cache.
+# Otherwise the "build: arm" and "build: no-cache" PR labels pick the image build options.
+#
+# "Connectors CI" is the single required check: it always runs, and passes when nothing
+# connector-related changed or when every connector job succeeded.
+name: connectors
+
+on:
+  merge_group:
+  pull_request:
+    branches: [main, "releases/**"]
+    # labeled/unlabeled re-run the build when a "build: arm" or "build: no-cache" label is added or removed.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+env:
+  IMAGE_TAG: pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
+  # Depot project of this repo (see depot.json); builds are saved to its registry for the scan.
+  DEPOT_PROJECT: 4kjksxtgnd
+  DEPOT_SAVE_TAG: connectors-pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Decides whether the rest of the workflow runs: only when a connector, a local module it
+  # replaces in its go.mod files, or this workflow's own inputs changed.
+  changes:
+    name: Detect connector changes
+    runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      connectors: ${{ steps.diff.outputs.connectors }}
+      # 'true' for PRs and merge queue entries targeting a release branch.
+      release: ${{ steps.release.outputs.release }}
+    steps:
+      - name: Check for a release branch
+        id: release
+        env:
+          # A branch name on pull_request, a full ref (refs/heads/...) on merge_group.
+          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref }}
+        run: |
+          if [[ "${BASE_REF#refs/heads/}" == releases/* ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+      # Blobless full history: enough for the merge base and the changed file names.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: Diff against the base branch
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          RELEASE: ${{ steps.release.outputs.release }}
+        run: |
+          # Release branches always run the full connector checks.
+          if [ "$RELEASE" = "true" ]; then
+            echo "Targeting a release branch; running the connector jobs."
+            echo "connectors=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          paths='^(connectors|connector-opamp-gateway|connector-runtime|connector-postgres|api|common|destinations|distros)/|^connectors\.docker-bake\.hcl$|^\.github/workflows/connectors\.yaml$'
+          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -E "$paths" || true)
+          if [ -n "$changed" ]; then
+            echo "Connector-related changes:"
+            echo "$changed"
+            echo "connectors=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No connector-related changes; skipping the connector jobs."
+            echo "connectors=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Each job bakes one target of connectors.docker-bake.hcl on Depot, saves it to Depot's
+  # registry as <DEPOT_SAVE_TAG>-<target>, and scans it from there.
+  build-connector-images:
+    name: build-${{ matrix.service }}
+    needs: changes
+    if: needs.changes.outputs.connectors == 'true'
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/bake-action authenticate to Depot over OIDC and sts fetch the agents-api token;
+    # pull-requests lets resolve-build-labels read the PR's labels.
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - connector-runtime
+          - connector-opamp-gateway
+          - connector-aws
+          - connector-azure
+          - connector-gcp
+          - connector-mulesoft
+          - connector-postgres
+    steps:
+      - uses: actions/checkout@v7
+
+      # Release builds: both platforms without the layer cache, whatever the labels say.
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+        with:
+          release: ${{ needs.changes.outputs.release }}
+
+      # The Go connector images download the private agents-api module.
+      - id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          pairs: |
+            odigos-io/agents-api:ro
+
+      - uses: depot/setup-action@v1
+
+      # Builds on Depot's remote builder, whose persistent layer cache also
+      # keeps the Dockerfiles' --mount=type=cache Go caches between runs.
+      - name: Build ${{ matrix.service }} Image
+        uses: depot/bake-action@v1
+        env:
+          PLATFORMS: ${{ steps.build-opts.outputs.platforms }}
+          # Read by the bake file as the github_token secret.
+          GITHUB_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+        with:
+          files: connectors.docker-bake.hcl
+          targets: ${{ matrix.service }}
+          no-cache: ${{ steps.build-opts.outputs.no-cache }}
+          push: false
+          save: true
+          save-tag: ${{ env.DEPOT_SAVE_TAG }}
+
+      - name: Scan image for vulnerabilities
+        id: scan
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          # registry: makes grype read the saved image from Depot instead of the local Docker daemon.
+          image: registry:registry.depot.dev/${{ env.DEPOT_PROJECT }}:${{ env.DEPOT_SAVE_TAG }}-${{ matrix.service }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save ${{ matrix.service }} scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
+          IMAGE_NAME: odigos-enterprise-${{ matrix.service }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          CUTOFF_EXCEEDED: ${{ steps.scan.outputs.cutoff-exceeded }}
+        run: |
+          # The scanner fails both on findings over the cutoff (allowed here) and when grype
+          # could not scan, e.g. reading the Depot registry; it then writes an empty report.
+          if [ "$SCAN_OUTCOME" = "failure" ] && [ "$CUTOFF_EXCEEDED" != "true" ]; then
+            echo "::error::The vulnerability scan did not run; see the scan step's log."
+            exit 1
+          fi
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "$IMAGE_NAME" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > "/tmp/scan-results/$IMAGE_NAME.json"
+
+      - name: Upload ${{ matrix.service }} scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-${{ matrix.service }}-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-enterprise-${{ matrix.service }}.json
+          retention-days: 30
+
+  vulnerability-report:
+    name: Generate Vulnerability Report
+    needs: [changes, build-connector-images]
+    runs-on: depot-ubuntu-latest
+    if: always() && needs.changes.outputs.connectors == 'true'
+    steps:
+      - name: Download all scan JSON results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vuln-scan-result-*
+          path: scan-results
+          merge-multiple: true
+
+      - name: Zip individual scan results
+        run: |
+          if [ -d "scan-results" ] && ls scan-results/*.json 1> /dev/null 2>&1; then
+            zip -j scan-results.zip scan-results/*.json
+            echo "Created zip with $(unzip -l scan-results.zip | grep -c '\.json') JSON files"
+          else
+            echo "No scan results to zip"
+            touch scan-results.zip
+          fi
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: connectors-vulnerability-report
+          path: scan-results.zip
+          retention-days: 90
+
+  # The connector modules read the private agents-api module.
+  test-connector-modules:
+    name: Connector Unit Tests
+    needs: changes
+    if: needs.changes.outputs.connectors == 'true'
+    runs-on: depot-ubuntu-24.04-4
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MODULES: >-
+        connectors
+        connectors/base
+        connectors/providers/aws
+        connectors/providers/azure
+        connectors/providers/gcp
+        connectors/providers/mulesoft
+        connector-opamp-gateway
+        connector-runtime
+    steps:
+      - uses: actions/checkout@v7
+      - id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          pairs: |
+            odigos-io/agents-api:ro
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: connectors/go.mod
+          cache-dependency-path: |
+            connectors/go.sum
+            connectors/base/go.sum
+            connectors/providers/*/go.sum
+            connector-opamp-gateway/go.sum
+            connector-runtime/go.sum
+      # Tests every module even after a failure, then fails if any module failed.
+      - name: Test modules
+        env:
+          GOFLAGS: -mod=mod
+          GITHUB_TOKEN: ${{ steps.sts.outputs.GH_TOKEN }}
+          GOPRIVATE: github.com/odigos-io/*
+        run: |
+          failed=()
+          for module in $MODULES; do
+            echo "::group::$module"
+            if ! (cd "$module" && go test ./... -race); then
+              echo "::error::Unit tests failed in $module"
+              failed+=("$module")
+            fi
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::Failed modules: ${failed[*]}"
+            exit 1
+          fi
+
+  # The single required check for this workflow. It always runs, and passes when nothing
+  # connector-related changed or when every connector job succeeded.
+  connectors-ci:
+    name: Connectors CI
+    needs: [changes, build-connector-images, vulnerability-report, test-connector-modules]
+    if: always()
+    runs-on: depot-ubuntu-latest
+    steps:
+      - name: Check connector job results
+        env:
+          CONNECTORS: ${{ needs.changes.outputs.connectors }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          if [ "$(jq -r '.changes.result' <<<"$NEEDS")" != "success" ]; then
+            echo "::error::Change detection did not succeed."
+            exit 1
+          fi
+          if [ "$CONNECTORS" != "true" ]; then
+            echo "No connector-related changes; nothing to check."
+            exit 0
+          fi
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<<"$NEEDS")
+          if [ -n "$failed" ]; then
+            echo "::error::Connector jobs did not succeed:"
+            echo "$failed"
+            exit 1
+          fi
+          echo "All connector jobs succeeded."

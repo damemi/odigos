@@ -40,6 +40,7 @@ ARG LAMBDA_AGENTS_IMAGE=registry.odigos.io/odigos-lambda-agents:v0.0.27
 # --- Go build ------------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
 ENV GOWORK=off
+ENV GOPRIVATE=github.com/odigos-io/*
 ARG TARGETARCH
 ARG LD_FLAGS
 WORKDIR /workspace
@@ -49,16 +50,24 @@ COPY destinations/ destinations/
 COPY distros/ distros/
 COPY connectors/ connectors/
 WORKDIR /workspace/connectors/providers/aws
-# The agents-api branch is private. The Makefile passes github_token as a BuildKit secret;
-# avoid writing an empty credential when running the Dockerfile directly without one.
-RUN --mount=type=secret,id=github_token \
+# The agents-api module is private, so the github_token BuildKit secret is required (the Makefile and the
+# bake file pass it from GITHUB_TOKEN). required=true only catches a missing secret; a secret declared from
+# an unset variable arrives empty, hence the test. git gets the token only as per-command config, so it
+# is never written into a layer.
+RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     --mount=type=cache,target=/go/pkg \
-    if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \
+    test -n "$GITHUB_TOKEN" || { echo "The github_token secret is empty; set GITHUB_TOKEN." >&2; exit 1; } && \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.https://x-access-token:${GITHUB_TOKEN}@github.com/.insteadOf" \
+    GIT_CONFIG_VALUE_0="https://github.com/" \
     go mod download && go mod verify
-RUN --mount=type=secret,id=github_token \
+RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    if [ -s /run/secrets/github_token ]; then git config --global url."https://$(cat /run/secrets/github_token):x-oauth-basic@github.com/".insteadOf "https://github.com/"; fi && \
+    test -n "$GITHUB_TOKEN" || { echo "The github_token secret is empty; set GITHUB_TOKEN." >&2; exit 1; } && \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.https://x-access-token:${GITHUB_TOKEN}@github.com/.insteadOf" \
+    GIT_CONFIG_VALUE_0="https://github.com/" \
     CGO_ENABLED=0 GOARCH=$TARGETARCH \
     go build -ldflags="${LD_FLAGS}" -a -o /workspace/connector-aws ./cmd
 
