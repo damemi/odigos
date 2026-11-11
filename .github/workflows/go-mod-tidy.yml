@@ -1,6 +1,7 @@
 name: go mod tidy
 on:
   merge_group:
+    types: [checks_requested]
   pull_request:
 
 jobs:

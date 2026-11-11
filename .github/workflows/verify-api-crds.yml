@@ -1,6 +1,8 @@
 name: verify api CRDs
 on:
   pull_request:
+  merge_group:
+    types: [checks_requested]
 
 jobs:
   verify-api-crds:

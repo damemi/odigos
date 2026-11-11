@@ -165,11 +165,13 @@ runs:
       id: get-latest-tag
       shell: bash
       env:
-        BRANCH: ${{ github.base_ref || github.ref_name }}
+        BRANCH: ${{ github.base_ref || github.event.merge_group.base_ref || github.ref_name }}
         ODIGOS_API_KEY: ${{ inputs.onprem-token }}
       run: |
         STABLE_VERSIONS=$(curl -fsSL -u "odigos:${ODIGOS_API_KEY}" https://registry.odigos.io/v2/charts/odigos/tags/list \
           | jq -r '.tags[]' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V)
+        # merge_group exposes the base branch as a full ref (refs/heads/...).
+        BRANCH="${BRANCH#refs/heads/}"
 
         if [[ "$BRANCH" == releases/* ]]; then
           VERSION_PREFIX=$(echo "$BRANCH" | sed -E 's|releases/v([0-9]+\.[0-9]+)\..*|\1|')

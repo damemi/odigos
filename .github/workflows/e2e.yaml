@@ -2,6 +2,7 @@ name: E2E Tests
 
 on:
   merge_group:
+    types: [checks_requested]
   pull_request:
     branches: [main, "releases/**"]
     types: [opened, synchronize, reopened, labeled, unlabeled]

@@ -12,6 +12,7 @@ name: central
 
 on:
   merge_group:
+    types: [checks_requested]
   pull_request:
     branches: [main, "releases/**"]
     # labeled/unlabeled re-run the build when a "build: arm" or "build: no-cache" label is added or removed.
