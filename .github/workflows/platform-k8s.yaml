@@ -1,7 +1,6 @@
 # PR checks for the Odigos Kubernetes platform:
-# - Builds the instrumentor, insights, collector and operator images on Depot from
-#   platform-k8s.docker-bake.hcl, builds the other images with Docker Buildx, and scans each for
-#   vulnerabilities.
+# - Builds the instrumentor, insights, collector, operator, odiglet, agents and ui images on Depot from
+#   platform-k8s.docker-bake.hcl and scans each for vulnerabilities, along with the webapp's dependencies.
 # - Runs the unit tests of every platform module, with the collector modules in their own job, and
 #   builds the CLI.
 #
@@ -35,15 +34,17 @@ jobs:
     name: build-${{ matrix.service }}
     runs-on: depot-ubuntu-latest
     # id-token lets depot/bake-action authenticate to Depot over OIDC;
+    # packages lets ui install the private @odigos-io/ui-kit from GitHub Packages;
     # pull-requests lets resolve-build-labels read the PR's labels.
     permissions:
       contents: read
       id-token: write
+      packages: read
       pull-requests: read
     strategy:
       fail-fast: false
       matrix:
-        service: [instrumentor, insights, collector, operator]
+        service: [instrumentor, insights, collector, operator, odiglet, agents, ui]
     steps:
       - uses: actions/checkout@v7
 
@@ -55,6 +56,12 @@ jobs:
         with:
           release: ${{ startsWith(github.base_ref, 'releases/') || startsWith(github.event.merge_group.base_ref, 'refs/heads/releases/') }}
 
+      # Sets NPMRC, which the bake file reads for ui's npmrc secret.
+      - name: Write npm auth
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: depot/setup-action@v1
 
       # Builds on Depot's remote builder, whose persistent layer cache also
@@ -65,6 +72,8 @@ jobs:
           PLATFORMS: ${{ steps.build-opts.outputs.platforms }}
           # The operator's embedded Helm chart version.
           ODIGOS_VERSION: v0.0.0-pr${{ github.event.number || github.run_number }}
+          # Read by the bake file as odiglet's github_token secret, for the private instrumentation repos.
+          GITHUB_TOKEN: ${{ matrix.service == 'odiglet' && secrets.RELEASE_BOT_TOKEN || '' }}
         with:
           files: platform-k8s.docker-bake.hcl
           targets: ${{ matrix.service }}
@@ -109,102 +118,6 @@ jobs:
         with:
           name: vuln-scan-result-${{ matrix.service }}-${{ github.sha }}.json
           path: /tmp/scan-results/odigos-${{ matrix.service }}.json
-          retention-days: 30
-
-  build-agents:
-    name: build-agents
-    runs-on: depot-ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Build Agents Image
-        uses: docker/build-push-action@v7
-        with:
-          platforms: linux/amd64
-          push: false
-          tags: agents:pr-${{ github.event.number || github.run_number }}
-          provenance: false
-          file: odiglet/enterprise/Dockerfile
-          secrets: |
-            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
-          target: agents
-          outputs: type=docker,dest=/tmp/agents.tar
-      - name: Load Docker image for scanning
-        run: docker load -i /tmp/agents.tar
-      - name: Scan image for vulnerabilities
-        id: scan-agents
-        uses: odigos-io/ci-core/vulnerabilities-scanner@main
-        with:
-          image: agents:pr-${{ github.event.number || github.run_number }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
-      - name: Save agents scan JSON
-        if: always()
-        env:
-          RESULTS_FILE: ${{ steps.scan-agents.outputs.results-file }}
-        run: |
-          mkdir -p /tmp/scan-results
-          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
-            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
-            exit 1
-          fi
-          jq --arg img "odigos-agents" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-agents.json
-      - name: Upload agents scan results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vuln-scan-result-agents-${{ github.sha }}.json
-          path: /tmp/scan-results/odigos-agents.json
-          retention-days: 30
-
-  build-odiglet:
-    name: build-odiglet
-    runs-on: depot-ubuntu-24.04-2
-    steps:
-      - uses: actions/checkout@v7
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Build Odiglet Image
-        uses: docker/build-push-action@v7
-        with:
-          platforms: linux/amd64
-          file: odiglet/enterprise/Dockerfile
-          context: .
-          secrets: |
-            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
-          push: false
-          tags: odiglet:pr-${{ github.event.number || github.run_number }}
-          provenance: false
-          outputs: type=docker,dest=/tmp/odiglet.tar
-      - name: Load Docker image for scanning
-        run: docker load -i /tmp/odiglet.tar
-      - name: Scan image for vulnerabilities
-        id: scan-odiglet
-        uses: odigos-io/ci-core/vulnerabilities-scanner@main
-        with:
-          image: odiglet:pr-${{ github.event.number || github.run_number }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
-      - name: Save odiglet scan JSON
-        if: always()
-        env:
-          RESULTS_FILE: ${{ steps.scan-odiglet.outputs.results-file }}
-        run: |
-          mkdir -p /tmp/scan-results
-          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
-            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
-            exit 1
-          fi
-          jq --arg img "odigos-odiglet" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-odiglet.json
-      - name: Upload odiglet scan results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vuln-scan-result-odiglet-${{ github.sha }}.json
-          path: /tmp/scan-results/odigos-odiglet.json
           retention-days: 30
 
   build-frontend:
@@ -253,53 +166,6 @@ jobs:
           name: vuln-scan-result-frontend-webapp-${{ github.sha }}.json
           path: /tmp/scan-results/odigos-ui-webapp.json
           retention-days: 30
-      # build the frontend image and scan the golang code.
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      - name: Write npm auth
-        id: npmrc
-        uses: ./.github/actions/npm-auth
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build Frontend Image
-        uses: docker/build-push-action@v7
-        with:
-          secret-files: |
-            npmrc=${{ steps.npmrc.outputs.path }}
-          platforms: linux/amd64
-          file: ui/Dockerfile
-          context: .
-          push: false
-          tags: frontend:pr-${{ github.event.number || github.run_number }}
-          provenance: false
-          outputs: type=docker,dest=/tmp/frontend.tar
-      - name: Load Docker image for scanning
-        run: docker load -i /tmp/frontend.tar
-      - name: Scan image for vulnerabilities
-        id: scan-frontend
-        uses: odigos-io/ci-core/vulnerabilities-scanner@main
-        with:
-          image: frontend:pr-${{ github.event.number || github.run_number }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
-      - name: Save frontend scan JSON
-        if: always()
-        env:
-          RESULTS_FILE: ${{ steps.scan-frontend.outputs.results-file }}
-        run: |
-          mkdir -p /tmp/scan-results
-          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
-            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
-            exit 1
-          fi
-          jq --arg img "odigos-ui" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-ui.json
-      - name: Upload frontend scan results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vuln-scan-result-frontend-${{ github.sha }}.json
-          path: /tmp/scan-results/odigos-ui.json
-          retention-days: 30
       - name: Build webapp
         run: yarn build
         working-directory: frontend/webapp
@@ -308,8 +174,6 @@ jobs:
     name: Generate Vulnerability Report
     needs:
       - build-depot-images
-      - build-agents
-      - build-odiglet
       - build-frontend
     runs-on: depot-ubuntu-latest
     if: always()
@@ -426,8 +290,6 @@ jobs:
     name: Platform K8s CI
     needs:
       - build-depot-images
-      - build-agents
-      - build-odiglet
       - build-frontend
       - vulnerability-report
       - build-cli

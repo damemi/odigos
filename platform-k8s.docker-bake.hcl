@@ -4,6 +4,12 @@
 #   depot bake -f platform-k8s.docker-bake.hcl collector          # one image
 #   PLATFORMS=linux/amd64,linux/arm64 depot bake -f platform-k8s.docker-bake.hcl
 #
+# odiglet downloads private instrumentation repos with the GITHUB_TOKEN environment variable,
+# passed as the github_token secret.
+#
+# ui installs the private @odigos-io/ui-kit with NPMRC (path to an .npmrc, default ~/.npmrc), as in
+# the Makefile. Bake reads the NPMRC file up front, so it must exist for any target.
+#
 # BUILDKIT_CACHE_MOUNT_NS isolates the Dockerfiles' --mount=type=cache volumes per
 # target on Depot's shared builders.
 
@@ -25,8 +31,16 @@ variable "PLATFORMS" {
   default = "linux/amd64"
 }
 
+variable "HOME" {
+  default = ""
+}
+
+variable "NPMRC" {
+  default = "${HOME}/.npmrc"
+}
+
 group "default" {
-  targets = ["instrumentor", "insights", "collector", "operator"]
+  targets = ["instrumentor", "insights", "collector", "operator", "odiglet", "agents", "ui"]
 }
 
 target "_platform-k8s" {
@@ -70,4 +84,46 @@ target "operator" {
     ODIGOS_VERSION          = ODIGOS_VERSION
   }
   tags = ["${ORG}/odigos-operator:${TAG}"]
+}
+
+target "odiglet" {
+  inherits   = ["_platform-k8s"]
+  dockerfile = "odiglet/enterprise/Dockerfile"
+  args = {
+    BUILDKIT_CACHE_MOUNT_NS = "odiglet"
+  }
+  secret = [
+    {
+      type = "env"
+      id   = "github_token"
+      env  = "GITHUB_TOKEN"
+    }
+  ]
+  tags = ["${ORG}/odigos-enterprise-odiglet:${TAG}"]
+}
+
+target "agents" {
+  inherits   = ["_platform-k8s"]
+  dockerfile = "odiglet/enterprise/Dockerfile"
+  target     = "agents"
+  args = {
+    BUILDKIT_CACHE_MOUNT_NS = "agents"
+  }
+  tags = ["${ORG}/odigos-enterprise-agents:${TAG}"]
+}
+
+target "ui" {
+  inherits   = ["_platform-k8s"]
+  dockerfile = "ui/Dockerfile"
+  args = {
+    BUILDKIT_CACHE_MOUNT_NS = "ui"
+  }
+  secret = [
+    {
+      type = "file"
+      id   = "npmrc"
+      src  = NPMRC
+    }
+  ]
+  tags = ["${ORG}/odigos-enterprise-ui:${TAG}"]
 }
