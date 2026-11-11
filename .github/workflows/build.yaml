@@ -637,8 +637,8 @@ jobs:
         # go-rtml (odigosebpfreceiver) links against runtime internals.
         run: go test -ldflags=-checklinkname=0 ./...
 
-  # Central and the cloud connectors. The connector modules read the private agents-api module.
-  test-central-modules:
+  # The cloud connectors. The connector modules read the private agents-api module.
+  test-connector-modules:
     name: Unit Tests (${{ matrix.module }})
     runs-on: depot-ubuntu-24.04-4
     permissions:
@@ -648,7 +648,6 @@ jobs:
       fail-fast: false
       matrix:
         module:
-          - central-backend
           - connectors
           - connectors/base
           - connectors/providers/aws
@@ -658,7 +657,7 @@ jobs:
           - connector-opamp-gateway
           - connector-runtime
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - id: sts
         uses: odigos-io/ci-core/sts@main
         with:
@@ -675,34 +674,3 @@ jobs:
           GITHUB_TOKEN: ${{ steps.sts.outputs.token }}
           GOPRIVATE: github.com/odigos-io/*
         run: go test ./... -race
-
-  central-ui-lint:
-    name: Central UI Lint
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    # Job-level so every yarn call sees it, including setup-node's `yarn cache dir`, which reads the
-    # userconfig (with its ${NODE_AUTH_TOKEN} placeholder) and fails when the variable is unset.
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    defaults:
-      run:
-        working-directory: central-ui
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: yarn
-          cache-dependency-path: central-ui/yarn.lock
-          registry-url: https://npm.pkg.github.com
-          scope: '@odigos-io'
-      - name: Install dependencies
-        # The kit is installed as the @odigos/ui-kit alias of @odigos-io/ui-kit; yarn v1 only sends the token
-        # for the tarball when the alias scope maps to the same registry. Safe for frozen installs only.
-        run: |
-          printf '\n@odigos:registry=https://npm.pkg.github.com\n' >> "$NPM_CONFIG_USERCONFIG"
-          yarn install --frozen-lockfile
-      - name: Lint
-        run: yarn lint
