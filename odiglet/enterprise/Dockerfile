@@ -143,6 +143,7 @@ ARG TARGETARCH
 ARG LD_FLAGS
 ARG RHEL=false
 ENV GOINSECURE=go.opentelemetry.io*
+ENV GOPRIVATE=github.com/odigos-io/odigos-device-plugin
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \

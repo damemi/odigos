@@ -6,13 +6,24 @@ on:
 jobs:
   go-mod-tidy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v5
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.6"
+      # odigos-device-plugin is private; the sts token lets git fetch versions the public proxy doesn't have.
+      - id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          pairs: |
+            odigos-io/odigos-device-plugin:ro
       - name: run make go-mod-tidy
+        env:
+          GOPRIVATE: github.com/odigos-io/odigos-device-plugin
         run: make go-mod-tidy
       - name: Check clean repository
         run: make check-clean-work-tree
@@ -22,11 +33,22 @@ jobs:
   # per module so a broken module graph fails CI instead of surfacing as red imports in a contributor's IDE.
   verify-go-mod-graph:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v5
       - uses: actions/setup-go@v7
         with:
           go-version: "1.26.6"
+      # odigos-device-plugin is private; the sts token lets git fetch versions the public proxy doesn't have.
+      - id: sts
+        uses: odigos-io/ci-core/sts@main
+        with:
+          pairs: |
+            odigos-io/odigos-device-plugin:ro
       - name: run make verify-go-mod-graph
+        env:
+          GOPRIVATE: github.com/odigos-io/odigos-device-plugin
         run: make verify-go-mod-graph
