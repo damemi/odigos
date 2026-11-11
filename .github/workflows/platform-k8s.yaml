@@ -3,6 +3,7 @@
 #   platform-k8s.docker-bake.hcl and scans each for vulnerabilities, along with the webapp's dependencies.
 # - Runs the unit tests of every platform module, with the collector modules in their own job, and
 #   builds the CLI.
+# - Packages the Helm charts and pushes the odigos chart to the project's Depot registry as an OCI chart.
 #
 # PRs to release branches build the Depot images for both platforms without the layer cache.
 # Otherwise the "build: arm" and "build: no-cache" PR labels pick their build options.
@@ -203,6 +204,52 @@ jobs:
           path: scan-results.zip
           retention-days: 90
 
+  # Packages the Helm charts as in release.yml, versioned 0.0.0-<IMAGE_TAG>, and pushes the odigos
+  # chart as an OCI chart to the registry of the repo's Depot project, tagged with its version.
+  package-helm:
+    name: Package Helm Charts
+    runs-on: depot-ubuntu-latest
+    # id-token lets the job log in to the Depot registry over OIDC.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # Same as IMAGE_TAG; job env cannot read the workflow env.
+      TAG: v0.0.0-pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.15.2
+
+      - name: Package Helm charts
+        run: bash ./scripts/package-charts.sh
+
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      - uses: oras-project/setup-oras@v1
+
+      # The project registry only accepts the repository registry.depot.dev/<DEPOT_PROJECT>, and
+      # helm push always appends the chart name to it. oras pushes the chart there with Helm's
+      # media types, tagged with the chart version, since Helm only resolves semver tags.
+      - name: Push odigos Helm chart to the Depot registry
+        working-directory: helm
+        run: |
+          set -euo pipefail
+          echo "$DEPOT_TOKEN" | oras login registry.depot.dev --username x-token --password-stdin
+          CHART_REF="registry.depot.dev/$DEPOT_PROJECT:${TAG#v}"
+          chart="odigos-${TAG#v}.tgz"
+          helm show chart "$chart" | yq -o=json > chart-config.json
+          oras push "$CHART_REF" \
+            --config chart-config.json:application/vnd.cncf.helm.config.v1+json \
+            "$chart:application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+          echo "Pushed oci://$CHART_REF" >> "$GITHUB_STEP_SUMMARY"
+
   build-cli:
     runs-on: depot-ubuntu-latest
     steps:
@@ -293,6 +340,7 @@ jobs:
       - build-depot-images
       - build-frontend
       - vulnerability-report
+      - package-helm
       - build-cli
       - test-platform-k8s-modules
       - test-collector-modules
