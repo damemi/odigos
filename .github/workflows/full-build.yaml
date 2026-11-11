@@ -15,26 +15,20 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The instrumentor, insights, collector and operator images build in platform-k8s.yaml, which on
+  # release-branch PRs builds both platforms without the layer cache.
   build-all-services:
     name: build-all-services
     strategy:
       matrix:
-        service: [instrumentor, odiglet, agents, ui, collector, insights, operator]
+        service: [odiglet, agents, ui]
         include:
-          - service: instrumentor
-            dockerfile_path: instrumentor/enterprise
           - service: odiglet
             dockerfile_path: odiglet/enterprise
           - service: agents
             dockerfile_path: odiglet/enterprise
           - service: ui
             dockerfile_path: ui
-          - service: collector
-            dockerfile_path: collector/enterprise
-          - service: insights
-            dockerfile_path: insights
-          - service: operator
-            dockerfile_path: operator
     runs-on: depot-ubuntu-24.04-8
     permissions:
       contents: read
@@ -65,7 +59,6 @@ jobs:
           context: .
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
-            ODIGOS_VERSION=v0.0.0-pr${{ github.event.number }}
           target: ${{ matrix.service == 'agents' && 'agents' || '' }}
 
   build-cli:

@@ -611,7 +611,7 @@ Checklist (mirrors AWS → GCP → Azure pattern):
     - `connectors/spec/mode_test.go` — `manualObservationReads` (and `writeVerbs` if the provider's write permissions use new verbs)
     - `connectors/spec/region_test.go` — default bootstrap region
     - `central-backend/graph/cloud_connector_helpers_test.go` — providers without collectors
-    - `.github/workflows/build.yaml` (`connector-unit-tests` matrix), `release-images.yml`, `vulnerability-scan.yaml`, `.github/cve-autofix/images.yaml`
+    - `.github/workflows/connectors.yaml` (`MODULES` of the unit-test job), `release-images.yml`, `vulnerability-scan.yaml`, `.github/cve-autofix/images.yaml`
     - `base/domain/workloadreport/model.go` `detailsToModel` — a new kind reports nil details until it gets a case (and possibly an agents-api type)
 
 ---

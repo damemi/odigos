@@ -1,0 +1,479 @@
+# PR checks for the Odigos Kubernetes platform:
+# - Builds the instrumentor, insights, collector and operator images on Depot from
+#   platform-k8s.docker-bake.hcl, builds the other images with Docker Buildx, and scans each for
+#   vulnerabilities.
+# - Runs the unit tests of every platform module, with the collector modules in their own job, and
+#   builds the CLI.
+#
+# PRs to release branches build the Depot images for both platforms without the layer cache.
+# Otherwise the "build: arm" and "build: no-cache" PR labels pick their build options.
+#
+# "Platform K8s CI" is the single required check: it always runs, and passes when every job succeeded.
+name: platform-k8s
+
+on:
+  merge_group:
+  pull_request:
+    branches: [main, "releases/**"]
+    # labeled/unlabeled re-run the build when a "build: arm" or "build: no-cache" label is added or removed.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+env:
+  IMAGE_TAG: pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
+  # Depot project of this repo (see depot.json); builds are saved to its registry for the scan.
+  DEPOT_PROJECT: 4kjksxtgnd
+  DEPOT_SAVE_TAG: platform-k8s-pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Each job bakes one target of platform-k8s.docker-bake.hcl on Depot, saves it to Depot's
+  # registry as <DEPOT_SAVE_TAG>-<target>, and scans it from there.
+  build-depot-images:
+    name: build-${{ matrix.service }}
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/bake-action authenticate to Depot over OIDC;
+    # pull-requests lets resolve-build-labels read the PR's labels.
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [instrumentor, insights, collector, operator]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Release builds (PRs and merge queue entries targeting a release branch): both platforms
+      # without the layer cache, whatever the labels say.
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+        with:
+          release: ${{ startsWith(github.base_ref, 'releases/') || startsWith(github.event.merge_group.base_ref, 'refs/heads/releases/') }}
+
+      - uses: depot/setup-action@v1
+
+      # Builds on Depot's remote builder, whose persistent layer cache also
+      # keeps the Dockerfiles' --mount=type=cache Go caches between runs.
+      - name: Build ${{ matrix.service }} Image
+        uses: depot/bake-action@v1
+        env:
+          PLATFORMS: ${{ steps.build-opts.outputs.platforms }}
+          # The operator's embedded Helm chart version.
+          ODIGOS_VERSION: v0.0.0-pr${{ github.event.number || github.run_number }}
+        with:
+          files: platform-k8s.docker-bake.hcl
+          targets: ${{ matrix.service }}
+          no-cache: ${{ steps.build-opts.outputs.no-cache }}
+          push: false
+          save: true
+          save-tag: ${{ env.DEPOT_SAVE_TAG }}
+
+      - name: Scan image for vulnerabilities
+        id: scan
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          # registry: makes grype read the saved image from Depot instead of the local Docker daemon.
+          image: registry:registry.depot.dev/${{ env.DEPOT_PROJECT }}:${{ env.DEPOT_SAVE_TAG }}-${{ matrix.service }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save ${{ matrix.service }} scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
+          IMAGE_NAME: odigos-${{ matrix.service }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          CUTOFF_EXCEEDED: ${{ steps.scan.outputs.cutoff-exceeded }}
+        run: |
+          # The scanner fails both on findings over the cutoff (allowed here) and when grype
+          # could not scan, e.g. reading the Depot registry; it then writes an empty report.
+          if [ "$SCAN_OUTCOME" = "failure" ] && [ "$CUTOFF_EXCEEDED" != "true" ]; then
+            echo "::error::The vulnerability scan did not run; see the scan step's log."
+            exit 1
+          fi
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "$IMAGE_NAME" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > "/tmp/scan-results/$IMAGE_NAME.json"
+
+      - name: Upload ${{ matrix.service }} scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-${{ matrix.service }}-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-${{ matrix.service }}.json
+          retention-days: 30
+
+  build-agents:
+    name: build-agents
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Build Agents Image
+        uses: docker/build-push-action@v7
+        with:
+          platforms: linux/amd64
+          push: false
+          tags: agents:pr-${{ github.event.number || github.run_number }}
+          provenance: false
+          file: odiglet/enterprise/Dockerfile
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
+          target: agents
+          outputs: type=docker,dest=/tmp/agents.tar
+      - name: Load Docker image for scanning
+        run: docker load -i /tmp/agents.tar
+      - name: Scan image for vulnerabilities
+        id: scan-agents
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          image: agents:pr-${{ github.event.number || github.run_number }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+      - name: Save agents scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan-agents.outputs.results-file }}
+        run: |
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-agents" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-agents.json
+      - name: Upload agents scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-agents-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-agents.json
+          retention-days: 30
+
+  build-odiglet:
+    name: build-odiglet
+    runs-on: depot-ubuntu-24.04-2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Build Odiglet Image
+        uses: docker/build-push-action@v7
+        with:
+          platforms: linux/amd64
+          file: odiglet/enterprise/Dockerfile
+          context: .
+          secrets: |
+            github_token=${{ secrets.RELEASE_BOT_TOKEN }}
+          push: false
+          tags: odiglet:pr-${{ github.event.number || github.run_number }}
+          provenance: false
+          outputs: type=docker,dest=/tmp/odiglet.tar
+      - name: Load Docker image for scanning
+        run: docker load -i /tmp/odiglet.tar
+      - name: Scan image for vulnerabilities
+        id: scan-odiglet
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          image: odiglet:pr-${{ github.event.number || github.run_number }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+      - name: Save odiglet scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan-odiglet.outputs.results-file }}
+        run: |
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-odiglet" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-odiglet.json
+      - name: Upload odiglet scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-odiglet-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-odiglet.json
+          retention-days: 30
+
+  build-frontend:
+    name: build-frontend
+    runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+      packages: read
+    # setup-node's .npmrc reads this for every yarn command in the job, not just the install.
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      # webapp is scanned separately because it runs with yarn, while the rest of the frontend runs with golang.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@odigos-io'
+      - name: Install webapp dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: frontend/webapp
+      - name: Scan frontend webapp for vulnerabilities
+        id: scan-frontend-webapp
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          path: frontend/webapp
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+      - name: Save frontend webapp scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan-frontend-webapp.outputs.results-file }}
+        run: |
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-ui-webapp" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-ui-webapp.json
+      - name: Upload frontend webapp scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-frontend-webapp-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-ui-webapp.json
+          retention-days: 30
+      # build the frontend image and scan the golang code.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Write npm auth
+        id: npmrc
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v7
+        with:
+          secret-files: |
+            npmrc=${{ steps.npmrc.outputs.path }}
+          platforms: linux/amd64
+          file: ui/Dockerfile
+          context: .
+          push: false
+          tags: frontend:pr-${{ github.event.number || github.run_number }}
+          provenance: false
+          outputs: type=docker,dest=/tmp/frontend.tar
+      - name: Load Docker image for scanning
+        run: docker load -i /tmp/frontend.tar
+      - name: Scan image for vulnerabilities
+        id: scan-frontend
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          image: frontend:pr-${{ github.event.number || github.run_number }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+      - name: Save frontend scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan-frontend.outputs.results-file }}
+        run: |
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-ui" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-ui.json
+      - name: Upload frontend scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-frontend-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-ui.json
+          retention-days: 30
+      - name: Build webapp
+        run: yarn build
+        working-directory: frontend/webapp
+
+  vulnerability-report:
+    name: Generate Vulnerability Report
+    needs:
+      - build-depot-images
+      - build-agents
+      - build-odiglet
+      - build-frontend
+    runs-on: depot-ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all scan JSON results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vuln-scan-result-*
+          path: scan-results
+          merge-multiple: true
+
+      - name: Zip individual scan results
+        run: |
+          if [ -d "scan-results" ] && ls scan-results/*.json 1> /dev/null 2>&1; then
+            zip -j scan-results.zip scan-results/*.json
+            echo "Created zip with $(unzip -l scan-results.zip | grep -c '\.json') JSON files"
+          else
+            echo "No scan results to zip"
+            touch scan-results.zip
+          fi
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulnerability-report
+          path: scan-results.zip
+          retention-days: 90
+
+  build-cli:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.6"
+      - name: Set up Goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: build --snapshot --clean
+
+  test-platform-k8s-modules:
+    name: Platform K8s Unit Tests
+    runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+    env:
+      MODULES: >-
+        common
+        k8sutils
+        procdiscovery
+        destinations
+        instrumentor
+        instrumentor/enterprise
+        odiglet
+        insights
+        frontend
+        ui
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.6"
+          cache-dependency-path: "**/go.sum"
+      # odiglet's tests generate and compile eBPF code.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y clang llvm libbpf-dev
+      # Tests every module even after a failure, then fails if any module failed.
+      - name: Test modules
+        run: |
+          failed=()
+          for module in $MODULES; do
+            echo "::group::$module"
+            case "$module" in
+              # Their Makefiles prepare what the tests need: envtest (instrumentor) and generated eBPF
+              # code (odiglet).
+              common|instrumentor|odiglet) cmd=(make test) ;;
+              *) cmd=(go test -ldflags=-checklinkname=0 ./...) ;;
+            esac
+            if ! (cd "$module" && "${cmd[@]}"); then
+              echo "::error::Unit tests failed in $module"
+              failed+=("$module")
+            fi
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::Failed modules: ${failed[*]}"
+            exit 1
+          fi
+
+  # The collector modules, in parallel with the other platform modules.
+  test-collector-modules:
+    name: Collector Unit Tests
+    runs-on: depot-ubuntu-24.04-2
+    permissions:
+      contents: read
+    env:
+      MODULES: >-
+        collector
+        collector/enterprise/cmd/odigosopampsupervisor
+        collector/enterprise/exporters/odigosurltemplatizationexporter
+        collector/enterprise/extension/odigosconfigconnectorextension
+        collector/enterprise/extension/odigosconfigvmextension
+        collector/enterprise/extension/odigosenterpriseauthextension
+        collector/enterprise/processors/odigosprofilesprocessor
+        collector/enterprise/processors/odigossymbolizeprocessor
+        collector/enterprise/processors/odigosvmprofileattrsprocessor
+        collector/enterprise/receivers/odigosebpfreceiver
+    steps:
+      - uses: actions/checkout@v7
+      # The collector has no root go.mod; take the Go version from the module
+      # that builds the collector binary.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: collector/enterprise/odigosotelcol/go.mod
+          cache-dependency-path: "collector/**/go.sum"
+      # Tests every module even after a failure, then fails if any module failed.
+      - name: Test modules
+        run: |
+          failed=()
+          for module in $MODULES; do
+            echo "::group::$module"
+            case "$module" in
+              # Its Makefile tests every collector module but the enterprise ones.
+              collector) cmd=(make test) ;;
+              # go-rtml (odigosebpfreceiver) links against runtime internals.
+              *) cmd=(go test -ldflags=-checklinkname=0 ./...) ;;
+            esac
+            if ! (cd "$module" && "${cmd[@]}"); then
+              echo "::error::Unit tests failed in $module"
+              failed+=("$module")
+            fi
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::Failed modules: ${failed[*]}"
+            exit 1
+          fi
+
+  # The single required check for this workflow. It always runs, and passes when every job succeeded.
+  platform-k8s-ci:
+    name: Platform K8s CI
+    needs:
+      - build-depot-images
+      - build-agents
+      - build-odiglet
+      - build-frontend
+      - vulnerability-report
+      - build-cli
+      - test-platform-k8s-modules
+      - test-collector-modules
+    if: always()
+    runs-on: depot-ubuntu-latest
+    steps:
+      - name: Check platform job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<<"$NEEDS")
+          if [ -n "$failed" ]; then
+            echo "::error::Platform jobs did not succeed:"
+            echo "$failed"
+            exit 1
+          fi
+          echo "All platform jobs succeeded."
