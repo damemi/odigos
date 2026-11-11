@@ -3899,7 +3899,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Java agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.30"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
               mountPoints = [{
@@ -3977,7 +3977,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.30"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
@@ -4056,7 +4056,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.30',
         });
 
         odigos.instrument({
@@ -4120,7 +4120,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Python agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.30"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
               mountPoints = [{
@@ -4201,7 +4201,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.30"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
@@ -4284,7 +4284,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.30',
         });
 
         odigos.instrument({
@@ -4350,7 +4350,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Node.js agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.30"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
               mountPoints = [{
@@ -4428,7 +4428,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.30"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
@@ -4507,7 +4507,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.30',
         });
 
         odigos.instrument({
@@ -4571,7 +4571,7 @@ setup:
             {
               # --- the agent-staging container: it copies the .NET agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.30"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
               mountPoints = [{
@@ -4652,7 +4652,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.30"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
@@ -4738,7 +4738,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.30',
         });
 
         odigos.instrument({
@@ -4805,7 +4805,7 @@ setup:
             {
               # --- the agent-staging container: it copies the PHP agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.30"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
               mountPoints = [{
@@ -4884,7 +4884,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.30"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/php /var/odigos/php"]
@@ -4967,7 +4967,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.30',
         });
 
         odigos.instrument({
@@ -5033,7 +5033,7 @@ setup:
             {
               # --- the agent-staging container: it copies the Ruby agent into the shared volume and exits ---
               name      = "odigos-agent"
-              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+              image     = "registry.odigos.io/odigos-fargate-agents:v0.0.30"
               essential = false # stages the agent and exits 0; SUCCESS below requires non-essential
               command   = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
               mountPoints = [{
@@ -5112,7 +5112,7 @@ setup:
           - Name: odigos-agent
         ContainerDefinitions:
           - Name: odigos-agent
-            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.27"
+            Image: "registry.odigos.io/odigos-fargate-agents:v0.0.30"
             # Non-essential: stages the agent and exits 0; SUCCESS below requires non-essential.
             Essential: false
             Command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/ruby /var/odigos/ruby"]
@@ -5195,7 +5195,7 @@ setup:
           },
           // Optional: the construct RECORDS whichever image it stages and Odigos holds you to that,
           // so a package ahead of this connector is not drift. Pin only to match a mirror.
-          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.27',
+          agentsImage: 'registry.odigos.io/odigos-fargate-agents:v0.0.30',
         });
 
         odigos.instrument({

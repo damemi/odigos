@@ -71,7 +71,7 @@ func TestLambdaInstructionsFollowSelectedDistro(t *testing.T) {
 			if err = json.Unmarshal([]byte(values["<ODIGOS_LAMBDA_CONFIG>"]), &config); err != nil {
 				t.Fatal(err)
 			}
-			if config.Signals != 7 || !config.HTTP || config.ApplicationSignals != recipe.ApplicationSignals || config.FunctionLogs != lambdaFunctionLogs(recipe.Language, recipe.ExecWrapper) {
+			if config.Signals != 7 || !config.HTTP || config.ApplicationSignals != recipe.ApplicationSignals || config.NoCollector != recipe.NoCollector || config.FunctionLogs != (!recipe.NoCollector && lambdaFunctionLogs(recipe.Language, recipe.ExecWrapper)) {
 				t.Fatalf("wrong selected config: %+v", config)
 			}
 			var destination map[string]any
@@ -99,7 +99,7 @@ func TestLambdaInstructionsFollowSelectedDistro(t *testing.T) {
 				if !strings.Contains(doc.Content, values[PlaceholderLayerARN]) {
 					t.Fatalf("%s: selected layer missing", doc.Variant)
 				}
-				if strings.Contains(doc.Content, "odigos:collector-layer") != (recipe.Artifact != "") && doc.Variant != "cdk" {
+				if strings.Contains(doc.Content, "odigos:collector-layer") != (recipe.Artifact != "" && !recipe.NoCollector) && doc.Variant != "cdk" {
 					t.Fatalf("%s: collector attachment/tag does not match distro", doc.Variant)
 				}
 				if strings.Contains(doc.Content, "<LAMBDA_") {

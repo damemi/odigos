@@ -24,8 +24,9 @@ if you haven't decided which one you want yet. To choose which OpenTelemetry dis
 However you apply it, self-managed Lambda instrumentation adds the same things to your function:
 
 1. **One or two layers.** An OpenTelemetry SDK layer for your function's language and architecture. The ADOT
-   distros also need a second, collector layer (`odigos-otel-adot-collector-<arch>`). The layer must be
-   **v0.0.19 or newer**, which is the first version that reads the current configuration format.
+   distros also need a second, collector layer (`odigos-otel-adot-collector-<arch>`), except their
+   collector-less (`-no-collector`) variants. The layer must be **v0.0.19 or newer**, which is the first
+   version that reads the current configuration format, and **newer than v0.0.27** for a collector-less distro.
 2. **`AWS_LAMBDA_EXEC_WRAPPER`** — tells Lambda to run your handler through the layer's instrumentation first.
    The exact path depends on the distro. See [Exec wrapper per distro](#exec-wrapper-per-distro).
 3. **`ODIGOS_LAMBDA_CONFIG`** — one JSON value with your service name, the signals to export, and the
@@ -37,7 +38,7 @@ However you apply it, self-managed Lambda instrumentation adds the same things t
    | --- | --- |
    | `odigos:iac` | `v1` |
    | `odigos:sdk-layer` | The exact SDK layer ARN you attached |
-   | `odigos:collector-layer` | The exact collector layer ARN (ADOT distros only) |
+   | `odigos:collector-layer` | The exact collector layer ARN (ADOT distros with a collector only) |
 
    Without the tags, Odigos has no way to tell an instrumented function from one you haven't touched yet. It
    keeps reporting the function as **Waiting for you to apply the instrumentation**, even if everything else is
@@ -61,7 +62,8 @@ key names and needs layers **v0.0.19 or newer**.
 | `insecure` | No | `true` for an insecure (no TLS) connection. gRPC only. Must match the destination. |
 | `headers` | No | Map of headers sent to the destination, for example `{"x-api-key":"..."}`. Must match the headers configured on the destination. |
 | `applicationSignals` | No | `true` for the ADOT + Application Signals preset. Requires both `"traces"` and `"metrics"` in `signals`. See [Distros](/cloud-connectors/aws/workloads/lambda/distros#adot-with-application-signals). |
-| `functionLogs` | No | `true` to collect the function's stdout and stderr as logs. Set it **exactly when** the destination enables logs **and** the function is in handler mode **and** runs Ruby or a lightweight Java wrapper. Leave it out otherwise — Odigos checks it. |
+| `functionLogs` | No | `true` to collect the function's stdout and stderr as logs. Set it **exactly when** the destination enables logs **and** the function is in handler mode **and** runs Ruby or a lightweight Java wrapper **with** a collector. Leave it out otherwise — Odigos checks it. |
+| `noCollector` | Collector-less | `true` for a [collector-less distro](/cloud-connectors/aws/workloads/lambda/distros#collector-less-distros): the SDK exports straight to `endpoint`. Requires `"http": true`. Set it exactly when the selected distro ID ends in `-no-collector` — Odigos checks it. |
 | `debug` | No | `true` for debug logging (`OTEL_LOG_LEVEL=debug`). Handler mode only. Set it exactly when debug telemetry is enabled for the connector — Odigos checks it. |
 | `webWrapper` | Web Adapter | The function's original `AWS_LAMBDA_EXEC_WRAPPER`, for functions behind the AWS Lambda Web Adapter. Use `""` when there is none. |
 
@@ -81,13 +83,19 @@ key names and needs layers **v0.0.19 or newer**.
     {"version":2,"service":"my-fn","signals":["traces"],"endpoint":"otlp.example.com:4317","webWrapper":"/opt/bootstrap"}
     ```
   </Tab>
+  <Tab title="Collector-less">
+    ```json
+    {"version":2,"service":"my-fn","signals":["traces","metrics","logs"],"endpoint":"https://otlp.example.com:4318","http":true,"noCollector":true}
+    ```
+  </Tab>
 </Tabs>
 
 <Warning>
   The layer's launcher exits and the function **fails to start** if `ODIGOS_LAMBDA_CONFIG` is not valid JSON,
   `version` is not `2` (or the legacy `1`), `signals` is empty, contains an unknown name, or repeats a name,
-  `endpoint` is empty, or `applicationSignals` is `true` without both `traces` and `metrics` in `signals`. The
-  log line begins with `odigos-lambda-startup:`. Check the JSON before you deploy.
+  `endpoint` is empty, `applicationSignals` is `true` without both `traces` and `metrics` in `signals`, or
+  `noCollector` is `true` without `http`. The log line begins with `odigos-lambda-startup:`. Check the JSON
+  before you deploy.
 </Warning>
 
 <Warning>
@@ -119,6 +127,11 @@ Distro descriptions and trade-offs are on the [Distros](/cloud-connectors/aws/wo
 | `python-lambda-otel` (Python default) | `/opt/otel-instrument` | `odigos-otel-python-<arch>` |
 | `python-lambda-adot`, `python-lambda-adot-application-signals` | `/opt/otel-instrument` | `odigos-otel-adot-python-<arch>` + `odigos-otel-adot-collector-<arch>` |
 | `ruby-lambda-otel` (Ruby default) | `/opt/otel-handler` | `odigos-otel-ruby-<arch>` |
+
+Each distro also has a collector-less variant, `<distro ID>-no-collector`, with the same wrapper. It uses only
+the SDK layer: for ADOT, leave out `odigos-otel-adot-collector-<arch>` and the `odigos:collector-layer` tag.
+Set `"noCollector": true` in `ODIGOS_LAMBDA_CONFIG`. Read its
+[drawbacks](/cloud-connectors/aws/workloads/lambda/distros#collector-less-distros) first.
 
 `<arch>` is `x86_64` or `arm64` and must match the function's architecture. For where the layer ARNs come from,
 see [Preload the Lambda layer](/cloud-connectors/aws/workloads/lambda/preload).

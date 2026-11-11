@@ -721,10 +721,18 @@ func (r *ManagedLayerResolver) RefreshOrphan(ctx context.Context, region, runtim
 	if !ok || name != publishedLayerName(lang, arch) {
 		return nil // not our layer — never delete a customer/public layer
 	}
+	key := region + "/" + lang + "/" + arch
+	r.mu.Lock()
+	current := r.published[key] == arn
+	r.mu.Unlock()
+	// Published, or verified as the bundled bytes, by this process: not a leftover. Deleting it would republish
+	// it on every pass for as long as an enabled function stays uninstrumented (refused, or awaiting routing).
+	if current {
+		return nil
+	}
 	if err := r.deleteLayerVersion(ctx, region, name, version); err != nil {
 		return fmt.Errorf("delete orphaned odigos layer %s: %w", arn, err)
 	}
-	key := region + "/" + lang + "/" + arch
 	r.mu.Lock()
 	delete(r.arns, key)
 	delete(r.published, key)
@@ -840,8 +848,8 @@ func reusableLayer(found discoveredLayer, bundled string) bool {
 // layer version on every fresh region/language, quietly accumulating them.
 //
 // The lists run wider than LanguageFromRuntime needs on purpose: that function prefix-matches, so it already
-// routes java8.al2 and ruby4.0 to a language, and the layer has to be discoverable for the runtimes the
-// connector will in fact try to instrument.
+// routes java8.al2 to a language, and the layer has to be discoverable for the runtimes the connector will in
+// fact try to instrument. Ruby lists only the Ruby ABIs the layer ships gems for; its distros reject the rest.
 func compatibleRuntimes(lang string) []lambdatypes.Runtime {
 	if lang == "adot-collector" {
 		seen := map[string]bool{}
@@ -874,7 +882,7 @@ func compatibleRuntimes(lang string) []lambdatypes.Runtime {
 	case "java":
 		names = []string{"java8.al2", "java8.al2023", "java11", "java11.al2023", "java17", "java17.al2023", "java21", "java25"}
 	case "ruby":
-		names = []string{"ruby3.2", "ruby3.3", "ruby3.4", "ruby4.0"}
+		names = []string{"ruby3.3", "ruby3.4"}
 	}
 	out := make([]lambdatypes.Runtime, len(names))
 	for i, n := range names {

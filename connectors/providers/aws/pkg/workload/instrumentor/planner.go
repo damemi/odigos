@@ -92,6 +92,10 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 		if err := validateLambdaApplicationSignalsTarget(lang, distro, target); err != nil {
 			return nil, err
 		}
+		if err := validateLambdaNoCollectorTarget(lang, distro, target); err != nil {
+			return nil, err
+		}
+		target = lambdaExportTarget(lang, distro, target)
 		headers, err := p.store.OTLPExportHeaders(ctx)
 		if err != nil {
 			return nil, err
@@ -100,8 +104,8 @@ func (p *LambdaPlanner) PlanFor(ctx context.Context, w baseapi.DiscoveredWorkloa
 		if service == "" {
 			service = fn.FunctionName
 		}
-		c := lambdaBootstrapConfig{Version: lambdaConfigVersion, Service: service, Signals: signalMask(target), Endpoint: target.Endpoint, Insecure: target.Insecure, Headers: headers, ApplicationSignals: recipeFor(lang, distro).ApplicationSignals}
-		c.FunctionLogs = target.Logs && activation != ActivationWebServer && lambdaFunctionLogs(lang, recipeFor(lang, distro).ExecWrapper)
+		c := lambdaBootstrapConfig{Version: lambdaConfigVersion, Service: service, Signals: signalMask(target), Endpoint: target.Endpoint, Insecure: target.Insecure, Headers: headers, ApplicationSignals: recipeFor(lang, distro).ApplicationSignals, NoCollector: recipeFor(lang, distro).NoCollector}
+		c.FunctionLogs = lambdaFunctionLogsEnabled(target, activation == ActivationWebServer, fn.Runtime, distro)
 		if c.Endpoint == "" {
 			c.Endpoint = target.HTTPEndpoint
 			c.HTTP = true
@@ -363,6 +367,9 @@ func lambdaSnippetReplacements(lang, distro string) map[string]string {
 	resolved["<LAMBDA_DISTRO_PREREQUISITES>"] = "Use the layer matching the selected upstream SDK, region and architecture."
 	if d.Artifact != "" {
 		resolved["<LAMBDA_DISTRO_PREREQUISITES>"] = "ADOT requires two layer slots: attach the matching ADOT SDK and collector layers, replacing previous Odigos SDK/collector layers. Handler mode only."
+		if d.NoCollector {
+			resolved["<LAMBDA_DISTRO_PREREQUISITES>"] = "Attach only the matching ADOT SDK layer, replacing previous Odigos SDK/collector layers. Handler mode only."
+		}
 		if d.ApplicationSignals {
 			resolved["<LAMBDA_DISTRO_PREREQUISITES>"] += " Enable destination traces and metrics. Automatic mode attaches the existing CloudWatchLambdaApplicationSignalsExecutionRolePolicy and enables Application Signals discovery. For manual deployment, configure that policy and discovery first. AWS also receives service telemetry."
 		}
@@ -371,6 +378,14 @@ func lambdaSnippetReplacements(lang, distro string) map[string]string {
 	c.FunctionLogs = lambdaFunctionLogs(lang, d.ExecWrapper)
 	raw, _ := json.Marshal(c)
 	text := strings.TrimSuffix(string(raw), "}") + `,"insecure":<OTLP_INSECURE>}`
+	if d.NoCollector {
+		resolved["<LAMBDA_DISTRO_DESCRIPTION>"] = fmt.Sprintf("%s (%s). SDK defaults are expanded from compact configuration at startup, and the SDK exports straight to the destination over OTLP/HTTP.", d.DisplayName, d.Version)
+		resolved["<LAMBDA_CDK_DESTINATION>"] = "{ httpEndpoint: '<OTLP_ENDPOINT>', traces: true, metrics: true, logs: true }"
+		resolved["<LAMBDA_DISTRO_PREREQUISITES>"] += " Requires an OTLP/HTTP destination reachable from the function. " + lambdaNoCollectorNote
+		c.HTTP, c.NoCollector, c.FunctionLogs = true, true, false
+		raw, _ = json.Marshal(c)
+		text = string(raw)
+	}
 	for k, v := range lambdaConfigSnippetValues(text) {
 		resolved[k] = v
 	}
@@ -397,7 +412,7 @@ func lambdaLayerSnippetReplacements(language, distro, layer, collector string) m
 	}
 	arns := []string{layer}
 	marker := baseapi.IaCMarker{Version: baseapi.IaCMarkerVersion, Layer: layer}
-	if recipeFor(language, distro).Artifact != "" {
+	if recipe := recipeFor(language, distro); recipe.Artifact != "" && !recipe.NoCollector {
 		if collector == "" {
 			collector = "<OTEL_COLLECTOR_LAYER_ARN>"
 		}

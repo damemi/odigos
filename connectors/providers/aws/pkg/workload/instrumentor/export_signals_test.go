@@ -31,7 +31,7 @@ func TestCollectionSummaryListsSupportedSignals(t *testing.T) {
 		note *baseapi.WorkloadRoutingNote
 		want string
 	}{
-		{lambdaSignalRoutingNote(routing, "ruby3.3"), "Collecting logs and traces"},
+		{lambdaSignalRoutingNote(routing, "ruby3.3", ""), "Collecting logs and traces"},
 		{fargateSignalRoutingNote(routing, []containerTarget{{recipe: agentRecipe{lang: LangRuby}}}), "Collecting traces"},
 	} {
 		note := c.note
@@ -52,7 +52,7 @@ func TestCollectionSummaryListsSupportedSignals(t *testing.T) {
 	} {
 		routing.Target = c.target
 		routing.Target.Profiles = true
-		for _, note := range []*baseapi.WorkloadRoutingNote{workloadRoutingNote(routing), lambdaSignalRoutingNote(routing, "python3.12"), fargateSignalRoutingNote(routing, []containerTarget{{recipe: agentRecipe{lang: LangRuby}}, {recipe: agentRecipe{lang: LangNodeJS}}})} {
+		for _, note := range []*baseapi.WorkloadRoutingNote{workloadRoutingNote(routing), lambdaSignalRoutingNote(routing, "python3.12", ""), fargateSignalRoutingNote(routing, []containerTarget{{recipe: agentRecipe{lang: LangRuby}}, {recipe: agentRecipe{lang: LangNodeJS}}})} {
 			if note == nil || note.Code != "collected-signals" || note.Message != c.want {
 				t.Fatalf("note = %+v, want %q", note, c.want)
 			}

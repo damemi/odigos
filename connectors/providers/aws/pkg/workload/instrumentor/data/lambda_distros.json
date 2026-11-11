@@ -5,6 +5,17 @@
     "language": "java",
     "isDefault": true,
     "execWrapper": "/opt/otel-javaagent-handler",
+    "memoryOverheadMiB": 200,
+    "version": "2.32.0"
+  },
+  {
+    "name": "java-lambda-otel-agent-no-collector",
+    "displayName": "Java Lambda OpenTelemetry agent (no collector)",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-javaagent-handler",
+    "noCollector": true,
+    "memoryOverheadMiB": 160,
     "version": "2.32.0"
   },
   {
@@ -13,6 +24,17 @@
     "language": "java",
     "isDefault": false,
     "execWrapper": "/opt/otel-handler",
+    "memoryOverheadMiB": 80,
+    "version": "0.21.0"
+  },
+  {
+    "name": "java-lambda-otel-wrapper-no-collector",
+    "displayName": "Java Lambda OpenTelemetry generic handler (no collector)",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-handler",
+    "noCollector": true,
+    "memoryOverheadMiB": 32,
     "version": "0.21.0"
   },
   {
@@ -21,6 +43,17 @@
     "language": "java",
     "isDefault": false,
     "execWrapper": "/opt/otel-proxy-handler",
+    "memoryOverheadMiB": 80,
+    "version": "0.21.0"
+  },
+  {
+    "name": "java-lambda-otel-proxy-wrapper-no-collector",
+    "displayName": "Java Lambda OpenTelemetry API Gateway proxy handler (no collector)",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-proxy-handler",
+    "noCollector": true,
+    "memoryOverheadMiB": 32,
     "version": "0.21.0"
   },
   {
@@ -29,6 +62,17 @@
     "language": "java",
     "isDefault": false,
     "execWrapper": "/opt/otel-sqs-handler",
+    "memoryOverheadMiB": 80,
+    "version": "0.21.0"
+  },
+  {
+    "name": "java-lambda-otel-sqs-wrapper-no-collector",
+    "displayName": "Java Lambda OpenTelemetry SQS event handler (no collector)",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-sqs-handler",
+    "noCollector": true,
+    "memoryOverheadMiB": 32,
     "version": "0.21.0"
   },
   {
@@ -37,6 +81,17 @@
     "language": "java",
     "isDefault": false,
     "execWrapper": "/opt/otel-stream-handler",
+    "memoryOverheadMiB": 80,
+    "version": "0.21.0"
+  },
+  {
+    "name": "java-lambda-otel-stream-wrapper-no-collector",
+    "displayName": "Java Lambda OpenTelemetry stream handler (no collector)",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-stream-handler",
+    "noCollector": true,
+    "memoryOverheadMiB": 32,
     "version": "0.21.0"
   },
   {
@@ -45,6 +100,17 @@
     "language": "nodejs",
     "isDefault": true,
     "execWrapper": "/opt/otel-handler",
+    "memoryOverheadMiB": 104,
+    "version": "0.23.0"
+  },
+  {
+    "name": "nodejs-lambda-otel-no-collector",
+    "displayName": "Node.js Lambda OpenTelemetry (no collector)",
+    "language": "nodejs",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-handler",
+    "noCollector": true,
+    "memoryOverheadMiB": 48,
     "version": "0.23.0"
   },
   {
@@ -53,6 +119,17 @@
     "language": "python",
     "isDefault": true,
     "execWrapper": "/opt/otel-instrument",
+    "memoryOverheadMiB": 104,
+    "version": "0.21.0"
+  },
+  {
+    "name": "python-lambda-otel-no-collector",
+    "displayName": "Python Lambda OpenTelemetry (no collector)",
+    "language": "python",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-instrument",
+    "noCollector": true,
+    "memoryOverheadMiB": 56,
     "version": "0.21.0"
   },
   {
@@ -61,6 +138,25 @@
     "language": "ruby",
     "isDefault": true,
     "execWrapper": "/opt/otel-handler",
+    "compatibleRuntimes": [
+      "ruby3.3",
+      "ruby3.4"
+    ],
+    "memoryOverheadMiB": 72,
+    "version": "0.14.0"
+  },
+  {
+    "name": "ruby-lambda-otel-no-collector",
+    "displayName": "Ruby Lambda OpenTelemetry (no collector)",
+    "language": "ruby",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-handler",
+    "compatibleRuntimes": [
+      "ruby3.3",
+      "ruby3.4"
+    ],
+    "noCollector": true,
+    "memoryOverheadMiB": 32,
     "version": "0.14.0"
   },
   {
@@ -93,6 +189,41 @@
       "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
       "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs"
     },
+    "memoryOverheadMiB": 200,
+    "version": "2.31.0"
+  },
+  {
+    "name": "java-lambda-adot-no-collector",
+    "displayName": "Java Lambda AWS ADOT (no collector)",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/odigos-adot-java-handler",
+    "artifact": "adot-java",
+    "applicationSignals": false,
+    "compatibleRuntimes": [
+      "java11",
+      "java17",
+      "java21"
+    ],
+    "environment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_ENABLED": "false"
+    },
+    "bootstrapEnvironment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_RUNTIME_ENABLED": "false",
+      "OTEL_AWS_LAMBDA_FAST_START": "false",
+      "OTEL_PROPAGATORS": "tracecontext,baggage",
+      "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://localhost:4318/v1/traces",
+      "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
+      "OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED": "true",
+      "OTEL_SDK_DISABLED": "false",
+      "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+      "OTEL_AWS_APPLICATION_SIGNALS_EXPORTER_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs"
+    },
+    "noCollector": true,
+    "memoryOverheadMiB": 152,
     "version": "2.31.0"
   },
   {
@@ -125,6 +256,41 @@
       "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
       "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs"
     },
+    "memoryOverheadMiB": 208,
+    "version": "2.31.0"
+  },
+  {
+    "name": "java-lambda-adot-application-signals-no-collector",
+    "displayName": "Java Lambda AWS ADOT + Application Signals (no collector)",
+    "language": "java",
+    "isDefault": false,
+    "execWrapper": "/opt/odigos-adot-java-handler",
+    "artifact": "adot-java",
+    "applicationSignals": true,
+    "compatibleRuntimes": [
+      "java11",
+      "java17",
+      "java21"
+    ],
+    "environment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_ENABLED": "true"
+    },
+    "bootstrapEnvironment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_RUNTIME_ENABLED": "false",
+      "OTEL_AWS_LAMBDA_FAST_START": "false",
+      "OTEL_PROPAGATORS": "tracecontext,baggage",
+      "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://localhost:4318/v1/traces",
+      "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
+      "OTEL_INSTRUMENTATION_COMMON_DEFAULT_ENABLED": "true",
+      "OTEL_SDK_DISABLED": "false",
+      "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+      "OTEL_AWS_APPLICATION_SIGNALS_EXPORTER_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs"
+    },
+    "noCollector": true,
+    "memoryOverheadMiB": 160,
     "version": "2.31.0"
   },
   {
@@ -161,6 +327,45 @@
       "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
       "OTEL_PYTHON_LOG_AUTO_INSTRUMENTATION": "true"
     },
+    "memoryOverheadMiB": 104,
+    "version": "0.21.0"
+  },
+  {
+    "name": "python-lambda-adot-no-collector",
+    "displayName": "Python Lambda AWS ADOT (no collector)",
+    "language": "python",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-instrument",
+    "artifact": "adot-python",
+    "applicationSignals": false,
+    "compatibleRuntimes": [
+      "python3.10",
+      "python3.11",
+      "python3.12",
+      "python3.13"
+    ],
+    "environment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_ENABLED": "false"
+    },
+    "bootstrapEnvironment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_RUNTIME_ENABLED": "false",
+      "OTEL_AWS_LAMBDA_FAST_START": "false",
+      "OTEL_PROPAGATORS": "tracecontext,baggage",
+      "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://localhost:4318/v1/traces",
+      "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
+      "OTEL_PYTHON_DISABLED_INSTRUMENTATIONS": "none",
+      "OTEL_PYTHON_DISTRO": "aws_distro",
+      "OTEL_PYTHON_CONFIGURATOR": "aws_configurator",
+      "OTEL_SDK_DISABLED": "false",
+      "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+      "OTEL_AWS_APPLICATION_SIGNALS_EXPORTER_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
+      "OTEL_PYTHON_LOG_AUTO_INSTRUMENTATION": "true"
+    },
+    "noCollector": true,
+    "memoryOverheadMiB": 48,
     "version": "0.21.0"
   },
   {
@@ -197,6 +402,45 @@
       "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
       "OTEL_PYTHON_LOG_AUTO_INSTRUMENTATION": "true"
     },
+    "memoryOverheadMiB": 112,
+    "version": "0.21.0"
+  },
+  {
+    "name": "python-lambda-adot-application-signals-no-collector",
+    "displayName": "Python Lambda AWS ADOT + Application Signals (no collector)",
+    "language": "python",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-instrument",
+    "artifact": "adot-python",
+    "applicationSignals": true,
+    "compatibleRuntimes": [
+      "python3.10",
+      "python3.11",
+      "python3.12",
+      "python3.13"
+    ],
+    "environment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_ENABLED": "true"
+    },
+    "bootstrapEnvironment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_RUNTIME_ENABLED": "false",
+      "OTEL_AWS_LAMBDA_FAST_START": "false",
+      "OTEL_PROPAGATORS": "tracecontext,baggage",
+      "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://localhost:4318/v1/traces",
+      "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
+      "OTEL_PYTHON_DISABLED_INSTRUMENTATIONS": "none",
+      "OTEL_PYTHON_DISTRO": "aws_distro",
+      "OTEL_PYTHON_CONFIGURATOR": "aws_configurator",
+      "OTEL_SDK_DISABLED": "false",
+      "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+      "OTEL_AWS_APPLICATION_SIGNALS_EXPORTER_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
+      "OTEL_PYTHON_LOG_AUTO_INSTRUMENTATION": "true"
+    },
+    "noCollector": true,
+    "memoryOverheadMiB": 48,
     "version": "0.21.0"
   },
   {
@@ -231,6 +475,43 @@
       "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
       "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs"
     },
+    "memoryOverheadMiB": 120,
+    "version": "0.13.0"
+  },
+  {
+    "name": "nodejs-lambda-adot-no-collector",
+    "displayName": "Nodejs Lambda AWS ADOT (no collector)",
+    "language": "nodejs",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-instrument",
+    "artifact": "adot-nodejs",
+    "applicationSignals": false,
+    "compatibleRuntimes": [
+      "nodejs18.x",
+      "nodejs20.x",
+      "nodejs22.x",
+      "nodejs24.x"
+    ],
+    "environment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_ENABLED": "false"
+    },
+    "bootstrapEnvironment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_RUNTIME_ENABLED": "false",
+      "OTEL_AWS_LAMBDA_FAST_START": "false",
+      "OTEL_PROPAGATORS": "tracecontext,baggage",
+      "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://localhost:4318/v1/traces",
+      "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
+      "OTEL_NODE_DISABLED_INSTRUMENTATIONS": "none",
+      "OTEL_NODE_ENABLED_INSTRUMENTATIONS": "amqplib,aws-lambda,aws-sdk,bunyan,cassandra-driver,connect,cucumber,dataloader,dns,express,fs,generic-pool,graphql,grpc,hapi,host-metrics,http,ioredis,kafkajs,knex,koa,lru-memoizer,memcached,mongodb,mongoose,mysql2,mysql,nestjs-core,net,openai,oracledb,pg,pino,redis,restify,router,runtime-node,socket.io,tedious,undici,winston",
+      "OTEL_SDK_DISABLED": "false",
+      "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+      "OTEL_AWS_APPLICATION_SIGNALS_EXPORTER_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs"
+    },
+    "noCollector": true,
+    "memoryOverheadMiB": 72,
     "version": "0.13.0"
   },
   {
@@ -265,6 +546,43 @@
       "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
       "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs"
     },
+    "memoryOverheadMiB": 128,
+    "version": "0.13.0"
+  },
+  {
+    "name": "nodejs-lambda-adot-application-signals-no-collector",
+    "displayName": "Nodejs Lambda AWS ADOT + Application Signals (no collector)",
+    "language": "nodejs",
+    "isDefault": false,
+    "execWrapper": "/opt/otel-instrument",
+    "artifact": "adot-nodejs",
+    "applicationSignals": true,
+    "compatibleRuntimes": [
+      "nodejs18.x",
+      "nodejs20.x",
+      "nodejs22.x",
+      "nodejs24.x"
+    ],
+    "environment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_ENABLED": "true"
+    },
+    "bootstrapEnvironment": {
+      "OTEL_AWS_APPLICATION_SIGNALS_RUNTIME_ENABLED": "false",
+      "OTEL_AWS_LAMBDA_FAST_START": "false",
+      "OTEL_PROPAGATORS": "tracecontext,baggage",
+      "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "http://localhost:4318/v1/traces",
+      "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs",
+      "OTEL_NODE_DISABLED_INSTRUMENTATIONS": "none",
+      "OTEL_NODE_ENABLED_INSTRUMENTATIONS": "amqplib,aws-lambda,aws-sdk,bunyan,cassandra-driver,connect,cucumber,dataloader,dns,express,fs,generic-pool,graphql,grpc,hapi,host-metrics,http,ioredis,kafkajs,knex,koa,lru-memoizer,memcached,mongodb,mongoose,mysql2,mysql,nestjs-core,net,openai,oracledb,pg,pino,redis,restify,router,runtime-node,socket.io,tedious,undici,winston",
+      "OTEL_SDK_DISABLED": "false",
+      "OTEL_EXPORTER_OTLP_PROTOCOL": "http/protobuf",
+      "OTEL_AWS_APPLICATION_SIGNALS_EXPORTER_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_METRICS_ENDPOINT": "http://localhost:4318/v1/metrics",
+      "OTEL_AWS_OTLP_LOGS_ENDPOINT": "http://localhost:4318/v1/logs"
+    },
+    "noCollector": true,
+    "memoryOverheadMiB": 80,
     "version": "0.13.0"
   }
 ]

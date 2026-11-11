@@ -218,8 +218,11 @@ func TestEveryLambdaDistroCompactEnvironmentAndCustomerIsolation(t *testing.T) {
 				if int(c.Signals) != mask || c.Service != "service" || c.ApplicationSignals != recipe.ApplicationSignals || !c.HTTP {
 					t.Fatal("wrong compact settings")
 				}
-				if c.FunctionLogs != (target.Logs && lambdaFunctionLogs(recipe.Language, recipe.ExecWrapper)) {
+				if c.FunctionLogs != (target.Logs && !recipe.NoCollector && lambdaFunctionLogs(recipe.Language, recipe.ExecWrapper)) {
 					t.Fatal("function log receiver selection does not match the selected distro")
+				}
+				if c.NoCollector != recipe.NoCollector {
+					t.Fatal("collector-less selection does not match the selected distro")
 				}
 				if strings.Contains(env[EnvLambdaConfig], "pipelines") || len(env[EnvLambdaConfig]) > 250 {
 					t.Fatal("collector pipeline duplicated in AWS environment")

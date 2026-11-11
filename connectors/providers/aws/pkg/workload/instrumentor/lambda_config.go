@@ -29,6 +29,7 @@ type lambdaBootstrapConfig struct {
 	FunctionLogs       bool              `json:"functionLogs,omitempty"`
 	Debug              bool              `json:"debug,omitempty"`
 	WebWrapper         *string           `json:"webWrapper,omitempty"`
+	NoCollector        bool              `json:"noCollector,omitempty"`
 }
 
 // The wire format names signals explicitly. Bit flags remain an implementation
@@ -144,8 +145,9 @@ func parseLambdaConfig(raw string) (lambdaBootstrapConfig, error) {
 	return c, nil
 }
 func compactLambdaEnvironment(env map[string]string, m managedManifest, webServer bool, runtime, distro, service string, target domaindest.OTLPTarget, headers map[string]string, debug bool) error {
-	c := lambdaBootstrapConfig{Version: lambdaConfigVersion, Service: service, Signals: signalMask(target), Endpoint: target.Endpoint, Insecure: target.Insecure, Headers: headers, Debug: debug && !webServer, ApplicationSignals: recipeFor(LanguageFromRuntime(runtime), distro).ApplicationSignals}
-	c.FunctionLogs = target.Logs && !webServer && lambdaFunctionLogs(LanguageFromRuntime(runtime), execWrapperForRuntime(runtime, distro))
+	recipe := recipeFor(LanguageFromRuntime(runtime), distro)
+	c := lambdaBootstrapConfig{Version: lambdaConfigVersion, Service: service, Signals: signalMask(target), Endpoint: target.Endpoint, Insecure: target.Insecure, Headers: headers, Debug: debug && !webServer, ApplicationSignals: recipe.ApplicationSignals, NoCollector: recipe.NoCollector}
+	c.FunctionLogs = lambdaFunctionLogsEnabled(target, webServer, runtime, distro)
 	if c.Endpoint == "" {
 		c.Endpoint = target.HTTPEndpoint
 		c.HTTP = true

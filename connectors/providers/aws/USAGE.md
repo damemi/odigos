@@ -38,7 +38,10 @@ layers, variables, mounts, dependencies and containers. Never author `ODIGOS_MAN
 Lambda layers v0.0.19 or newer read version 2 `ODIGOS_LAMBDA_CONFIG`. Environment additions are compact
 configuration plus the selected execution wrapper; attribution is recorded in Lambda tags. Web Adapter
 configuration uses `webWrapper`, not the legacy short-key `w`. Default distros use one layer; ADOT uses SDK
-and Collector layers. Lambda's five-layer and 4-KiB environment limits still apply. Automatic updates affect
+and Collector layers, except its `-no-collector` variants. Every distro has such a collector-less variant
+(`"noCollector": true`, OTLP/HTTP destinations and handler mode only); its response waits on every export.
+A distro's `memoryOverheadMiB` is sizing guidance in the plan notes; memory size is never checked. Lambda's
+five-layer and 4-KiB environment limits still apply. Automatic updates affect
 `$LATEST`; deploy a new version and move aliases through your application pipeline. Alias and weighted
 canary instrumentation are checked before claiming complete coverage.
 

@@ -1,6 +1,6 @@
 ---
 title: 'Lambda Instrumentation Distros'
-description: 'Choose which OpenTelemetry distribution instruments each AWS Lambda function — the full Java agent, lightweight Java handler wrappers, AWS ADOT, or ADOT with CloudWatch Application Signals — and how to switch between them.'
+description: 'Choose which OpenTelemetry distribution instruments each AWS Lambda function — the full Java agent, lightweight Java handler wrappers, AWS ADOT, or ADOT with CloudWatch Application Signals, each with or without the in-sandbox collector — what each costs in memory and latency, and how to switch between them.'
 sidebarTitle: 'Distros'
 ---
 
@@ -16,38 +16,71 @@ lighter-weight Java wrapper, or the AWS-maintained ADOT SDK.
 
 ## Available distros
 
-The name in the first column is what the Central UI shows in the distro picker. The ID is what the
+Four families of distros, each built on its own OpenTelemetry SDK:
+
+| Family | Languages | Pick it when |
+| --- | --- | --- |
+| **OpenTelemetry** — the default | Java (full agent), Node.js, Python, Ruby | You want the upstream [OpenTelemetry Lambda](https://github.com/open-telemetry/opentelemetry-lambda) layers. Right for most functions. |
+| **Java lightweight wrappers** | Java | Java cold start matters more than automatic spans for HTTP clients and databases. |
+| **AWS ADOT** | Java, Node.js, Python | You standardize on the [AWS Distro for OpenTelemetry](#aws-adot). |
+| **AWS ADOT + Application Signals** | Java, Node.js, Python | You also want [CloudWatch Application Signals](#adot-with-application-signals). |
+
+Every distro comes in two versions:
+
+- **With collector** (the default). The SDK hands telemetry to a small collector inside the Lambda sandbox,
+  which sends it on after your function has responded. A slow or unreachable destination never slows the
+  function down.
+- **Collector-less.** The SDK sends telemetry to your destination itself. It uses 40 to 64 MB less memory, but
+  every response waits for the export. Read [Collector-less distros](#collector-less-distros) before you pick
+  one.
+
+### Distro IDs
+
+The UI name is what the distro picker in Central shows. The ID is what the
 [CDK `distro` option](/cloud-connectors/aws/cdk/lambda#choosing-a-distro) and the source's status badge use.
+For the collector-less version of a distro, add `-no-collector` to its ID (for example
+`nodejs-lambda-otel-no-collector`); its UI name ends with **(no collector)**.
 
-### Java
+<Tabs>
+  <Tab title="Java">
+    | UI name | ID |
+    | --- | --- |
+    | **Full agent (2.32.0)** — default | `java-lambda-otel-agent` |
+    | **Generic handler · lightweight (0.21.0)** | `java-lambda-otel-wrapper` |
+    | **API Gateway proxy handler · lightweight (0.21.0)** | `java-lambda-otel-proxy-wrapper` |
+    | **SQS event handler · lightweight (0.21.0)** | `java-lambda-otel-sqs-wrapper` |
+    | **Stream handler · lightweight (0.21.0)** | `java-lambda-otel-stream-wrapper` |
+    | **Java Lambda AWS ADOT (2.31.0)** | `java-lambda-adot` |
+    | **Java Lambda AWS ADOT + Application Signals (2.31.0)** | `java-lambda-adot-application-signals` |
 
-| UI name | ID | What it is |
-| --- | --- | --- |
-| **Full agent (2.32.0)** — default | `java-lambda-otel-agent` | The full OpenTelemetry Java agent, plus an Odigos handler bridge. Automatically instruments supported HTTP clients, database libraries, and frameworks. Works with both object (`RequestHandler`) and raw-stream (`RequestStreamHandler`) handlers. Adds cold-start overhead. |
-| **Generic handler · lightweight (0.21.0)** | `java-lambda-otel-wrapper` | Lightweight wrapper for a `RequestHandler` that takes maps or POJOs, including Function URL and HTTP API v2 events. Covers the invocation and AWS SDK calls only — no automatic HTTP client or database spans. |
-| **API Gateway proxy handler · lightweight (0.21.0)** | `java-lambda-otel-proxy-wrapper` | Lightweight wrapper for API Gateway REST API proxy events (payload v1), with HTTP span attributes and incoming context propagation. |
-| **SQS event handler · lightweight (0.21.0)** | `java-lambda-otel-sqs-wrapper` | Lightweight wrapper for handlers that receive `SQSEvent` batches, with SQS-specific tracing and message context. |
-| **Stream handler · lightweight (0.21.0)** | `java-lambda-otel-stream-wrapper` | Lightweight wrapper for a `RequestStreamHandler` that reads and writes bytes with its own serialization. |
-| **Java Lambda AWS ADOT (2.31.0)** | `java-lambda-adot` | The AWS Distro for OpenTelemetry (ADOT) Java agent. See [AWS ADOT](#aws-adot). |
-| **Java Lambda AWS ADOT + Application Signals (2.31.0)** | `java-lambda-adot-application-signals` | ADOT with CloudWatch Application Signals turned on. See [ADOT with Application Signals](#adot-with-application-signals). |
+    See [Choosing a Java distro](#choosing-a-java-distro) for what each one covers.
+  </Tab>
+  <Tab title="Node.js">
+    | UI name | ID |
+    | --- | --- |
+    | **Node.js Lambda OpenTelemetry (0.23.0)** — default | `nodejs-lambda-otel` |
+    | **Nodejs Lambda AWS ADOT (0.13.0)** | `nodejs-lambda-adot` |
+    | **Nodejs Lambda AWS ADOT + Application Signals (0.13.0)** | `nodejs-lambda-adot-application-signals` |
+  </Tab>
+  <Tab title="Python">
+    | UI name | ID |
+    | --- | --- |
+    | **Python Lambda OpenTelemetry (0.21.0)** — default | `python-lambda-otel` |
+    | **Python Lambda AWS ADOT (0.21.0)** | `python-lambda-adot` |
+    | **Python Lambda AWS ADOT + Application Signals (0.21.0)** | `python-lambda-adot-application-signals` |
+  </Tab>
+  <Tab title="Ruby">
+    | UI name | ID |
+    | --- | --- |
+    | **Ruby Lambda OpenTelemetry (0.14.0)** — default | `ruby-lambda-otel` |
 
-### Node.js, Python, and Ruby
+    Ruby has a single SDK, and it runs only on `ruby3.3` and `ruby3.4`. The layer ships no gems for other Ruby
+    versions, so those functions are reported as **Not supported** rather than instrumented.
+  </Tab>
+</Tabs>
 
-| Language | UI name | ID |
-| --- | --- | --- |
-| Node.js | **Node.js Lambda OpenTelemetry (0.23.0)** — default | `nodejs-lambda-otel` |
-| Node.js | **Nodejs Lambda AWS ADOT (0.13.0)** | `nodejs-lambda-adot` |
-| Node.js | **Nodejs Lambda AWS ADOT + Application Signals (0.13.0)** | `nodejs-lambda-adot-application-signals` |
-| Python | **Python Lambda OpenTelemetry (0.21.0)** — default | `python-lambda-otel` |
-| Python | **Python Lambda AWS ADOT (0.21.0)** | `python-lambda-adot` |
-| Python | **Python Lambda AWS ADOT + Application Signals (0.21.0)** | `python-lambda-adot-application-signals` |
-| Ruby | **Ruby Lambda OpenTelemetry (0.14.0)** — default | `ruby-lambda-otel` |
-
-The defaults are the upstream [OpenTelemetry Lambda](https://github.com/open-telemetry/opentelemetry-lambda)
-layers, repackaged by Odigos. Ruby has a single distro.
-
-Go, .NET, and custom runtimes have no OpenTelemetry Lambda layer. They're discovered, and reported as
-**Not supported**.
+ADOT runs only on the runtimes its SDK supports; see [AWS ADOT](#aws-adot). Go, .NET, and custom runtimes have
+no OpenTelemetry Lambda layer. They're discovered, and reported as **Not supported**.
 
 ## Choosing a Java distro
 
@@ -58,7 +91,7 @@ and which handler interface they can wrap.
   <Step title="Start with the full agent">
     It's the default for a reason: it's the only Java option that produces spans for your outgoing HTTP calls,
     database queries, and messaging clients, and it handles both `RequestHandler` and `RequestStreamHandler`
-    functions. The Odigos bridge extracts the incoming trace context (W3C `traceparent`, or the AWS X-Ray
+    functions. The price is a longer cold start. The Odigos bridge extracts the incoming trace context (W3C `traceparent`, or the AWS X-Ray
     header when there's no W3C parent), creates one server span per invocation, and flushes traces, metrics,
     and logs before Lambda freezes the sandbox.
   </Step>
@@ -69,8 +102,8 @@ and which handler interface they can wrap.
     | Your handler receives | Pick |
     | --- | --- |
     | A map or POJO (including Function URL and HTTP API v2 events) | Generic handler |
-    | API Gateway REST proxy events (payload v1) | API Gateway proxy handler |
-    | `SQSEvent` batches | SQS event handler |
+    | API Gateway REST proxy events (payload v1) | API Gateway proxy handler (adds HTTP span attributes and incoming context propagation) |
+    | `SQSEvent` batches | SQS event handler (adds SQS-specific tracing and message context) |
     | Raw `InputStream` / `OutputStream` (`RequestStreamHandler`) | Stream handler |
 
     <Warning>
@@ -100,9 +133,10 @@ rolled back exactly like the defaults.
 - **Two layers.** ADOT functions get an SDK layer (`odigos-otel-adot-<language>-<arch>`) **and** a separate
   collector layer (`odigos-otel-adot-collector-<arch>`), because the Java SDK and collector together exceed
   Lambda's direct-upload size limit. The function needs **two free layer slots** out of AWS's limit of five.
+  The [collector-less](#collector-less-distros) ADOT variants use only the SDK layer.
 - **Same export path.** Telemetry goes to the collector inside the layer and from there to your Odigos
-  destination. ADOT's own default of sending traces to X-Ray is turned off — every signal goes to your
-  destination.
+  destination (or, collector-less, straight to it). ADOT's own default of sending traces to X-Ray is turned
+  off — every signal goes to your destination.
 - **Application Signals is off.** The plain ADOT distros force CloudWatch Application Signals **off** at
   startup, even if the function's environment sets `OTEL_AWS_APPLICATION_SIGNALS_ENABLED=true`. If you were
   already using Application Signals on that function, it stops reporting. Pick
@@ -181,6 +215,110 @@ Prerequisites depend on how the function is instrumented:
   **Verify in CloudWatch.** A configuration that matches what Odigos expects is not proof that data reaches
   AWS. Invoke the function, then check its service, operations, and metrics in CloudWatch Application Signals.
 </Tip>
+
+## Collector-less distros
+
+The other distros send telemetry from the SDK to a small OpenTelemetry collector that runs inside the Lambda
+sandbox, on `localhost`. The collector forwards it to your destination **after** your handler has returned its
+response. A collector-less distro removes that collector, and the SDK exports straight to your destination.
+
+Pick one when the collector's memory and start-up cost matter more than keeping your function isolated from
+the destination. It saves 40 to 64 MB per function. See [Memory and CPU](#memory-and-cpu).
+
+<Warning>
+  **Every collector-less distro has drawbacks: it trades the collector's memory for your function's latency
+  and reliability. Read all of this before you select one.**
+
+  **How it affects your function:**
+
+  - **Every response waits for the export.** The SDK sends traces, metrics, and logs to your destination
+    before the function returns its response. The round trip to your destination is added to every
+    invocation, and to its billed duration. In testing, a destination that took 300 ms to answer added 0.3 to
+    0.9 seconds to every response. With the collector, it made no measurable difference.
+  - **An unreachable destination still slows every invocation.** Odigos caps each wait on the destination at one
+    second. Without the cap, the SDKs waited 10 seconds (Node.js, Java), 30 to 60 seconds (Python), or
+    indefinitely (Ruby). With it, a destination that never answers added about 1 second per invocation for
+    Node.js and Python, 1 to 2 seconds for Ruby, and 1 to 4.4 seconds for Java. Java ADOT + Application Signals
+    still took up to 12 seconds, because its Application Signals pipeline isn't fully covered by the cap. That can
+    exceed a short function timeout, and the function's callers then get errors (for example,
+    `500 Internal Server Error` from API Gateway). With the collector, it made no measurable difference.
+  - **Slow and failed exports are lost.** An export that takes longer than the one-second cap is abandoned, and
+    nothing buffers telemetry or retries it later. To allow a slower destination, set the cap yourself on the
+    function: `OTEL_EXPORTER_OTLP_TIMEOUT` (seconds for Python and Ruby, milliseconds for the others),
+    `OTEL_BSP_EXPORT_TIMEOUT`, `OTEL_BLRP_EXPORT_TIMEOUT`, `OTEL_METRIC_EXPORT_TIMEOUT`, and
+    `OTEL_INSTRUMENTATION_AWS_LAMBDA_FLUSH_TIMEOUT` (milliseconds). Values the function sets take precedence.
+  - **Function output logs aren't collected.** Ruby and the lightweight Java wrappers send logs only by
+    capturing the function's stdout and stderr, which the collector does. Their collector-less variants send
+    traces (and, for Java, metrics) but no logs.
+
+  **Requirements and limitations:**
+
+  - **An OTLP/HTTP destination.** The SDKs export over OTLP/HTTP only, so a destination with only a gRPC
+    endpoint is rejected.
+  - **Network access from the function to the destination.** The function itself opens the connection.
+  - **Handler mode only.** Collector-less distros aren't offered for functions behind the AWS Lambda Web Adapter.
+  - **Layers newer than v0.0.27.** An older layer ignores the setting. The OpenTelemetry distros then keep
+    running their collector, and ADOT exports to a collector that isn't attached, so its telemetry is lost.
+</Warning>
+
+How it's packaged:
+
+- **ADOT** attaches only the SDK layer. The separate collector layer is left off, so the function needs one
+  free layer slot instead of two.
+- **The other distros** ship the collector inside their single layer. In a collector-less function, a small
+  idle extension starts in its place, because Lambda fails to start a function whose extension exits without
+  registering. The idle extension registers for shutdown only, so it never holds up an invocation.
+
+How much a collector-less distro slows a warm response down, measured with the same small function in each
+language in the AWS Lambda runtime images at 512 MB, with Lambda's CPU share for that size:
+
+| Distro | Destination answers in 300 ms | Destination never answers |
+| --- | --- | --- |
+| Java full agent | +0.3 s | 1.0–2.9 s per response |
+| Java lightweight wrappers | +0.3 s | 2.0–2.7 s per response |
+| Java ADOT | +0.3 s | 1.9–4.4 s per response |
+| Java ADOT + Application Signals | +0.3 s | 2.3–12.2 s per response |
+| Node.js OpenTelemetry | +0.3 s | 1.0 s per response |
+| Node.js ADOT | +0.4 s | 1.0–1.1 s per response |
+| Node.js ADOT + Application Signals | +0.3 s | 1.0–1.2 s per response |
+| Python OpenTelemetry | +0.6 s | 1.0 s per response |
+| Python ADOT | +0.9 s | 1.0–1.1 s per response |
+| Python ADOT + Application Signals | +0.9 s | 1.0 s per response |
+| Ruby | +0.3 s | 1.0–2.0 s per response |
+
+With the collector, neither destination changed the response time of any distro.
+
+## Memory and CPU
+
+Instrumentation adds memory to your function: the SDK inside your function's process, plus the collector unless
+the distro is collector-less. Odigos doesn't check or enforce a memory size, so size the function yourself.
+This is how much each distro added to a small test function in its language:
+
+| Distro | With collector | Collector-less |
+| --- | --- | --- |
+| Java full agent | +200 MB | +160 MB |
+| Java lightweight wrappers | +80 MB | +32 MB |
+| Java ADOT | +200 MB | +152 MB |
+| Java ADOT + Application Signals | +208 MB | +160 MB |
+| Node.js OpenTelemetry | +104 MB | +48 MB |
+| Node.js ADOT | +120 MB | +72 MB |
+| Node.js ADOT + Application Signals | +128 MB | +80 MB |
+| Python OpenTelemetry | +104 MB | +56 MB |
+| Python ADOT | +104 MB | +48 MB |
+| Python ADOT + Application Signals | +112 MB | +48 MB |
+| Ruby | +72 MB | +32 MB |
+
+These are the most each distro added at 128, 256, and 512 MB in the AWS Lambda runtime images, scaled to how
+Lambda reports memory use. Your function's own libraries change the numbers, so treat them as a starting point:
+compare the **Max Memory Used** on the function's `REPORT` log lines before and after you instrument it.
+
+<Note>
+  Memory isn't the only cost. Lambda gives a function CPU in proportion to its memory size, about one vCPU at
+  1,769 MB, so a 128 MB function gets about a fourteenth of a vCPU. The SDK, the collector, and your code
+  share it. A Node.js function instrumented with the default distro timed out at 128 MB with a 3-second timeout,
+  mostly for lack of CPU, and answered in about a second or less at 512 MB. Use at least 256 MB, and 512 MB for
+  the Java agent and ADOT, especially with short timeouts.
+</Note>
 
 ## Switch distros
 
@@ -267,7 +405,7 @@ are detected from their attached layers, and only distros with a verified web-se
 | Python | Python Lambda OpenTelemetry only |
 | Ruby | None — not supported |
 
-ADOT and the lightweight Java wrappers are never offered for these functions.
+ADOT, the lightweight Java wrappers, and the collector-less distros are never offered for these functions.
 
 ## Signals each distro produces
 
@@ -280,6 +418,10 @@ Odigos exports the signals your destination enables, as far as each distro can p
 | Java lightweight wrappers | Yes | Exported when enabled | Function output (stdout/stderr) |
 | Node.js, Python (default and ADOT) | Yes | Yes | Yes |
 | Ruby | Yes | No | Function output (stdout/stderr) |
+| Collector-less Java lightweight wrappers | Yes | Exported when enabled | No |
+| Collector-less Ruby | Yes | No | No |
+
+The other collector-less distros produce the same signals as their counterparts.
 
 "Yes" and "Exported when enabled" mean the signal is exported to your destination when you enable it there. What the SDK emits depends on its instrumentations and on what your code records, so a signal you enable can still be empty. "Function output" means logs are collected from the function's stdout and stderr through the Lambda
 Telemetry API, because those SDKs can't bridge your logging framework. For the other distros, application
@@ -291,13 +433,14 @@ and Bunyan) — a function that never logs produces no log records. No Lambda di
 | Message on the source | Meaning |
 | --- | --- |
 | `unsupported instrumentation distro "<name>" for Lambda <language> (handler)` / `(web-server)` | The selected distro doesn't exist for this language, or isn't offered for Web Adapter functions. |
-| `Lambda distro <name> does not support runtime <runtime>` | An ADOT distro was selected for a runtime ADOT doesn't support. |
+| `Lambda distro <name> does not support runtime <runtime>` | An ADOT distro was selected for a runtime ADOT doesn't support, or a Ruby function runs a Ruby version other than 3.3 or 3.4. |
 | `ADOT + Application Signals requires traces and metrics to be enabled for the destination` | Enable both traces and metrics on the connector's destination, or choose plain ADOT. |
 | `Application Signals requires existing policy <arn>: …` | The AWS managed policy doesn't exist or can't be read. Odigos never creates it. |
 | `attach existing Application Signals policy to execution role <name>: …` | Odigos couldn't attach the policy to the execution role, usually a missing IAM permission. |
 | `enable Application Signals discovery: …` | Odigos couldn't enable discovery, usually a missing permission. |
 | `Application Signals requires a valid Lambda execution-role ARN` | The function's execution role couldn't be determined. |
-| `max amount of layers was reached already: …` | The function already uses too many layers. ADOT needs two free slots, the other distros one. |
+| `max amount of layers was reached already: …` | The function already uses too many layers. ADOT needs two free slots, the other distros (and collector-less ADOT) one. |
+| `unsupported: Lambda distro <name> exports without a collector and requires a destination with an OTLP/HTTP endpoint` | A collector-less distro was selected, but the destination has only a gRPC endpoint. Add an OTLP/HTTP endpoint, or pick a distro with a collector. |
 | `Lambda environment requires N bytes, exceeding AWS's 4096-byte limit; …` | Your own environment variables plus destination headers don't fit. Shorten them. |
 | `unsupported: function sets a non-Odigos AWS_LAMBDA_EXEC_WRAPPER "<value>" …` | The function already uses its own exec wrapper. Odigos won't overwrite it. |
 | `unsupported: Java handler "<handler>" is not a class[::method] handler the OpenTelemetry Java layer can wrap` | The Java handler isn't a class reference such as `com.example.App` or `com.example.App::handleRequest`. |
@@ -309,7 +452,8 @@ and Bunyan) — a function that never logs produces no log records. No Lambda di
 Switching distros or uninstrumenting a function removes only what it added to the function: the layers, the two
 environment variables, and the tags. See [Lambda uninstall](/cloud-connectors/aws/workloads/lambda/instrument#bill-of-materials-and-uninstall).
 Layer versions left in your account are covered in [layer cleanup](/cloud-connectors/aws/workloads/lambda/preload#bill-of-materials-and-uninstall).
-The ADOT collector layer runs inside the Lambda sandbox. It is not a regional Collector.
+The ADOT collector layer runs inside the Lambda sandbox. It is not a regional Collector. Collector-less ADOT
+functions don't have it.
 
 ADOT with Application Signals also leaves two shared items behind, which uninstrumenting does not remove:
 

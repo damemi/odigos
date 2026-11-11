@@ -12,6 +12,8 @@ Existing upstream defaults are unchanged. Ruby has no ADOT distribution. .NET an
 
 Each ADOT selection attaches two Odigos-owned layers: an AWS SDK layer and an architecture-specific collector layer. The collector is separate because combining it with the Java SDK exceeds Lambda's 50 MiB direct-upload limit. Switching SDKs removes the previous Odigos SDK/collector layers and preserves unrelated layers. Rollback restores managed environment variables and removes both attached versions. Two free layer slots are required.
 
+Each ADOT selection also has a `-no-collector` variant (for example `nodejs-lambda-adot-no-collector`) that attaches only the SDK layer and one layer slot. Its SDK exports straight to the destination's OTLP/HTTP endpoint before the invocation returns, so a slow or unreachable destination delays every invocation and failed exports are dropped. A destination without an OTLP/HTTP endpoint is rejected as unsupported.
+
 The SDK explicitly exports each selected signal over OTLP/HTTP to the local collector, which forwards it to the selected destination. Disabled destination signals use `none`. Per-signal endpoints are required because AWS's Lambda configurators can otherwise redirect traces to X-Ray. All supported library instrumentations are enabled, including Node logging bridges and runtime instrumentation. Python uses pure-Python fallbacks for optional accelerators, avoiding the x86-only binaries in the published AWS zip on Graviton. Java uses the existing SDK-free invocation bridge with the AWS full agent, preserving Function URL/HTTP API context, stream handlers, and invocation flushing without initializing another SDK.
 
 ## Application Signals prerequisites

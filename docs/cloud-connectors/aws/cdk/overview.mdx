@@ -42,7 +42,7 @@ Pick Odigos-managed when you'd rather not touch your infrastructure code at all.
 ## Install
 
 ```bash
-npm install --save-exact @odigos/aws-cdk@0.0.27
+npm install --save-exact @odigos/aws-cdk@0.0.30
 ```
 
 The package needs `aws-cdk-lib` `^2.150.0`, `constructs` `^10.0.5`, and Node.js 18.12 or later.
@@ -54,8 +54,8 @@ The package needs `aws-cdk-lib` `^2.150.0`, `constructs` `^10.0.5`, and Node.js 
   instead.
 </Info>
 
-**The package version *is* the instrumentation version.** `@odigos/aws-cdk@0.0.27` uses the OpenTelemetry layers and
-agents bundle built by Odigos release `v0.0.27`, and nothing resolves or moves at deploy time. Upgrading is a
+**The package version *is* the instrumentation version.** `@odigos/aws-cdk@0.0.30` uses the OpenTelemetry layers and
+agents bundle built by Odigos release `v0.0.30`, and nothing resolves or moves at deploy time. Upgrading is a
 deliberate `npm update` followed by a `cdk diff` that shows exactly what changes.
 
 ## The two constructs
@@ -123,7 +123,7 @@ definition, such as ones written by an earlier package version. The only environ
 Fargate still uses the environment variable, with this shape:
 
 ```json
-{"v":1,"source":"cdk","version":"v0.0.27","lang":"java","image":"registry.odigos.io/odigos-fargate-agents:v0.0.27"}
+{"v":1,"source":"cdk","version":"v0.0.30","lang":"java","image":"registry.odigos.io/odigos-fargate-agents:v0.0.30"}
 ```
 
 Odigos reads `lang` and `image`; `v`, `source`, and `version` are informational.

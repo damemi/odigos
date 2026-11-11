@@ -153,7 +153,7 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 			}
 			// Publish or clear the fallback explanation while keeping the last applied route. The route is
 			// advanced only after a settled live configuration conforms to the desired target below.
-			if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, lambdaSignalRoutingNote(routing, fn.Runtime)); serr != nil {
+			if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, lambdaSignalRoutingNote(routing, fn.Runtime, enabled[fn.FunctionARN].distro)); serr != nil {
 				observeLog.Warn("set lambda routing note failed", "function", fn.FunctionName, "error", serr)
 			}
 			cur, ok := live[fn.FunctionARN]
@@ -171,7 +171,7 @@ func (o *LambdaObserver) Observe(ctx context.Context) error {
 					}
 				}
 				if obs.Conformance == baseapi.ConformanceConformant {
-					if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), lambdaSignalRoutingNote(routing, fn.Runtime)); serr != nil {
+					if serr := o.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), lambdaSignalRoutingNote(routing, fn.Runtime, enabled[fn.FunctionARN].distro)); serr != nil {
 						observeLog.Warn("set lambda routing after conformance failed", "function", fn.FunctionName, "error", serr)
 					}
 				}
@@ -230,7 +230,12 @@ func (o *LambdaObserver) observation(ctx context.Context, fn store.LambdaFunctio
 	// A destination the collector cannot be configured for is a configuration problem, not function drift:
 	// there is no desired state to judge this function against, so say that rather than reporting every
 	// marked function as Partial because the connector cannot describe what it wants.
-	collectorCfg, cfgErr := renderCollectorConfig(dest, destHeaders)
+	cfgErr := validateLambdaNoCollectorTarget(LanguageFromRuntime(fn.Runtime), src.distro, dest)
+	dest = lambdaExportTarget(LanguageFromRuntime(fn.Runtime), src.distro, dest)
+	collectorCfg, err := renderCollectorConfig(dest, destHeaders)
+	if cfgErr == nil {
+		cfgErr = err
+	}
 	if cfgErr == nil {
 		cfgErr = validateLambdaApplicationSignalsTarget(LanguageFromRuntime(fn.Runtime), src.distro, dest)
 	}

@@ -28,6 +28,12 @@ type lambdaRecipe struct {
 	CompatibleRuntimes   []string          `json:"compatibleRuntimes,omitempty"`
 	Environment          map[string]string `json:"environment,omitempty"`
 	BootstrapEnvironment map[string]string `json:"bootstrapEnvironment,omitempty"`
+	// NoCollector distros export from the SDK straight to an OTLP/HTTP destination, without the in-sandbox
+	// collector (and, for ADOT, without the collector layer).
+	NoCollector bool `json:"noCollector,omitempty"`
+	// MemoryOverheadMiB is the peak memory the distro added to a small test function, SDK and collector included.
+	// Sizing guidance only: a function's own libraries change it, so nothing is refused on its basis.
+	MemoryOverheadMiB int32 `json:"memoryOverheadMiB,omitempty"`
 }
 
 func lambdaRecipes() []lambdaRecipe {
@@ -45,7 +51,8 @@ func LambdaDistros(language, activation string) []baseapi.InstrumentationDistro 
 		if d.Language != language {
 			continue
 		}
-		if activation == ActivationWebServer && (d.Artifact != "" || language == "ruby" || (language == "java" && d.Name != JavaAgentDistro)) {
+		// A web server's SDK is never flushed per invocation, so it relies on the in-sandbox collector.
+		if activation == ActivationWebServer && (d.Artifact != "" || d.NoCollector || language == "ruby" || (language == "java" && d.Name != JavaAgentDistro)) {
 			continue
 		}
 		out = append(out, d.InstrumentationDistro)
@@ -80,20 +87,29 @@ func DesiredLambdaPlanForDistro(lang, activation, name string) (plan.Plan, error
 	if err != nil {
 		return p, err
 	}
-	if recipe := recipeFor(lang, d.Name); recipe.Artifact != "" {
+	recipe := recipeFor(lang, d.Name)
+	if recipe.Artifact != "" {
 		for i := range p.Fragments {
 			if p.Fragments[i].Kind == plan.KindLayer {
 				p.Fragments[i].Layer.Placeholder = "<OTEL_LAYER_ARN>"
 			}
 		}
-		p.Fragments = append(p.Fragments, plan.Fragment{Anchor: plan.Anchor{Scope: plan.ScopeWorkload, Field: plan.FieldLayers}, Kind: plan.KindLayer, Layer: &plan.Layer{Placeholder: "<OTEL_COLLECTOR_LAYER_ARN>"}})
-		p.Placeholders = append(p.Placeholders, plan.Placeholder{Token: "<OTEL_COLLECTOR_LAYER_ARN>", Description: "The Odigos ADOT collector layer version ARN for the same region and architecture. Attach it alongside the ADOT SDK layer."})
+		if !recipe.NoCollector {
+			p.Fragments = append(p.Fragments, plan.Fragment{Anchor: plan.Anchor{Scope: plan.ScopeWorkload, Field: plan.FieldLayers}, Kind: plan.KindLayer, Layer: &plan.Layer{Placeholder: "<OTEL_COLLECTOR_LAYER_ARN>"}})
+			p.Placeholders = append(p.Placeholders, plan.Placeholder{Token: "<OTEL_COLLECTOR_LAYER_ARN>", Description: "The Odigos ADOT collector layer version ARN for the same region and architecture. Attach it alongside the ADOT SDK layer."})
+		}
 		p.Notes = append(p.Notes, "Use the matching ADOT layer, replacing any previous Odigos SDK layer. ADOT supports handler mode only.")
 		if recipe.ApplicationSignals {
 			p.Notes = append(p.Notes, "Application Signals additionally sends service telemetry to AWS. For this manual deployment, enable Application Signals service discovery and grant the existing CloudWatchLambdaApplicationSignalsExecutionRolePolicy to the function execution role. The selected destination must enable traces and metrics.")
 		}
 	}
-	wrapper := recipeFor(lang, d.Name).ExecWrapper
+	if recipe.NoCollector {
+		p.Notes = append(p.Notes, lambdaNoCollectorNote)
+	}
+	if recipe.MemoryOverheadMiB > 0 {
+		p.Notes = append(p.Notes, fmt.Sprintf("In testing, this distro added up to about %d MB of memory to a small function; size the function with room for it.", recipe.MemoryOverheadMiB))
+	}
+	wrapper := recipe.ExecWrapper
 	if activation == ActivationWebServer {
 		wrapper = lambdaWebServerWrapper
 	}
@@ -270,7 +286,7 @@ type collectorLayerResolver interface {
 }
 
 func resolveLambdaCollector(ctx context.Context, layers LayerResolver, fn store.LambdaFunction, distro string, readOnly bool) (string, error) {
-	if recipeFor(LanguageFromRuntime(fn.Runtime), distro).Artifact == "" {
+	if recipe := recipeFor(LanguageFromRuntime(fn.Runtime), distro); recipe.Artifact == "" || recipe.NoCollector {
 		return "", nil
 	}
 	if r, ok := layers.(collectorLayerResolver); ok {

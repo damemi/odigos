@@ -233,7 +233,7 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 			// Publish or clear the fallback explanation immediately, but retain the last applied Via until the
 			// configuration is confirmed or AWS accepts the update. A failed/deferred update must not claim a
 			// route that is not yet live.
-			if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, lambdaSignalRoutingNote(routing, fn.Runtime)); serr != nil {
+			if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, fn.RoutingVia, lambdaSignalRoutingNote(routing, fn.Runtime, enabled[fn.FunctionARN].distro)); serr != nil {
 				log.Warn("set lambda routing note failed", "function", fn.FunctionName, "error", serr)
 			}
 			if err := i.instrument(ctx, fn, routing.Target, routing.Headers, enabled[fn.FunctionARN]); err != nil {
@@ -246,7 +246,7 @@ func (i *LambdaInstrumentor) Reconcile(ctx context.Context) error {
 				i.recordCutover(ctx, fn, routing, err)
 			} else {
 				_ = i.store.ClearLambdaInstrumentationError(ctx, fn.FunctionARN)
-				if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), lambdaSignalRoutingNote(routing, fn.Runtime)); serr != nil {
+				if serr := i.store.SetLambdaRouting(ctx, fn.FunctionARN, string(routing.Via), lambdaSignalRoutingNote(routing, fn.Runtime, enabled[fn.FunctionARN].distro)); serr != nil {
 					log.Warn("set lambda routing after converge failed", "function", fn.FunctionName, "error", serr)
 				}
 				i.recordCutover(ctx, fn, routing, nil)
@@ -470,6 +470,10 @@ func (i *LambdaInstrumentor) instrument(ctx context.Context, fn store.LambdaFunc
 	if err := validateLambdaApplicationSignalsTarget(lang, src.distro, dest); err != nil {
 		return err
 	}
+	if err := validateLambdaNoCollectorTarget(lang, src.distro, dest); err != nil {
+		return err
+	}
+	dest = lambdaExportTarget(lang, src.distro, dest)
 	debug := i.debug()
 	// Render the collector's configuration before touching AWS. A destination the collector cannot be
 	// configured for — no usable endpoint, or no accepted signal — is an instrumentation error reported
@@ -848,7 +852,8 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 		if expectedService == "" {
 			expectedService = fn.FunctionName
 		}
-		if err != nil || c.Service != expectedService || c.Signals != signalMask(dest) || c.Debug != (debug && !webServer) || c.ApplicationSignals != recipeFor(LanguageFromRuntime(fn.Runtime), distro).ApplicationSignals || c.FunctionLogs != (dest.Logs && !webServer && lambdaFunctionLogs(LanguageFromRuntime(fn.Runtime), execWrapperForRuntime(fn.Runtime, distro))) || (c.WebWrapper != nil) != webServer {
+		recipe := recipeFor(LanguageFromRuntime(fn.Runtime), distro)
+		if err != nil || c.Service != expectedService || c.Signals != signalMask(dest) || c.Debug != (debug && !webServer) || c.ApplicationSignals != recipe.ApplicationSignals || c.NoCollector != recipe.NoCollector || c.FunctionLogs != lambdaFunctionLogsEnabled(dest, webServer, fn.Runtime, distro) || (c.WebWrapper != nil) != webServer {
 			return []string{componentCollectorExport}
 		}
 		cfg, err := renderCollectorConfig(c.target(), c.Headers)
@@ -884,7 +889,11 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 	if layerARN != "" && (!contains(layers, layerARN) || !layerFamilyMatches(layerARN, fn.Runtime, firstArch(fn.Architecture), distro)) {
 		diff = append(diff, componentInstrumentationLayer)
 	}
-	if recipeFor(LanguageFromRuntime(fn.Runtime), distro).Artifact != "" {
+	if recipe := recipeFor(LanguageFromRuntime(fn.Runtime), distro); recipe.NoCollector {
+		if hasCollectorLayer(layers, firstArch(fn.Architecture)) {
+			diff = append(diff, componentInstrumentationLayer)
+		}
+	} else if recipe.Artifact != "" {
 		if collector := recordedCollectorLayer(env); collector != "" {
 			if !contains(layers, collector) || !isCollectorLayer(collector, firstArch(fn.Architecture)) {
 				diff = append(diff, componentInstrumentationLayer)

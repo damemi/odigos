@@ -114,9 +114,14 @@ on when you want those signals and your destination is configured to accept them
 </Warning>
 
 <Note>
-  The Application Signals distros (`*-adot-application-signals`) require both `destination.traces` and
-  `destination.metrics` to be `true`; the build fails otherwise. See
+  The Application Signals distros (`*-adot-application-signals`, with or without `-no-collector`) require both
+  `destination.traces` and `destination.metrics` to be `true`; the build fails otherwise. See
   [ADOT and Application Signals](/cloud-connectors/aws/cdk/lambda#adot-and-application-signals).
+</Note>
+
+<Note>
+  The collector-less distros (`*-no-collector`) require `destination.httpEndpoint`, because their SDKs export
+  straight to it over OTLP/HTTP. See [Choosing a distro](/cloud-connectors/aws/cdk/lambda#choosing-a-distro).
 </Note>
 
 ### Signals by language

@@ -11,10 +11,16 @@ func applySignalActivation(env map[string]string, dest domaindest.OTLPTarget, la
 	}
 }
 
-func lambdaSignalRoutingNote(routing domaindest.Routing, runtime string) *baseapi.WorkloadRoutingNote {
+func lambdaSignalRoutingNote(routing domaindest.Routing, runtime, distro string) *baseapi.WorkloadRoutingNote {
 	language := LanguageFromRuntime(runtime)
-	if (routing.Target.Profiles || language == LangRuby && (routing.Target.Metrics || routing.Target.Logs)) && routing.Outcome != domaindest.RoutingError {
-		note := routing.Target.LambdaCollectionSummary(language)
+	target := routing.Target
+	// These SDKs log only through function output, which a collector-less distro has nothing to capture.
+	dropsLogs := target.Logs && !lambdaFunctionLogsEnabled(target, false, runtime, distro) && lambdaFunctionLogs(language, execWrapperForRuntime(runtime, distro))
+	if dropsLogs {
+		target.Logs = false
+	}
+	if (routing.Target.Profiles || dropsLogs || language == LangRuby && (routing.Target.Metrics || routing.Target.Logs)) && routing.Outcome != domaindest.RoutingError {
+		note := target.LambdaCollectionSummary(language)
 		if routing.Note != "" {
 			note += " " + routing.Note
 		}
