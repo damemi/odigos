@@ -108,7 +108,7 @@ You can install Odigos Central using the CLI or Helm chart.
 
 ## Keycloak image
 
-Odigos Central deploys Keycloak from the image in `auth.image` (see the [`odigos-central` Helm values file](https://github.com/odigos-io/odigos/blob/main/helm/odigos-central/values.yaml)). That image is based on official Keycloak with health and metrics enabled at build time, which is required for `start --optimized`.
+Odigos Central deploys Keycloak from the image in `auth.image` (see `helm show values oci://registry.odigos.io/charts/odigos-central`). That image is based on official Keycloak with health and metrics enabled at build time, which is required for `start --optimized`.
 
 The chart starts Keycloak with `start --optimized --http-enabled=true` and probes `/health/live` and `/health/ready`. Those endpoints are not available on a stock official image in optimized mode.
 

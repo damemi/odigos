@@ -4,7 +4,7 @@ sidebarTitle: "Processor Addition"
 description: "Add OpenTelemetry Collector processors to transform, filter, or enrich OpenTelemetry signals in the VM Agent"
 ---
 
-[Processor addition](/vmagent/setup/configuration/actions/overview#processor-addition) lets you add an OpenTelemetry Collector processor to transform, filter, or enrich signals (e.g., add or delete attributes, batch, sample, mask PII). Processors defined in the [Odigos collector builder config](https://github.com/odigos-io/odigos/blob/main/collector/builder-config.yaml#L61) are supported.
+[Processor addition](/vmagent/setup/configuration/actions/overview#processor-addition) lets you add an OpenTelemetry Collector processor to transform, filter, or enrich signals (e.g., add or delete attributes, batch, sample, mask PII). Processors defined in the Odigos collector builder config are supported.
 
 There are two ways to add a processor addition action: using `odictl` or using YAML files.
 
@@ -49,7 +49,7 @@ There are two ways to add a processor addition action: using `odictl` or using Y
       <Step title="Configure the processor addition">
 
         1. Press `i` to enter INSERT mode.
-        2. Set the processor type and options. Only processors listed in the [Odigos collector builder config](https://github.com/odigos-io/odigos/blob/main/collector/builder-config.yaml#L61) are supported. Set the processor name (e.g., `attributes`, `batch`) and fill in any processor-specific configuration.
+        2. Set the processor type and options. Only processors listed in the Odigos collector builder config are supported. Set the processor name (e.g., `attributes`, `batch`) and fill in any processor-specific configuration.
         3. When finished, press `Esc`, then type `:wq` to save and exit.
 
         <img 
@@ -96,7 +96,7 @@ There are two ways to add a processor addition action: using `odictl` or using Y
         ```
       </Step>
       <Step title="Add the processor addition configuration">
-        Add a processor addition action with the desired processor type and config. Processors listed in the [Odigos collector builder config](https://github.com/odigos-io/odigos/blob/main/collector/builder-config.yaml#L61) are supported. Set `config.type` to one of those processor names (e.g., `attributes`, `batch`), and use `config.processorConfig` for processor-specific options. See the [OpenTelemetry Collector Contrib documentation](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor) for each processor's configuration.
+        Add a processor addition action with the desired processor type and config. Processors listed in the Odigos collector builder config are supported. Set `config.type` to one of those processor names (e.g., `attributes`, `batch`), and use `config.processorConfig` for processor-specific options. See the [OpenTelemetry Collector Contrib documentation](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor) for each processor's configuration.
 
         For example:
 

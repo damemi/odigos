@@ -18,7 +18,7 @@ The backend waits until both succeed:
 1. `GET http://keycloak:8080/realms/master/.well-known/openid-configuration`
 2. A password grant against the Keycloak **master** admin (`admin-cli`) using the credentials in the `keycloak-admin-credentials` secret
 
-Keycloak itself is only Ready when `/health/live` and `/health/ready` succeed. Those endpoints exist because Odigos ships a **custom Keycloak image** with health checks enabled at **build time**. Use `auth.image` from the [`odigos-central` Helm values file](https://github.com/odigos-io/odigos/blob/main/helm/odigos-central/values.yaml) as the source of truth. Replacing it with the official Keycloak image while keeping `start --optimized` and the chart probes typically leaves `central-backend` stuck in this wait. See [Installation](/central/installation#keycloak-image).
+Keycloak itself is only Ready when `/health/live` and `/health/ready` succeed. Those endpoints exist because Odigos ships a **custom Keycloak image** with health checks enabled at **build time**. Use `auth.image` from the chart values (`helm show values oci://registry.odigos.io/charts/odigos-central`) as the source of truth. Replacing it with the official Keycloak image while keeping `start --optimized` and the chart probes typically leaves `central-backend` stuck in this wait. See [Installation](/central/installation#keycloak-image).
 
 ```bash
 kubectl logs deploy/central-backend -n odigos-central --tail=50

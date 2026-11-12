@@ -599,8 +599,7 @@ def process_overview(backend_yaml_dir, docs_dir):
 
     content = (
         "<Tip>"
-        + "\n  Can't find your backend in Odigos? Please tell us! We are constantly adding new integrations.<br />"
-        + "\n  You can also follow our quick [add new destination](/enterprise/adding-new-dest) guide and submit a PR."
+        + "\n  Can't find your backend in Odigos? Please tell us! We are constantly adding new integrations."
         + "\n</Tip>"
         + "\n\n| | | | Traces | Metrics | Logs | Profiles |"
         + "\n|---|---|---|:---:|:---:|:---:|:---:|"
