@@ -19,9 +19,12 @@ kubeadmConfigPatches:
   # Secret volumes are refreshed on the kubelet's periodic pod sync (default 1m), which delays
   # webhook certs that are written to a secret after the pod started.
   # https://kubernetes.io/docs/concepts/configuration/secret/#using-secrets-as-files-from-a-pod
+  # Image pulls run in parallel instead of one at a time, so pods start sooner after install.
   - |
     kind: KubeletConfiguration
     syncFrequency: 10s
+    serializeImagePulls: false
+    maxParallelImagePulls: 6
 nodes:
   - role: control-plane
   - role: worker

@@ -4,6 +4,7 @@
 # - Runs the unit tests of every platform module, with the collector modules in their own job, and
 #   builds the CLI.
 # - Packages the Helm charts and pushes the odigos chart to the project's Depot registry as an OCI chart.
+# - Runs the sampling e2e tests on kind clusters with those images and that chart.
 #
 # PRs to release branches build the Depot images for both platforms without the layer cache.
 # Otherwise the "build: arm" and "build: no-cache" PR labels pick their build options.
@@ -43,6 +44,10 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
+    # DEPOT_SAVE_TAG includes the run attempt; re-running only a failed e2e job keeps this attempt's
+    # output, so the e2e job reads the tag the images were saved with from here.
+    outputs:
+      save-tag: ${{ env.DEPOT_SAVE_TAG }}
     strategy:
       fail-fast: false
       matrix:
@@ -213,6 +218,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      chart-ref: ${{ steps.push-chart.outputs.chart-ref }}
     env:
       # Same as IMAGE_TAG; job env cannot read the workflow env.
       TAG: v0.0.0-pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
@@ -238,6 +245,7 @@ jobs:
       # helm push always appends the chart name to it. oras pushes the chart there with Helm's
       # media types, tagged with the chart version, since Helm only resolves semver tags.
       - name: Push odigos Helm chart to the Depot registry
+        id: push-chart
         working-directory: helm
         run: |
           set -euo pipefail
@@ -249,6 +257,130 @@ jobs:
             --config chart-config.json:application/vnd.cncf.helm.config.v1+json \
             "$chart:application/vnd.cncf.helm.chart.content.v1.tar+gzip"
           echo "Pushed oci://$CHART_REF" >> "$GITHUB_STEP_SUMMARY"
+          echo "chart-ref=$CHART_REF" >> "$GITHUB_OUTPUT"
+
+  # Installs the odigos chart pushed by package-helm on a kind cluster, with the images saved by
+  # build-depot-images, and runs one sampling e2e test from tests/e2e against it.
+  e2e-sampling:
+    name: E2E (${{ matrix.test }})
+    needs:
+      - build-depot-images
+      - package-helm
+    runs-on: depot-ubuntu-24.04-4
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - head-sampling-http-nodejs
+          - head-sampling-http-python
+          - head-sampling-http-java
+          - tail-sampling-nodejs
+    # id-token lets the job log in to the Depot registry over OIDC.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGES_SAVE_TAG: ${{ needs.build-depot-images.outputs.save-tag }}
+      CHART_REF: ${{ needs.package-helm.outputs.chart-ref }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      - uses: oras-project/setup-oras@v1
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.15.2
+
+      - name: Install chainsaw
+        uses: kyverno/action-install-chainsaw@v0.2.13
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          node_image: kindest/node:v1.32.11@sha256:5fc52d52a7b9574015299724bd68f183702956aa4a2116ae75a63cb574b35af8
+          version: "v0.33.0"
+          cluster_name: kind
+          config: tests/common/apply/kind-config.yaml
+          ignore_failed_clean: true
+
+      - name: Wait for cluster readiness
+        run: bash tests/common/wait_for_kind_ready.sh
+
+      - name: Log in to the Depot registry
+        run: echo "$DEPOT_TOKEN" | oras login registry.depot.dev --username x-token --password-stdin
+
+      # The cluster pulls the saved images from the Depot registry with a pull secret in the Odigos
+      # namespace, as in odigos-local-env. Odiglet pre-pulls the agents image on every node, so the
+      # instrumented test apps need no secret.
+      - name: Create the Depot registry pull secret
+        run: |
+          set -euo pipefail
+          kubectl create namespace odigos-test
+          kubectl create secret docker-registry depot-registry \
+            --namespace odigos-test \
+            --docker-server=registry.depot.dev \
+            --docker-username=x-token \
+            --docker-password="$(depot pull-token --project "$DEPOT_PROJECT")"
+
+      # Helm values that point each chart image component at its image saved by build-depot-images.
+      # The scheduler and autoscaler Deployments run 0 replicas and the CLI image only runs on
+      # uninstall, so they need no override.
+      - name: Write Helm values for the Depot images
+        run: |
+          set -euo pipefail
+          values="$RUNNER_TEMP/odigos-images-values.yaml"
+          {
+            echo "imagePullSecrets:"
+            echo "  - depot-registry"
+            echo "images:"
+            # <chart image component>=<build-depot-images service>
+            for pair in enterprise-instrumentor=instrumentor enterprise-collector=collector \
+              enterprise-odiglet=odiglet enterprise-agents=agents enterprise-ui=ui; do
+              echo "  ${pair%%=*}: registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG-${pair#*=}"
+            done
+            # Victoria Metrics is published, not built in this repo.
+            echo "  victoria-metrics: registry.odigos.io/odigos-victoria-metrics:latest"
+          } > "$values"
+          cat "$values"
+          echo "ODIGOS_HELM_VALUES=$values" >> "$GITHUB_ENV"
+
+      # oras saves the chart under its pushed file name, odigos-<version>.tgz.
+      - name: Pull odigos Helm chart from the Depot registry
+        run: |
+          set -euo pipefail
+          oras pull "$CHART_REF" --output "$RUNNER_TEMP/chart"
+          echo "ODIGOS_CHART=$RUNNER_TEMP/chart/odigos-${CHART_REF##*:}.tgz" >> "$GITHUB_ENV"
+
+      - name: Run E2E test
+        env:
+          ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
+        run: chainsaw test "tests/e2e/${{ matrix.test }}" --apply-timeout 30s
+
+      - name: Cluster diagnostics
+        if: failure()
+        run: |
+          echo "==== Nodes ===="; kubectl get nodes -o wide
+          echo "==== Pods (all namespaces) ===="; kubectl get pods -A -o wide
+          echo "==== Events ===="; kubectl get events -A --sort-by=.lastTimestamp | tail -n 200
+
+      - name: Export kind logs
+        if: failure()
+        run: kind export logs kind-logs
+        continue-on-error: true
+
+      - name: Upload kind logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-logs-${{ matrix.test }}
+          path: kind-logs
+        continue-on-error: true
 
   build-cli:
     runs-on: depot-ubuntu-latest
@@ -341,6 +473,7 @@ jobs:
       - build-frontend
       - vulnerability-report
       - package-helm
+      - e2e-sampling
       - build-cli
       - test-platform-k8s-modules
       - test-collector-modules
