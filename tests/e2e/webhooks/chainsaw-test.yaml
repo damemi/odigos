@@ -10,8 +10,7 @@ spec:
       try:
         - script:
             content: |
-              # The platform-k8s workflow sets ODIGOS_HELM_VALUES to the images it built on Depot.
-              ../../../cli/odigos install --ns odigos-test ${ODIGOS_HELM_VALUES:+-f "$ODIGOS_HELM_VALUES"} --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test
+              ../../../cli/odigos install --ns odigos-test -f ../../common/odigos-values.yaml --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test
               kubectl label namespace odigos-test odigos.io/system-object="true"
               ../../common/verify_odigos_installation.sh odigos-test
             timeout: 5m

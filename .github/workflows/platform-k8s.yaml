@@ -4,7 +4,7 @@
 # - Runs the unit tests of every platform module, with the collector modules in their own job, and
 #   builds the CLI binaries with goreleaser.
 # - Packages the Helm charts and pushes the odigos chart to the project's Depot registry as an OCI chart.
-# - Runs e2e tests on kind clusters with those images and that chart, on Kubernetes 1.32 and the
+# - Runs e2e tests on kind clusters with those images and the repo's chart, on Kubernetes 1.32 and the
 #   versions of the PR's "test-k8s/<version>" labels.
 #
 # PRs to release branches build the Depot images for both platforms without the layer cache, and
@@ -281,14 +281,13 @@ jobs:
           # Each must be in the supported-versions of .github/actions/kubernetes-tests.
           release-versions: "1.21.12,1.29,1.37"
 
-  # Installs the odigos chart pushed by package-helm on a kind cluster of one Kubernetes version,
-  # with the images saved by build-depot-images, and runs one e2e test against it.
+  # Installs Odigos on a kind cluster of one Kubernetes version, with the images saved by
+  # build-depot-images, and runs one e2e test against it.
   e2e:
     name: E2E (${{ matrix.kube-version }}, ${{ matrix.test }})
     needs:
       - resolve-kubernetes-versions
       - build-depot-images
-      - package-helm
     runs-on: depot-ubuntu-24.04-4
     strategy:
       fail-fast: false
@@ -321,7 +320,6 @@ jobs:
       id-token: write
     env:
       IMAGES_SAVE_TAG: ${{ needs.build-depot-images.outputs.save-tag }}
-      CHART_REF: ${{ needs.package-helm.outputs.chart-ref }}
     steps:
       - uses: actions/checkout@v7
 
@@ -329,8 +327,6 @@ jobs:
       - uses: depot/setup-action@v1
         with:
           oidc: true
-
-      - uses: oras-project/setup-oras@v1
 
       - name: Install Helm
         uses: azure/setup-helm@v4.2.0
@@ -369,9 +365,6 @@ jobs:
       - name: Wait for cluster readiness
         run: bash tests/common/wait_for_kind_ready.sh
 
-      - name: Log in to the Depot registry
-        run: echo "$DEPOT_TOKEN" | oras login registry.depot.dev --username x-token --password-stdin
-
       # Copies the odigos binary out of the cli image saved by build-depot-images to cli/odigos,
       # where the tests run it from. The image is distroless, so the container is created, never run.
       - name: Extract the CLI binary from the cli image
@@ -396,33 +389,26 @@ jobs:
             --docker-username=x-token \
             --docker-password="$(depot pull-token --project "$DEPOT_PROJECT")"
 
-      # Helm values that point each chart image component at its image saved by build-depot-images.
-      # The scheduler and autoscaler Deployments run 0 replicas, so they need no override.
+      # Points each chart image component at its image saved by build-depot-images, in the values file
+      # every test installs with. The scheduler and autoscaler Deployments run 0 replicas, so they need no override.
       - name: Write Helm values for the Depot images
         run: |
           set -euo pipefail
-          values="$RUNNER_TEMP/odigos-images-values.yaml"
-          {
-            echo "imagePullSecrets:"
-            echo "  - depot-registry"
-            echo "images:"
-            # <chart image component>=<build-depot-images service>
-            for pair in enterprise-instrumentor=instrumentor enterprise-collector=collector \
-              enterprise-odiglet=odiglet enterprise-agents=agents enterprise-ui=ui cli=cli; do
-              echo "  ${pair%%=*}: registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG-${pair#*=}"
-            done
+          IMAGE="registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG"
+          cat > tests/common/odigos-values.yaml <<EOF
+          imagePullSecrets:
+            - depot-registry
+          images:
+            enterprise-instrumentor: $IMAGE-instrumentor
+            enterprise-collector: $IMAGE-collector
+            enterprise-odiglet: $IMAGE-odiglet
+            enterprise-agents: $IMAGE-agents
+            enterprise-ui: $IMAGE-ui
+            cli: $IMAGE-cli
             # Victoria Metrics is published, not built in this repo.
-            echo "  victoria-metrics: registry.odigos.io/odigos-victoria-metrics:latest"
-          } > "$values"
-          cat "$values"
-          echo "ODIGOS_HELM_VALUES=$values" >> "$GITHUB_ENV"
-
-      # oras saves the chart under its pushed file name, odigos-<version>.tgz.
-      - name: Pull odigos Helm chart from the Depot registry
-        run: |
-          set -euo pipefail
-          oras pull "$CHART_REF" --output "$RUNNER_TEMP/chart"
-          echo "ODIGOS_CHART=$RUNNER_TEMP/chart/odigos-${CHART_REF##*:}.tgz" >> "$GITHUB_ENV"
+            victoria-metrics: registry.odigos.io/odigos-victoria-metrics:latest
+          EOF
+          cat tests/common/odigos-values.yaml
 
       - name: Run E2E test
         env:

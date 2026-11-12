@@ -22,8 +22,7 @@ spec:
             timeout: 5m
             content: |
               echo "Installing Odigos with tag $IMAGE_TAG"
-              # The platform-k8s workflow sets ODIGOS_HELM_VALUES to the images it built on Depot.
-              ../../../../cli/odigos install --ns odigos-test ${ODIGOS_HELM_VALUES:+-f "$ODIGOS_HELM_VALUES"} \
+              ../../../../cli/odigos install --ns odigos-test -f ../../../common/odigos-values.yaml \
                 --set image.tag=$IMAGE_TAG \
                 --set onPremToken=$ODIGOS_API_KEY \
                 --set metricsSources.agentMetrics.runtimeMetrics.java.disabled=false
