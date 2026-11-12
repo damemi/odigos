@@ -21,9 +21,18 @@ variable "TAG" {
   default = "dev"
 }
 
-# The version the operator packages its embedded Helm chart with; must be valid semver.
+# The version the operator and the CLI package their embedded Helm chart with; must be valid semver.
 variable "ODIGOS_VERSION" {
   default = "v0.0.0-dev"
+}
+
+# Stamped into the CLI binary. Static by default so they do not bust the layer cache.
+variable "SHORT_COMMIT" {
+  default = "dev"
+}
+
+variable "DATE" {
+  default = "1970-01-01T00:00:00Z"
 }
 
 # Comma-separated, e.g. linux/amd64,linux/arm64.
@@ -40,7 +49,7 @@ variable "NPMRC" {
 }
 
 group "default" {
-  targets = ["instrumentor", "insights", "collector", "operator", "odiglet", "agents", "ui"]
+  targets = ["instrumentor", "insights", "collector", "operator", "odiglet", "agents", "ui", "cli"]
 }
 
 target "_platform-k8s" {
@@ -126,4 +135,17 @@ target "ui" {
     }
   ]
   tags = ["${ORG}/odigos-enterprise-ui:${TAG}"]
+}
+
+target "cli" {
+  inherits   = ["_platform-k8s"]
+  dockerfile = "cli/Dockerfile"
+  args = {
+    BUILDKIT_CACHE_MOUNT_NS = "cli"
+    VERSION                 = ODIGOS_VERSION
+    CHART_VERSION           = ODIGOS_VERSION
+    SHORT_COMMIT            = SHORT_COMMIT
+    DATE                    = DATE
+  }
+  tags = ["${ORG}/odigos-cli:${TAG}"]
 }

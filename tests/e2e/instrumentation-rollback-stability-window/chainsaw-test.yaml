@@ -18,7 +18,10 @@ spec:
             content: |
               # The pwd is the directory of this file, so we have to walk up to the project root to find the helm chart
               P="../../.."
-              helm upgrade --install odigos $P/helm/odigos --set onPremToken="$ODIGOS_API_KEY" --create-namespace --namespace odigos-test --set image.tag=e2e-test  --set nodeSelector."kubernetes\.io/os"=linux --set autoRollback.graceTime=3m --set autoRollback.stabilityWindowTime=2m
+              # The platform-k8s workflow sets ODIGOS_CHART and ODIGOS_HELM_VALUES to the chart and images it built on Depot.
+              helm upgrade --install odigos "${ODIGOS_CHART:-$P/helm/odigos}" --set onPremToken="$ODIGOS_API_KEY" --create-namespace --namespace odigos-test \
+                ${ODIGOS_HELM_VALUES:+-f "$ODIGOS_HELM_VALUES"} \
+                --set image.tag=e2e-test --set nodeSelector."kubernetes\.io/os"=linux --set autoRollback.graceTime=3m --set autoRollback.stabilityWindowTime=2m
               kubectl label namespace odigos-test odigos.io/system-object="true"
 
     - name: Verify Odigos Installation
