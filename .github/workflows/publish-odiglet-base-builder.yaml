@@ -22,34 +22,6 @@ jobs:
 
     steps:
 
-      - name: Validate New Version
-        shell: bash
-        run: |
-          TAGS=$(curl -sf "https://us-central1-docker.pkg.dev/v2/odigos-cloud/components/odiglet-base/tags/list" | jq -r '.tags[]' | grep -E '^v[0-9]+\.[0-9]+$' | sort -Vr)
-
-          # Extract the latest version
-          LATEST_VERSION=$(echo "$TAGS" | head -n 1)
-          echo "Latest published version: $LATEST_VERSION"
-
-          # New version from workflow input
-          NEW_VERSION=${{ github.event.inputs.image_tag }}
-
-          # Parse major and minor from latest and new versions
-          LATEST_MAJOR=$(echo $LATEST_VERSION | cut -d. -f1)
-          LATEST_MINOR=$(echo $LATEST_VERSION | cut -d. -f2)
-          NEW_MAJOR=$(echo $NEW_VERSION | cut -d. -f1)
-          NEW_MINOR=$(echo $NEW_VERSION | cut -d. -f2)
-
-          # Compare versions
-          if [[ $NEW_MAJOR -eq $((LATEST_MAJOR + 1)) && $NEW_MINOR -eq 0 ]]; then
-            echo "New version is a valid major version increment."
-          elif [[ $NEW_MAJOR -eq $LATEST_MAJOR && $NEW_MINOR -eq $((LATEST_MINOR + 1)) ]]; then
-            echo "New version is a valid minor version increment."
-          else
-            echo "Error: $NEW_VERSION must be the next version after the latest published $LATEST_VERSION (expected $LATEST_MAJOR.$((LATEST_MINOR + 1)))."
-            exit 1
-          fi
-
       - name: Get ro Token for this repo
         id: sts-this-repo
         uses: odigos-io/ci-core/sts@main
@@ -78,6 +50,36 @@ jobs:
           username: oauth2accesstoken
           password: ${{ steps.gcp-auth.outputs.access_token }}
 
+      - name: Validate New Version
+        shell: bash
+        env:
+          ACCESS_TOKEN: ${{ steps.gcp-auth.outputs.access_token }}
+        run: |
+          TAGS=$(curl -sf -u "oauth2accesstoken:${ACCESS_TOKEN}" "https://us-central1-docker.pkg.dev/v2/odigos-cloud/components-private/odiglet-base/tags/list" | jq -r '.tags[]' | grep -E '^v[0-9]+\.[0-9]+$' | sort -Vr)
+
+          # Extract the latest version
+          LATEST_VERSION=$(echo "$TAGS" | head -n 1)
+          echo "Latest published version: $LATEST_VERSION"
+
+          # New version from workflow input
+          NEW_VERSION=${{ github.event.inputs.image_tag }}
+
+          # Parse major and minor from latest and new versions
+          LATEST_MAJOR=$(echo $LATEST_VERSION | cut -d. -f1)
+          LATEST_MINOR=$(echo $LATEST_VERSION | cut -d. -f2)
+          NEW_MAJOR=$(echo $NEW_VERSION | cut -d. -f1)
+          NEW_MINOR=$(echo $NEW_VERSION | cut -d. -f2)
+
+          # Compare versions
+          if [[ $NEW_MAJOR -eq $((LATEST_MAJOR + 1)) && $NEW_MINOR -eq 0 ]]; then
+            echo "New version is a valid major version increment."
+          elif [[ $NEW_MAJOR -eq $LATEST_MAJOR && $NEW_MINOR -eq $((LATEST_MINOR + 1)) ]]; then
+            echo "New version is a valid minor version increment."
+          else
+            echo "Error: $NEW_VERSION must be the next version after the latest published $LATEST_VERSION (expected $LATEST_MAJOR.$((LATEST_MINOR + 1)))."
+            exit 1
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -92,7 +94,6 @@ jobs:
           file: ./odiglet/base.Dockerfile
           push: true
           tags: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/odiglet-base:${{ github.event.inputs.image_tag }}
             us-central1-docker.pkg.dev/odigos-cloud/components-private/odiglet-base:${{ github.event.inputs.image_tag }}
 
       - name: Notify Slack

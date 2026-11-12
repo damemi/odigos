@@ -10,13 +10,15 @@ Verification needs [cosign](https://docs.sigstore.dev/cosign/system_config/insta
 Always verify by digest:
 
 <Note>
-Verify against the canonical registry, `us-central1-docker.pkg.dev/odigos-cloud/components`.
-`registry.odigos.io` is a pull alias: images resolve through it, but signature
-discovery for retroactively signed versions does not currently surface there.
+Verify against `registry.odigos.io`, logged in with your Odigos token. Versions published
+before signing went live were signed retroactively in
+`us-central1-docker.pkg.dev/odigos-cloud/components`; verify those against that registry,
+as in the worked example below.
 </Note>
 
 ```bash
-IMG=us-central1-docker.pkg.dev/odigos-cloud/components/odigos-odiglet
+docker login registry.odigos.io -u odigos   # password: your Odigos token
+IMG=registry.odigos.io/odigos-enterprise-odiglet
 DIGEST=$(docker buildx imagetools inspect "${IMG}:<version>" --format '{{.Manifest.Digest}}')
 
 cosign verify \

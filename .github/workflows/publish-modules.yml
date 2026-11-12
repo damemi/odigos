@@ -438,7 +438,6 @@ jobs:
           push: true
           provenance: false
           tags: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/${{ matrix.image }}:${{ env.ODIGOS_TAG }}${{ env.TAG_SUFFIX }}
             us-central1-docker.pkg.dev/odigos-cloud/components-private/${{ matrix.image }}:${{ env.ODIGOS_TAG }}${{ env.TAG_SUFFIX }}
           build-args: |
             SERVICE_NAME=${{ matrix.service }}
@@ -451,17 +450,12 @@ jobs:
           file: ${{ matrix.file }}
           target: ${{ matrix.target || '' }}
 
-      # Runs in this job so it inherits the registry logins above. One build
-      # writes the same digest to three registries; each ref gets its own
-      # signature, because signatures live beside the image in one registry
-      # and do not travel with a copy. Signing is fail-closed: a signing
-      # failure fails this publish job.
+      # Runs in this job so it inherits the registry logins above. Signing is
+      # fail-closed: a signing failure fails this publish job.
       - name: Sign image and attach SBOM
         uses: odigos-io/ci-core/sign-oci@main
         with:
-          refs: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/${{ matrix.image }}
-            us-central1-docker.pkg.dev/odigos-cloud/components-private/${{ matrix.image }}
+          refs: us-central1-docker.pkg.dev/odigos-cloud/components-private/${{ matrix.image }}
           digest: ${{ steps.build.outputs.digest }}
 
       - name: Notify Slack
