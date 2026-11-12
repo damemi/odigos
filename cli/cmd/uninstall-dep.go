@@ -137,7 +137,7 @@ and rollback any metadata changes made to your objects.`,
 		fmt.Printf("\n\u001B[32mSUCCESS:\u001B[0m Odigos uninstalled.\n")
 	},
 	Example: `
-# Uninstall Odigos open-source or cloud from the cluster in your kubeconfig active context.
+# Uninstall Odigos from the cluster in your kubeconfig active context.
 odigos uninstall
 
 # Uninstall Odigos without confirmation

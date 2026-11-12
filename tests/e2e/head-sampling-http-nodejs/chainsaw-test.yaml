@@ -4,7 +4,7 @@ metadata:
   name: head-sampling-http-nodejs
 spec:
   description: |
-    E2E for Odigos head sampling on HTTP route matching with nodejs-community.
+    E2E for Odigos head sampling on HTTP route matching with nodejs-enterprise.
     Uses the prebuilt nodejs-head-sampling image from Artifact Registry, enables
     sampling dry-run, generates traffic, and asserts odigos.sampling.* attributes
     on collected spans.
@@ -25,8 +25,12 @@ spec:
         - script:
             timeout: 5m
             content: |
-              # pwd is tests/e2e/head-sampling-http-nodejs — chart lives at repo root helm/odigos
-              helm upgrade --install odigos ../../../helm/odigos --set onPremToken="$ODIGOS_API_KEY" --create-namespace --namespace odigos-test \
+              # The platform-k8s workflow sets ODIGOS_CHART to the chart it pushed to the Depot registry and
+              # ODIGOS_HELM_VALUES to the images.<component> overrides for the images it built there.
+              # Without them, installs the repo's chart (pwd is tests/e2e/head-sampling-http-nodejs) with
+              # locally built e2e-test images.
+              helm upgrade --install odigos "${ODIGOS_CHART:-../../../helm/odigos}" --set onPremToken="$ODIGOS_API_KEY" --create-namespace --namespace odigos-test \
+                ${ODIGOS_HELM_VALUES:+-f "$ODIGOS_HELM_VALUES"} \
                 --set image.tag=e2e-test \
                 --set nodeSelector."kubernetes\.io/os"=linux \
                 --set sampling.dryRun=true \
@@ -84,7 +88,7 @@ spec:
         - script:
             timeout: 1m
             content: |
-              # Allow InstrumentationConfig / OpAMP to propagate Sampling rules to nodejs-community agents.
+              # Allow InstrumentationConfig / OpAMP to propagate Sampling rules to nodejs-enterprise agents.
               sleep 20
 
     - name: Generate traffic

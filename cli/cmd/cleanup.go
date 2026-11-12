@@ -106,7 +106,7 @@ All other Odigos components and system resources are deleted automatically by He
 
 	},
 	Example: `
-# Cleanup Odigos open-source or cloud from the cluster in your kubeconfig active context.
+# Cleanup Odigos from the cluster in your kubeconfig active context.
 odigos cleanup
 
 # Cleanup Odigos without confirmation

@@ -1,28 +1,35 @@
 name: verify collector ocb
+
 on:
   pull_request:
     paths:
       - "collector/**"
+      - "common/**"
+      - "odigosauth/**"
+      - ".github/workflows/verify-collector-ocb.yml"
+
+permissions:
+  contents: read
 
 jobs:
   verify-collector-ocb:
-    runs-on: ubuntu-latest
+    runs-on: depot-ubuntu-latest
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v5
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e #v7.0.0
         with:
-          go-version: "1.26.6"
-      # The collector distribution is collector/enterprise (verify-enterprise-collector-ocb);
-      # this checks the generated code of the components under collector/.
-      - name: Generate component metadata
+          go-version-file: collector/odigosotelcol/go.mod
+
+      - name: Generate collector with ocb and component metadata
         working-directory: ./collector
-        run: "make generate"
+        run: make genodigoscol generate
+
       - name: Verify Generate
         working-directory: ./collector
         run: |
-          if [[ $(git diff --exit-code) ]]; then
-            git diff
-            echo "collector components are out of sync with their metadata. Please run 'make generate' in 'collector' directory and commit the changes."
+          if [ -n "$(git status --porcelain .)" ]; then
+            git status --porcelain .
+            git diff .
+            echo "::error::collector is out of sync with its sources. Run 'make genodigoscol generate' in collector and commit the result."
             exit 1
           fi

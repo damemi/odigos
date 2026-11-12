@@ -1,4 +1,4 @@
-# Java head-sampling-http app (java-community / java-ebpf instrumentation).
+# Java head-sampling-http app (java-ebpf-instrumentations).
 # Image: us-central1-docker.pkg.dev/odigos-cloud/components/java-head-sampling:v0.0.1
 # (built from tests/common/services/java-head-sampling).
 # No kubelet-health-probes-query-params: Java app has no /graphql endpoint.

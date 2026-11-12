@@ -20,10 +20,7 @@ It installs Kubernetes components that auto-instrument your applications with Op
 and send traces, metrics, and logs to any telemetry backend.`,
 	RunE: runInstallOrUpgradeWithLegacyCheck,
 	Example: `
-# Install or upgrade Odigos open-source in your cluster with the default values
-odigos install
-
-# Install or upgrade Odigos on-prem tier for enterprise users
+# Install or upgrade Odigos in your cluster with the default values
 odigos install --set onPremToken=${ODIGOS_TOKEN}
 
 # Install or upgrade Odigos and set specific values

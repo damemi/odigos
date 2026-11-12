@@ -19,6 +19,7 @@ import (
 	"github.com/odigos-io/odigos/config"
 	"github.com/odigos-io/odigos/destinations"
 	"github.com/odigos-io/odigos/distros"
+	enterprisedistros "github.com/odigos-io/odigos/distros/enterprise"
 	"github.com/odigos-io/odigos/frontend/kube"
 	"github.com/odigos-io/odigos/frontend/kube/watchers"
 	"github.com/odigos-io/odigos/frontend/services"
@@ -52,9 +53,8 @@ type Deps struct {
 	ProfilingGate       *profiles.IngestGate
 	ProfilesConsumer    *profiles.OdigosProfilesConsumer
 	OtlpReceiver        *otlp.Receiver
-	// DistrosProvider resolves which otel distro each language gets. Bootstrap
-	// sets the community one; out-of-tree mains replace it before BuildRouter
-	// so the UI reports the same distros their instrumentor injects.
+	// DistrosProvider resolves which otel distro each language gets, the same
+	// provider the instrumentor injects with.
 	DistrosProvider *distros.Provider
 	// UrlTemplatizationLiveTrafficLearning resolves
 	// K8sWorkloadContainerUrlTemplatization.liveTrafficLearning.
@@ -149,11 +149,7 @@ func Bootstrap(ctx context.Context, flags Flags, logger logr.Logger) (*Deps, err
 		os.Getenv(k8sconsts.OdigosInsightsClickHousePasswordEnv),
 	)
 
-	distrosGetter, err := distros.NewCommunityGetter()
-	if err != nil {
-		return nil, fmt.Errorf("loading distros: %w", err)
-	}
-	distrosProvider, err := distros.NewProvider(distros.NewCommunityDefaulter(), distrosGetter)
+	distrosProvider, err := enterprisedistros.NewEnterpriseProvider()
 	if err != nil {
 		return nil, fmt.Errorf("initializing distros provider: %w", err)
 	}

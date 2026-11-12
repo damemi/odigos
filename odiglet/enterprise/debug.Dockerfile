@@ -62,7 +62,7 @@ RUN ARCH_SUFFIX=$(cat /tmp/arch_suffix) && \
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
 WORKDIR /go/src/github.com/odigos-io/odigos
-ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation/v2
+ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation/v2,github.com/odigos-io/odigos-device-plugin
 # odiglet/enterprise replaces these odigos modules with local paths.
 COPY api/ api/
 COPY common/ common/

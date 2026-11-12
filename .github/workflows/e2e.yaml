@@ -2,6 +2,7 @@ name: E2E Tests
 
 on:
   merge_group:
+    types: [checks_requested]
   pull_request:
     branches: [main, "releases/**"]
     types: [opened, synchronize, reopened, labeled, unlabeled]
@@ -99,6 +100,7 @@ jobs:
         run: |
           TAG=e2e-test make build-images
           TAG=e2e-test EXTENDED=true make build-odiglet build-agents
+          TAG=e2e-test make build-central-images build-connector-opamp-gateway
           docker save -o odigos-images.tar $(docker images --format "{{.Repository}}:{{.Tag}}" | grep "odigos")
 
       - uses: ko-build/setup-ko@v0.9
@@ -143,6 +145,7 @@ jobs:
           key: ${{ github.run_id }}-odigos-images
 
   kubernetes-test:
+    name: kubernetes-test (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled && ', with_wasp' || '' }})
     needs: [build-odigos-images, build-cli]
     runs-on: depot-ubuntu-24.04-8
     permissions:
@@ -171,10 +174,6 @@ jobs:
           - "env-injection"
           - "data-streams"
           - "argo-rollouts"
-          - "head-sampling-http-nodejs"
-          - "head-sampling-http-python"
-          - "head-sampling-http-java"
-          - "tail-sampling-nodejs"
           - "enterprise/multi-apps"
           - "enterprise/jvm-metrics"
           - "enterprise/mount-method"
@@ -182,8 +181,21 @@ jobs:
           - "enterprise/control-plane"
           - "enterprise/instrumentation-rules"
           - "enterprise/python-ebpf"
+          - "enterprise/central-install"
+          - "enterprise/central-infrastructure"
+          - "enterprise/central-ui"
+          - "enterprise/central-auth-idp"
+        wasp-enabled: [false]
         # Release PRs also run the important-customers configurations.
         include:
+          # The with_wasp jobs force the instrumentations that support WASP onto it (ODIGOS_FORCE_WASP),
+          # since the CI kernel does not require it.
+          - kube-version: "1.32"
+            test-scenario: "helm-chart"
+            wasp-enabled: true
+          - kube-version: "1.32"
+            test-scenario: "enterprise/python-ebpf"
+            wasp-enabled: true
           - kube-version: "1.32"
             test-scenario: "enterprise/important-customers"
             customer: greatwall
@@ -220,6 +232,7 @@ jobs:
           kubernetes-version: ${{ matrix.kube-version }}
           test-scenario: ${{ matrix.test-scenario }}
           customer: ${{ matrix.customer || '' }}
+          wasp-enabled: ${{ matrix.wasp-enabled || false }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
 
@@ -250,10 +263,6 @@ jobs:
           - "env-injection"
           - "data-streams"
           - "argo-rollouts"
-          - "head-sampling-http-nodejs"
-          - "head-sampling-http-python"
-          - "head-sampling-http-java"
-          - "tail-sampling-nodejs"
           - "enterprise/multi-apps"
           - "enterprise/jvm-metrics"
           - "enterprise/mount-method"

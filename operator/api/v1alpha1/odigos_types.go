@@ -24,7 +24,7 @@ import (
 
 // OdigosSpec defines the desired state of Odigos
 type OdigosSpec struct {
-	// (Optional) OnPremToken is an enterprise token for Odigos Enterprise.
+	// (Optional) OnPremToken is the Odigos on-prem license token.
 	// +operator-sdk:csv:customresourcedefinitions:type=spec,displayName="On-Prem Token",order=1
 	OnPremToken string `json:"onPremToken,omitempty"`
 
@@ -75,8 +75,7 @@ type OdigosSpec struct {
 
 	// (Optional) ImagePrefix is a prefix for all container images.
 	// This should only be used if you are pulling Odigos images from the non-default registry.
-	// Default (community): docker.io/keyval
-	// Default (enterprise): registry.odigos.io
+	// Default: registry.odigos.io
 	// Default (OpenShift): registry.connect.redhat.com/odigos
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	ImagePrefix string `json:"imagePrefix,omitempty"`

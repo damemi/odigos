@@ -1,0 +1,44 @@
+[
+  {
+    "name": "java-community",
+    "displayName": "Java OpenTelemetry",
+    "language": "java",
+    "isDefault": true,
+    "version": "2.32.0"
+  },
+  {
+    "name": "python-community",
+    "displayName": "Python OpenTelemetry",
+    "language": "python",
+    "isDefault": true,
+    "version": "1.0.90"
+  },
+  {
+    "name": "nodejs-fargate-otel",
+    "displayName": "Node.js OpenTelemetry",
+    "language": "nodejs",
+    "isDefault": true,
+    "version": "0.81.0"
+  },
+  {
+    "name": "dotnet-community",
+    "displayName": ".NET OpenTelemetry",
+    "language": "dotnet",
+    "isDefault": true,
+    "version": "1.17.0"
+  },
+  {
+    "name": "php-community",
+    "displayName": "PHP OpenTelemetry",
+    "language": "php",
+    "isDefault": true,
+    "version": "0.9.0"
+  },
+  {
+    "name": "ruby-community",
+    "displayName": "Ruby OpenTelemetry",
+    "language": "ruby",
+    "isDefault": true,
+    "version": "0.0.10"
+  }
+]

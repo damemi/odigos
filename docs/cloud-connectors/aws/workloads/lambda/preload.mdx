@@ -1,0 +1,142 @@
+---
+title: 'Preload the Lambda Layer'
+description: 'Preload the Lambda OpenTelemetry layer into your own AWS account before instrumenting with IaC.'
+sidebarTitle: 'Preload'
+---
+
+<Note>
+  If you use **Odigos-managed** Lambda instrumentation, you can skip this page. The
+  connector reuses a matching layer in your account or publishes one itself
+  (`lambda:PublishLayerVersion`) the first time it instruments a function. Those layers get the description
+  `Odigos OpenTelemetry layer for <lang>/<arch> sha256:<digest prefix>`, and the connector publishes a new
+  layer version whenever the bundle's digest changes.
+</Note>
+
+If you **self-manage** instrumentation, you have two choices for where the layer your CloudFormation, CDK,
+or Terraform attaches actually lives. Either way, the layer must be **v0.0.19 or newer**: older layers don't
+contain the launcher that reads the version 2 `ODIGOS_LAMBDA_CONFIG`. See
+[What gets added to your function](/cloud-connectors/aws/workloads/lambda/instrument#what-gets-added-to-your-function).
+
+<Tabs>
+  <Tab title="Reference the public Odigos layer">
+    Simplest option: attach the public layer ARN Odigos publishes in every supported region directly in your
+    function resource:
+
+    ```text
+    arn:aws:lambda:<region>:233171357117:layer:odigos-otel-<family>-<arch>:<n>
+    ```
+
+    `<arch>` is `x86_64` or `arm64`, and `<family>` is one of:
+
+    | Family | Used by |
+    | --- | --- |
+    | `java`, `nodejs`, `python`, `ruby` | The default OpenTelemetry distros |
+    | `adot-java`, `adot-nodejs`, `adot-python` | The [AWS ADOT distros](/cloud-connectors/aws/workloads/lambda/distros#aws-adot) (SDK layer) |
+    | `adot-collector` | The collector layer every ADOT distro also needs |
+
+    ADOT functions need **both** the SDK layer and the collector layer attached, so they use two of the
+    function's five layer slots.
+
+    Layer version numbers differ by layer and region, so don't guess `<n>`. The exact ARNs for a release are the
+    `LAYER_ARNS` table in the `@odigos/aws-cdk` package, keyed `<region>/<family>/<arch>`.
+
+    No preloading, no extra deploy — for next steps see
+    [Instrument Lambda](/cloud-connectors/aws/workloads/lambda/instrument). If your organization's policy
+    forbids attaching a Lambda layer owned by another AWS account, use the
+    **Preload into your own account (SAR)** tab instead.
+  </Tab>
+
+  <Tab title="Preload into your own account (SAR)">
+    Deploy the Odigos layer from the AWS Serverless Application Repository (SAR) so the resulting
+    `AWS::Lambda::LayerVersion` is owned by **your** account. Then attach that stack's `LayerVersionArn`
+    instead of the public Odigos layer ARN.
+
+    Deploying a SAR application is an AWS workflow — follow
+    [Deploying applications](https://docs.aws.amazon.com/serverlessrepo/latest/devguide/serverlessrepo-how-to-consume.html)
+    (Console or CLI). For nesting the app in your own template, see
+    [`AWS::Serverless::Application`](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-application.html).
+
+    What Odigos supplies for that deploy:
+
+    - **Application IDs** — `SAR_APPLICATIONS` in `@odigos/aws-cdk`, keyed by `language/architecture`
+      (for example `python/arm64`). The applications are published from account `233171357117` in
+      `us-east-1`, named `odigos-otel-<family>-<arch>`, and you can search the console for that name. The
+      families are the same as the public layers above.
+    - **Semantic version** — `SAR_SEMANTIC_VERSION` in the same package. Pin it (for example `0.0.30`); SAR
+      versions are immutable and that pin keeps the layer bytes stable across deploys.
+
+    <Note>
+      SAR application names spell the x86 architecture with a hyphen (`odigos-otel-python-x86-64`), while the
+      layer names and ARNs use an underscore (`odigos-otel-python-x86_64`). The public SAR applications exist
+      in the commercial AWS partition only.
+    </Note>
+
+    With the Odigos CDK construct, you do not call SAR yourself — set
+    `layerSource: OdigosLayerSource.IN_ACCOUNT` and the construct nests the application using those exports.
+    For an ADOT distro, the construct nests **two** SAR applications: the SDK and the collector.
+    See [Where the layer comes from](/cloud-connectors/aws/cdk/lambda#where-the-layer-comes-from).
+    The deploying principal needs `serverlessrepo:CreateCloudFormationTemplate` and
+    `serverlessrepo:GetApplication`.
+
+    <Info>
+      A stack update that supersedes a layer version retains the old one instead of deleting it, so functions
+      that still reference it keep working. Delete old versions yourself once nothing references them. See
+      [Bill of materials and uninstall](#bill-of-materials-and-uninstall).
+    </Info>
+  </Tab>
+</Tabs>
+
+## Layer integrity
+
+The ADOT SDK layers are repackaged from the official AWS ADOT releases. Each download is verified against a
+pinned SHA-256 checksum when the layers are built, and a mismatch fails the build. Layers the connector
+publishes into your account carry the bundle's SHA-256 digest prefix in their description, so you can tell
+which bundle a given layer version contains.
+
+## Bill of materials and uninstall
+
+What you own in your account depends on where the layer came from.
+
+| Layer source | In your account | After you uninstrument |
+| --- | --- | --- |
+| Public Odigos layer | Nothing. Functions reference a layer owned by the Odigos publisher account. | Detaching the ARN is all there is to do. |
+| SAR or CDK `IN_ACCOUNT` | One layer version per family and architecture, created by a SAR stack (ADOT: SDK and collector). | Removing the stack leaves the layer versions behind, because the application sets `DeletionPolicy`, `UpdateReplacePolicy`, and the SAM retention policy to `Retain`. Superseded versions remain too. |
+| Published by the connector | One layer version per family, architecture, and region the connector used. | Deleted on a best-effort basis when no function in that region still uses it. The connector only tracks versions it published or reused since it last started, so a restart or a bundle update can leave versions behind. |
+
+### Uninstall
+
+1. **Uninstrument the functions first**, following [Lambda uninstall](/cloud-connectors/aws/workloads/lambda/instrument#bill-of-materials-and-uninstall).
+   Make sure no `$LATEST`, published version, or alias target still references a layer version before you
+   delete it.
+2. **Public layers:** nothing to delete.
+3. **SAR:** remove the standalone layer stack, or remove the nested application from its parent stack and update
+   the parent. Don't destroy an application stack just to drop a nested layer. Note the layer ARN from the
+   `LayerVersionArn` output first, because once the stack is gone the retained layer is no longer listed under it.
+4. **Terraform or your own publishing:** remove the dedicated layer resources through their original state, and
+   check for retain settings such as `skip_destroy`.
+5. **List what remains** for each layer name you own, in each region, and delete only versions that are
+   unused:
+
+   ```bash
+   REGION="<LAYER_REGION>"
+   LAYER_NAME="<EXACT_OWNED_LAYER_NAME>"
+   VERSION="<UNUSED_LAYER_VERSION_NUMBER>"
+   aws lambda list-layer-versions --region "$REGION" --layer-name "$LAYER_NAME"
+   aws lambda delete-layer-version --region "$REGION" --layer-name "$LAYER_NAME" --version-number "$VERSION"
+   ```
+
+Deleting a layer version does not uninstrument functions already using it. They keep working, but the version
+can't be attached again. See [AWS layer deletion](https://docs.aws.amazon.com/lambda/latest/dg/creating-deleting-layers.html).
+Keep shared CDK bootstrap resources and any artifact buckets other deployments use.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Instrument Lambda" icon="bolt" href="/cloud-connectors/aws/workloads/lambda/instrument">
+    CDK, CloudFormation, Terraform, and the AWS CLI for every supported Lambda distro.
+  </Card>
+
+  <Card title="CDK reference" icon="code" href="/cloud-connectors/aws/cdk/lambda">
+    Every option on the Lambda CDK construct, in depth.
+  </Card>
+</CardGroup>

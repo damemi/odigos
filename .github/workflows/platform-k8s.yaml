@@ -1,0 +1,493 @@
+# PR checks for the Odigos Kubernetes platform:
+# - Builds the instrumentor, insights, collector, operator, odiglet, agents and ui images on Depot from
+#   platform-k8s.docker-bake.hcl and scans each for vulnerabilities, along with the webapp's dependencies.
+# - Runs the unit tests of every platform module, with the collector modules in their own job, and
+#   builds the CLI.
+# - Packages the Helm charts and pushes the odigos chart to the project's Depot registry as an OCI chart.
+# - Runs the sampling e2e tests on kind clusters with those images and that chart.
+#
+# PRs to release branches build the Depot images for both platforms without the layer cache.
+# Otherwise the "build: arm" and "build: no-cache" PR labels pick their build options.
+#
+# "Platform K8s CI" is the single required check: it always runs, and passes when every job succeeded.
+name: platform-k8s
+
+on:
+  merge_group:
+    types: [checks_requested]
+  pull_request:
+    branches: [main, "releases/**"]
+    # labeled/unlabeled re-run the build when a "build: arm" or "build: no-cache" label is added or removed.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+env:
+  IMAGE_TAG: pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
+  # Depot project of this repo (see depot.json); builds are saved to its registry for the scan.
+  DEPOT_PROJECT: 4kjksxtgnd
+  DEPOT_SAVE_TAG: platform-k8s-pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Each job bakes one target of platform-k8s.docker-bake.hcl on Depot, saves it to Depot's
+  # registry as <DEPOT_SAVE_TAG>-<target>, and scans it from there.
+  build-depot-images:
+    name: build-${{ matrix.service }}
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/bake-action authenticate to Depot over OIDC;
+    # packages lets ui install the private @odigos-io/ui-kit from GitHub Packages;
+    # pull-requests lets resolve-build-labels read the PR's labels.
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    # DEPOT_SAVE_TAG includes the run attempt; re-running only a failed e2e job keeps this attempt's
+    # output, so the e2e job reads the tag the images were saved with from here.
+    outputs:
+      save-tag: ${{ env.DEPOT_SAVE_TAG }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [instrumentor, insights, collector, operator, odiglet, agents, ui]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Release builds (PRs and merge queue entries targeting a release branch): both platforms
+      # without the layer cache, whatever the labels say.
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+        with:
+          release: ${{ startsWith(github.base_ref, 'releases/') || startsWith(github.event.merge_group.base_ref, 'refs/heads/releases/') }}
+
+      # Sets NPMRC, which the bake file reads for ui's npmrc secret.
+      - name: Write npm auth
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: depot/setup-action@v1
+
+      # Builds on Depot's remote builder, whose persistent layer cache also
+      # keeps the Dockerfiles' --mount=type=cache Go caches between runs.
+      - name: Build ${{ matrix.service }} Image
+        uses: depot/bake-action@v1
+        env:
+          PLATFORMS: ${{ steps.build-opts.outputs.platforms }}
+          # The operator's embedded Helm chart version.
+          ODIGOS_VERSION: v0.0.0-pr${{ github.event.number || github.run_number }}
+          # Read by the bake file as odiglet's github_token secret, for the private instrumentation repos.
+          GITHUB_TOKEN: ${{ matrix.service == 'odiglet' && secrets.RELEASE_BOT_TOKEN || '' }}
+        with:
+          files: platform-k8s.docker-bake.hcl
+          targets: ${{ matrix.service }}
+          no-cache: ${{ steps.build-opts.outputs.no-cache }}
+          push: false
+          save: true
+          save-tag: ${{ env.DEPOT_SAVE_TAG }}
+
+      - name: Scan image for vulnerabilities
+        id: scan
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          # registry: makes grype read the saved image from Depot instead of the local Docker daemon.
+          image: registry:registry.depot.dev/${{ env.DEPOT_PROJECT }}:${{ env.DEPOT_SAVE_TAG }}-${{ matrix.service }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save ${{ matrix.service }} scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
+          IMAGE_NAME: odigos-${{ matrix.service }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          CUTOFF_EXCEEDED: ${{ steps.scan.outputs.cutoff-exceeded }}
+        run: |
+          # The scanner fails both on findings over the cutoff (allowed here) and when grype
+          # could not scan, e.g. reading the Depot registry; it then writes an empty report.
+          if [ "$SCAN_OUTCOME" = "failure" ] && [ "$CUTOFF_EXCEEDED" != "true" ]; then
+            echo "::error::The vulnerability scan did not run; see the scan step's log."
+            exit 1
+          fi
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "$IMAGE_NAME" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > "/tmp/scan-results/$IMAGE_NAME.json"
+
+      - name: Upload ${{ matrix.service }} scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-${{ matrix.service }}-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-${{ matrix.service }}.json
+          retention-days: 30
+
+  build-frontend:
+    name: build-frontend
+    runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+      packages: read
+    # setup-node's .npmrc reads this for every yarn command in the job, not just the install.
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      # webapp is scanned separately because it runs with yarn, while the rest of the frontend runs with golang.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@odigos-io'
+      - name: Install webapp dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: frontend/webapp
+      - name: Scan frontend webapp for vulnerabilities
+        id: scan-frontend-webapp
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          path: frontend/webapp
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+      - name: Save frontend webapp scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan-frontend-webapp.outputs.results-file }}
+        run: |
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "odigos-ui-webapp" --arg tag "pr-${{ github.event.number || github.run_number }}" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > /tmp/scan-results/odigos-ui-webapp.json
+      - name: Upload frontend webapp scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-frontend-webapp-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-ui-webapp.json
+          retention-days: 30
+      - name: Build webapp
+        run: yarn build
+        working-directory: frontend/webapp
+
+  vulnerability-report:
+    name: Generate Vulnerability Report
+    needs:
+      - build-depot-images
+      - build-frontend
+    runs-on: depot-ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all scan JSON results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vuln-scan-result-*
+          path: scan-results
+          merge-multiple: true
+
+      - name: Zip individual scan results
+        run: |
+          if [ -d "scan-results" ] && ls scan-results/*.json 1> /dev/null 2>&1; then
+            zip -j scan-results.zip scan-results/*.json
+            echo "Created zip with $(unzip -l scan-results.zip | grep -c '\.json') JSON files"
+          else
+            echo "No scan results to zip"
+            touch scan-results.zip
+          fi
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: vulnerability-report
+          path: scan-results.zip
+          retention-days: 90
+
+  # Packages the Helm charts as in release.yml, versioned 0.0.0-<IMAGE_TAG>, and pushes the odigos
+  # chart as an OCI chart to the registry of the repo's Depot project, tagged with its version.
+  package-helm:
+    name: Package Helm Charts
+    runs-on: depot-ubuntu-latest
+    # id-token lets the job log in to the Depot registry over OIDC.
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      chart-ref: ${{ steps.push-chart.outputs.chart-ref }}
+    env:
+      # Same as IMAGE_TAG; job env cannot read the workflow env.
+      TAG: v0.0.0-pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.15.2
+
+      - name: Package Helm charts
+        run: bash ./scripts/package-charts.sh
+
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      - uses: oras-project/setup-oras@v1
+
+      # The project registry only accepts the repository registry.depot.dev/<DEPOT_PROJECT>, and
+      # helm push always appends the chart name to it. oras pushes the chart there with Helm's
+      # media types, tagged with the chart version, since Helm only resolves semver tags.
+      - name: Push odigos Helm chart to the Depot registry
+        id: push-chart
+        working-directory: helm
+        run: |
+          set -euo pipefail
+          echo "$DEPOT_TOKEN" | oras login registry.depot.dev --username x-token --password-stdin
+          CHART_REF="registry.depot.dev/$DEPOT_PROJECT:${TAG#v}"
+          chart="odigos-${TAG#v}.tgz"
+          helm show chart "$chart" | yq -o=json > chart-config.json
+          oras push "$CHART_REF" \
+            --config chart-config.json:application/vnd.cncf.helm.config.v1+json \
+            "$chart:application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+          echo "Pushed oci://$CHART_REF" >> "$GITHUB_STEP_SUMMARY"
+          echo "chart-ref=$CHART_REF" >> "$GITHUB_OUTPUT"
+
+  # Installs the odigos chart pushed by package-helm on a kind cluster, with the images saved by
+  # build-depot-images, and runs one sampling e2e test from tests/e2e against it.
+  e2e-sampling:
+    name: E2E (${{ matrix.test }})
+    needs:
+      - build-depot-images
+      - package-helm
+    runs-on: depot-ubuntu-24.04-4
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - head-sampling-http-nodejs
+          - head-sampling-http-python
+          - head-sampling-http-java
+          - tail-sampling-nodejs
+    # id-token lets the job log in to the Depot registry over OIDC.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGES_SAVE_TAG: ${{ needs.build-depot-images.outputs.save-tag }}
+      CHART_REF: ${{ needs.package-helm.outputs.chart-ref }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      - uses: oras-project/setup-oras@v1
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.15.2
+
+      - name: Install chainsaw
+        uses: kyverno/action-install-chainsaw@v0.2.13
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          node_image: kindest/node:v1.32.11@sha256:5fc52d52a7b9574015299724bd68f183702956aa4a2116ae75a63cb574b35af8
+          version: "v0.33.0"
+          cluster_name: kind
+          config: tests/common/apply/kind-config.yaml
+          ignore_failed_clean: true
+
+      - name: Wait for cluster readiness
+        run: bash tests/common/wait_for_kind_ready.sh
+
+      - name: Log in to the Depot registry
+        run: echo "$DEPOT_TOKEN" | oras login registry.depot.dev --username x-token --password-stdin
+
+      # The cluster pulls the saved images from the Depot registry with a pull secret in the Odigos
+      # namespace, as in odigos-local-env. Odiglet pre-pulls the agents image on every node, so the
+      # instrumented test apps need no secret.
+      - name: Create the Depot registry pull secret
+        run: |
+          set -euo pipefail
+          kubectl create namespace odigos-test
+          kubectl create secret docker-registry depot-registry \
+            --namespace odigos-test \
+            --docker-server=registry.depot.dev \
+            --docker-username=x-token \
+            --docker-password="$(depot pull-token --project "$DEPOT_PROJECT")"
+
+      # Helm values that point each chart image component at its image saved by build-depot-images.
+      # The scheduler and autoscaler Deployments run 0 replicas and the CLI image only runs on
+      # uninstall, so they need no override.
+      - name: Write Helm values for the Depot images
+        run: |
+          set -euo pipefail
+          values="$RUNNER_TEMP/odigos-images-values.yaml"
+          {
+            echo "imagePullSecrets:"
+            echo "  - depot-registry"
+            echo "images:"
+            # <chart image component>=<build-depot-images service>
+            for pair in enterprise-instrumentor=instrumentor enterprise-collector=collector \
+              enterprise-odiglet=odiglet enterprise-agents=agents enterprise-ui=ui; do
+              echo "  ${pair%%=*}: registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG-${pair#*=}"
+            done
+            # Victoria Metrics is published, not built in this repo.
+            echo "  victoria-metrics: registry.odigos.io/odigos-victoria-metrics:latest"
+          } > "$values"
+          cat "$values"
+          echo "ODIGOS_HELM_VALUES=$values" >> "$GITHUB_ENV"
+
+      # oras saves the chart under its pushed file name, odigos-<version>.tgz.
+      - name: Pull odigos Helm chart from the Depot registry
+        run: |
+          set -euo pipefail
+          oras pull "$CHART_REF" --output "$RUNNER_TEMP/chart"
+          echo "ODIGOS_CHART=$RUNNER_TEMP/chart/odigos-${CHART_REF##*:}.tgz" >> "$GITHUB_ENV"
+
+      - name: Run E2E test
+        env:
+          ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
+        run: chainsaw test "tests/e2e/${{ matrix.test }}" --apply-timeout 30s
+
+      - name: Cluster diagnostics
+        if: failure()
+        run: |
+          echo "==== Nodes ===="; kubectl get nodes -o wide
+          echo "==== Pods (all namespaces) ===="; kubectl get pods -A -o wide
+          echo "==== Events ===="; kubectl get events -A --sort-by=.lastTimestamp | tail -n 200
+
+      - name: Export kind logs
+        if: failure()
+        run: kind export logs kind-logs
+        continue-on-error: true
+
+      - name: Upload kind logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-logs-${{ matrix.test }}
+          path: kind-logs
+        continue-on-error: true
+
+  build-cli:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.6"
+      - name: Set up Goreleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: build --snapshot --clean
+
+  test-platform-k8s-modules:
+    name: Platform K8s Unit Tests
+    runs-on: depot-ubuntu-24.04-8
+    permissions:
+      contents: read
+    env:
+      MODULES: >-
+        common
+        k8sutils
+        procdiscovery
+        destinations
+        instrumentor
+        instrumentor/enterprise
+        odiglet
+        insights
+        frontend
+        ui
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.6"
+          cache-dependency-path: "**/go.sum"
+      # odiglet's tests generate and compile eBPF code.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y clang llvm libbpf-dev
+      # Tests every module even after a failure, then fails if any module failed.
+      - name: Test modules
+        run: |
+          failed=()
+          for module in $MODULES; do
+            echo "::group::$module"
+            case "$module" in
+              # Their Makefiles prepare what the tests need: envtest (instrumentor) and generated eBPF
+              # code (odiglet).
+              common|instrumentor|odiglet) cmd=(make test) ;;
+              *) cmd=(go test -ldflags=-checklinkname=0 ./...) ;;
+            esac
+            if ! (cd "$module" && "${cmd[@]}"); then
+              echo "::error::Unit tests failed in $module"
+              failed+=("$module")
+            fi
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::Failed modules: ${failed[*]}"
+            exit 1
+          fi
+
+  # The collector modules, in parallel with the other platform modules.
+  test-collector-modules:
+    name: Collector Unit Tests
+    runs-on: depot-ubuntu-24.04-2
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      # The collector has no root go.mod; take the Go version from the module
+      # that builds the collector binary.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: collector/odigosotelcol/go.mod
+          cache-dependency-path: "collector/**/go.sum"
+      # Tests every collector module and the distribution; -k keeps going after a module fails.
+      - name: Test modules
+        working-directory: ./collector
+        run: make -k test
+
+  # The single required check for this workflow. It always runs, and passes when every job succeeded.
+  platform-k8s-ci:
+    name: Platform K8s CI
+    needs:
+      - build-depot-images
+      - build-frontend
+      - vulnerability-report
+      - package-helm
+      - e2e-sampling
+      - build-cli
+      - test-platform-k8s-modules
+      - test-collector-modules
+    if: always()
+    runs-on: depot-ubuntu-latest
+    steps:
+      - name: Check platform job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<<"$NEEDS")
+          if [ -n "$failed" ]; then
+            echo "::error::Platform jobs did not succeed:"
+            echo "$failed"
+            exit 1
+          fi
+          echo "All platform jobs succeeded."

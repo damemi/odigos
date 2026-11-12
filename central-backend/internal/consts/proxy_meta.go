@@ -1,0 +1,15 @@
+package consts
+
+type ProxyConnectionStatus string
+
+const (
+	ProxyMetaFieldPlatformName                        = "platform_name"
+	ProxyMetaFieldPlatformType                        = "platform_type"
+	ProxyMetaFieldOdigosVersion                       = "odigos_version"
+	ProxyMetaFieldGraphQLSchemaVersion                = "graphql_schema_version"
+	ProxyMetaFieldConnectedAt                         = "connected_at" // seconds since epoch (we store secs; resolver multiplies to ms)
+	ProxyMetaFieldLastSeenAt                          = "last_seen_at" // seconds since epoch (we store secs; resolver multiplies to ms)
+	ProxyMetaFieldStatus                              = "status"
+	StatusConnected             ProxyConnectionStatus = "success"
+	StatusDisconnected          ProxyConnectionStatus = "error" // "success" | "error" (see consts.ProxyConnectionStatus)
+)

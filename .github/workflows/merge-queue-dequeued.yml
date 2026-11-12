@@ -1,0 +1,102 @@
+name: Merge Queue Removal Alert
+
+# pull_request_target runs the copy of this file on the base branch, so every PR is covered and the
+# Slack secret is available. It never checks out or runs PR code.
+on:
+  pull_request_target:
+    types: [dequeued]
+
+permissions: {}
+
+jobs:
+  notify:
+    # A re-run would post the same alert again.
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    steps:
+      - name: Notify Slack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.MERGE_QUEUE_SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          REASON: ${{ github.event.reason }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$REASON" ]; then
+            REASON=$(gh api graphql -F owner="${REPO%/*}" -F name="${REPO#*/}" -F number="$PR_NUMBER" -f query='
+              query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $number) {
+                    timelineItems(itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT], last: 1) {
+                      nodes { ... on RemovedFromMergeQueueEvent { reason } }
+                    }
+                  }
+                }
+              }' --jq '.data.repository.pullRequest.timelineItems.nodes[0].reason // ""')
+          fi
+
+          case "${REASON,,}" in
+            merge|merged|already_merged) echo "PR #$PR_NUMBER was merged"; exit 0 ;;
+          esac
+          # The dequeued event can arrive just before the merge lands.
+          sleep 20
+          if [ "$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .merged)" = "true" ]; then
+            echo "PR #$PR_NUMBER was merged"
+            exit 0
+          fi
+
+          SLACK_ID=$({ gh api "repos/$REPO/contents/.github/slack-users.json" -H "Accept: application/vnd.github.raw" || echo '{}'; } \
+            | jq -r --arg login "$PR_AUTHOR" '.[$login] // ""')
+          if [ -n "$SLACK_ID" ]; then
+            AUTHOR="<@$SLACK_ID>"
+          else
+            AUTHOR="$PR_AUTHOR (add them to .github/slack-users.json to be mentioned)"
+          fi
+
+          # Merge queue checks run on gh-readonly-queue/<base>/pr-<number>-<sha> branches; keep only the latest attempt.
+          FAILED_CHECKS=$(PREFIX="gh-readonly-queue/$PR_BASE/pr-$PR_NUMBER-" gh api "repos/$REPO/actions/runs?event=merge_group&per_page=100" --jq '
+            [.workflow_runs[] | select(.head_branch | startswith(env.PREFIX))]
+            | (.[0].head_sha // "") as $sha
+            | .[] | select(.head_sha == $sha and (.conclusion == "failure" or .conclusion == "timed_out"))
+            | "• <\(.html_url)|\(.name)>"')
+
+          PAYLOAD=$(jq -n \
+            --arg number "$PR_NUMBER" \
+            --arg title "$PR_TITLE" \
+            --arg url "$PR_URL" \
+            --arg author "$AUTHOR" \
+            --arg reason "${REASON:-unknown}" \
+            --arg failed "$FAILED_CHECKS" \
+            '
+            def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+            {
+              text: "PR #\($number) was removed from the merge queue",
+              blocks: [
+                {type: "section", text: {type: "mrkdwn", text: ":no_entry: <\($url)|#\($number) \($title | esc)> was removed from the merge queue"}},
+                {type: "section", fields: [
+                  {type: "mrkdwn", text: "*Author:*\n\($author)"},
+                  {type: "mrkdwn", text: "*Reason:*\n`\($reason | esc)`"}
+                ]},
+                {type: "section", text: {type: "mrkdwn", text: (
+                  if $failed != "" then "*Failed checks:*\n\($failed)"
+                  else "No failed merge queue checks found. See the <\($url)|PR timeline> for details." end
+                )}}
+              ]
+            }')
+
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::warning::MERGE_QUEUE_SLACK_WEBHOOK_URL is not set; payload:"
+            echo "$PAYLOAD"
+            exit 0
+          fi
+          curl -fsS -X POST -H 'Content-type: application/json' --data "$PAYLOAD" "$SLACK_WEBHOOK_URL"

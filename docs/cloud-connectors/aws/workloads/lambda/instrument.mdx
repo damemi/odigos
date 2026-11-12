@@ -1,0 +1,554 @@
+---
+title: 'Instrument Lambda with CDK, CloudFormation, or Terraform'
+description: 'Self-managed AWS Lambda instrumentation using the Odigos CDK construct, CloudFormation, Terraform, or the AWS CLI: the layers, exec wrapper, configuration, and tags Odigos expects.'
+sidebarTitle: 'Instrument Lambda'
+---
+
+AWS Lambda functions can be instrumented two ways: **Odigos-managed**, where the connector attaches
+everything for you, or **self-managed**, where you attach it yourself through your own IaC. This page is
+about the self-managed path — see
+[Odigos-managed vs. self-managed instrumentation](/cloud-connectors/overview#odigos-managed-vs-self-managed-instrumentation)
+if you haven't decided which one you want yet. To choose which OpenTelemetry distribution a function runs
+(the full Java agent, a lightweight Java wrapper, or AWS ADOT), see
+[Lambda instrumentation distros](/cloud-connectors/aws/workloads/lambda/distros).
+
+<Info>
+  Open the Lambda Source in Central and use the **How to instrument this workload** panel in the drawer. It
+  shows ready-to-paste **Terraform**, **CloudFormation**, **AWS CLI**, and **AWS CDK** tabs, generated for
+  that function and its destination. **Select the distro in Central first**: Odigos checks your function
+  against the distro selected there, and the snippets are generated for it.
+</Info>
+
+## What gets added to your function
+
+However you apply it, self-managed Lambda instrumentation adds the same things to your function:
+
+1. **One or two layers.** An OpenTelemetry SDK layer for your function's language and architecture. The ADOT
+   distros also need a second, collector layer (`odigos-otel-adot-collector-<arch>`), except their
+   collector-less (`-no-collector`) variants. The layer must be **v0.0.19 or newer**, which is the first
+   version that reads the current configuration format, and **newer than v0.0.27** for a collector-less distro.
+2. **`AWS_LAMBDA_EXEC_WRAPPER`** — tells Lambda to run your handler through the layer's instrumentation first.
+   The exact path depends on the distro. See [Exec wrapper per distro](#exec-wrapper-per-distro).
+3. **`ODIGOS_LAMBDA_CONFIG`** — one JSON value with your service name, the signals to export, and the
+   destination endpoint. The layer expands it at startup into the full SDK and collector configuration, so
+   your function's environment stays well under AWS's 4 KB limit.
+4. **Three resource tags** that tell Odigos "this function is instrumented, and here are the layers it runs":
+
+   | Tag | Value |
+   | --- | --- |
+   | `odigos:iac` | `v1` |
+   | `odigos:sdk-layer` | The exact SDK layer ARN you attached |
+   | `odigos:collector-layer` | The exact collector layer ARN (ADOT distros with a collector only) |
+
+   Without the tags, Odigos has no way to tell an instrumented function from one you haven't touched yet. It
+   keeps reporting the function as **Waiting for you to apply the instrumentation**, even if everything else is
+   in place.
+
+Those two environment variables are the only ones Odigos adds. Your own environment variables are left
+untouched.
+
+## ODIGOS_LAMBDA_CONFIG reference
+
+The value is a single-line JSON object stored as a string. This is schema **version 2**, which uses readable
+key names and needs layers **v0.0.19 or newer**.
+
+| Key | Required | Meaning |
+| --- | --- | --- |
+| `version` | Yes | Config version. Must be `2`. |
+| `service` | Yes | Service name. Must equal the Source's **Service Name** in Central — the function name unless you override it. |
+| `signals` | Yes | Signals to export, as a list of unique names: `"traces"`, `"metrics"`, `"logs"`. At least one is required. Must equal the signals your destination enables — even for Ruby, which doesn't produce metrics. |
+| `endpoint` | Yes | Destination endpoint, exactly as configured on the connector's destination. For OTLP/gRPC, bare `host:port` with no scheme. For OTLP/HTTP, the full URL. |
+| `http` | No | `true` when `endpoint` is an OTLP/HTTP endpoint. Omit for gRPC. Must match the destination. |
+| `insecure` | No | `true` for an insecure (no TLS) connection. gRPC only. Must match the destination. |
+| `headers` | No | Map of headers sent to the destination, for example `{"x-api-key":"..."}`. Must match the headers configured on the destination. |
+| `applicationSignals` | No | `true` for the ADOT + Application Signals preset. Requires both `"traces"` and `"metrics"` in `signals`. See [Distros](/cloud-connectors/aws/workloads/lambda/distros#adot-with-application-signals). |
+| `functionLogs` | No | `true` to collect the function's stdout and stderr as logs. Set it **exactly when** the destination enables logs **and** the function is in handler mode **and** runs Ruby or a lightweight Java wrapper **with** a collector. Leave it out otherwise — Odigos checks it. |
+| `noCollector` | Collector-less | `true` for a [collector-less distro](/cloud-connectors/aws/workloads/lambda/distros#collector-less-distros): the SDK exports straight to `endpoint`. Requires `"http": true`. Set it exactly when the selected distro ID ends in `-no-collector` — Odigos checks it. |
+| `debug` | No | `true` for debug logging (`OTEL_LOG_LEVEL=debug`). Handler mode only. Set it exactly when debug telemetry is enabled for the connector — Odigos checks it. |
+| `webWrapper` | Web Adapter | The function's original `AWS_LAMBDA_EXEC_WRAPPER`, for functions behind the AWS Lambda Web Adapter. Use `""` when there is none. |
+
+<Tabs>
+  <Tab title="gRPC, traces only">
+    ```json
+    {"version":2,"service":"my-fn","signals":["traces"],"endpoint":"otlp.example.com:4317"}
+    ```
+  </Tab>
+  <Tab title="HTTP, all signals, with a header">
+    ```json
+    {"version":2,"service":"my-fn","signals":["traces","metrics","logs"],"endpoint":"https://otlp.example.com:4318","http":true,"headers":{"x-api-key":"<API_KEY>"}}
+    ```
+  </Tab>
+  <Tab title="Web Adapter">
+    ```json
+    {"version":2,"service":"my-fn","signals":["traces"],"endpoint":"otlp.example.com:4317","webWrapper":"/opt/bootstrap"}
+    ```
+  </Tab>
+  <Tab title="Collector-less">
+    ```json
+    {"version":2,"service":"my-fn","signals":["traces","metrics","logs"],"endpoint":"https://otlp.example.com:4318","http":true,"noCollector":true}
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  The layer's launcher exits and the function **fails to start** if `ODIGOS_LAMBDA_CONFIG` is not valid JSON,
+  `version` is not `2` (or the legacy `1`), `signals` is empty, contains an unknown name, or repeats a name,
+  `endpoint` is empty, `applicationSignals` is `true` without both `traces` and `metrics` in `signals`, or
+  `noCollector` is `true` without `http`. The log line begins with `odigos-lambda-startup:`. Check the JSON
+  before you deploy.
+</Warning>
+
+<Warning>
+  A version 2 configuration on a **v0.0.18** layer also fails to start: that launcher only understands the
+  short-key version 1 format. Layers older than v0.0.18 don't read `ODIGOS_LAMBDA_CONFIG` at all. Upgrade the
+  layers together with the configuration.
+</Warning>
+
+<Warning>
+  Values in `headers` are stored as **plain text** in the function's configuration, and anyone who can read the
+  function configuration can read them. They also count toward the 4096-byte environment limit.
+</Warning>
+
+## Exec wrapper per distro
+
+Set `AWS_LAMBDA_EXEC_WRAPPER` to the path for the distro selected in Central, and attach the layers it needs.
+Distro descriptions and trade-offs are on the [Distros](/cloud-connectors/aws/workloads/lambda/distros) page.
+
+| Distro ID | `AWS_LAMBDA_EXEC_WRAPPER` | Layers |
+| --- | --- | --- |
+| `java-lambda-otel-agent` (Java default) | `/opt/otel-javaagent-handler` | `odigos-otel-java-<arch>` |
+| `java-lambda-otel-wrapper` | `/opt/otel-handler` | `odigos-otel-java-<arch>` |
+| `java-lambda-otel-proxy-wrapper` | `/opt/otel-proxy-handler` | `odigos-otel-java-<arch>` |
+| `java-lambda-otel-sqs-wrapper` | `/opt/otel-sqs-handler` | `odigos-otel-java-<arch>` |
+| `java-lambda-otel-stream-wrapper` | `/opt/otel-stream-handler` | `odigos-otel-java-<arch>` |
+| `java-lambda-adot`, `java-lambda-adot-application-signals` | `/opt/odigos-adot-java-handler` | `odigos-otel-adot-java-<arch>` + `odigos-otel-adot-collector-<arch>` |
+| `nodejs-lambda-otel` (Node.js default) | `/opt/otel-handler` | `odigos-otel-nodejs-<arch>` |
+| `nodejs-lambda-adot`, `nodejs-lambda-adot-application-signals` | `/opt/otel-instrument` | `odigos-otel-adot-nodejs-<arch>` + `odigos-otel-adot-collector-<arch>` |
+| `python-lambda-otel` (Python default) | `/opt/otel-instrument` | `odigos-otel-python-<arch>` |
+| `python-lambda-adot`, `python-lambda-adot-application-signals` | `/opt/otel-instrument` | `odigos-otel-adot-python-<arch>` + `odigos-otel-adot-collector-<arch>` |
+| `ruby-lambda-otel` (Ruby default) | `/opt/otel-handler` | `odigos-otel-ruby-<arch>` |
+
+Each distro also has a collector-less variant, `<distro ID>-no-collector`, with the same wrapper. It uses only
+the SDK layer: for ADOT, leave out `odigos-otel-adot-collector-<arch>` and the `odigos:collector-layer` tag.
+Set `"noCollector": true` in `ODIGOS_LAMBDA_CONFIG`. Read its
+[drawbacks](/cloud-connectors/aws/workloads/lambda/distros#collector-less-distros) first.
+
+`<arch>` is `x86_64` or `arm64` and must match the function's architecture. For where the layer ARNs come from,
+see [Preload the Lambda layer](/cloud-connectors/aws/workloads/lambda/preload).
+
+<Note>
+  For the Java full agent you do **not** set `JAVA_TOOL_OPTIONS`. The wrapper adds the `-javaagent` flag at
+  runtime. A wrapper is a correctness setting for the lightweight Java distros: the generic `/opt/otel-handler`
+  on a `RequestStreamHandler` function breaks the invocation.
+</Note>
+
+## Using AWS CDK
+
+The easiest option if your functions are already defined in a CDK app. One package covers every supported
+language — the construct looks at each function's runtime and figures out the right layer(s), wrapper,
+configuration, and tags on its own.
+
+```bash
+npm install @odigos/aws-cdk@<PACKAGE_VERSION>
+```
+
+<Info>
+  TypeScript and JavaScript only, for now — the Python package (`odigos-aws-cdk`) is not yet published.
+  Python CDK apps should use the [CloudFormation instructions](#using-cloudformation-directly) below.
+</Info>
+
+```typescript
+import { OdigosLambdaInstrumentation } from '@odigos/aws-cdk';
+
+new OdigosLambdaInstrumentation(this, 'Odigos', {
+  destination: {
+    endpoint: 'otlp.example.com:4317',   // OTLP/gRPC as bare host:port — no scheme
+    // httpEndpoint: 'https://otlp.example.com:4318',  // use this instead, for OTLP/HTTP
+  },
+  serviceName: 'my-api',   // set explicitly if your stack doesn't name the function directly
+  distro: 'java-lambda-otel-agent',   // optional; defaults to the language default
+  functions: [apiFn],   // serviceName applies to every listed function, so use one construct per function
+});
+```
+
+That one call attaches the layer(s), sets the wrapper, writes `ODIGOS_LAMBDA_CONFIG`, and tags every function
+you list. Set `distro` to the same ID you selected in Central.
+
+<Warning>
+  Don't also enable a CDK-instrumented function as an Odigos-managed source. Every
+  `cdk deploy` would reassert the CDK's configuration, every connector reconcile
+  would reassert its own, and the function's configuration would be rewritten on every round trip.
+</Warning>
+
+<Card title="Full CDK reference" icon="code" href="/cloud-connectors/aws/cdk/lambda">
+  Every option in depth — layer sources, choosing a distro, instrumenting a whole stack at once, the AWS Lambda
+  Web Adapter, and the complete API.
+</Card>
+
+## Using CloudFormation directly
+
+If you're not using CDK, merge these properties into your function by hand. The shape is the same for every
+language and distro: layers, tags, and two environment variables. Only the placeholder values change. Tabs
+for Terraform and the AWS CLI follow the same pattern.
+
+Replace the placeholders in `<ANGLE_BRACKETS>`:
+
+| Placeholder | Value |
+| --- | --- |
+| `<OTEL_LAYER_ARN>` | The SDK layer ARN for your region, language, and architecture |
+| `<OTEL_COLLECTOR_LAYER_ARN>` | The collector layer ARN. ADOT distros only. |
+| `<WRAPPER>` | The wrapper from [Exec wrapper per distro](#exec-wrapper-per-distro) |
+| `<SERVICE_NAME>` | The service name for the function |
+| `<OTLP_ENDPOINT>` | Your destination endpoint, in the format described in the config reference above |
+
+<Tabs>
+  <Tab title="CloudFormation">
+    ```yaml
+    # Merge into Resources.<YourFunction>.Properties
+    Layers:
+      - "<OTEL_LAYER_ARN>"    # keep any layers you already have, add this one
+    Tags:
+      - Key: "odigos:iac"
+        Value: "v1"
+      - Key: "odigos:sdk-layer"
+        Value: "<OTEL_LAYER_ARN>"
+    Environment:
+      Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: "<WRAPPER>"
+        ODIGOS_LAMBDA_CONFIG: '{"version":2,"service":"<SERVICE_NAME>","signals":["traces"],"endpoint":"<OTLP_ENDPOINT>"}'
+    ```
+  </Tab>
+
+  <Tab title="CloudFormation (ADOT)">
+    ADOT distros attach two layers and tag both:
+
+    ```yaml
+    # Merge into Resources.<YourFunction>.Properties
+    Layers:
+      - "<OTEL_LAYER_ARN>"              # odigos-otel-adot-<language>-<arch>
+      - "<OTEL_COLLECTOR_LAYER_ARN>"    # odigos-otel-adot-collector-<arch>
+    Tags:
+      - Key: "odigos:iac"
+        Value: "v1"
+      - Key: "odigos:sdk-layer"
+        Value: "<OTEL_LAYER_ARN>"
+      - Key: "odigos:collector-layer"
+        Value: "<OTEL_COLLECTOR_LAYER_ARN>"
+    Environment:
+      Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: "<WRAPPER>"
+        ODIGOS_LAMBDA_CONFIG: '{"version":2,"service":"<SERVICE_NAME>","signals":["traces"],"endpoint":"<OTLP_ENDPOINT>"}'
+    ```
+  </Tab>
+
+  <Tab title="Terraform">
+    ```hcl
+    resource "aws_lambda_function" "app" {
+      # ... existing configuration ...
+      layers = concat(var.existing_layers, [
+        "<OTEL_LAYER_ARN>",
+        # "<OTEL_COLLECTOR_LAYER_ARN>",   # ADOT distros only
+      ])
+      tags = merge(var.existing_tags, {
+        "odigos:iac"       = "v1"
+        "odigos:sdk-layer" = "<OTEL_LAYER_ARN>"
+        # "odigos:collector-layer" = "<OTEL_COLLECTOR_LAYER_ARN>"   # ADOT distros only
+      })
+      environment {
+        variables = merge(
+          { for key, value in var.existing_environment : key => value if !contains(["ODIGOS_MANAGED", "ODIGOS_IAC"], key) },
+          {
+            AWS_LAMBDA_EXEC_WRAPPER = "<WRAPPER>"
+            ODIGOS_LAMBDA_CONFIG    = jsonencode({ version = 2, service = "<SERVICE_NAME>", signals = ["traces"], endpoint = "<OTLP_ENDPOINT>" })
+          }
+        )
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="AWS CLI">
+    `update-function-configuration` replaces the whole layer list and environment, so read the current values
+    first and merge. This keeps your own layers and variables, and drops the ones from the earlier Odigos
+    format:
+
+    ```bash
+    FUNCTION="<FUNCTION_NAME>"
+    REGION="<REGION>"
+
+    aws lambda get-function-configuration --function-name "$FUNCTION" --region "$REGION" > current.json
+
+    # Odigos additions only — merged into the live environment below
+    cat > odigos-env.json <<'JSON'
+    {
+      "Variables": {
+        "AWS_LAMBDA_EXEC_WRAPPER": "<WRAPPER>",
+        "ODIGOS_LAMBDA_CONFIG": "{\"version\":2,\"service\":\"<SERVICE_NAME>\",\"signals\":[\"traces\"],\"endpoint\":\"<OTLP_ENDPOINT>\"}"
+      }
+    }
+    JSON
+
+    jq -s '{Variables: ((.[0].Environment.Variables // {}) + .[1].Variables | del(.ODIGOS_MANAGED, .ODIGOS_IAC))}' \
+      current.json odigos-env.json > merged-env.json
+
+    # Keep your own layers; replace any earlier Odigos layers
+    EXISTING=$(jq -r '.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)' current.json | tr '\n' ' ')
+
+    aws lambda update-function-configuration --function-name "$FUNCTION" --region "$REGION" \
+      --layers $EXISTING "<OTEL_LAYER_ARN>" \
+      --environment file://merged-env.json
+    # ADOT distros: add "<OTEL_COLLECTOR_LAYER_ARN>" to --layers as well
+
+    cat > odigos-tags.json <<'JSON'
+    {
+      "odigos:iac": "v1",
+      "odigos:sdk-layer": "<OTEL_LAYER_ARN>"
+    }
+    JSON
+    # ADOT distros: also add "odigos:collector-layer": "<OTEL_COLLECTOR_LAYER_ARN>"
+
+    aws lambda tag-resource --region "$REGION" \
+      --resource "$(jq -r .FunctionArn current.json)" --tags file://odigos-tags.json
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  The examples use `"signals":["traces"]` (traces only). Set `signals` to match the signals your destination
+  enables, and add `http`, `insecure`, `headers`, and the other keys from the config reference above as needed.
+</Tip>
+
+### Functions behind the AWS Lambda Web Adapter
+
+For a function that runs a web server behind the
+[AWS Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter), set the wrapper to
+`/opt/odigos-webserver` and record the function's existing wrapper (the adapter's, often `/opt/bootstrap`) in
+`webWrapper`:
+
+```yaml
+Environment:
+  Variables:
+    AWS_LAMBDA_EXEC_WRAPPER: "/opt/odigos-webserver"
+    ODIGOS_LAMBDA_CONFIG: '{"version":2,"service":"<SERVICE_NAME>","signals":["traces"],"endpoint":"<OTLP_ENDPOINT>","webWrapper":"/opt/bootstrap"}'
+```
+
+You no longer edit `NODE_OPTIONS`, `JAVA_TOOL_OPTIONS`, or `PYTHONPATH`. Web Adapter functions support the Java
+full agent, the upstream Node.js distro, and the upstream Python distro. Ruby and ADOT are not supported there.
+
+## Things to watch out for
+
+<AccordionGroup>
+  <Accordion title="The tags are not optional">
+    The `odigos:iac` tag is how Odigos knows the function is instrumented at all, and the recorded layer ARNs
+    are what future checks compare against, so a version you deliberately pinned is respected. Without them the
+    function stays at **Waiting for you to apply the instrumentation**. The identity that deploys your function needs
+    `lambda:TagResource`.
+  </Accordion>
+
+  <Accordion title="Match the distro selected in Central">
+    Odigos compares the function's wrapper, layer family (ADOT or not), and collector layer against the distro
+    selected in Central. A mismatch is reported as **Instrumentation does not match**. See
+    [Switch distros](/cloud-connectors/aws/workloads/lambda/distros#switch-distros).
+  </Accordion>
+
+  <Accordion title="The configuration must match the destination exactly">
+    Odigos compares `ODIGOS_LAMBDA_CONFIG` with the connector's destination and Source: `service` with the Source's
+    service name, `signals` with the destination's enabled signals, and `endpoint`, `http`, `insecure`, and
+    `headers` with the destination's endpoint, protocol, TLS setting, and headers. `applicationSignals`,
+    `functionLogs`, `debug`, and `webWrapper` must also be set exactly as the reference above describes. A missing signal and an extra signal are both drift, and the
+    source shows **Instrumentation does not match**. To turn off a signal, turn it off on the destination first,
+    then remove it from `signals`.
+  </Accordion>
+
+  <Accordion title="OpenTelemetry variables you set are overridden">
+    At startup the layer clears the standard `OTEL_EXPORTER_OTLP_*` endpoint, protocol, headers, and insecure
+    variables and `OTEL_LOG_LEVEL` for your function's process. It then sets `OTEL_SERVICE_NAME`, the
+    per-signal `OTEL_*_EXPORTER` selectors, and the exporters from `ODIGOS_LAMBDA_CONFIG`. Your values stay
+    visible in the AWS console but have no effect.
+  </Accordion>
+
+  <Accordion title="Never set the odigos:managed or odigos:pending tags, or ODIGOS_MANAGED">
+    These belong to the connector alone. When the connector instruments a function it saves the function's
+    original configuration in its own database, and `odigos:managed` (plus `odigos:pending` while an update is
+    in flight) is the reference to that saved state. `ODIGOS_MANAGED` is an older environment-variable form of
+    the same marker. Setting any of them yourself claims a rollback that was never recorded.
+  </Accordion>
+
+  <Accordion title="AWS allows at most five layers per function">
+    Odigos needs one layer slot, or two for the ADOT distros. If your function already has too many layers,
+    the update fails with a layer-limit message.
+  </Accordion>
+
+  <Accordion title="The environment is limited to 4096 bytes">
+    Your own variables plus `ODIGOS_LAMBDA_CONFIG` (including any `headers`) must fit in AWS's 4096-byte
+    limit for Lambda environment variables.
+  </Accordion>
+</AccordionGroup>
+
+## Migrating from earlier formats
+
+Two earlier formats exist:
+
+- **The original environment-variable format**, where you set `ODIGOS_IAC`, `OPENTELEMETRY_COLLECTOR_CONFIG_URI`,
+  `OTEL_SERVICE_NAME`, and per-signal `OTEL_*_EXPORTER` variables by hand.
+- **The short-key version 1 configuration**, `{"v":1,...}`, introduced with layer v0.0.18.
+
+Odigos still recognizes functions deployed in either format during migration, but the instructions in Central
+and the CDK construct now produce version 2. Functions that Odigos instruments for you (**Odigos-managed**) are
+migrated automatically. For self-managed functions, switch to version 2 together with **v0.0.19 or newer**
+layers.
+
+To move a self-managed function from the original environment-variable format:
+
+1. **Remove** `ODIGOS_IAC`, `OPENTELEMETRY_COLLECTOR_CONFIG_URI`, and the `OTEL_SERVICE_NAME` and
+   `OTEL_*_EXPORTER` variables Odigos had you set. For Web Adapter functions, also remove the `JAVA_TOOL_OPTIONS`,
+   `NODE_OPTIONS`, and `PYTHONPATH` additions.
+2. **Upgrade** the Odigos layer(s) to **v0.0.19 or newer**.
+3. **Add** the `odigos:*` tags, plus `AWS_LAMBDA_EXEC_WRAPPER` and a version 2 `ODIGOS_LAMBDA_CONFIG`.
+
+To move from the version 1 configuration, upgrade the layers to v0.0.19 or newer and rewrite the value with
+these keys:
+
+| Version 1 | Version 2 |
+| --- | --- |
+| `v` | `version` (set to `2`) |
+| `s` | `service` |
+| `t` (bitmask: traces `1`, metrics `2`, logs `4`) | `signals` (list, for example `7` becomes `["traces","metrics","logs"]`) |
+| `e` | `endpoint` |
+| `p` | `http` |
+| `i` | `insecure` |
+| `h` | `headers` |
+| `a` | `applicationSignals` |
+| `l` | `functionLogs` |
+| `d` | `debug` |
+| `w` | `webWrapper` |
+
+<Check>
+  Once the tags, wrapper, layer(s), and configuration all match, Odigos flips the function to **Instrumented**
+  on its own — usually within a few minutes, at the next discovery cycle. No action needed on the Odigos side.
+</Check>
+
+## Published versions, aliases, and canaries
+
+Odigos changes `$LATEST` only. It never publishes a version or moves an alias, and a version published before
+instrumentation keeps running without it.
+
+On each check, Odigos lists the function's aliases and compares the primary version and every weighted canary
+version of each alias with `$LATEST`: the `ODIGOS_LAMBDA_CONFIG` value, the exec wrapper, and the attached Odigos
+layers. The check runs for Odigos-managed functions once `$LATEST` has settled, and for self-managed functions
+whenever Odigos observes them. If a version differs, the source reports:
+
+```text
+Lambda $LATEST is configured, but alias <alias> invokes version <n> with different instrumentation. Publish the
+instrumented configuration and update the alias through your deployment pipeline; Odigos does not move production aliases
+```
+
+To fix it, publish a version through your normal deployment process and point every alias and canary at it,
+including provisioned concurrency and SnapStart deployments. Then check telemetry on the versions that receive
+traffic. Versions no alias points to, and invocations by explicit version ARN, are not checked.
+
+The check needs `lambda:ListAliases` and `lambda:GetFunctionConfiguration`, which are part of the connector's
+[discovery permissions](/cloud-connectors/add-connectors/add-aws-connector#iam-permissions).
+
+## Bill of materials and uninstall
+
+Uninstalling removes what instrumentation added to the function. It never deletes the function or its
+execution role. This section is the Lambda procedure; [layer cleanup](/cloud-connectors/aws/workloads/lambda/preload#bill-of-materials-and-uninstall)
+and [Application Signals cleanup](/cloud-connectors/aws/workloads/lambda/distros#bill-of-materials-and-uninstall)
+cover what outlives the function.
+
+| Added to the function | After uninstall |
+| --- | --- |
+| The SDK layer, plus the collector layer for ADOT | Detached. The layer versions in your account remain until you delete them. |
+| `AWS_LAMBDA_EXEC_WRAPPER` and `ODIGOS_LAMBDA_CONFIG` | Removed. For a Web Adapter function the original wrapper is put back. |
+| The `odigos:*` tags | Removed, or restored to their earlier values. |
+| Published versions and aliases | Unchanged. Versions published while instrumented stay instrumented. |
+| ADOT + Application Signals: execution-role policy attachment and account discovery | Kept, because other functions can share them. |
+
+### Uninstall self-managed instrumentation
+
+1. **Disable the Source** in Central. Odigos does not modify self-managed functions; it reports instrumentation
+   that is still in place.
+2. **Remove the instrumentation through the IaC that added it**, and leave everything else alone:
+   - Detach the Odigos layer ARNs (`odigos-otel-*`).
+   - Delete `ODIGOS_LAMBDA_CONFIG` and `AWS_LAMBDA_EXEC_WRAPPER`. On a Web Adapter function, set the wrapper
+     back to the `webWrapper` value from the configuration, and keep the adapter layer.
+   - Delete the `odigos:iac`, `odigos:sdk-layer`, and `odigos:collector-layer` tags.
+3. **Deploy, then invoke the function** to confirm it still works.
+4. **Replace published versions.** Publish the clean configuration and update every alias and weighted target
+   that points at an instrumented version. Delete old instrumented versions through your usual retention process.
+5. **Confirm and finish.** Check that the source reports no instrumentation, then delete the Source if you are
+   retiring it. Finish the layer and Application Signals cleanup if they apply.
+
+<Tabs>
+  <Tab title="CloudFormation">
+    Remove the added layers, environment keys, and tags from the function resource, review the change set, and
+    update the stack. Deleting the stack removes the function.
+  </Tab>
+  <Tab title="Terraform / OpenTofu">
+    Remove the additions from the function resource and review the plan. It should update the existing
+    function, not destroy it.
+  </Tab>
+  <Tab title="AWS CDK">
+    Remove the function from `functions` or drop its `instrument(fn)` call. If you use
+    `OdigosInstrumentationAspect`, narrow or remove it too, or it reapplies the change. Review `cdk diff` and
+    deploy. `cdk destroy` removes the whole application. For the construct's extra resources, see
+    the [CDK bill of materials](/cloud-connectors/aws/cdk/lambda#bill-of-materials-and-uninstall).
+  </Tab>
+  <Tab title="AWS CLI">
+    Build the update from the live configuration, so changes made since installation survive. This drops the
+    Odigos layers, removes both variables, and restores the Web Adapter wrapper if there was one:
+
+    ```bash
+    FUNCTION="<FUNCTION_NAME>"
+    REGION="<FUNCTION_REGION>"
+
+    aws lambda get-function-configuration --function-name "$FUNCTION" --region "$REGION" > current.json
+
+    jq '(.Environment.Variables // {}) as $env
+      | ($env.ODIGOS_LAMBDA_CONFIG // "{}" | fromjson | .webWrapper // "") as $wrapper
+      | {FunctionName, RevisionId,
+         Layers: [.Layers[]?.Arn | select(contains(":layer:odigos-otel-") | not)],
+         Environment: {Variables: (($env | del(.ODIGOS_LAMBDA_CONFIG, .AWS_LAMBDA_EXEC_WRAPPER))
+           + (if $wrapper != "" then {AWS_LAMBDA_EXEC_WRAPPER: $wrapper} else {} end))}}' \
+      current.json > rollback.json
+
+    aws lambda update-function-configuration --region "$REGION" --cli-input-json file://rollback.json
+    aws lambda wait function-updated-v2 --function-name "$FUNCTION" --region "$REGION"
+
+    aws lambda untag-resource --region "$REGION" --resource "$(jq -r .FunctionArn current.json)" \
+      --tag-keys 'odigos:iac' 'odigos:sdk-layer' 'odigos:collector-layer'
+    ```
+
+    `current.json` and `rollback.json` contain the function's environment variables, so delete them when you
+    are done.
+  </Tab>
+</Tabs>
+
+### If Odigos installed the instrumentation
+
+Use **Uninstrument** while the connector and its AWS credentials are available. The connector restores the
+original configuration it saved in its own database, detaches only the layer versions it attached, and removes
+its tags. It does not touch customer-owned instrumentation. Do not delete the `odigos:managed` or
+`odigos:pending` tags first: they point at the saved state. See
+[Uninstrument workloads](/cloud-connectors/instrument-workloads#uninstrument-workloads).
+
+When the last function using a layer in a region is uninstrumented, the connector also tries to delete the
+layer version it published. Check [layer cleanup](/cloud-connectors/aws/workloads/lambda/preload#bill-of-materials-and-uninstall)
+for what can remain. Function log groups and telemetry already sent stay under their own retention.
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Lambda distros" icon="layer-group" href="/cloud-connectors/aws/workloads/lambda/distros">
+    Pick the SDK or agent each function runs.
+  </Card>
+
+  <Card title="Full CDK reference" icon="code" href="/cloud-connectors/aws/cdk/lambda">
+    Every construct option, in depth.
+  </Card>
+
+  <Card title="Preload the layer" icon="download" href="/cloud-connectors/aws/workloads/lambda/preload">
+    Get the layer into your own account first, if your policy requires it.
+  </Card>
+</CardGroup>

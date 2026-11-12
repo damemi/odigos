@@ -4,7 +4,7 @@
 # To add a new customer:
 #   1. Add their slug to the CUSTOMERS array (use underscores, no hyphens)
 #   2. Declare a <slug>_helm_sets bash array with their helm --set flags
-#   3. Add a matching include entry in .github/workflows/build.yaml
+#   3. Add a matching include entry in .github/workflows/e2e.yaml
 #
 # helm-install.sh only sets image.tag and onPremToken (from env).
 # Everything else — modes, crons, feature flags — is owned here per customer.

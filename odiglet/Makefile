@@ -3,8 +3,7 @@
 include obi.mk
 
 # Libraries with a generate target in the module cache
-LIBRARIES := go.opentelemetry.io/auto \
-			github.com/odigos-io/runtime-detector
+LIBRARIES := github.com/odigos-io/runtime-detector
 
 go-mod: go-mod-replace
 	@go mod download

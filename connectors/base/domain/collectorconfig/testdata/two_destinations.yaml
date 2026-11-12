@@ -1,0 +1,82 @@
+receivers:
+    otlp:
+        protocols:
+            grpc:
+                endpoint: 0.0.0.0:4317
+            http:
+                endpoint: 0.0.0.0:4318
+processors:
+    batch:
+        send_batch_size: 8192
+        timeout: 200ms
+    memory_limiter:
+        check_interval: 1s
+        limit_mib: 1638
+        spike_limit_mib: 327
+    resource:
+        attributes:
+            - action: insert
+              key: cloud.region
+              value: us-east-1
+    resourcedetection:
+        detectors:
+            - env
+            - ecs
+        override: false
+        timeout: 2s
+exporters:
+    otlp_grpc/generic-customer-backend:
+        endpoint: otlp.vendor.example.com:4317
+        tls:
+            insecure: true
+    otlp_grpc/honeycomb-honeycomb:
+        endpoint: api.honeycomb.io:443
+        headers:
+            x-honeycomb-team: hc-api-key
+extensions:
+    health_check:
+        endpoint: 0.0.0.0:13133
+service:
+    extensions:
+        - health_check
+    pipelines:
+        logs/generic-customer-backend:
+            receivers:
+                - otlp
+            processors:
+                - memory_limiter
+                - resourcedetection
+                - resource
+                - batch
+            exporters:
+                - otlp_grpc/generic-customer-backend
+        metrics/generic-customer-backend:
+            receivers:
+                - otlp
+            processors:
+                - memory_limiter
+                - resourcedetection
+                - resource
+                - batch
+            exporters:
+                - otlp_grpc/generic-customer-backend
+        traces/generic-customer-backend:
+            receivers:
+                - otlp
+            processors:
+                - memory_limiter
+                - resourcedetection
+                - resource
+                - batch
+            exporters:
+                - otlp_grpc/generic-customer-backend
+        traces/honeycomb-honeycomb:
+            receivers:
+                - otlp
+            processors:
+                - memory_limiter
+                - resourcedetection
+                - resource
+                - batch
+            exporters:
+                - otlp_grpc/honeycomb-honeycomb

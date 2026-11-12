@@ -22,6 +22,7 @@ updates:
       - /instrumentor
       - /k8sutils
       - /odiglet
+      - /odiglet/enterprise
       - /odigosauth
       - /opampserver
       - /operator
@@ -76,9 +77,10 @@ updates:
     directories:
       - /
       - /collector
-      - /frontend
-      - /odiglet
+      - /instrumentor/enterprise
+      - /odiglet/enterprise
       - /operator
+      - /ui
     schedule:
       day: sunday
       interval: weekly

@@ -1,0 +1,174 @@
+---
+title: 'CDK: Destinations'
+description: 'Configure where the Odigos AWS CDK constructs send telemetry, and which signals to enable.'
+sidebarTitle: 'Destinations'
+---
+
+Both Lambda and Fargate constructs take a `destination` — where your telemetry is sent, and which OpenTelemetry
+signals to include. Configure it once on the construct; every workload that construct instruments uses the
+same settings.
+
+<Note>
+  Read [Odigos AWS CDK](/cloud-connectors/aws/cdk/overview) first for install and when to use the package.
+  This page covers only the shared `destination` options.
+</Note>
+
+## Choosing a destination
+
+You give the construct an endpoint in one of two formats, depending on which protocol your destination
+speaks:
+
+<ParamField path="destination.endpoint" type="string">
+  OTLP over **gRPC**, written as a bare `host:port` with **no** `https://` prefix — for example
+  `otlp.example.com:4317`. Port 4317 is the convention.
+</ParamField>
+
+<ParamField path="destination.httpEndpoint" type="string">
+  OTLP over **HTTP**, written as a full URL **including** the scheme — for example
+  `https://otlp.example.com:4318`. Port 4318 is the convention.
+</ParamField>
+
+The two formats aren't interchangeable, and getting them mixed up is the most common mistake here. Both
+constructs check the format and stop the build on a scheme in `endpoint` or a missing scheme in `httpEndpoint`,
+rather than deploying something that starts up fine and then quietly delivers nothing. Using a port that belongs
+to the other protocol (4318 with gRPC, or 4317 with HTTP) produces a warning.
+
+<Note>
+  **How many endpoints to set differs between the two constructs.** Lambda takes
+  **exactly one**. Fargate accepts **either or both**; see
+  [Fargate → Transport](/cloud-connectors/aws/cdk/fargate#transport) for how it chooses.
+</Note>
+
+Two more optional settings:
+
+<ParamField path="destination.insecure" type="boolean" default="false">
+  Connect to the gRPC `endpoint` without TLS. Applies to the gRPC `endpoint` only — the HTTP exporter takes
+  its transport from the URL scheme. On Fargate this is what makes the construct write `http://` instead of
+  `https://` in front of `endpoint`.
+</ParamField>
+
+<ParamField path="destination.headers" type="object">
+  Headers sent with every request, which in practice means your destination's credential (an API key or
+  token).
+
+  On Lambda they're stored in the `headers` field of the `ODIGOS_LAMBDA_CONFIG` environment variable. On Fargate
+  they're stored in `OTEL_EXPORTER_OTLP_HEADERS`, as a comma-separated `key=value` list sorted by key.
+
+  <Note>
+    **Fargate: pass raw header values.** The construct URL-encodes names and values for you (a space becomes `+`),
+    which is the form Odigos compares against the destination's headers. A value such as `Bearer <token>` goes in
+    as written. If the destination in Odigos has no headers, don't set any here.
+  </Note>
+
+  <Warning>
+    Both are plain-text environment variables on the workload — readable by
+    anyone who can describe the function or task definition, and visible in the AWS
+    console. For a long-lived credential, prefer a destination that authenticates by
+    network position (a private VPC endpoint, or mTLS), or send telemetry to a
+    collector you run that holds the real credential.
+  </Warning>
+</ParamField>
+
+## Choosing which signals to send
+
+OpenTelemetry produces three kinds of data, and you choose which ones to send:
+
+<ParamField path="destination.traces" type="boolean" default="true">
+  Traces — the request-by-request timelines. On by default.
+</ParamField>
+
+<ParamField path="destination.metrics" type="boolean" default="false">
+  Metrics — numeric measurements over time. **Off unless you turn it on.**
+</ParamField>
+
+<ParamField path="destination.logs" type="boolean" default="false">
+  Logs. **Off unless you turn it on.**
+</ParamField>
+
+<ParamField path="destination.profiles" type="boolean" default="false">
+  Profiles. No Lambda or Fargate agent produces profiles today, so setting this to `true` only adds a synth
+  **warning**; it doesn't activate a profiler, and your other selected signals stay enabled.
+</ParamField>
+
+```typescript
+destination: {
+  endpoint: 'otlp.example.com:4317',
+  metrics: true,   // off unless you ask
+  logs: true,      // off unless you ask
+}
+```
+
+Traces are on by default because that is the primary signal most teams set up OpenTelemetry for.
+Metrics and logs are opt-in: enabling a signal you are not ready to receive is not free — refused
+batches are retried on a backoff, and on Lambda that retrying happens inside billed duration. Turn them
+on when you want those signals and your destination is configured to accept them.
+
+<Warning>
+  **Match this to what your destination in Odigos has enabled — exactly.** Odigos compares
+  the workload's full telemetry configuration against what it expects, so a
+  missing signal *and* an extra one are both reported as *drifted*: a
+  traces-only workload checked against a destination configured for all three
+  signals, or the reverse, even though the workload is working fine.
+  Read the enabled signals off the destination in Odigos and state the same ones
+  here.
+</Warning>
+
+<Note>
+  The Application Signals distros (`*-adot-application-signals`, with or without `-no-collector`) require both
+  `destination.traces` and `destination.metrics` to be `true`; the build fails otherwise. See
+  [ADOT and Application Signals](/cloud-connectors/aws/cdk/lambda#adot-and-application-signals).
+</Note>
+
+<Note>
+  The collector-less distros (`*-no-collector`) require `destination.httpEndpoint`, because their SDKs export
+  straight to it over OTLP/HTTP. See [Choosing a distro](/cloud-connectors/aws/cdk/lambda#choosing-a-distro).
+</Note>
+
+### Signals by language
+
+The constructs enable the signals you choose, as far as each language's agent can produce them. A signal that's
+off is switched off at the source (`OTEL_<SIGNAL>_EXPORTER=none`), not just filtered.
+
+| Language | Lambda | Fargate |
+| --- | --- | --- |
+| Java, Node.js, Python | Traces, metrics, logs | Traces, metrics, logs |
+| .NET, PHP | Not available on Lambda | Traces, metrics, logs |
+| Ruby | Traces and function logs. **No metrics** — enabling `metrics` adds a synth warning. | **Traces only** — enabling `metrics` or `logs` adds a synth warning. |
+
+On Lambda, the Java lightweight wrappers and Ruby collect logs from the function's stdout and stderr. See
+[Lambda instrumentation distros](/cloud-connectors/aws/workloads/lambda/distros) for each distro's signals.
+
+<Note>
+  Turning all three off stops the build — a workload with instrumentation but
+  nowhere to send anything would be silent, which is never what you meant.
+</Note>
+
+## Bill of materials and uninstall
+
+| Added by `destination` | After removal |
+| --- | --- |
+| Endpoint, transport, enabled signals, and optional headers in the workload configuration | Old Lambda versions, ECS task revisions, and IaC or build history can still hold these values, including headers. |
+| A reference to an existing receiver or regional Collector | The constructs don't create the receiver, a regional Collector, or backend credentials. |
+
+Changing the CDK `destination` doesn't change the matching destination in Central, or delete telemetry already ingested.
+To change destinations, update both, deploy, and verify delivery from every traffic-serving Lambda version and ECS deployment before you retire the old receiver.
+
+To stop export entirely, use the [Lambda](/cloud-connectors/aws/cdk/lambda#bill-of-materials-and-uninstall) or
+[Fargate](/cloud-connectors/aws/cdk/fargate#bill-of-materials-and-uninstall) uninstall steps. Disabling every signal isn't an
+option: the constructs reject a destination with no signals.
+
+Once nothing uses the old endpoint, remove its Central configuration and revoke any dedicated receiver credentials at
+their issuer. Rotate a credential if old versions, revisions, or generated files that held it should no longer authorize
+calls. To remove an owned regional Collector, see its [uninstall guide](/cloud-connectors/aws/regional-collector#uninstall).
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Lambda construct" icon="bolt" href="/cloud-connectors/aws/cdk/lambda">
+    Distros, ADOT, layer sources, web-server mode.
+  </Card>
+
+  <Card title="Fargate construct" icon="cubes" href="/cloud-connectors/aws/cdk/fargate">
+    Languages, service naming, the agents image.
+  </Card>
+</CardGroup>

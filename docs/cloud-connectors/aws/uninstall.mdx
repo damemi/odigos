@@ -1,0 +1,124 @@
+---
+title: 'Uninstall AWS Integrations'
+description: 'Remove AWS connector authentication, Lambda and Fargate instrumentation, and regional Collectors in the right order, and find what is left behind.'
+sidebarTitle: 'Uninstall and leftovers'
+---
+
+Use this page to remove an AWS connector and everything installed for it, while keeping your application
+functions, ECS services, and shared infrastructure. To remove only one component, use its guide below. You don't
+need to delete the connector.
+
+## Choose the component to remove
+
+| Installed flow | Guide |
+| --- | --- |
+| Access keys or Assume IAM role, any setup method | [AWS authentication](/cloud-connectors/add-connectors/add-aws-connector#bill-of-materials-and-uninstall) |
+| Odigos-managed Lambda or Fargate instrumentation | [Managed instrumentation](/cloud-connectors/instrument-workloads#uninstrument-workloads) |
+| Self-managed Lambda (CDK, CloudFormation, Terraform, AWS CLI) | [Lambda instrumentation](/cloud-connectors/aws/workloads/lambda/instrument#bill-of-materials-and-uninstall) |
+| Lambda layers | [Lambda layers](/cloud-connectors/aws/workloads/lambda/preload#bill-of-materials-and-uninstall) |
+| Self-managed Fargate (CDK, CloudFormation, Terraform, raw ECS) | [Fargate instrumentation](/cloud-connectors/aws/workloads/fargate/instrument#bill-of-materials-and-uninstall) |
+| Mirrored Fargate agents image | [Fargate image](/cloud-connectors/aws/workloads/fargate/preload#bill-of-materials-and-uninstall) |
+| ADOT with Application Signals | [Application Signals cleanup](/cloud-connectors/aws/workloads/lambda/distros#bill-of-materials-and-uninstall) |
+| Regional Collector, automatic or manual | [Regional Collector uninstall](/cloud-connectors/aws/regional-collector#uninstall) |
+| CDK package and destination settings | [CDK package](/cloud-connectors/aws/cdk/overview#bill-of-materials-and-uninstall) and [CDK destinations](/cloud-connectors/aws/cdk/destinations#bill-of-materials-and-uninstall) |
+
+## Remove a complete AWS setup
+
+Do the steps in this order, so the connector keeps the permissions it needs until the end.
+
+<Steps>
+  <Step title="Record what was installed">
+    Note the connector name, accounts, regions, IAM user, role, and policy names, access key IDs, stack names,
+    Terraform workspaces, layer versions, and ECS service and task-definition ARNs. The Collector uninstall
+    drawer shows the Collector's resource references.
+
+    Run AWS cleanup with your own provisioning or admin identity, in the account and region that own each
+    resource. The connector's credentials aren't meant to delete IAM resources. Run
+    `aws sts get-caller-identity` to confirm the account before you delete anything. A cross-account Assume IAM
+    role setup needs cleanup in both accounts.
+  </Step>
+  <Step title="Remove instrumentation">
+    For Odigos-managed Sources, select **Uninstrument** and wait for rollback and the application rollouts to
+    finish. For self-managed Sources, disable them and remove the instrumentation through the IaC that added it.
+    Odigos doesn't undo changes you own.
+
+    For Lambda, publish an uninstrumented version and move every alias and weighted traffic target off
+    instrumented versions. For Fargate, wait until no running task, including scheduled and standalone tasks,
+    uses an instrumented revision.
+  </Step>
+  <Step title="Uninstall every regional Collector">
+    Follow the [Collector uninstall procedure](/cloud-connectors/aws/regional-collector#uninstall) for each
+    region, and resolve any retained-resource or deletion errors first. Deleting the connector or a routing
+    destination doesn't remove the Collector from AWS.
+  </Step>
+  <Step title="Delete the connector">
+    Delete unneeded Sources and destinations, then delete the connector on **Connections**. See
+    [Delete a connector](/cloud-connectors/manage-and-remove#delete-a-connector) for the retain and cleanup
+    deletion policies. Neither policy replaces the Collector uninstall.
+  </Step>
+  <Step title="Revoke the AWS credentials">
+    Follow [authentication cleanup](/cloud-connectors/add-connectors/add-aws-connector#bill-of-materials-and-uninstall).
+    Remove only the users, keys, roles, and policy attachments created for this connector, and restore any
+    policy or trust configuration you changed on a reused identity.
+
+    Revoking an access key blocks new calls with that key. Role sessions that were already issued keep working
+    until they expire, unless you
+    [revoke them](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_revoke-sessions.html).
+  </Step>
+  <Step title="Clean up what is left">
+    Remove layer versions, old ECS task definitions, mirrored images, execution roles, prerequisite stacks, and
+    network rules using the per-flow guides. Remove each only when nothing else uses it. See
+    [What can still remain](#what-can-still-remain).
+  </Step>
+</Steps>
+
+## Use the tool that owns the resource
+
+Remove each resource with the tool that created it. Name prefixes and tags alone don't prove that something
+belongs only to this installation.
+
+| Installation method | How to remove |
+| --- | --- |
+| Dedicated CloudFormation stack | Delete that exact stack and wait for `DELETE_COMPLETE`. Remove access keys and other dependencies created outside the stack first. Check `DELETE_FAILED` events. |
+| Instrumentation inside an application CloudFormation or CDK stack | Remove the instrumentation properties or construct, review the change set or `cdk diff`, and update the stack. Don't delete the application stack. |
+| Terraform / OpenTofu | Use the original state and workspace. Remove the instrumentation from your application resources and apply. Destroy a workspace only if it is dedicated to what you are removing. Deleting the state file removes nothing from AWS. |
+| AWS CLI / Console | Remove the exact resources you recorded, in dependency order. |
+
+For a dedicated CloudFormation stack:
+
+```bash
+STACK="<EXACT_STACK_NAME>"
+REGION="<STACK_REGION>"
+aws cloudformation delete-stack --stack-name "$STACK" --region "$REGION"
+aws cloudformation wait stack-delete-complete --stack-name "$STACK" --region "$REGION"
+```
+
+For a dedicated Terraform workspace, review the plan before you apply it:
+
+```bash
+terraform plan -destroy -out=remove.tfplan
+terraform apply remove.tfplan
+# OpenTofu: tofu plan -destroy -out=remove.tfplan && tofu apply remove.tfplan
+```
+
+## What can still remain
+
+| Item | Why it remains, and how to finish |
+| --- | --- |
+| Application Lambda functions, ECS services, task roles, log groups, VPCs, subnets, clusters | Uninstalling instrumentation keeps your application. Retire these separately. |
+| Published Lambda versions, unused layer versions, inactive ECS task definitions, image digests | AWS keeps these deployment artifacts. Delete them after review. |
+| Collector resources you created or supplied | Odigos deletes a Collector resource only if it created it and recorded its reference. Use the retained list from the uninstall and the tool that created the rest. |
+| Secrets scheduled for deletion | A secret deleted with a recovery window isn't gone until the window ends. See [DeleteSecret](https://docs.aws.amazon.com/cli/latest/reference/secretsmanager/delete-secret.html). |
+| Terraform and CDK state, generated files, downloads, and backups | Deleting AWS resources doesn't delete these copies. Remove them, and rotate dedicated destination credentials if they remain in history. |
+| Central's controller, gateway, and shared PostgreSQL and Redis | Deleting one connector doesn't uninstall Central or purge its history. The provider schemas are shared, so don't drop `connector_aws` to remove one account. |
+| CloudWatch, Application Signals, X-Ray, and backend telemetry | Stopping exporters stops new data. Data already ingested stays under its service's retention policy. |
+
+## Verify
+
+Compare your recorded inventory with AWS in every affected account and region. Confirm that:
+
+- No task or function version still runs the removed agent.
+- No Collector tasks, load balancers, or dedicated security groups remain.
+- No dedicated live access keys or policy attachments remain.
+- CloudFormation shows `DELETE_COMPLETE` and Terraform shows no dedicated resources left.
+- Everything you intentionally kept is written down.

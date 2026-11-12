@@ -16,6 +16,8 @@ jobs:
           go work init && go work use -r .
           # odiglet/enterprise needs private instrumentation repos this job cannot download.
           go work edit -dropuse=./odiglet/enterprise
+          # The cloud connector modules read the private agents-api module.
+          go work edit -dropuse=./connectors/base -dropuse=./connectors/providers/aws -dropuse=./connectors/providers/azure -dropuse=./connectors/providers/gcp -dropuse=./connectors/providers/mulesoft -dropuse=./connector-opamp-gateway
           cd api
           make docgen
       - name: Check for changes in CRD API docs
@@ -57,6 +59,22 @@ jobs:
           if [[ -n $(git status --porcelain) ]]; then
             git diff
             echo "RBAC docs need to be updated. Please run 'make rbac-docs', then commit the changes."
+            exit 1
+          fi
+
+  check-helm-values-doc-change:
+    runs-on: depot-ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Generate Helm values docs
+        run: |
+          make helm-values-docs
+      - name: Check for changes in Helm values docs
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            git diff
+            echo "Helm values docs need to be updated. Please run 'make helm-values-docs', then commit the changes."
             exit 1
           fi
 

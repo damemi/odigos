@@ -1,7 +1,7 @@
 name: On-Prem Token Reminders Tests
 
 # Tests the onprem-token-reminders module only when it, or a workflow that runs
-# it, changes. Kept out of build.yaml's unit-test matrix on purpose so the rest
+# it, changes. Kept out of platform-k8s.yaml's unit tests on purpose so the rest
 # of the repo does not pay for it on every PR.
 
 on:

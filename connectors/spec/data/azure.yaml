@@ -1,0 +1,1535 @@
+provider: azure
+displayName: Microsoft Azure
+
+# Provider boundary and non-secret connector configuration (not authentication).
+# One connector instance owns one Azure subscription. Detectors enumerate resources across the
+# subscription (no resource-group selection field).
+connector:
+  # Fixed placeholder until regional bootstrap is implemented for this provider.
+  bootstrapRegion:
+    defaultRegion: eastus
+    supportedRegions:
+      - eastus
+  fields:
+    - name: subscriptionId
+      displayName: Azure Subscription ID
+      componentType: input
+      required: true
+      tooltip: The Azure subscription this connector manages.
+
+# Authentication: either the connector pod's ambient credentials (Azure Workload Identity / Managed
+# Identity via DefaultAzureCredential) or a service principal client secret stored in the credentials
+# Secret. Azure credentials are not themselves bound to a single subscription — the connector always
+# scopes its calls to the configured subscription id.
+auth:
+  permissions:
+    - Microsoft.Resources/subscriptions/read
+  methods:
+    - id: workload-identity
+      displayName: Workload identity
+      description: >-
+        Uses the connector pod's ambient credentials (Azure Workload Identity / Managed Identity via
+        DefaultAzureCredential). No credentials Secret keys are required.
+      fields: []
+
+    - id: service-principal
+      displayName: Service principal
+      description: >-
+        An Azure AD application (service principal) with a client secret, stored in the credentials
+        Secret. Maps to the standard AZURE_* environment variables the Azure SDK reads.
+      fields:
+        - name: tenantId
+          displayName: Tenant ID
+          componentType: input
+          required: true
+          showInUi: true
+          tooltip: Azure AD (Entra ID) tenant that owns the service principal.
+          envVar: AZURE_TENANT_ID
+        - name: clientId
+          displayName: Client ID
+          componentType: input
+          required: true
+          showInUi: true
+          tooltip: Application (client) ID of the service principal.
+          envVar: AZURE_CLIENT_ID
+        - name: clientSecret
+          displayName: Client Secret
+          componentType: input
+          secret: true
+          required: true
+          showInUi: true
+          tooltip: Client secret for the service principal.
+          envVar: AZURE_CLIENT_SECRET
+
+# Two parallel hierarchies (domains), completely separate, sharing only the codebase and running pod.
+#   workloads        -> discovery + instrumentation (instrument a discovered workload directly).
+#   computePlatforms -> discovery + installation    (install a separate Odigos agent onto the platform).
+# Every type name is unique across both domains.
+
+# workloads: directly-instrumentable resources — discovered, then instrumented in place.
+workloads:
+  discovery:
+    enabled: true
+    displayName: Workload discovery
+    description: >-
+      Enumerate Azure Container Apps across the subscription, so they can be surfaced as Odigos Source
+      candidates.
+    types:
+      - name: azure.container-apps
+        displayName: Azure Container Apps
+        description: List Container Apps in every resource group in the subscription.
+        permissions:
+          - Microsoft.App/containerApps/read
+          # Container Apps revisions are immutable, and Properties.Template is the latest DESIRED template,
+          # not what serves traffic — in Multiple-revision mode an ingress traffic split can weight an older,
+          # uninstrumented revision. Per-revision runningState/healthState lives on the revisions
+          # sub-resource, behind this distinct read action. Needed by manual (IaC) mode, which observes
+          # through discovery alone. NOTE: listSecrets is deliberately never requested.
+          - Microsoft.App/containerApps/revisions/read
+
+  # instrumentation: instrument a discovered workload DIRECTLY. Each type references a workload-discovery
+  # type and declares how instrumentation is injected. Gated on an OTLP destination.
+  #   azure.container-apps -> service (OpenTelemetry agent injected into the app revision)
+  instrumentation:
+    enabled: true
+    displayName: Workload instrumentation
+    description: >-
+      Attach OpenTelemetry instrumentation directly to discovered Container Apps. Requires an OTLP
+      destination.
+    types:
+      - name: azure.container-apps
+        displayName: Azure Container Apps
+        description: >-
+          Inject the OpenTelemetry agent into the Container Apps revision (init container + EmptyDir
+          volume + activation/OTLP env, the OSS k8s-init-container pattern).
+        method: service
+        permissions:
+          - Microsoft.App/containerApps/read
+          - Microsoft.App/containerApps/write
+          - Microsoft.App/managedEnvironments/join/action
+
+# computePlatforms: managed environments — discovered, then a separate Odigos agent is installed onto
+# them. Installation is NOT supported yet, so discovered compute platforms are reported but never
+# instrumented (surfaced as NotImplemented).
+computePlatforms:
+  discovery:
+    enabled: true
+    displayName: Compute-platform discovery
+    description: >-
+      Detect managed environments — AKS clusters and Azure Virtual Machines — across the subscription,
+      so they can be surfaced as compute-platform candidates.
+    types:
+      - name: azure.aks
+        displayName: Azure Kubernetes Service
+        description: >-
+          Detect AKS clusters in the subscription. Instrumented by installing Odigos for Kubernetes
+          (odiglet) in the cluster.
+        permissions:
+          - Microsoft.ContainerService/managedClusters/read
+      - name: azure.vm
+        displayName: Azure Virtual Machine
+        description: >-
+          Detect Virtual Machines across the subscription. Instrumented by installing the Odigos VM
+          agent on the instance.
+        permissions:
+          - Microsoft.Compute/virtualMachines/read
+
+  # installation: install a separate Odigos agent onto a discovered compute platform (Odigos for
+  # Kubernetes on AKS, or the Odigos VM agent on Azure VMs). This is NOT supported yet, so it
+  # declares no types: discovered compute platforms are reported but never instrumented (surfaced as
+  # NotImplemented). When support lands, each installable compute-platform type is referenced here with
+  # its install method (method: agent) and the Azure RBAC permissions the install requires.
+  installation:
+    enabled: false
+    displayName: Compute-platform installation
+    description: >-
+      Install a separate Odigos agent onto a discovered compute platform (Odigos for Kubernetes on
+      AKS, the Odigos VM agent on Azure VMs). Not supported yet.
+    types: []
+
+# setup: declarative onboarding artifacts rendered in the create-connector UI. The UI fills the literal
+# {{permissions}} placeholder from the aggregated spec permissions for the selected access level, so the
+# preview always matches what test-connection validates. Provider-owned: Azure renders a custom RBAC role
+# definition (Actions list); the shared UI renderer stays agnostic.
+setup:
+  artifacts:
+    - id: policy-preview
+      section: permissions
+      title: Policy preview
+      description: The custom Azure RBAC role Odigos needs for the selected access level.
+      format: json
+      itemTemplate: '"{{permission}}"'
+      itemSeparator: ",\n"
+      template: |-
+        {
+          "Name": "Odigos Cloud Connector",
+          "IsCustom": true,
+          "Description": "Role for the Odigos cloud connector.",
+          "Actions": [
+            {{permissions}}
+          ],
+          "NotActions": [],
+          "DataActions": [],
+          "NotDataActions": [],
+          "AssignableScopes": [
+            "/subscriptions/{{subscriptionId}}"
+          ]
+        }
+
+    # ---------------------------------------------------------------------------------------------------
+    # MANUAL (IaC) INSTRUMENTATION INSTRUCTIONS — section "instrumentation:azure.container-apps".
+    #
+    # A workload type whose capability is {discovery: true, instrumentation: false} is instrumented BY THE
+    # CUSTOMER: Odigos discovers it, publishes what to apply, observes the result and reports conformance,
+    # and never mutates it. <ANGLE_BRACKETED> tokens are values the customer substitutes — deliberately not
+    # the {{token}} syntax, which is filled from create-connector form values and left verbatim when there
+    # is none.
+    #
+    # Each artifact is one DELIVERY VARIANT for one LANGUAGE, and both halves of that are load-bearing.
+    # `language` is the connector language key the plan carries — the workload's detected runtime, or its
+    # runtime override when the customer set one — and a connector serves only the matching set, so a
+    # customer opening a Java service is handed the Java documents alone. Before that, one artifact per
+    # variant had to document every language it might be opened for, which put five runtimes' environment
+    # variables in front of a reader who has one and left the paragraph that applies to them to be found
+    # rather than copied. Every variant still has to stand on its own within its language: a customer opens
+    # one document and applies it.
+    #
+    # A language declared here that no plan builds is unreachable — the selection finds nothing and falls
+    # back to the language-neutral artifacts, of which an instrumentation section may declare none — so a
+    # misspelled key silently serves prose. The coverage guard below fails on it.
+    #
+    # Checked against the connector's own injection recipes by TestInstrumentationArtifactsMatchPlans
+    # (providers/azure): every variable, path, container name and staging command below is asserted to be
+    # what the instrumentor would apply. Nothing converges a manual-mode app, so instructions that have
+    # drifted leave a customer applying a previous release's configuration and reading a drift verdict they
+    # cannot attribute. Do not hand-edit a value here to silence a failure. The guard runs PER LANGUAGE, over
+    # the documents that language is served, so a app's own agent path missing from its own artifacts fails
+    # even when another language's artifact mentions it.
+    # ---------------------------------------------------------------------------------------------------
+
+    - id: instrument-container-apps-manual-java
+      section: instrumentation:azure.container-apps
+      language: java
+      variant: manual
+      variantLabel: Reference
+      title: Instrument a Java Container App yourself
+      description: >-
+        The complete change for a Java app, tool-independent. Read this first: it is the reference the
+        Terraform, Bicep and az-cli variants show in their own syntax.
+      format: text
+      steps:
+        - Add the shared volume and the odigos-agent init container to the app template.
+        - Mount the volume into your application container.
+        - Set the Java environment variables listed below.
+        - Deploy. Container Apps revisions are immutable, so this creates a new revision — in Multiple-revision mode, move traffic to it.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        The Java agent is staged by a container, not baked into your image: the "odigos-agent" init
+        container copies the Java agent into a shared volume your application container reads at /var/odigos.
+
+        Container Apps has REAL init containers, so the stager exits when it is done and the platform starts
+        your container only after it succeeds. There is no startup probe and no dependency to declare.
+
+        APP TEMPLATE (properties.template.*)
+          volumes: add
+            name        = odigos-agent
+            storageType = EmptyDir      (Container Apps accepts no size limit on it)
+          initContainers: add
+            name    = odigos-agent
+            image   = us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+            command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
+            volumeMounts = [{ volumeName = odigos-agent, mountPath = /var/odigos }]
+
+        YOUR APPLICATION CONTAINER
+          volumeMounts += { volumeName = odigos-agent, mountPath = /var/odigos }
+          env          += the variables below
+
+        ENVIRONMENT — identity and export
+          ODIGOS_IAC                  = {"v":1,"lang":"java"}
+
+        Do NOT set ODIGOS_MANAGED — that is the connector's own record of a mutation IT
+        performed, including the rollback snapshot; setting it by hand claims a rollback that
+        was never recorded.
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>
+          ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = grpc
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+        Leave OTEL_LOG_LEVEL unset unless debug telemetry is enabled on this connector (then set it to "debug").
+
+        ODIGOS_OTLP_ENDPOINT is host:port; OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL — they are not interchangeable.
+
+        ENVIRONMENT — Java activation
+        APPEND, never assign — keep your existing value and put ours after it, joined by the separator shown.
+          JAVA_TOOL_OPTIONS           APPEND a space  -javaagent:/var/odigos/java/javaagent.jar
+
+    - id: instrument-container-apps-terraform-java
+      section: instrumentation:azure.container-apps
+      language: java
+      variant: terraform
+      variantLabel: Terraform
+      title: Instrument a Java Container App (Terraform)
+      description: >-
+        Anchored fragments for azurerm_container_app, staging and activating the Java agent.
+      format: shell
+      steps:
+        - Add the volume and init_container blocks inside template.
+        - Add the volume mount and env to your application container.
+        - Apply, then move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        resource "azurerm_container_app" "app" {
+          # ... your existing configuration ...
+
+          template {
+            volume {
+              name = "odigos-agent"
+              # Container Apps accepts no size limit on an EmptyDir volume.
+              storage_type = "EmptyDir"
+            }
+
+            # --- the Java agent-staging init container: it stages the agent and exits, and Container Apps
+            # --- starts the application container only after it succeeds. No probe or dependency is needed.
+            init_container {
+              name    = "odigos-agent"
+              image   = "us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0"
+              command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
+
+              volume_mounts {
+                name = "odigos-agent"
+                path = "/var/odigos"
+              }
+            }
+
+            # --- your Java application container ---
+            container {
+              name  = "<YOUR_CONTAINER>"
+              image = var.app_image
+              # ... your existing configuration ...
+
+              volume_mounts {
+                name = "odigos-agent"
+                path = "/var/odigos"
+              }
+
+              env {
+                # The IaC marker: it is what attributes this container to Odigos, and its recorded
+                # language is the agent the activation environment below is checked against.
+                # The value, unescaped, is exactly: {"v":1,"lang":"java"}
+                name  = "ODIGOS_IAC"
+                value = "{\"v\":1,\"lang\":\"java\"}"
+              }
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
+              env {
+                name  = "OTEL_SERVICE_NAME"
+                value = "<ODIGOS_SOURCE_NAME>"
+              }
+              env {
+                name  = "OTEL_RESOURCE_ATTRIBUTES"
+                value = "cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>"
+              }
+              env {
+                name  = "ODIGOS_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT>"
+              }
+              env {
+                # The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                name  = "OTEL_EXPORTER_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT_URL>"
+              }
+              env {
+                name  = "OTEL_EXPORTER_OTLP_PROTOCOL"
+                value = "grpc"
+              }
+              env {
+                name  = "OTEL_TRACES_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_METRICS_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_LOGS_EXPORTER"
+                value = "otlp"
+              }
+              # --- Java activation ---
+              env {
+                # APPEND, never assign: keep whatever the container already carries and add ours
+                # after it, joined by a space.
+                name  = "JAVA_TOOL_OPTIONS"
+                value = trimspace("${var.java_tool_options} -javaagent:/var/odigos/java/javaagent.jar")
+              }
+              # Do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift.
+            }
+          }
+        }
+
+    - id: instrument-container-apps-bicep-java
+      section: instrumentation:azure.container-apps
+      language: java
+      variant: bicep
+      variantLabel: Bicep / ARM
+      title: Instrument a Java Container App (Bicep / ARM)
+      description: >-
+        The properties.template fragment to merge into your Microsoft.App/containerApps resource, staging and
+        activating the Java agent.
+      format: shell
+      steps:
+        - Merge these template members into your Microsoft.App/containerApps resource.
+        - Keep your container's existing settings — only the volumeMounts and env entries below are added.
+        - Deploy, then move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        // Merge into the properties.template of your Microsoft.App/containerApps resource.
+        resource app 'Microsoft.App/containerApps@2024-03-01' = {
+          // ... your existing name, location, managedEnvironmentId, ingress ...
+          properties: {
+            template: {
+              volumes: [
+                {
+                  name: 'odigos-agent'
+                  // Container Apps accepts no size limit on an EmptyDir volume.
+                  storageType: 'EmptyDir'
+                }
+              ]
+              // A real init container: it stages the Java agent and exits, and Container Apps starts your
+              // container only after it succeeds. No probe and no dependency to declare.
+              initContainers: [
+                {
+                  name: 'odigos-agent'
+                  image: 'us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0'
+                  command: [ 'sh', '-c', 'mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java' ]
+                  volumeMounts: [
+                    { volumeName: 'odigos-agent', mountPath: '/var/odigos' }
+                  ]
+                }
+              ]
+              containers: [
+                {
+                  name: '<YOUR_CONTAINER>'
+                  // ... your existing image, resources, probes ...
+                  volumeMounts: [
+                    { volumeName: 'odigos-agent', mountPath: '/var/odigos' }
+                  ]
+                  env: [
+                    // The IaC marker: it is what attributes this container to Odigos, and its recorded
+                    // language is the agent the activation environment below is checked against. Do NOT
+                    // set ODIGOS_MANAGED — that is the connector's record of a mutation it performed, and
+                    // it is what authorizes Odigos to change this app.
+                    // The value, unescaped, is exactly: {"v":1,"lang":"java"}
+                    { name: 'ODIGOS_IAC', value: '{"v":1,"lang":"java"}' }
+                    { name: 'OTEL_SERVICE_NAME', value: '<ODIGOS_SOURCE_NAME>' }
+                    { name: 'OTEL_RESOURCE_ATTRIBUTES', value: 'cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>' }
+                    { name: 'ODIGOS_OTLP_ENDPOINT', value: '<OTLP_ENDPOINT>' }
+                    // The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                    { name: 'OTEL_EXPORTER_OTLP_ENDPOINT', value: '<OTLP_ENDPOINT_URL>' }
+                    { name: 'OTEL_EXPORTER_OTLP_PROTOCOL', value: 'grpc' }
+                    { name: 'OTEL_TRACES_EXPORTER', value: 'otlp' }
+                    { name: 'OTEL_METRICS_EXPORTER', value: 'otlp' }
+                    { name: 'OTEL_LOGS_EXPORTER', value: 'otlp' }
+                    // --- Java activation ---
+                    // APPEND to the value your container already has, joined by a space —
+                    // assigning ours over it discards yours.
+                    { name: 'JAVA_TOOL_OPTIONS', value: empty(javaToolOptions) ? '-javaagent:/var/odigos/java/javaagent.jar' : '${javaToolOptions} -javaagent:/var/odigos/java/javaagent.jar' }
+                    // Do NOT set OTEL_LOG_LEVEL: it is compared against unset, so a value is reported as
+                    // instrumentation drift.
+                  ]
+                }
+              ]
+            }
+          }
+        }
+
+        // ---------------------------------------------------------------------------------------------
+
+    - id: instrument-container-apps-az-cli-java
+      section: instrumentation:azure.container-apps
+      language: java
+      variant: az-cli
+      variantLabel: Azure CLI
+      title: Instrument a Java Container App (Azure CLI)
+      description: >-
+        Export the app definition, merge the Java fragment, and apply it. The CLI has no flag for init
+        containers or volumes, so this goes through a YAML round-trip rather than a one-liner.
+      format: shell
+      steps:
+        - Export the live app definition.
+        - Merge the volume, the odigos-agent init container and your container's mount/env into it, as shown.
+        - Apply it with `az containerapp update --yaml`.
+        - Move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        APP="<YOUR_APP_NAME>"
+        RG="<YOUR_RESOURCE_GROUP>"
+
+        # az containerapp has no flags for init containers or volumes, so edit the definition itself.
+        az containerapp show --name "$APP" --resource-group "$RG" --output yaml > app.yaml
+
+        # In app.yaml, under properties.template:
+        #
+        #   volumes:
+        #     - name: odigos-agent
+        #       storageType: EmptyDir
+        #
+        #   initContainers:
+        #     - name: odigos-agent
+        #       image: us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+        #       command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/java /var/odigos/java"]
+        #       volumeMounts:
+        #         - volumeName: odigos-agent
+        #           mountPath: /var/odigos
+        #
+        #   and on your Java container <YOUR_CONTAINER>:
+        #     volumeMounts:
+        #       - volumeName: odigos-agent
+        #         mountPath: /var/odigos
+        #     env:
+        #       # The IaC marker: it is what attributes this container to Odigos. Do NOT set ODIGOS_MANAGED —
+        #       # that is the connector's record of a mutation it performed, and it is what authorizes Odigos
+        #       # to change this app.
+        #       - name: ODIGOS_IAC
+        #         value: '{"v":1,"lang":"java"}'
+        #       - name: OTEL_SERVICE_NAME
+        #         value: <ODIGOS_SOURCE_NAME>
+        #       - name: OTEL_RESOURCE_ATTRIBUTES
+        #         value: cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>
+        #       - name: ODIGOS_OTLP_ENDPOINT
+        #         value: <OTLP_ENDPOINT>
+        #       - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        #         value: <OTLP_ENDPOINT_URL>
+        #       - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        #         value: grpc
+        #       - name: OTEL_TRACES_EXPORTER
+        #         value: otlp
+        #       - name: OTEL_METRICS_EXPORTER
+        #         value: otlp
+        #       - name: OTEL_LOGS_EXPORTER
+        #         value: otlp
+        #       # --- Java activation ---
+        #       - name: JAVA_TOOL_OPTIONS
+        #         value: APPEND a space -javaagent:/var/odigos/java/javaagent.jar to your existing value
+        #     (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
+
+    - id: instrument-container-apps-manual-python
+      section: instrumentation:azure.container-apps
+      language: python
+      variant: manual
+      variantLabel: Reference
+      title: Instrument a Python Container App yourself
+      description: >-
+        The complete change for a Python app, tool-independent. Read this first: it is the reference the
+        Terraform, Bicep and az-cli variants show in their own syntax.
+      format: text
+      steps:
+        - Add the shared volume and the odigos-agent init container to the app template.
+        - Mount the volume into your application container.
+        - Set the Python environment variables listed below.
+        - Deploy. Container Apps revisions are immutable, so this creates a new revision — in Multiple-revision mode, move traffic to it.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        The Python agent is staged by a container, not baked into your image: the "odigos-agent" init
+        container copies the Python agent into a shared volume your application container reads at /var/odigos.
+
+        Container Apps has REAL init containers, so the stager exits when it is done and the platform starts
+        your container only after it succeeds. There is no startup probe and no dependency to declare.
+
+        APP TEMPLATE (properties.template.*)
+          volumes: add
+            name        = odigos-agent
+            storageType = EmptyDir      (Container Apps accepts no size limit on it)
+          initContainers: add
+            name    = odigos-agent
+            image   = us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+            command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
+            volumeMounts = [{ volumeName = odigos-agent, mountPath = /var/odigos }]
+
+        YOUR APPLICATION CONTAINER
+          volumeMounts += { volumeName = odigos-agent, mountPath = /var/odigos }
+          env          += the variables below
+
+        ENVIRONMENT — identity and export
+          ODIGOS_IAC                  = {"v":1,"lang":"python"}
+
+        Do NOT set ODIGOS_MANAGED — that is the connector's own record of a mutation IT
+        performed, including the rollback snapshot; setting it by hand claims a rollback that
+        was never recorded.
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>
+          ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = grpc
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+        Leave OTEL_LOG_LEVEL unset unless debug telemetry is enabled on this connector (then set it to "debug").
+
+        ODIGOS_OTLP_ENDPOINT is host:port; OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL — they are not interchangeable.
+
+        ENVIRONMENT — Python activation
+        APPEND, never assign — keep your existing value and put ours after it, joined by the separator shown.
+          OTEL_PYTHON_CONFIGURATOR    = odigos-python-configurator
+          PYTHONPATH                  APPEND ":"  /var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation
+
+    - id: instrument-container-apps-terraform-python
+      section: instrumentation:azure.container-apps
+      language: python
+      variant: terraform
+      variantLabel: Terraform
+      title: Instrument a Python Container App (Terraform)
+      description: >-
+        Anchored fragments for azurerm_container_app, staging and activating the Python agent.
+      format: shell
+      steps:
+        - Add the volume and init_container blocks inside template.
+        - Add the volume mount and env to your application container.
+        - Apply, then move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        resource "azurerm_container_app" "app" {
+          # ... your existing configuration ...
+
+          template {
+            volume {
+              name = "odigos-agent"
+              # Container Apps accepts no size limit on an EmptyDir volume.
+              storage_type = "EmptyDir"
+            }
+
+            # --- the Python agent-staging init container: it stages the agent and exits, and Container Apps
+            # --- starts the application container only after it succeeds. No probe or dependency is needed.
+            init_container {
+              name    = "odigos-agent"
+              image   = "us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0"
+              command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
+
+              volume_mounts {
+                name = "odigos-agent"
+                path = "/var/odigos"
+              }
+            }
+
+            # --- your Python application container ---
+            container {
+              name  = "<YOUR_CONTAINER>"
+              image = var.app_image
+              # ... your existing configuration ...
+
+              volume_mounts {
+                name = "odigos-agent"
+                path = "/var/odigos"
+              }
+
+              env {
+                # The IaC marker: it is what attributes this container to Odigos, and its recorded
+                # language is the agent the activation environment below is checked against.
+                # The value, unescaped, is exactly: {"v":1,"lang":"python"}
+                name  = "ODIGOS_IAC"
+                value = "{\"v\":1,\"lang\":\"python\"}"
+              }
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
+              env {
+                name  = "OTEL_SERVICE_NAME"
+                value = "<ODIGOS_SOURCE_NAME>"
+              }
+              env {
+                name  = "OTEL_RESOURCE_ATTRIBUTES"
+                value = "cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>"
+              }
+              env {
+                name  = "ODIGOS_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT>"
+              }
+              env {
+                # The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                name  = "OTEL_EXPORTER_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT_URL>"
+              }
+              env {
+                name  = "OTEL_EXPORTER_OTLP_PROTOCOL"
+                value = "grpc"
+              }
+              env {
+                name  = "OTEL_TRACES_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_METRICS_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_LOGS_EXPORTER"
+                value = "otlp"
+              }
+              # --- Python activation ---
+              env {
+                name  = "OTEL_PYTHON_CONFIGURATOR"
+                value = "odigos-python-configurator"
+              }
+              env {
+                # APPEND, never assign: keep whatever the container already carries and add ours
+                # after it, joined by ":".
+                name  = "PYTHONPATH"
+                value = var.pythonpath == "" ? "/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation" : "${var.pythonpath}:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation"
+              }
+              # Do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift.
+            }
+          }
+        }
+
+    - id: instrument-container-apps-bicep-python
+      section: instrumentation:azure.container-apps
+      language: python
+      variant: bicep
+      variantLabel: Bicep / ARM
+      title: Instrument a Python Container App (Bicep / ARM)
+      description: >-
+        The properties.template fragment to merge into your Microsoft.App/containerApps resource, staging and
+        activating the Python agent.
+      format: shell
+      steps:
+        - Merge these template members into your Microsoft.App/containerApps resource.
+        - Keep your container's existing settings — only the volumeMounts and env entries below are added.
+        - Deploy, then move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        // Merge into the properties.template of your Microsoft.App/containerApps resource.
+        resource app 'Microsoft.App/containerApps@2024-03-01' = {
+          // ... your existing name, location, managedEnvironmentId, ingress ...
+          properties: {
+            template: {
+              volumes: [
+                {
+                  name: 'odigos-agent'
+                  // Container Apps accepts no size limit on an EmptyDir volume.
+                  storageType: 'EmptyDir'
+                }
+              ]
+              // A real init container: it stages the Python agent and exits, and Container Apps starts your
+              // container only after it succeeds. No probe and no dependency to declare.
+              initContainers: [
+                {
+                  name: 'odigos-agent'
+                  image: 'us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0'
+                  command: [ 'sh', '-c', 'mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python' ]
+                  volumeMounts: [
+                    { volumeName: 'odigos-agent', mountPath: '/var/odigos' }
+                  ]
+                }
+              ]
+              containers: [
+                {
+                  name: '<YOUR_CONTAINER>'
+                  // ... your existing image, resources, probes ...
+                  volumeMounts: [
+                    { volumeName: 'odigos-agent', mountPath: '/var/odigos' }
+                  ]
+                  env: [
+                    // The IaC marker: it is what attributes this container to Odigos, and its recorded
+                    // language is the agent the activation environment below is checked against. Do NOT
+                    // set ODIGOS_MANAGED — that is the connector's record of a mutation it performed, and
+                    // it is what authorizes Odigos to change this app.
+                    // The value, unescaped, is exactly: {"v":1,"lang":"python"}
+                    { name: 'ODIGOS_IAC', value: '{"v":1,"lang":"python"}' }
+                    { name: 'OTEL_SERVICE_NAME', value: '<ODIGOS_SOURCE_NAME>' }
+                    { name: 'OTEL_RESOURCE_ATTRIBUTES', value: 'cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>' }
+                    { name: 'ODIGOS_OTLP_ENDPOINT', value: '<OTLP_ENDPOINT>' }
+                    // The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                    { name: 'OTEL_EXPORTER_OTLP_ENDPOINT', value: '<OTLP_ENDPOINT_URL>' }
+                    { name: 'OTEL_EXPORTER_OTLP_PROTOCOL', value: 'grpc' }
+                    { name: 'OTEL_TRACES_EXPORTER', value: 'otlp' }
+                    { name: 'OTEL_METRICS_EXPORTER', value: 'otlp' }
+                    { name: 'OTEL_LOGS_EXPORTER', value: 'otlp' }
+                    // --- Python activation ---
+                    { name: 'OTEL_PYTHON_CONFIGURATOR', value: 'odigos-python-configurator' }
+                    // APPEND to the value your container already has, joined by ":" —
+                    // assigning ours over it discards yours.
+                    { name: 'PYTHONPATH', value: empty(pythonPath) ? '/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation' : '${pythonPath}:/var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation' }
+                    // Do NOT set OTEL_LOG_LEVEL: it is compared against unset, so a value is reported as
+                    // instrumentation drift.
+                  ]
+                }
+              ]
+            }
+          }
+        }
+
+        // ---------------------------------------------------------------------------------------------
+
+    - id: instrument-container-apps-az-cli-python
+      section: instrumentation:azure.container-apps
+      language: python
+      variant: az-cli
+      variantLabel: Azure CLI
+      title: Instrument a Python Container App (Azure CLI)
+      description: >-
+        Export the app definition, merge the Python fragment, and apply it. The CLI has no flag for init
+        containers or volumes, so this goes through a YAML round-trip rather than a one-liner.
+      format: shell
+      steps:
+        - Export the live app definition.
+        - Merge the volume, the odigos-agent init container and your container's mount/env into it, as shown.
+        - Apply it with `az containerapp update --yaml`.
+        - Move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        APP="<YOUR_APP_NAME>"
+        RG="<YOUR_RESOURCE_GROUP>"
+
+        # az containerapp has no flags for init containers or volumes, so edit the definition itself.
+        az containerapp show --name "$APP" --resource-group "$RG" --output yaml > app.yaml
+
+        # In app.yaml, under properties.template:
+        #
+        #   volumes:
+        #     - name: odigos-agent
+        #       storageType: EmptyDir
+        #
+        #   initContainers:
+        #     - name: odigos-agent
+        #       image: us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+        #       command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/python /var/odigos/python"]
+        #       volumeMounts:
+        #         - volumeName: odigos-agent
+        #           mountPath: /var/odigos
+        #
+        #   and on your Python container <YOUR_CONTAINER>:
+        #     volumeMounts:
+        #       - volumeName: odigos-agent
+        #         mountPath: /var/odigos
+        #     env:
+        #       # The IaC marker: it is what attributes this container to Odigos. Do NOT set ODIGOS_MANAGED —
+        #       # that is the connector's record of a mutation it performed, and it is what authorizes Odigos
+        #       # to change this app.
+        #       - name: ODIGOS_IAC
+        #         value: '{"v":1,"lang":"python"}'
+        #       - name: OTEL_SERVICE_NAME
+        #         value: <ODIGOS_SOURCE_NAME>
+        #       - name: OTEL_RESOURCE_ATTRIBUTES
+        #         value: cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>
+        #       - name: ODIGOS_OTLP_ENDPOINT
+        #         value: <OTLP_ENDPOINT>
+        #       - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        #         value: <OTLP_ENDPOINT_URL>
+        #       - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        #         value: grpc
+        #       - name: OTEL_TRACES_EXPORTER
+        #         value: otlp
+        #       - name: OTEL_METRICS_EXPORTER
+        #         value: otlp
+        #       - name: OTEL_LOGS_EXPORTER
+        #         value: otlp
+        #       # --- Python activation ---
+        #       - name: OTEL_PYTHON_CONFIGURATOR
+        #         value: odigos-python-configurator
+        #       - name: PYTHONPATH
+        #         value: APPEND ":" /var/odigos/python:/var/odigos/python/opentelemetry/instrumentation/auto_instrumentation to your existing value
+        #     (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
+
+    - id: instrument-container-apps-manual-nodejs
+      section: instrumentation:azure.container-apps
+      language: nodejs
+      variant: manual
+      variantLabel: Reference
+      title: Instrument a Node.js Container App yourself
+      description: >-
+        The complete change for a Node.js app, tool-independent. Read this first: it is the reference the
+        Terraform, Bicep and az-cli variants show in their own syntax.
+      format: text
+      steps:
+        - Add the shared volume and the odigos-agent init container to the app template.
+        - Mount the volume into your application container.
+        - Set the Node.js environment variables listed below.
+        - Deploy. Container Apps revisions are immutable, so this creates a new revision — in Multiple-revision mode, move traffic to it.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        The Node.js agent is staged by a container, not baked into your image: the "odigos-agent" init
+        container copies the Node.js agent into a shared volume your application container reads at /var/odigos.
+
+        Container Apps has REAL init containers, so the stager exits when it is done and the platform starts
+        your container only after it succeeds. There is no startup probe and no dependency to declare.
+
+        APP TEMPLATE (properties.template.*)
+          volumes: add
+            name        = odigos-agent
+            storageType = EmptyDir      (Container Apps accepts no size limit on it)
+          initContainers: add
+            name    = odigos-agent
+            image   = us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+            command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
+            volumeMounts = [{ volumeName = odigos-agent, mountPath = /var/odigos }]
+
+        YOUR APPLICATION CONTAINER
+          volumeMounts += { volumeName = odigos-agent, mountPath = /var/odigos }
+          env          += the variables below
+
+        ENVIRONMENT — identity and export
+          ODIGOS_IAC                  = {"v":1,"lang":"nodejs"}
+
+        Do NOT set ODIGOS_MANAGED — that is the connector's own record of a mutation IT
+        performed, including the rollback snapshot; setting it by hand claims a rollback that
+        was never recorded.
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>
+          ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = grpc
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+        Leave OTEL_LOG_LEVEL unset unless debug telemetry is enabled on this connector (then set it to "debug").
+
+        ODIGOS_OTLP_ENDPOINT is host:port; OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL — they are not interchangeable.
+
+        ENVIRONMENT — Node.js activation
+        APPEND, never assign — keep your existing value and put ours after it, joined by the separator shown.
+          NODE_OPTIONS                APPEND a space  --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js
+
+    - id: instrument-container-apps-terraform-nodejs
+      section: instrumentation:azure.container-apps
+      language: nodejs
+      variant: terraform
+      variantLabel: Terraform
+      title: Instrument a Node.js Container App (Terraform)
+      description: >-
+        Anchored fragments for azurerm_container_app, staging and activating the Node.js agent.
+      format: shell
+      steps:
+        - Add the volume and init_container blocks inside template.
+        - Add the volume mount and env to your application container.
+        - Apply, then move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        resource "azurerm_container_app" "app" {
+          # ... your existing configuration ...
+
+          template {
+            volume {
+              name = "odigos-agent"
+              # Container Apps accepts no size limit on an EmptyDir volume.
+              storage_type = "EmptyDir"
+            }
+
+            # --- the Node.js agent-staging init container: it stages the agent and exits, and Container Apps
+            # --- starts the application container only after it succeeds. No probe or dependency is needed.
+            init_container {
+              name    = "odigos-agent"
+              image   = "us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0"
+              command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
+
+              volume_mounts {
+                name = "odigos-agent"
+                path = "/var/odigos"
+              }
+            }
+
+            # --- your Node.js application container ---
+            container {
+              name  = "<YOUR_CONTAINER>"
+              image = var.app_image
+              # ... your existing configuration ...
+
+              volume_mounts {
+                name = "odigos-agent"
+                path = "/var/odigos"
+              }
+
+              env {
+                # The IaC marker: it is what attributes this container to Odigos, and its recorded
+                # language is the agent the activation environment below is checked against.
+                # The value, unescaped, is exactly: {"v":1,"lang":"nodejs"}
+                name  = "ODIGOS_IAC"
+                value = "{\"v\":1,\"lang\":\"nodejs\"}"
+              }
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
+              env {
+                name  = "OTEL_SERVICE_NAME"
+                value = "<ODIGOS_SOURCE_NAME>"
+              }
+              env {
+                name  = "OTEL_RESOURCE_ATTRIBUTES"
+                value = "cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>"
+              }
+              env {
+                name  = "ODIGOS_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT>"
+              }
+              env {
+                # The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                name  = "OTEL_EXPORTER_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT_URL>"
+              }
+              env {
+                name  = "OTEL_EXPORTER_OTLP_PROTOCOL"
+                value = "grpc"
+              }
+              env {
+                name  = "OTEL_TRACES_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_METRICS_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_LOGS_EXPORTER"
+                value = "otlp"
+              }
+              # --- Node.js activation ---
+              env {
+                # APPEND, never assign: keep whatever the container already carries and add ours
+                # after it, joined by a space.
+                name  = "NODE_OPTIONS"
+                value = trimspace("${var.node_options} --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js")
+              }
+              # Do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift.
+            }
+          }
+        }
+
+    - id: instrument-container-apps-bicep-nodejs
+      section: instrumentation:azure.container-apps
+      language: nodejs
+      variant: bicep
+      variantLabel: Bicep / ARM
+      title: Instrument a Node.js Container App (Bicep / ARM)
+      description: >-
+        The properties.template fragment to merge into your Microsoft.App/containerApps resource, staging and
+        activating the Node.js agent.
+      format: shell
+      steps:
+        - Merge these template members into your Microsoft.App/containerApps resource.
+        - Keep your container's existing settings — only the volumeMounts and env entries below are added.
+        - Deploy, then move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        // Merge into the properties.template of your Microsoft.App/containerApps resource.
+        resource app 'Microsoft.App/containerApps@2024-03-01' = {
+          // ... your existing name, location, managedEnvironmentId, ingress ...
+          properties: {
+            template: {
+              volumes: [
+                {
+                  name: 'odigos-agent'
+                  // Container Apps accepts no size limit on an EmptyDir volume.
+                  storageType: 'EmptyDir'
+                }
+              ]
+              // A real init container: it stages the Node.js agent and exits, and Container Apps starts your
+              // container only after it succeeds. No probe and no dependency to declare.
+              initContainers: [
+                {
+                  name: 'odigos-agent'
+                  image: 'us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0'
+                  command: [ 'sh', '-c', 'mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs' ]
+                  volumeMounts: [
+                    { volumeName: 'odigos-agent', mountPath: '/var/odigos' }
+                  ]
+                }
+              ]
+              containers: [
+                {
+                  name: '<YOUR_CONTAINER>'
+                  // ... your existing image, resources, probes ...
+                  volumeMounts: [
+                    { volumeName: 'odigos-agent', mountPath: '/var/odigos' }
+                  ]
+                  env: [
+                    // The IaC marker: it is what attributes this container to Odigos, and its recorded
+                    // language is the agent the activation environment below is checked against. Do NOT
+                    // set ODIGOS_MANAGED — that is the connector's record of a mutation it performed, and
+                    // it is what authorizes Odigos to change this app.
+                    // The value, unescaped, is exactly: {"v":1,"lang":"nodejs"}
+                    { name: 'ODIGOS_IAC', value: '{"v":1,"lang":"nodejs"}' }
+                    { name: 'OTEL_SERVICE_NAME', value: '<ODIGOS_SOURCE_NAME>' }
+                    { name: 'OTEL_RESOURCE_ATTRIBUTES', value: 'cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>' }
+                    { name: 'ODIGOS_OTLP_ENDPOINT', value: '<OTLP_ENDPOINT>' }
+                    // The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                    { name: 'OTEL_EXPORTER_OTLP_ENDPOINT', value: '<OTLP_ENDPOINT_URL>' }
+                    { name: 'OTEL_EXPORTER_OTLP_PROTOCOL', value: 'grpc' }
+                    { name: 'OTEL_TRACES_EXPORTER', value: 'otlp' }
+                    { name: 'OTEL_METRICS_EXPORTER', value: 'otlp' }
+                    { name: 'OTEL_LOGS_EXPORTER', value: 'otlp' }
+                    // --- Node.js activation ---
+                    // APPEND to the value your container already has, joined by a space —
+                    // assigning ours over it discards yours.
+                    { name: 'NODE_OPTIONS', value: empty(nodeOptions) ? '--require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js' : '${nodeOptions} --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js' }
+                    // Do NOT set OTEL_LOG_LEVEL: it is compared against unset, so a value is reported as
+                    // instrumentation drift.
+                  ]
+                }
+              ]
+            }
+          }
+        }
+
+        // ---------------------------------------------------------------------------------------------
+
+    - id: instrument-container-apps-az-cli-nodejs
+      section: instrumentation:azure.container-apps
+      language: nodejs
+      variant: az-cli
+      variantLabel: Azure CLI
+      title: Instrument a Node.js Container App (Azure CLI)
+      description: >-
+        Export the app definition, merge the Node.js fragment, and apply it. The CLI has no flag for init
+        containers or volumes, so this goes through a YAML round-trip rather than a one-liner.
+      format: shell
+      steps:
+        - Export the live app definition.
+        - Merge the volume, the odigos-agent init container and your container's mount/env into it, as shown.
+        - Apply it with `az containerapp update --yaml`.
+        - Move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        APP="<YOUR_APP_NAME>"
+        RG="<YOUR_RESOURCE_GROUP>"
+
+        # az containerapp has no flags for init containers or volumes, so edit the definition itself.
+        az containerapp show --name "$APP" --resource-group "$RG" --output yaml > app.yaml
+
+        # In app.yaml, under properties.template:
+        #
+        #   volumes:
+        #     - name: odigos-agent
+        #       storageType: EmptyDir
+        #
+        #   initContainers:
+        #     - name: odigos-agent
+        #       image: us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+        #       command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/nodejs /var/odigos/nodejs"]
+        #       volumeMounts:
+        #         - volumeName: odigos-agent
+        #           mountPath: /var/odigos
+        #
+        #   and on your Node.js container <YOUR_CONTAINER>:
+        #     volumeMounts:
+        #       - volumeName: odigos-agent
+        #         mountPath: /var/odigos
+        #     env:
+        #       # The IaC marker: it is what attributes this container to Odigos. Do NOT set ODIGOS_MANAGED —
+        #       # that is the connector's record of a mutation it performed, and it is what authorizes Odigos
+        #       # to change this app.
+        #       - name: ODIGOS_IAC
+        #         value: '{"v":1,"lang":"nodejs"}'
+        #       - name: OTEL_SERVICE_NAME
+        #         value: <ODIGOS_SOURCE_NAME>
+        #       - name: OTEL_RESOURCE_ATTRIBUTES
+        #         value: cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>
+        #       - name: ODIGOS_OTLP_ENDPOINT
+        #         value: <OTLP_ENDPOINT>
+        #       - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        #         value: <OTLP_ENDPOINT_URL>
+        #       - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        #         value: grpc
+        #       - name: OTEL_TRACES_EXPORTER
+        #         value: otlp
+        #       - name: OTEL_METRICS_EXPORTER
+        #         value: otlp
+        #       - name: OTEL_LOGS_EXPORTER
+        #         value: otlp
+        #       # --- Node.js activation ---
+        #       - name: NODE_OPTIONS
+        #         value: APPEND a space --require /var/odigos/nodejs/node_modules/@opentelemetry/auto-instrumentations-node/build/src/register.js to your existing value
+        #     (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
+
+    - id: instrument-container-apps-manual-dotnet
+      section: instrumentation:azure.container-apps
+      language: dotnet
+      variant: manual
+      variantLabel: Reference
+      title: Instrument a .NET Container App yourself
+      description: >-
+        The complete change for a .NET app, tool-independent. Read this first: it is the reference the
+        Terraform, Bicep and az-cli variants show in their own syntax.
+      format: text
+      steps:
+        - Add the shared volume and the odigos-agent init container to the app template.
+        - Mount the volume into your application container.
+        - Set the .NET environment variables listed below.
+        - Deploy. Container Apps revisions are immutable, so this creates a new revision — in Multiple-revision mode, move traffic to it.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        The .NET agent is staged by a container, not baked into your image: the "odigos-agent" init
+        container copies the .NET agent into a shared volume your application container reads at /var/odigos.
+
+        Container Apps has REAL init containers, so the stager exits when it is done and the platform starts
+        your container only after it succeeds. There is no startup probe and no dependency to declare.
+
+        APP TEMPLATE (properties.template.*)
+          volumes: add
+            name        = odigos-agent
+            storageType = EmptyDir      (Container Apps accepts no size limit on it)
+          initContainers: add
+            name    = odigos-agent
+            image   = us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+            command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
+            volumeMounts = [{ volumeName = odigos-agent, mountPath = /var/odigos }]
+
+        YOUR APPLICATION CONTAINER
+          volumeMounts += { volumeName = odigos-agent, mountPath = /var/odigos }
+          env          += the variables below
+
+        ENVIRONMENT — identity and export
+          ODIGOS_IAC                  = {"v":1,"lang":"dotnet"}
+
+        Do NOT set ODIGOS_MANAGED — that is the connector's own record of a mutation IT
+        performed, including the rollback snapshot; setting it by hand claims a rollback that
+        was never recorded.
+          OTEL_SERVICE_NAME           = <ODIGOS_SOURCE_NAME>
+          OTEL_RESOURCE_ATTRIBUTES    = cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>
+          ODIGOS_OTLP_ENDPOINT        = <OTLP_ENDPOINT>
+          OTEL_EXPORTER_OTLP_ENDPOINT = <OTLP_ENDPOINT_URL>
+          OTEL_EXPORTER_OTLP_PROTOCOL = grpc
+          OTEL_TRACES_EXPORTER        = otlp
+          OTEL_METRICS_EXPORTER       = otlp
+          OTEL_LOGS_EXPORTER          = otlp
+        Leave OTEL_LOG_LEVEL unset unless debug telemetry is enabled on this connector (then set it to "debug").
+
+        ODIGOS_OTLP_ENDPOINT is host:port; OTEL_EXPORTER_OTLP_ENDPOINT is the scheme-qualified URL — they are not interchangeable.
+
+        ENVIRONMENT — .NET activation
+        Every variable below is SET to exactly the value shown; none of them is a list to merge into.
+          CORECLR_ENABLE_PROFILING    = 1
+          CORECLR_PROFILER            = {918728DD-259F-4A6A-AC2B-B85E1B658318}
+          CORECLR_PROFILER_PATH       = /var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
+          OTEL_DOTNET_AUTO_HOME       = /var/odigos/dotnet
+          DOTNET_STARTUP_HOOKS        = /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
+          DOTNET_ADDITIONAL_DEPS      = /var/odigos/dotnet/AdditionalDeps
+          DOTNET_SHARED_STORE         = /var/odigos/dotnet/store
+
+    - id: instrument-container-apps-terraform-dotnet
+      section: instrumentation:azure.container-apps
+      language: dotnet
+      variant: terraform
+      variantLabel: Terraform
+      title: Instrument a .NET Container App (Terraform)
+      description: >-
+        Anchored fragments for azurerm_container_app, staging and activating the .NET agent.
+      format: shell
+      steps:
+        - Add the volume and init_container blocks inside template.
+        - Add the volume mount and env to your application container.
+        - Apply, then move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        resource "azurerm_container_app" "app" {
+          # ... your existing configuration ...
+
+          template {
+            volume {
+              name = "odigos-agent"
+              # Container Apps accepts no size limit on an EmptyDir volume.
+              storage_type = "EmptyDir"
+            }
+
+            # --- the .NET agent-staging init container: it stages the agent and exits, and Container Apps
+            # --- starts the application container only after it succeeds. No probe or dependency is needed.
+            init_container {
+              name    = "odigos-agent"
+              image   = "us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0"
+              command = ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
+
+              volume_mounts {
+                name = "odigos-agent"
+                path = "/var/odigos"
+              }
+            }
+
+            # --- your .NET application container ---
+            container {
+              name  = "<YOUR_CONTAINER>"
+              image = var.app_image
+              # ... your existing configuration ...
+
+              volume_mounts {
+                name = "odigos-agent"
+                path = "/var/odigos"
+              }
+
+              env {
+                # The IaC marker: it is what attributes this container to Odigos, and its recorded
+                # language is the agent the activation environment below is checked against.
+                # The value, unescaped, is exactly: {"v":1,"lang":"dotnet"}
+                name  = "ODIGOS_IAC"
+                value = "{\"v\":1,\"lang\":\"dotnet\"}"
+              }
+              # Do NOT add ODIGOS_MANAGED. That is the connector's own record of a mutation IT
+              # performed, including the rollback snapshot; setting it by hand claims a rollback that
+              # was never recorded. Remove it if an earlier attempt left one.
+              env {
+                name  = "OTEL_SERVICE_NAME"
+                value = "<ODIGOS_SOURCE_NAME>"
+              }
+              env {
+                name  = "OTEL_RESOURCE_ATTRIBUTES"
+                value = "cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>"
+              }
+              env {
+                name  = "ODIGOS_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT>"
+              }
+              env {
+                # The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                name  = "OTEL_EXPORTER_OTLP_ENDPOINT"
+                value = "<OTLP_ENDPOINT_URL>"
+              }
+              env {
+                name  = "OTEL_EXPORTER_OTLP_PROTOCOL"
+                value = "grpc"
+              }
+              env {
+                name  = "OTEL_TRACES_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_METRICS_EXPORTER"
+                value = "otlp"
+              }
+              env {
+                name  = "OTEL_LOGS_EXPORTER"
+                value = "otlp"
+              }
+              # --- .NET activation ---
+              env {
+                name  = "CORECLR_ENABLE_PROFILING"
+                value = "1"
+              }
+              env {
+                name  = "CORECLR_PROFILER"
+                value = "{918728DD-259F-4A6A-AC2B-B85E1B658318}"
+              }
+              env {
+                name  = "CORECLR_PROFILER_PATH"
+                value = "/var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so"
+              }
+              env {
+                name  = "OTEL_DOTNET_AUTO_HOME"
+                value = "/var/odigos/dotnet"
+              }
+              env {
+                name  = "DOTNET_STARTUP_HOOKS"
+                value = "/var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll"
+              }
+              env {
+                name  = "DOTNET_ADDITIONAL_DEPS"
+                value = "/var/odigos/dotnet/AdditionalDeps"
+              }
+              env {
+                name  = "DOTNET_SHARED_STORE"
+                value = "/var/odigos/dotnet/store"
+              }
+              # Do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift.
+            }
+          }
+        }
+
+    - id: instrument-container-apps-bicep-dotnet
+      section: instrumentation:azure.container-apps
+      language: dotnet
+      variant: bicep
+      variantLabel: Bicep / ARM
+      title: Instrument a .NET Container App (Bicep / ARM)
+      description: >-
+        The properties.template fragment to merge into your Microsoft.App/containerApps resource, staging and
+        activating the .NET agent.
+      format: shell
+      steps:
+        - Merge these template members into your Microsoft.App/containerApps resource.
+        - Keep your container's existing settings — only the volumeMounts and env entries below are added.
+        - Deploy, then move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        // Merge into the properties.template of your Microsoft.App/containerApps resource.
+        resource app 'Microsoft.App/containerApps@2024-03-01' = {
+          // ... your existing name, location, managedEnvironmentId, ingress ...
+          properties: {
+            template: {
+              volumes: [
+                {
+                  name: 'odigos-agent'
+                  // Container Apps accepts no size limit on an EmptyDir volume.
+                  storageType: 'EmptyDir'
+                }
+              ]
+              // A real init container: it stages the .NET agent and exits, and Container Apps starts your
+              // container only after it succeeds. No probe and no dependency to declare.
+              initContainers: [
+                {
+                  name: 'odigos-agent'
+                  image: 'us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0'
+                  command: [ 'sh', '-c', 'mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet' ]
+                  volumeMounts: [
+                    { volumeName: 'odigos-agent', mountPath: '/var/odigos' }
+                  ]
+                }
+              ]
+              containers: [
+                {
+                  name: '<YOUR_CONTAINER>'
+                  // ... your existing image, resources, probes ...
+                  volumeMounts: [
+                    { volumeName: 'odigos-agent', mountPath: '/var/odigos' }
+                  ]
+                  env: [
+                    // The IaC marker: it is what attributes this container to Odigos, and its recorded
+                    // language is the agent the activation environment below is checked against. Do NOT
+                    // set ODIGOS_MANAGED — that is the connector's record of a mutation it performed, and
+                    // it is what authorizes Odigos to change this app.
+                    // The value, unescaped, is exactly: {"v":1,"lang":"dotnet"}
+                    { name: 'ODIGOS_IAC', value: '{"v":1,"lang":"dotnet"}' }
+                    { name: 'OTEL_SERVICE_NAME', value: '<ODIGOS_SOURCE_NAME>' }
+                    { name: 'OTEL_RESOURCE_ATTRIBUTES', value: 'cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>' }
+                    { name: 'ODIGOS_OTLP_ENDPOINT', value: '<OTLP_ENDPOINT>' }
+                    // The scheme-qualified form. A bare host:port is accepted here and then exports nowhere.
+                    { name: 'OTEL_EXPORTER_OTLP_ENDPOINT', value: '<OTLP_ENDPOINT_URL>' }
+                    { name: 'OTEL_EXPORTER_OTLP_PROTOCOL', value: 'grpc' }
+                    { name: 'OTEL_TRACES_EXPORTER', value: 'otlp' }
+                    { name: 'OTEL_METRICS_EXPORTER', value: 'otlp' }
+                    { name: 'OTEL_LOGS_EXPORTER', value: 'otlp' }
+                    // --- .NET activation ---
+                    { name: 'CORECLR_ENABLE_PROFILING', value: '1' }
+                    { name: 'CORECLR_PROFILER', value: '{918728DD-259F-4A6A-AC2B-B85E1B658318}' }
+                    { name: 'CORECLR_PROFILER_PATH', value: '/var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so' }
+                    { name: 'OTEL_DOTNET_AUTO_HOME', value: '/var/odigos/dotnet' }
+                    { name: 'DOTNET_STARTUP_HOOKS', value: '/var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll' }
+                    { name: 'DOTNET_ADDITIONAL_DEPS', value: '/var/odigos/dotnet/AdditionalDeps' }
+                    { name: 'DOTNET_SHARED_STORE', value: '/var/odigos/dotnet/store' }
+                    // Do NOT set OTEL_LOG_LEVEL: it is compared against unset, so a value is reported as
+                    // instrumentation drift.
+                  ]
+                }
+              ]
+            }
+          }
+        }
+
+        // ---------------------------------------------------------------------------------------------
+
+    - id: instrument-container-apps-az-cli-dotnet
+      section: instrumentation:azure.container-apps
+      language: dotnet
+      variant: az-cli
+      variantLabel: Azure CLI
+      title: Instrument a .NET Container App (Azure CLI)
+      description: >-
+        Export the app definition, merge the .NET fragment, and apply it. The CLI has no flag for init
+        containers or volumes, so this goes through a YAML round-trip rather than a one-liner.
+      format: shell
+      steps:
+        - Export the live app definition.
+        - Merge the volume, the odigos-agent init container and your container's mount/env into it, as shown.
+        - Apply it with `az containerapp update --yaml`.
+        - Move ingress traffic to the new revision if you run in Multiple-revision mode.
+      prerequisites:
+        - >-
+          Make sure that registry.odigos.io is accessible to the workload or change the connector to use a local image override (https://docs.odigos.io/cloud-connectors/add-connectors/add-azure-connector).
+      template: |-
+        APP="<YOUR_APP_NAME>"
+        RG="<YOUR_RESOURCE_GROUP>"
+
+        # az containerapp has no flags for init containers or volumes, so edit the definition itself.
+        az containerapp show --name "$APP" --resource-group "$RG" --output yaml > app.yaml
+
+        # In app.yaml, under properties.template:
+        #
+        #   volumes:
+        #     - name: odigos-agent
+        #       storageType: EmptyDir
+        #
+        #   initContainers:
+        #     - name: odigos-agent
+        #       image: us-central1-docker.pkg.dev/odigos-cloud/components/cloud-run-agents:v0.1.0
+        #       command: ["sh", "-c", "mkdir -p /var/odigos && cp -r /instrumentations/dotnet /var/odigos/dotnet"]
+        #       volumeMounts:
+        #         - volumeName: odigos-agent
+        #           mountPath: /var/odigos
+        #
+        #   and on your .NET container <YOUR_CONTAINER>:
+        #     volumeMounts:
+        #       - volumeName: odigos-agent
+        #         mountPath: /var/odigos
+        #     env:
+        #       # The IaC marker: it is what attributes this container to Odigos. Do NOT set ODIGOS_MANAGED —
+        #       # that is the connector's record of a mutation it performed, and it is what authorizes Odigos
+        #       # to change this app.
+        #       - name: ODIGOS_IAC
+        #         value: '{"v":1,"lang":"dotnet"}'
+        #       - name: OTEL_SERVICE_NAME
+        #         value: <ODIGOS_SOURCE_NAME>
+        #       - name: OTEL_RESOURCE_ATTRIBUTES
+        #         value: cloud.provider=azure,cloud.platform=azure_container_apps,cloud.region=<REGION>
+        #       - name: ODIGOS_OTLP_ENDPOINT
+        #         value: <OTLP_ENDPOINT>
+        #       - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        #         value: <OTLP_ENDPOINT_URL>
+        #       - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        #         value: grpc
+        #       - name: OTEL_TRACES_EXPORTER
+        #         value: otlp
+        #       - name: OTEL_METRICS_EXPORTER
+        #         value: otlp
+        #       - name: OTEL_LOGS_EXPORTER
+        #         value: otlp
+        #       # --- .NET activation ---
+        #       - name: CORECLR_ENABLE_PROFILING
+        #         value: 1
+        #       - name: CORECLR_PROFILER
+        #         value: {918728DD-259F-4A6A-AC2B-B85E1B658318}
+        #       - name: CORECLR_PROFILER_PATH
+        #         value: /var/odigos/dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so
+        #       - name: OTEL_DOTNET_AUTO_HOME
+        #         value: /var/odigos/dotnet
+        #       - name: DOTNET_STARTUP_HOOKS
+        #         value: /var/odigos/dotnet/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll
+        #       - name: DOTNET_ADDITIONAL_DEPS
+        #         value: /var/odigos/dotnet/AdditionalDeps
+        #       - name: DOTNET_SHARED_STORE
+        #         value: /var/odigos/dotnet/store
+        #     (do NOT set OTEL_LOG_LEVEL — compared against unset, so a value is reported as drift)
+# gateway: connector-wide collector wiring; not part of either domain. Implemented in a later phase.
+gateway:
+  enabled: false
+  displayName: Gateway / collector wiring
+  description: >-
+    Wire instrumented workloads to managed-otelcol regional collectors. Implemented in a later phase.
+  types: []

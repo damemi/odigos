@@ -1,0 +1,21 @@
+---
+title: "Helm Chart Values"
+sidebarTitle: "Helm Values"
+---
+
+import Values from "/snippets/enterprise/helm-values/odigos-central.mdx";
+
+These are the default values of the `odigos-central` Helm chart. Override them with `--set` or a values file when you install or upgrade Odigos Central with Helm.
+
+This page shows the values of the latest chart. To see the values of the exact version you are installing, read them from the registry:
+
+```bash
+echo "$ODIGOS_TOKEN" | helm registry login registry.odigos.io -u odigos --password-stdin
+helm show values oci://registry.odigos.io/charts/odigos-central --version <VERSION>
+```
+
+To see the values set on an installed release, run `helm get values odigos-central -n odigos-central` (add `--all` to include the defaults).
+
+## Default Values
+
+<Values />

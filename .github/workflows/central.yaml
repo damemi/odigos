@@ -1,0 +1,355 @@
+# PR checks for Odigos Central (central-backend, central-proxy, central-ui):
+# - Builds the three images on Depot from central.docker-bake.hcl and scans each for vulnerabilities.
+# - Runs the central-backend and central-proxy unit tests and the central-ui lint.
+# - Packages the Helm charts and pushes the odigos-central chart to Central's Depot registry as
+#   an OCI chart.
+#
+# The jobs run only when Central, its Helm chart, a local module it depends on, or this workflow changed.
+# PRs to release branches always run them, building both platforms without the layer cache.
+# Otherwise the "build: arm" and "build: no-cache" PR labels pick the image build options.
+#
+# "Central CI" is the single required check: it always runs, and passes when nothing
+# Central-related changed or when every Central job succeeded.
+name: central
+
+on:
+  merge_group:
+    types: [checks_requested]
+  pull_request:
+    branches: [main, "releases/**"]
+    # labeled/unlabeled re-run the build when a "build: arm" or "build: no-cache" label is added or removed.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+env:
+  IMAGE_TAG: pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
+  # Central's own Depot project, rather than the repo's default in depot.json; builds are saved to
+  # its registry for the scan.
+  DEPOT_PROJECT: nfl9hd9fl2
+  DEPOT_SAVE_TAG: central-pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Decides whether the rest of the workflow runs: only when Central, a local module it replaces in
+  # its go.mod files, or this workflow's own inputs changed.
+  changes:
+    name: Detect Central changes
+    runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      central: ${{ steps.diff.outputs.central }}
+      # 'true' for PRs and merge queue entries targeting a release branch.
+      release: ${{ steps.release.outputs.release }}
+    steps:
+      - name: Check for a release branch
+        id: release
+        env:
+          # A branch name on pull_request, a full ref (refs/heads/...) on merge_group.
+          BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref }}
+        run: |
+          if [[ "${BASE_REF#refs/heads/}" == releases/* ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+      # Blobless full history: enough for the merge base and the changed file names.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: Diff against the base branch
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
+          RELEASE: ${{ steps.release.outputs.release }}
+        run: |
+          # Release branches always run the full Central checks.
+          if [ "$RELEASE" = "true" ]; then
+            echo "Targeting a release branch; running the Central jobs."
+            echo "central=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          paths='^(central-backend|central-proxy|central-ui|actions|api|common|config|connectors|destinations|distros|frontend|instrumentationrules|k8sutils|odigosauth|recommendations|status|helm/odigos-central)/|^scripts/package-charts\.sh$|^\.github/actions/npm-auth/|^\.github/workflows/central\.yaml$'
+          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -E "$paths" || true)
+          if [ -n "$changed" ]; then
+            echo "Central-related changes:"
+            echo "$changed"
+            echo "central=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Central-related changes; skipping the Central jobs."
+            echo "central=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Each job bakes one target of central.docker-bake.hcl on Depot, saves it to Depot's
+  # registry as <DEPOT_SAVE_TAG>-<target>, and scans it from there.
+  build-central-images:
+    name: build-${{ matrix.service }}
+    needs: changes
+    if: needs.changes.outputs.central == 'true'
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/bake-action authenticate to Depot over OIDC;
+    # pull-requests lets resolve-build-labels read the PR's labels;
+    # packages lets the npm-auth token install @odigos-io/ui-kit for central-ui.
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [central-backend, central-proxy, central-ui]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Release builds: both platforms without the layer cache, whatever the labels say.
+      - name: Resolve build options from PR labels
+        id: build-opts
+        uses: odigos-io/ci-core/resolve-build-labels@main
+        with:
+          release: ${{ needs.changes.outputs.release }}
+
+      # Sets NPMRC, which the bake file reads for central-ui's npmrc secret.
+      - name: Write npm auth
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: depot/setup-action@v1
+
+      # Builds on Depot's remote builder, whose persistent layer cache also
+      # keeps the Dockerfiles' --mount=type=cache Go caches between runs.
+      - name: Build ${{ matrix.service }} Image
+        uses: depot/bake-action@v1
+        env:
+          PLATFORMS: ${{ steps.build-opts.outputs.platforms }}
+        with:
+          project: ${{ env.DEPOT_PROJECT }}
+          files: central.docker-bake.hcl
+          targets: ${{ matrix.service }}
+          no-cache: ${{ steps.build-opts.outputs.no-cache }}
+          push: false
+          save: true
+          save-tag: ${{ env.DEPOT_SAVE_TAG }}
+
+      - name: Scan image for vulnerabilities
+        id: scan
+        uses: odigos-io/ci-core/vulnerabilities-scanner@main
+        with:
+          # registry: makes grype read the saved image from Depot instead of the local Docker daemon.
+          image: registry:registry.depot.dev/${{ env.DEPOT_PROJECT }}:${{ env.DEPOT_SAVE_TAG }}-${{ matrix.service }}
+          severity-cutoff: "CRITICAL"
+        continue-on-error: true
+
+      - name: Save ${{ matrix.service }} scan JSON
+        if: always()
+        env:
+          RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
+          IMAGE_NAME: odigos-${{ matrix.service }}
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          CUTOFF_EXCEEDED: ${{ steps.scan.outputs.cutoff-exceeded }}
+        run: |
+          # The scanner fails both on findings over the cutoff (allowed here) and when grype
+          # could not scan, e.g. reading the Depot registry; it then writes an empty report.
+          if [ "$SCAN_OUTCOME" = "failure" ] && [ "$CUTOFF_EXCEEDED" != "true" ]; then
+            echo "::error::The vulnerability scan did not run; see the scan step's log."
+            exit 1
+          fi
+          mkdir -p /tmp/scan-results
+          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
+            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
+            exit 1
+          fi
+          jq --arg img "$IMAGE_NAME" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > "/tmp/scan-results/$IMAGE_NAME.json"
+
+      - name: Upload ${{ matrix.service }} scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuln-scan-result-${{ matrix.service }}-${{ github.sha }}.json
+          path: /tmp/scan-results/odigos-${{ matrix.service }}.json
+          retention-days: 30
+
+  vulnerability-report:
+    name: Generate Vulnerability Report
+    needs: [changes, build-central-images]
+    runs-on: depot-ubuntu-latest
+    if: always() && needs.changes.outputs.central == 'true'
+    steps:
+      - name: Download all scan JSON results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vuln-scan-result-*
+          path: scan-results
+          merge-multiple: true
+
+      - name: Zip individual scan results
+        run: |
+          if [ -d "scan-results" ] && ls scan-results/*.json 1> /dev/null 2>&1; then
+            zip -j scan-results.zip scan-results/*.json
+            echo "Created zip with $(unzip -l scan-results.zip | grep -c '\.json') JSON files"
+          else
+            echo "No scan results to zip"
+            touch scan-results.zip
+          fi
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-vulnerability-report
+          path: scan-results.zip
+          retention-days: 90
+
+  # Packages the Helm charts as in release.yml, versioned 0.0.0-<IMAGE_TAG>, and pushes the
+  # odigos-central chart as an OCI chart to the registry of Central's Depot project, tagged with
+  # its version.
+  package-helm:
+    name: Package Helm Charts
+    needs: changes
+    if: needs.changes.outputs.central == 'true'
+    runs-on: depot-ubuntu-latest
+    # id-token lets the job log in to the Depot registry over OIDC.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      # Same as IMAGE_TAG; job env cannot read the workflow env.
+      TAG: v0.0.0-pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.15.2
+
+      - name: Package Helm charts
+        run: bash ./scripts/package-charts.sh
+
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      - uses: oras-project/setup-oras@v1
+
+      # The project registry only accepts the repository registry.depot.dev/<DEPOT_PROJECT>, and
+      # helm push always appends the chart name to it. oras pushes the chart there with Helm's
+      # media types, tagged with the chart version, since Helm only resolves semver tags.
+      - name: Push odigos-central Helm chart to the Depot registry
+        working-directory: helm
+        run: |
+          set -euo pipefail
+          echo "$DEPOT_TOKEN" | oras login registry.depot.dev --username x-token --password-stdin
+          CHART_REF="registry.depot.dev/$DEPOT_PROJECT:${TAG#v}"
+          chart="odigos-central-${TAG#v}.tgz"
+          helm show chart "$chart" | yq -o=json > chart-config.json
+          oras push "$CHART_REF" \
+            --config chart-config.json:application/vnd.cncf.helm.config.v1+json \
+            "$chart:application/vnd.cncf.helm.chart.content.v1.tar+gzip"
+          echo "Pushed oci://$CHART_REF" >> "$GITHUB_STEP_SUMMARY"
+
+  # Both modules replace every odigos-io module with a local path, so no private module is downloaded.
+  test-central-modules:
+    name: Central Unit Tests
+    needs: changes
+    if: needs.changes.outputs.central == 'true'
+    runs-on: depot-ubuntu-24.04-2
+    permissions:
+      contents: read
+    env:
+      MODULES: >-
+        central-backend
+        central-proxy
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: central-backend/go.mod
+          cache-dependency-path: |
+            central-backend/go.sum
+            central-proxy/go.sum
+      # Tests every module even after a failure, then fails if any module failed.
+      - name: Test modules
+        env:
+          GOFLAGS: -mod=mod
+        run: |
+          failed=()
+          for module in $MODULES; do
+            echo "::group::$module"
+            if ! (cd "$module" && go test ./... -race); then
+              echo "::error::Unit tests failed in $module"
+              failed+=("$module")
+            fi
+            echo "::endgroup::"
+          done
+          if [ ${#failed[@]} -gt 0 ]; then
+            echo "::error::Failed modules: ${failed[*]}"
+            exit 1
+          fi
+
+  central-ui-lint:
+    name: Central UI Lint
+    needs: changes
+    if: needs.changes.outputs.central == 'true'
+    runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    # Job-level so every yarn call sees it, including setup-node's `yarn cache dir`, which reads the
+    # userconfig (with its ${NODE_AUTH_TOKEN} placeholder) and fails when the variable is unset.
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        working-directory: central-ui
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: central-ui/yarn.lock
+          registry-url: https://npm.pkg.github.com
+          scope: '@odigos-io'
+      - name: Install dependencies
+        # The kit is installed as the @odigos/ui-kit alias of @odigos-io/ui-kit; yarn v1 only sends the token
+        # for the tarball when the alias scope maps to the same registry. Safe for frozen installs only.
+        run: |
+          printf '\n@odigos:registry=https://npm.pkg.github.com\n' >> "$NPM_CONFIG_USERCONFIG"
+          yarn install --frozen-lockfile
+      - name: Lint
+        run: yarn lint
+
+  # The single required check for this workflow. It always runs, and passes when nothing
+  # Central-related changed or when every Central job succeeded.
+  central-ci:
+    name: Central CI
+    needs: [changes, build-central-images, vulnerability-report, package-helm, test-central-modules, central-ui-lint]
+    if: always()
+    runs-on: depot-ubuntu-latest
+    steps:
+      - name: Check Central job results
+        env:
+          CENTRAL: ${{ needs.changes.outputs.central }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          if [ "$(jq -r '.changes.result' <<<"$NEEDS")" != "success" ]; then
+            echo "::error::Change detection did not succeed."
+            exit 1
+          fi
+          if [ "$CENTRAL" != "true" ]; then
+            echo "No Central-related changes; nothing to check."
+            exit 0
+          fi
+          failed=$(jq -r 'to_entries[] | select(.value.result != "success") | "\(.key): \(.value.result)"' <<<"$NEEDS")
+          if [ -n "$failed" ]; then
+            echo "::error::Central jobs did not succeed:"
+            echo "$failed"
+            exit 1
+          fi
+          echo "All Central jobs succeeded."

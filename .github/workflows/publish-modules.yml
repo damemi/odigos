@@ -140,14 +140,32 @@ jobs:
             echo "kind=standard" >> "$GITHUB_OUTPUT"
           fi
 
+      # Central and the cloud connectors moved here from odigos-enterprise. A tag that carries them is released
+      # entirely from this repo; patches of versions released before the move still release their enterprise
+      # components from odigos-enterprise.
+      - name: Check whether odigos-enterprise releases this tag
+        id: layout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "repos/${REPO}/contents/central-backend?ref=${TAG}" --silent 2>/dev/null; then
+            echo "Tag ${TAG} carries Central and the connectors; nothing to release in odigos-enterprise."
+            echo "dispatch=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "dispatch=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
+        if: steps.meta.outputs.kind == 'feature' && steps.layout.outputs.dispatch == 'true'
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ needs.decide.outputs.tag }}
 
       - name: Read enterprise branch from tag annotation
-        if: steps.meta.outputs.kind == 'feature'
+        if: steps.meta.outputs.kind == 'feature' && steps.layout.outputs.dispatch == 'true'
         id: branch
         env:
           TAG: ${{ needs.decide.outputs.tag }}
@@ -177,6 +195,7 @@ jobs:
           echo "OSS branch: '${OSS_BRANCH}'"
 
       - name: Get sts tokens
+        if: steps.layout.outputs.dispatch == 'true'
         id: sts-enterprise
         uses: odigos-io/ci-core/sts@main
         with:
@@ -185,7 +204,7 @@ jobs:
           output-git-config: "false"
 
       - name: Trigger create release PR workflow
-        if: steps.meta.outputs.kind == 'standard'
+        if: steps.meta.outputs.kind == 'standard' && steps.layout.outputs.dispatch == 'true'
         uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ steps.sts-enterprise.outputs.GH_TOKEN }}
@@ -194,7 +213,7 @@ jobs:
           client-payload: '{"tag": "${{ needs.decide.outputs.tag }}"}'
 
       - name: Trigger create feature-release PR workflow
-        if: steps.meta.outputs.kind == 'feature'
+        if: steps.meta.outputs.kind == 'feature' && steps.layout.outputs.dispatch == 'true'
         uses: peter-evans/repository-dispatch@v4
         with:
           token: ${{ steps.sts-enterprise.outputs.GH_TOKEN }}
@@ -203,7 +222,7 @@ jobs:
           client-payload: '{"tag": "${{ needs.decide.outputs.tag }}", "branch": "${{ steps.branch.outputs.enterprise_branch }}", "oss_branch": "${{ steps.branch.outputs.oss_branch }}"}'
 
       - name: Notify Slack
-        if: always()
+        if: always() && steps.layout.outputs.dispatch != 'false'
         uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
         with:
           webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
@@ -249,7 +268,7 @@ jobs:
             description: 'Instrumentor manages auto-instrumentation for workloads with Odigos.'
           - service: collector
             image: odigos-enterprise-collector
-            file: collector/enterprise/Dockerfile
+            file: collector/Dockerfile
             runner: depot-ubuntu-24.04-16
             summary: 'Odigos Collector'
             description: 'The Odigos build of the OpenTelemetry Collector.'
@@ -293,7 +312,67 @@ jobs:
             runner: depot-ubuntu-latest
             summary: 'Insights for Odigos'
             description: 'Insights learns per-transaction baselines from traces and scores deviations.'
+          - service: central-backend
+            image: odigos-enterprise-central-backend
+            file: central-backend/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            summary: 'Central Backend for Odigos'
+            description: 'Central Backend is the core component of Odigos Central, responsible for managing the data flow from the cluster to the ui.'
+          - service: central-proxy
+            image: odigos-enterprise-central-proxy
+            file: central-proxy/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            summary: 'Central Proxy for Odigos'
+            description: 'Central Proxy is handle the communication between the cluster that Odigos is running in and the Odigos Central.'
+          - service: central-ui
+            image: odigos-enterprise-central-ui
+            # The Dockerfile path is relative to the central-ui context.
+            file: Dockerfile
+            context: '{{defaultContext}}:central-ui'
+            runner: depot-ubuntu-24.04-4
+            summary: 'Central UI for Odigos'
+            description: 'Central UI is the web interface for Odigos Central, providing a user-friendly way to manage and visualize the data collected by Odigos.'
+          - service: connector-opamp-gateway
+            image: odigos-enterprise-connector-opamp-gateway
+            file: connector-opamp-gateway/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            summary: 'Managed Collector OpAMP Gateway for Odigos'
+            description: 'Authenticates managed Collector OpAMP connections and routes each to the cloud connector its credential is bound to.'
+          # Cloud connector images are best-effort: a failure does not fail the release or cancel the other images.
+          - service: connector-runtime
+            image: odigos-enterprise-connector-runtime
+            file: connector-runtime/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-aws
+            image: odigos-enterprise-connector-aws
+            file: connectors/providers/aws/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-azure
+            image: odigos-enterprise-connector-azure
+            file: connectors/providers/azure/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-gcp
+            image: odigos-enterprise-connector-gcp
+            file: connectors/providers/gcp/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-mulesoft
+            image: odigos-enterprise-connector-mulesoft
+            file: connectors/providers/mulesoft/Dockerfile
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
+          - service: connector-postgres
+            image: odigos-enterprise-connector-postgres
+            # The Dockerfile path is relative to the connector-postgres context.
+            file: Dockerfile
+            context: '{{defaultContext}}:connector-postgres'
+            runner: depot-ubuntu-24.04-4
+            best-effort: true
     runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.best-effort == true }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -368,6 +447,7 @@ jobs:
             RHEL=false
             EXTENDED=${{ matrix.extended && 'true' || 'false' }}
           platforms: linux/amd64,linux/arm64
+          context: ${{ matrix.context || '{{defaultContext}}' }}
           file: ${{ matrix.file }}
           target: ${{ matrix.target || '' }}
 
@@ -392,3 +472,93 @@ jobs:
           success-description: "Odigos image ${{ matrix.image }}${{ matrix.extended && ' (extended)' || '' }} released successfully"
           failure-description: "ERROR: Odigos image ${{ matrix.image }}${{ matrix.extended && ' (extended)' || '' }} release failed"
           tag: ${{ steps.extract_tag.outputs.tag }}
+
+  # odigos-enterprise triggered the CLI and Helm chart release (release.yml) after publishing its images. Tags that
+  # carry Central and the cloud connectors are released only from this repo, so this repo triggers it once its images
+  # are published; older tags still get it from odigos-enterprise.
+  trigger-cli-release:
+    needs: [decide, publish-images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check whether this repo releases the tag
+        id: layout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.decide.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "repos/${REPO}/contents/central-backend?ref=${TAG}" --silent 2>/dev/null; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Tag ${TAG} predates the move; odigos-enterprise triggers its CLI release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # promote-rc-to-stable already dispatches release_cli for a first stable; a second run would fail on the
+      # CLI archives it already uploaded.
+      - name: Skip CLI dispatch if GitHub release already has CLI assets
+        if: steps.layout.outputs.release == 'true'
+        id: skip-cli
+        env:
+          TAG: ${{ needs.decide.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          VERSION="${TAG#v}"
+          EXPECTED=(
+            "cli_${VERSION}_darwin_amd64.tar.gz"
+            "cli_${VERSION}_darwin_arm64.tar.gz"
+            "cli_${VERSION}_linux_amd64.tar.gz"
+            "cli_${VERSION}_linux_arm64.tar.gz"
+            "cli_${VERSION}_windows_amd64.tar.gz"
+            "cli_${VERSION}_windows_arm64.tar.gz"
+            "checksums.txt"
+          )
+          if ! assets=$(gh api "repos/${REPO}/releases/tags/${TAG}" --jq '[.assets[].name]' 2>/dev/null); then
+            echo "No GitHub release for $TAG — will trigger CLI release"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          missing=()
+          for name in "${EXPECTED[@]}"; do
+            if ! jq -e --arg n "$name" 'index($n) != null' <<< "$assets" >/dev/null; then
+              missing+=("$name")
+            fi
+          done
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "CLI archives already on $TAG — skipping duplicate CLI trigger"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Missing CLI assets on $TAG: ${missing[*]} — will trigger CLI release"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Get sts token to trigger the release
+        if: steps.layout.outputs.release == 'true' && steps.skip-cli.outputs.skip != 'true'
+        id: sts-release
+        uses: odigos-io/ci-core/sts@main
+        with:
+          scope: odigos-io/odigos
+          identity: trigger-release
+          output-git-config: "false"
+
+      - name: Trigger CLI and Helm chart release
+        if: steps.layout.outputs.release == 'true' && steps.skip-cli.outputs.skip != 'true'
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ steps.sts-release.outputs.GH_TOKEN }}
+          repository: odigos-io/odigos
+          event-type: release_cli
+          client-payload: '{"tag": "${{ needs.decide.outputs.tag }}"}'
+
+      - name: Notify Slack
+        if: always() && steps.layout.outputs.release == 'true'
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        with:
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: ${{ steps.skip-cli.outputs.skip == 'true' && 'All Odigos images published. CLI GitHub release already has assets; skipped duplicate CLI trigger' || 'All Odigos images published. Triggered the CLI and Helm chart release' }}
+          failure-description: "ERROR: failed to trigger the CLI and Helm chart release"
+          tag: ${{ needs.decide.outputs.tag }}

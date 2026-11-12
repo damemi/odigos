@@ -1,0 +1,130 @@
+---
+title: 'Manage and Remove Cloud Connectors'
+description: 'Monitor Cloud Connector health, understand status, and remove connectors with retain or cleanup deletion policies.'
+sidebarTitle: 'Manage and Remove'
+---
+
+Use this page to operate connectors after they are online — health, immutable fields, and safe removal.
+
+## Connector status
+
+The Central UI shows each connector's health as a status indicator. The underlying phase, shown in the **Phase** column of `kubectl get odigoscloudconnectors -n odigos-central`, is one of:
+
+| Status | Meaning |
+| --- | --- |
+| **Starting** | The connector workload is deploying, or the runtime has not finished registering, authenticating, and completing a successful discovery cycle. The Connections table shows this as **Pending** |
+| **Connected** | The runtime is healthy: authenticated to the cloud account and discovery is succeeding |
+| **Degraded** | The runtime is up but not fully healthy (for example discovery failures, or heartbeats that have gone stale) |
+| **Error** | A hard failure that blocks a healthy runtime (for example the connector image cannot be resolved, or `spec.provider` was changed after create) |
+| **Disabled** | The connector runtime reported itself as disabled |
+
+The CRD also defines **Pending** and **Deleting** phases. The Connections table shows both as **Pending**.
+
+<AccordionGroup>
+  <Accordion title="Common causes of Degraded or Error">
+    **Degraded** usually means:
+
+    - A discovery cycle failed (missing permissions, cloud API errors, or other detector failures)
+    - The runtime stopped refreshing its heartbeat (for example the pod is wedged or lost its Postgres connection), so the last healthy status went stale
+
+    Auth that has not succeeded yet, or discovery that has not completed a successful cycle yet, typically stays in **Starting** rather than **Degraded**.
+
+    **Error** usually means:
+
+    - The connector image could not be resolved for the provider
+    - `spec.provider` was changed after the connector was created (provider is immutable)
+
+    Schema version mismatches fail connector startup (the pod does not stay healthy), which typically shows as **Starting** or, if heartbeats stop updating, **Degraded** — not a dedicated schema-mismatch phase.
+
+    Fix credentials or IAM, confirm [Cloud Connectors are enabled](/cloud-connectors/enable), and check `connector-runtime` / connector pods in the Central namespace.
+  </Accordion>
+</AccordionGroup>
+
+## What you can change
+
+- The Central UI does not edit an existing connector's display name, credentials, or capabilities. Those live on the `OdigosCloudConnector` resource (`spec.displayName`, `spec.workloads`, `spec.computePlatforms`, `spec.collectors`) and its credentials Secret (`spec.credentialsSecretRef`). Submitting the Create Cloud Connector flow again for the same account updates the existing connector and its Secret.
+- **Bootstrap region** (AWS) cannot be changed in the UI after the connector is created. To change it, edit `spec.bootstrapRegion` on the `OdigosCloudConnector` resource. See [Bootstrap region](/cloud-connectors/add-connectors/add-aws-connector#bootstrap-region-advanced).
+- **Regional Collector mode** (AWS) can be changed from the **Connections** table with the row action **Collector mode**, which opens the **Regional Collector mode** drawer with **Off**, **Manual (customer IaC)**, and **Automatic**. Saving restarts the connector.
+- **Destinations** can be enabled or disabled with the **Enable/Disable** toggle. A disabled destination keeps its configuration but is not used.
+- **`provider` is immutable** after the connector is created. To switch providers (for example from AWS to another cloud), create a new connector.
+
+## Delete a connector
+
+Deleting a connector removes the connector runtime from the Central cluster. What happens to cloud-side instrumentation depends on the deletion policy annotation on the `OdigosCloudConnector` resource:
+
+```yaml
+metadata:
+  annotations:
+    odigos.io/deletion-policy: retain   # or cleanup
+```
+
+<Tabs>
+  <Tab title="retain (default)">
+    Deletes the connector from Central (the connector pod and related resources in the Central cluster). It does **not** uninstrument cloud workloads.
+
+    Any Odigos instrumentation already applied in the cloud account stays in place (for example Lambda layers or the agent container in Fargate task definitions). To remove that instrumentation, [uninstrument Sources](/cloud-connectors/instrument-workloads#uninstrument-workloads) while the connector is still online, or change those resources outside Odigos after delete.
+
+    <Info>
+      Creating a connector from the Central UI typically leaves the annotation
+      unset, which means **retain**.
+    </Info>
+  </Tab>
+  <Tab title="cleanup">
+    Before removing the connector, attempt to roll back Odigos-managed instrumentation in the provider and wait for self-managed cleanup. Customer-owned IaC changes must still be removed through their original deployment tool.
+
+    Set the annotation explicitly:
+
+    ```yaml
+    metadata:
+      annotations:
+        odigos.io/deletion-policy: cleanup
+    ```
+
+    <Warning>
+      If rollback does not finish within the cleanup timeout (**15 minutes** by
+      default), the connector may still be deleted and some resources can remain
+      instrumented.
+    </Warning>
+  </Tab>
+</Tabs>
+
+### Connectors with a regional Collector
+
+For an AWS connector, [uninstall every regional Collector](/cloud-connectors/aws/regional-collector#uninstall) before deleting the connector. This includes customer-owned manual deployments: **Remove from Odigos** only removes their declaration and revokes credentials. Neither connector deletion policy is a replacement for reviewing the Collector resource inventory.
+
+### Complete AWS removal
+
+Follow the [AWS uninstall and leftovers inventory](/cloud-connectors/aws/uninstall) to remove instrumentation, Collectors, retained artifacts, and dedicated IAM resources in order. Keep connector credentials valid until cloud-side rollback and Collector teardown are verified; revoke/remove dedicated authentication resources last.
+
+Deleting through the UI removes the connector resource and its credentials Secret, and Kubernetes removes the runtime objects owned by that resource. Direct kubectl deletion requires separate cleanup of the exact credentials Secret referenced by the connector; do not delete a shared Secret or bypass unfinished cleanup by removing finalizers.
+
+Per-connector deletion does not uninstall Central, erase shared provider-database history/backups, or delete telemetry already stored in AWS or another backend. Delete unwanted Source/destination configuration explicitly, and use the relevant data-retention procedures for history. Do not drop a shared provider schema to remove one connector.
+
+### Sources on delete
+
+When you delete a connector, Sources and discovery data for that account boundary are no longer managed through that connector.
+
+<Tip>
+  Prefer disabling or deleting Sources first if you want a controlled rollback
+  while the connector is still running, especially under the default **retain**
+  policy.
+</Tip>
+
+## Related
+
+<CardGroup cols={2}>
+  <Card
+    title="Instrument workloads"
+    icon="microchip"
+    href="/cloud-connectors/instrument-workloads"
+  >
+    Create and disable Sources while the connector is online.
+  </Card>
+  <Card
+    title="Cloud Connectors overview"
+    icon="cloud"
+    href="/cloud-connectors/overview"
+  >
+    Back to concepts and supported providers.
+  </Card>
+</CardGroup>

@@ -64,8 +64,7 @@ spec:
                 description: |-
                   (Optional) ImagePrefix is a prefix for all container images.
                   This should only be used if you are pulling Odigos images from the non-default registry.
-                  Default (community): docker.io/keyval
-                  Default (enterprise): registry.odigos.io
+                  Default: registry.odigos.io
                   Default (OpenShift): registry.connect.redhat.com/odigos
                 type: string
               logLevel:
@@ -91,8 +90,8 @@ spec:
                   Note that Odigos will only be able to instrument applications on the same node.
                 type: object
               onPremToken:
-                description: (Optional) OnPremToken is an enterprise token for Odigos
-                  Enterprise.
+                description: (Optional) OnPremToken is the Odigos on-prem license
+                  token.
                 type: string
               openshiftEnabled:
                 description: |-

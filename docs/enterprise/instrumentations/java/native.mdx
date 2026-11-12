@@ -1,0 +1,14 @@
+---
+title: 'Automatic Instrumentation'
+sidebarTitle: 'Native'
+icon: 'java'
+---
+
+import Content from "/snippets/enterprise/instrumentations/java/native.mdx";
+
+<Info>
+  Odigos instruments Java applications with [eBPF-based instrumentation](/enterprise/instrumentations/java/ebpf) by default.
+  To use the native OpenTelemetry Java agent instead, set the container's **Otel Distro Name** to `java-community` in the source drawer, or set `otelDistroName: java-community` under `containerOverrides` in the [Source object](/enterprise/pipeline/sources/introduction).
+</Info>
+
+<Content />

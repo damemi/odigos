@@ -1,0 +1,310 @@
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+scalar JSON
+scalar Int64
+
+enum Role {
+  OWNER
+  ADMIN
+  MAINTAINER
+  VIEWER
+  NO_ACCESS
+}
+
+enum SignInStatus {
+  SUCCESS
+  PASSWORD_UPDATE_REQUIRED
+  ACCESS_DENIED
+}
+
+enum AuthProviderId {
+  GOOGLE
+  AZURE
+  OKTA
+}
+
+input SamlIdentityProviderInput {
+  providerId: AuthProviderId!
+  idpEntityId: String!
+  singleSignOnServiceUrl: String!
+  signingCertificate: String!
+}
+
+type SystemConfig {
+  isInitialized: Boolean!
+  version: String!
+}
+
+type ComputePlatform {
+  id: String!
+  name: String!
+  odigosVersion: String!
+  # agents-api GraphQL schema version reported by VM proxies; used by the UI to
+  # select the right agents-api dialect. Null for k8s proxies (they don't report it).
+  graphqlSchemaVersion: String
+  type: String!
+  status: String!
+  connectedAt: Int64
+  lastSeenAt: Int64
+  users: [User!]!
+  teams: [Team!]!
+  # Workload statistics from the latest snapshot or compact agent summary.
+  # Null until the platform reports statistics.
+  stats: ComputePlatformStats
+  # Collector capability selected on this cloud connector CR. Empty on other platforms.
+  collectors: [CloudConnectorCollectorCapability!]!
+}
+
+type ComputePlatformStats {
+  workloads: Int!
+  instrumentedWorkloads: Int!
+  # Instrumented workloads whose health is Error or Failure.
+  workloadsWithIssues: Int!
+  # Instrumented workloads whose instrumentation is still rolling out (Pending or Waiting).
+  workloadsInProgress: Int!
+  namespaces: Int!
+  autoInstrumentedNamespaces: Int!
+  # When the proxy generated the snapshot these statistics come from (ms since epoch).
+  updatedAt: Int64!
+}
+
+input WriteComputePlatformInput {
+  addUserIds: [String]
+  removeUserIds: [String]
+  addTeamIds: [String]
+  removeTeamIds: [String]
+}
+
+input OidcIdentityProviderInput {
+  providerId: AuthProviderId!
+  clientId: String!
+  clientSecret: String!
+  discoveryUrl: String!
+  tenantId: String!
+}
+
+type SignInResult {
+  idToken: String
+  accessToken: String
+  user: User
+  status: SignInStatus!
+}
+
+type User {
+  id: String!
+  email: String!
+  username: String!
+  role: Role!
+  needsPasswordChange: Boolean!
+  # Signs in through an identity provider (SSO): their role mappings set the role at each sign-in, and their
+  # password is the identity provider's, not Central's.
+  sso: Boolean!
+  teams: [Team!]!
+  computePlatforms: [ComputePlatform!]!
+}
+
+input WriteUserInput {
+  email: String
+  password: String
+  role: Role
+  addTeamIds: [String]
+  removeTeamIds: [String]
+  addComputePlatformIds: [String]
+  removeComputePlatformIds: [String]
+}
+
+type CreateUserResult {
+  success: Boolean!
+  userID: String!
+  generatedPassword: String
+}
+
+type ResetUserPasswordResult {
+  success: Boolean!
+  error: String
+  generatedPassword: String
+}
+
+type Team {
+  id: String!
+  name: String!
+  description: String
+  users: [User!]!
+  computePlatforms: [ComputePlatform!]!
+  createdAt: String!
+  updatedAt: String!
+}
+
+input WriteTeamInput {
+  name: String
+  description: String
+  addUserIds: [String]
+  removeUserIds: [String]
+  addComputePlatformIds: [String]
+  removeComputePlatformIds: [String]
+}
+
+type GeneralResult {
+  success: Boolean!
+  error: String
+}
+
+# Maps an identity provider group (token claim value) to an Odigos role.
+type GroupRoleMapping {
+  id: String!
+  providerId: AuthProviderId!
+  claimName: String!
+  claimValue: String!
+  role: Role!
+  # Optional human-readable label for the group, shown in the UI instead of the
+  # raw claim value (e.g. the Azure group GUID). Purely cosmetic; matching still
+  # uses claimValue.
+  displayName: String
+}
+
+input WriteGroupRoleMappingInput {
+  providerId: AuthProviderId!
+  # Token claim to match on. Defaults to "groups" when omitted.
+  claimName: String
+  # The group identifier emitted by the IdP (e.g. Azure group object ID or name).
+  claimValue: String!
+  role: Role!
+  # Optional human-readable label for the group (cosmetic only).
+  displayName: String
+}
+
+enum IdentityProviderProtocol {
+  OIDC
+  SAML
+}
+
+# Settings of a configured external identity provider, for the Admin screen.
+# Secrets never leave the backend: only whether one is stored.
+type IdentityProvider {
+  providerId: AuthProviderId!
+  protocol: IdentityProviderProtocol!
+  enabled: Boolean!
+  # Redirect URI to register in the identity provider.
+  callbackUrl: String!
+  # OIDC
+  clientId: String
+  discoveryUrl: String
+  tenantId: String
+  hasClientSecret: Boolean!
+  # SAML
+  idpEntityId: String
+  singleSignOnServiceUrl: String
+  hasSigningCertificate: Boolean!
+}
+
+type IdentityProviderResult {
+  success: Boolean!
+  error: String
+  callbackUrl: String
+}
+
+type RemoteFetchResult {
+  proxyID: String!
+  success: Boolean!
+  data: String
+  error: String
+}
+
+type ServicesStatus {
+  status: HealthStatus!
+  message: String
+}
+
+enum HealthStatus {
+  HEALTHY
+  WARNING
+  DOWN
+}
+
+type BackendHealthStatus {
+  redisStatus: ServicesStatus!
+  keycloakStatus: ServicesStatus!
+  sseStatus: ServicesStatus!
+}
+
+type HealthQuery {
+  backend: BackendHealthStatus!
+}
+
+type ApiToken {
+  token: String!
+  name: String!
+  issuedAt: Int64!
+  expiresAt: Int64!
+}
+
+type Query {
+  remoteFetch(proxyID: String!, query: String!, variables: JSON!): String!
+  remoteMultiFetch(
+    proxyIDs: [String!]!
+    query: String!
+    variables: JSON!
+  ): [RemoteFetchResult!]!
+  systemConfig: SystemConfig!
+  apiTokens: [ApiToken!]!
+  # Public (unauthenticated): aliases of configured external IdPs for the login chooser.
+  # Returns only AuthProviderId values — never IdP secrets or full Keycloak config.
+  configuredIdentityProviders: [AuthProviderId!]!
+  # ADMIN/OWNER only: settings of configured identity providers, without secrets.
+  identityProviders: [IdentityProvider!]!
+  signInUrl(providerId: AuthProviderId!): String
+  signOutUrl(idToken: String): String
+  computePlatforms: [ComputePlatform!]!
+  users: [User!]!
+  teams: [Team!]!
+  groupRoleMappings(providerId: AuthProviderId!): [GroupRoleMapping!]!
+  health: HealthQuery!
+}
+
+type Mutation {
+  # Identity Provider for OIDC
+  ensureOidcIdentityProvider(
+    input: OidcIdentityProviderInput!
+  ): IdentityProviderResult!
+  # Identity Provider for SAML
+  ensureSamlIdentityProvider(
+    input: SamlIdentityProviderInput!
+  ): IdentityProviderResult!
+
+  signIn(email: String, password: String, code: String): SignInResult!
+  setInitialPassword(
+    email: String!
+    oneTimePassword: String!
+    password: String!
+  ): SignInResult!
+  verifyToken(token: String!): GeneralResult!
+
+  updateComputePlatform(
+    id: String!
+    input: WriteComputePlatformInput!
+  ): GeneralResult!
+
+  createUser(input: WriteUserInput!): CreateUserResult!
+  updateUser(userID: String!, input: WriteUserInput!): GeneralResult!
+  deleteUser(userID: String!): GeneralResult!
+  resetUserPassword(userID: String!): ResetUserPasswordResult!
+
+  createTeam(input: WriteTeamInput!): GeneralResult!
+  updateTeam(teamID: String!, input: WriteTeamInput!): GeneralResult!
+  deleteTeam(teamID: String!): GeneralResult!
+
+  # Map IdP groups to Odigos roles (applied as Keycloak IdP role mappers)
+  createGroupRoleMapping(input: WriteGroupRoleMappingInput!): GeneralResult!
+  updateGroupRoleMapping(
+    id: String!
+    input: WriteGroupRoleMappingInput!
+  ): GeneralResult!
+  deleteGroupRoleMapping(
+    providerId: AuthProviderId!
+    id: String!
+  ): GeneralResult!
+
+  deleteProxyConnection(proxyID: String!): GeneralResult!
+}

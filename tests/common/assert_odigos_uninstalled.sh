@@ -112,9 +112,11 @@ fi
 
 
 # "default-token" is created in each namespace by k8s prior to k8s 1.24: https://github.com/kubernetes/kubernetes/pull/108309 - so we exclude it
+# "odigos-ecr-pull" is the image pull secret the cross-cloud tests create on AKS before installing Odigos
 SECRETS_IN_NAMESPACE=$(kubectl get secrets -n $NAMESPACE -o json | jq -r '
     .items[] |
     select(.metadata.name | startswith("default-token") | not) |
+    select(.metadata.name != "odigos-ecr-pull") |
     .metadata.name' 2>/dev/null || true)
 if [ ! -z "$SECRETS_IN_NAMESPACE" ]; then
     print_error "Found secrets in namespace $NAMESPACE:"

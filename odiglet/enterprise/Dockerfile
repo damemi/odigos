@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.22
 
 ######### dotnet builder #########
@@ -143,10 +144,18 @@ ARG TARGETARCH
 ARG LD_FLAGS
 ARG RHEL=false
 ENV GOINSECURE=go.opentelemetry.io*
-RUN --mount=type=secret,id=github_token \
+ENV GOPRIVATE=github.com/odigos-io/odigos-device-plugin
+# The instrumentation and device plugin modules are private, so the github_token BuildKit secret is required
+# (the Makefile and the bake file pass it from GITHUB_TOKEN). required=true only catches a missing secret; a
+# secret declared from an unset variable arrives empty, hence the test. git gets the token only as
+# per-command config, so it is never written into a layer.
+RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    test -n "$GITHUB_TOKEN" || { echo "The github_token secret is empty; set GITHUB_TOKEN." >&2; exit 1; } && \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.https://x-access-token:${GITHUB_TOKEN}@github.com/.insteadOf" \
+    GIT_CONFIG_VALUE_0="https://github.com/" \
     CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make build-odiglet
 # File capabilities so the binary can use eBPF privileges when run as non-root.
 # Setting this caps as the permitted set (=p) so that the binary can be executed with a sub set of these capabilities
@@ -154,17 +163,23 @@ RUN --mount=type=secret,id=github_token \
 RUN setcap cap_bpf,cap_perfmon,cap_sys_admin,cap_sys_ptrace,cap_dac_read_search,cap_ipc_lock,cap_sys_resource,cap_setuid,cap_setgid=p ./odiglet
 
 # Build CSI driver binary (same binary as community odiglet; required when mountMethod is k8s-csi-driver)
-RUN --mount=type=secret,id=github_token \
+RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    test -n "$GITHUB_TOKEN" || { echo "The github_token secret is empty; set GITHUB_TOKEN." >&2; exit 1; } && \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.https://x-access-token:${GITHUB_TOKEN}@github.com/.insteadOf" \
+    GIT_CONFIG_VALUE_0="https://github.com/" \
     GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o odigos-csi-driver github.com/odigos-io/odigos/odiglet/cmd/csi-driver
 
 # Build OSS deviceplugin binary (same binary as community odiglet)
-RUN --mount=type=secret,id=github_token \
+RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
-    git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
+    test -n "$GITHUB_TOKEN" || { echo "The github_token secret is empty; set GITHUB_TOKEN." >&2; exit 1; } && \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.https://x-access-token:${GITHUB_TOKEN}@github.com/.insteadOf" \
+    GIT_CONFIG_VALUE_0="https://github.com/" \
     GOOS=linux GOARCH=$TARGETARCH go build -o deviceplugin github.com/odigos-io/odigos/deviceplugin/cmd
 
 # Download grpc_health_probe this is used by the deviceplugin container to check if the deviceplugin is healthy

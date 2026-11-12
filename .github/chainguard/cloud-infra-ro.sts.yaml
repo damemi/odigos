@@ -1,7 +1,7 @@
 # Read-only access to this repo's Go modules for odigos-io/cloud-infra (aws/docs-gate builds the
-# sign-in Lambda on odigosauth/docslogin). That workflow runs only from main.
+# sign-in Lambda on odigosauth/docslogin): deploys from main, and plans on cloud-infra pull requests.
 issuer: https://token.actions.githubusercontent.com
-subject_pattern: '^repo:odigos-io(@84347062)?/cloud-infra(@1015638527)?:ref:refs/heads/main$'
+subject_pattern: '^repo:odigos-io(@84347062)?/cloud-infra(@1015638527)?:(pull_request|ref:refs/heads/main)$'
 
 permissions:
   contents: read

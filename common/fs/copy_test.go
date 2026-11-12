@@ -278,3 +278,44 @@ func BenchmarkCopyDirectories(b *testing.B) {
 		}
 	}
 }
+
+// A changed .NET native profiler is renamed, not rewritten, so a process that
+// has it mapped keeps running; the renamed copy is protected from --delete.
+func TestRemoveChangedFilesFromKeepMap_DotnetProfilerKept(t *testing.T) {
+	srcDir := t.TempDir()
+	dstDir := t.TempDir()
+	rel := "dotnet/linux-glibc/OpenTelemetry.AutoInstrumentation.Native.so"
+	for dir, content := range map[string]string{srcDir: "v1.19.1", dstDir: "v1.9.0"} {
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oldHash, err := fileHash(filepath.Join(dstDir, rel))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keep, err := removeChangedFilesFromKeepMap(getCriticalFiles(dstDir), srcDir, dstDir)
+	if err != nil {
+		t.Fatalf("removeChangedFilesFromKeepMap: %v", err)
+	}
+	renamed := filepath.Join(dstDir, "dotnet/linux-glibc",
+		"OpenTelemetry.AutoInstrumentation.Native_hash_version-"+oldHash[:12]+".so")
+	if _, ok := keep[renamed]; !ok {
+		t.Fatalf("renamed profiler %s not in the keep map: %v", renamed, keep)
+	}
+	got, err := os.ReadFile(renamed)
+	if err != nil {
+		t.Fatalf("renamed profiler missing on disk: %v", err)
+	}
+	if string(got) != "v1.9.0" {
+		t.Fatalf("renamed profiler holds %q, want the old version", got)
+	}
+	if _, err := os.Stat(filepath.Join(dstDir, rel)); !os.IsNotExist(err) {
+		t.Fatalf("original path should be free for the new version to land")
+	}
+}
