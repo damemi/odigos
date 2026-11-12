@@ -26,7 +26,8 @@ spec:
                 --set imagePrefix=registry.odigos.io \
                 --set onPremToken=$ODIGOS_API_KEY \
                 --set auth.adminUsername=admin \
-                --set auth.adminPassword=admin
+                --set auth.adminPassword=admin \
+                --set auth.javaOpts="-Xms128m -Xmx256m -XX:ActiveProcessorCount=1"
 
               kubectl label namespace odigos-central odigos.io/system-object="true"
 

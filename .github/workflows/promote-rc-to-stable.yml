@@ -108,9 +108,7 @@ jobs:
 
       - name: Retag existing images to stable
         run: |
-            # Define which images go to which registries
-            # All non-RHEL component images (OSS + enterprise). Each is promoted in components
-            # and mirrored to components-private.
+            # All non-RHEL component images (OSS + enterprise), promoted in components-private only.
             GCR_IMAGE_NAMES=("odigos-autoscaler" "odigos-scheduler" "odigos-operator" "odigos-cli" "odigos-victoria-metrics" "odigos-cache" "odigos-enterprise-central-backend" "odigos-enterprise-central-proxy" "odigos-enterprise-central-ui" "odigos-enterprise-ui" "odigos-enterprise-agents" "odigos-enterprise-collector" "odigos-enterprise-instrumentor" "odigos-enterprise-odiglet" "odigos-enterprise-insights" "odigos-enterprise-connector-runtime" "odigos-enterprise-connector-aws" "odigos-enterprise-connector-azure" "odigos-enterprise-connector-gcp" "odigos-enterprise-connector-postgres")
 
             # Community images, built only for versions released before odigos-enterprise moved here.
@@ -125,7 +123,7 @@ jobs:
             for SUFFIX in "${IMAGE_SUFFIXES[@]}"; do
               # Process GCR images
               for IMAGE_NAME in "${GCR_IMAGE_NAMES[@]}"; do
-                REPO=${GCR_REPO}
+                REPO=${GCR_PRIVATE_REPO}
                 echo "Copying ${REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.RC_TAG }} to ${REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.STABLE_TAG }}"
                 if ! crane copy ${REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.RC_TAG }} ${REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.STABLE_TAG }}; then
                   echo "ERROR: Failed to copy ${REPO}/${IMAGE_NAME}${SUFFIX}"
@@ -134,18 +132,6 @@ jobs:
                   echo "Successfully copied ${REPO}/${IMAGE_NAME}${SUFFIX}"
                 fi
               done
-
-              # Mirror all GCR images into the private registry (components-private).
-              for IMAGE_NAME in "${GCR_IMAGE_NAMES[@]}"; do
-                echo "Mirroring ${GCR_REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.STABLE_TAG }} to ${GCR_PRIVATE_REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.STABLE_TAG }}"
-                if ! oras copy -r ${GCR_REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.STABLE_TAG }} ${GCR_PRIVATE_REPO}/${IMAGE_NAME}${SUFFIX}:${{ env.STABLE_TAG }}; then
-                  echo "ERROR: Failed to mirror ${GCR_PRIVATE_REPO}/${IMAGE_NAME}${SUFFIX}"
-                  FAILED_COPIES+=("${GCR_PRIVATE_REPO}/${IMAGE_NAME}${SUFFIX}")
-                else
-                  echo "Successfully mirrored ${GCR_PRIVATE_REPO}/${IMAGE_NAME}${SUFFIX}"
-                fi
-              done
-
             done
 
             for IMAGE_NAME in "${LEGACY_COMMUNITY_IMAGE_NAMES[@]}"; do
@@ -167,20 +153,12 @@ jobs:
             # images never get an -extended tag, so they must not be listed here.
             EXTENDED_IMAGE_NAMES=("odigos-enterprise-agents" "odigos-enterprise-odiglet")
             for IMAGE_NAME in "${EXTENDED_IMAGE_NAMES[@]}"; do
-              echo "Copying ${GCR_REPO}/${IMAGE_NAME}:${{ env.RC_TAG }}-extended to ${GCR_REPO}/${IMAGE_NAME}:${{ env.STABLE_TAG }}-extended"
-              if ! crane copy ${GCR_REPO}/${IMAGE_NAME}:${{ env.RC_TAG }}-extended ${GCR_REPO}/${IMAGE_NAME}:${{ env.STABLE_TAG }}-extended; then
-                echo "ERROR: Failed to copy ${GCR_REPO}/${IMAGE_NAME} extended"
-                FAILED_COPIES+=("${GCR_REPO}/${IMAGE_NAME}-extended")
-              else
-                echo "Successfully copied ${GCR_REPO}/${IMAGE_NAME} extended"
-              fi
-
-              echo "Mirroring ${GCR_REPO}/${IMAGE_NAME}:${{ env.STABLE_TAG }}-extended to ${GCR_PRIVATE_REPO}/${IMAGE_NAME}:${{ env.STABLE_TAG }}-extended"
-              if ! oras copy -r ${GCR_REPO}/${IMAGE_NAME}:${{ env.STABLE_TAG }}-extended ${GCR_PRIVATE_REPO}/${IMAGE_NAME}:${{ env.STABLE_TAG }}-extended; then
-                echo "ERROR: Failed to mirror ${GCR_PRIVATE_REPO}/${IMAGE_NAME} extended"
+              echo "Copying ${GCR_PRIVATE_REPO}/${IMAGE_NAME}:${{ env.RC_TAG }}-extended to ${GCR_PRIVATE_REPO}/${IMAGE_NAME}:${{ env.STABLE_TAG }}-extended"
+              if ! crane copy ${GCR_PRIVATE_REPO}/${IMAGE_NAME}:${{ env.RC_TAG }}-extended ${GCR_PRIVATE_REPO}/${IMAGE_NAME}:${{ env.STABLE_TAG }}-extended; then
+                echo "ERROR: Failed to copy ${GCR_PRIVATE_REPO}/${IMAGE_NAME} extended"
                 FAILED_COPIES+=("${GCR_PRIVATE_REPO}/${IMAGE_NAME}-extended")
               else
-                echo "Successfully mirrored ${GCR_PRIVATE_REPO}/${IMAGE_NAME} extended"
+                echo "Successfully copied ${GCR_PRIVATE_REPO}/${IMAGE_NAME} extended"
               fi
             done
 

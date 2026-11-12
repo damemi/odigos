@@ -139,7 +139,18 @@ jobs:
           failure-description: "ERROR: Failed to start Odigos CLI release"
           tag: ${{ env.TAG }}
 
+      - id: gcp-auth
+        name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          access_token_lifetime: 1200s
+
       - name: Verify Components Image Ready
+        env:
+          ACCESS_TOKEN: ${{ steps.gcp-auth.outputs.access_token }}
         run: |
           # Community instrumentor, odiglet, collector and ui images are only built for versions released
           # before odigos-enterprise moved here, so they are not required.
@@ -149,8 +160,8 @@ jobs:
 
           for REPO in "${REPOS[@]}"; do
             echo "Checking tag $TAG_TO_CHECK in $REPO..."
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://artifactregistry.us-central1.rep.googleapis.com/v1/projects/odigos-cloud/locations/us-central1/repositories/components/packages/$REPO/tags/$TAG_TO_CHECK")
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            "https://artifactregistry.us-central1.rep.googleapis.com/v1/projects/odigos-cloud/locations/us-central1/repositories/components-private/packages/$REPO/tags/$TAG_TO_CHECK")
 
             if [ "$HTTP_STATUS" -eq 200 ]; then
               echo "Tag $TAG_TO_CHECK exists in $REPO."
@@ -159,15 +170,6 @@ jobs:
               exit 1
             fi
           done
-
-      - id: gcp-auth
-        name: Authenticate with Google Cloud
-        uses: google-github-actions/auth@v3
-        with:
-          token_format: 'access_token'
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          access_token_lifetime: 1200s
 
       - name: Login to Artifact Registry
         uses: docker/login-action@v3
@@ -379,7 +381,7 @@ jobs:
         id: ko-cli
         working-directory: ./cli
         env:
-          KO_DOCKER_REPO: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-cli
+          KO_DOCKER_REPO: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cli
           KO_CONFIG_PATH: ./.ko.yaml
           VERSION: ${{ env.TAG }}
           SHORT_COMMIT: ${{ steps.vars.outputs.short_commit }}
@@ -399,49 +401,27 @@ jobs:
             *) echo "::error::ko did not return a digest ref: ${IMAGE_REF}"; exit 1 ;;
           esac
 
-      # Sign at the source registry before mirroring, so the mirrors can carry
-      # the signature and SBOM along as OCI referrers. Fail-closed.
+      # Fail-closed.
       - name: Sign CLI image and attach SBOM
         uses: odigos-io/ci-core/sign-oci@main
         with:
-          refs: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-cli
+          refs: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cli
           digest: ${{ steps.ko-cli.outputs.digest }}
 
       - name: Install oras
         uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
 
-      - name: Copy CLI image to private GCR
-        env:
-          SOURCE_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-cli
-          GCR_PRIVATE_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cli
-        run: |
-          # oras copy -r rather than crane copy: -r copies the referrers graph
-          # (cosign signature and SBOM attestation) along with the image, so
-          # the mirror stays verifiable. crane copy moves only the manifest.
-          oras copy -r ${SOURCE_IMAGE}:${{ env.TAG }} ${GCR_PRIVATE_DEST_IMAGE}:${{ env.TAG }}
-
-          # Mirror :latest only when this release owns it, so the mirror stays
-          # in step with the source registry.
-          if [ "${{ env.PUSH_LATEST }}" = "true" ]; then
-            oras copy -r ${SOURCE_IMAGE}:latest ${GCR_PRIVATE_DEST_IMAGE}:latest
-          else
-            echo "Skipping :latest mirror for ${{ env.TAG }}"
-          fi
-
       - name: Copy VictoriaMetrics image to GCR
         id: vm-copy
         env:
           SOURCE_IMAGE: docker.io/victoriametrics/victoria-metrics:${{ env.VICTORIA_METRICS_VERSION }}
-          GCR_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-victoria-metrics
           GCR_PRIVATE_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-victoria-metrics
         run: |
-          oras copy -r ${SOURCE_IMAGE} ${GCR_DEST_IMAGE}:${{ env.TAG }}
           oras copy -r ${SOURCE_IMAGE} ${GCR_PRIVATE_DEST_IMAGE}:${{ env.TAG }}
 
           # VICTORIA_METRICS_VERSION is pinned per branch, so :latest here
           # tracks whichever release owns it rather than the last one to run.
           if [ "${{ env.PUSH_LATEST }}" = "true" ]; then
-            oras copy -r ${SOURCE_IMAGE} ${GCR_DEST_IMAGE}:latest
             oras copy -r ${SOURCE_IMAGE} ${GCR_PRIVATE_DEST_IMAGE}:latest
           else
             echo "Skipping :latest mirror for ${{ env.TAG }}"
@@ -458,25 +438,20 @@ jobs:
       - name: Sign re-hosted VictoriaMetrics image
         uses: odigos-io/ci-core/sign-oci@main
         with:
-          refs: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-victoria-metrics
-            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-victoria-metrics
+          refs: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-victoria-metrics
           digest: ${{ steps.vm-copy.outputs.digest }}
 
       - name: Copy Redis image to GCR as odigos-cache
         id: cache-copy
         env:
           SOURCE_IMAGE: docker.io/library/redis:${{ env.REDIS_VERSION }}
-          GCR_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components/odigos-cache
           GCR_PRIVATE_DEST_IMAGE: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cache
         run: |
-          oras copy -r ${SOURCE_IMAGE} ${GCR_DEST_IMAGE}:${{ env.TAG }}
           oras copy -r ${SOURCE_IMAGE} ${GCR_PRIVATE_DEST_IMAGE}:${{ env.TAG }}
 
           # REDIS_VERSION is pinned per branch, so :latest here tracks whichever
           # release owns it rather than the last one to run.
           if [ "${{ env.PUSH_LATEST }}" = "true" ]; then
-            oras copy -r ${SOURCE_IMAGE} ${GCR_DEST_IMAGE}:latest
             oras copy -r ${SOURCE_IMAGE} ${GCR_PRIVATE_DEST_IMAGE}:latest
           else
             echo "Skipping :latest mirror for ${{ env.TAG }}"
@@ -493,9 +468,7 @@ jobs:
       - name: Sign re-hosted odigos-cache image
         uses: odigos-io/ci-core/sign-oci@main
         with:
-          refs: |
-            us-central1-docker.pkg.dev/odigos-cloud/components/odigos-cache
-            us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cache
+          refs: us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cache
           digest: ${{ steps.cache-copy.outputs.digest }}
 
       - name: Set notification messages

@@ -77,7 +77,7 @@ The in-memory profile store is sized from **environment variables** read by the 
 
 ## OTLP Exporter Tuning
 
-If you need to adjust retry behaviour or compression on the profiling OTLP pipelines (node → gateway, gateway → UI), set the nested keys under `profiling.exporter` in your Helm values (defaults live in the chart’s [`values.yaml`](https://github.com/odigos-io/odigos/blob/main/helm/odigos/values.yaml) under the `profiling:` block):
+If you need to adjust retry behaviour or compression on the profiling OTLP pipelines (node → gateway, gateway → UI), set the nested keys under `profiling.exporter` in your Helm values (see the defaults under the `profiling:` block of `helm show values oci://registry.odigos.io/charts/odigos`):
 
 ```yaml
 profiling:

@@ -13,13 +13,11 @@ Currently, this image is built and pushed manually to our GCP registry.
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   --push \
-  -t us-central1-docker.pkg.dev/odigos-cloud/components/keycloak:24.0.3-odigos1 \
   -t us-central1-docker.pkg.dev/odigos-cloud/components-private/keycloak:24.0.3-odigos1 \
   .
 ```
 
-Push to both repositories: the Helm chart pulls `registry.odigos.io/keycloak`, which serves
-`components-private`, while vulnerability scans read `components`.
+The Helm chart pulls `registry.odigos.io/keycloak`, which serves `components-private`.
 
 ## Features Enabled
 

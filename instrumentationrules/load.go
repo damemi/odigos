@@ -3,6 +3,7 @@ package instrumentationrules
 import (
 	"embed"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,8 +17,12 @@ var loadedRules []InstrumentationRule
 // map from rule type to rule catalog config object
 var rulesByType map[string]InstrumentationRule
 
+// loadOnce parses the instrumentation-rule catalog the first time Load is called; it is embedded and never
+// changes at runtime.
+var loadOnce = sync.OnceValue(func() error { return load(instrumentationRulesFS) })
+
 func Load() error {
-	return load(instrumentationRulesFS)
+	return loadOnce()
 }
 
 func Get() []InstrumentationRule {

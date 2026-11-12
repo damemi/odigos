@@ -378,7 +378,6 @@
           {
             "group": "Contribution Guidelines",
             "pages": [
-              "enterprise/adding-new-dest",
               "enterprise/debugging"
             ]
           },
@@ -628,16 +627,9 @@
       "dark": "#151515"
     }
   },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/odigos-io/odigos"
-    }
-  },
   "footer": {
     "socials": {
       "x": "https://twitter.com/odigosio",
-      "github": "https://github.com/odigos-io/odigos",
       "slack": "https://odigos.slack.com/join/shared_invite/zt-1d7egaz29-Rwv2T8kyzc3mWP8qKobz~A#/shared-invite/email"
     }
   },
@@ -724,7 +716,11 @@
     },
     {
       "source": "/adding-new-dest",
-      "destination": "/enterprise/adding-new-dest"
+      "destination": "/enterprise/backends-overview"
+    },
+    {
+      "source": "/enterprise/adding-new-dest",
+      "destination": "/enterprise/backends-overview"
     },
     {
       "source": "/debugging",

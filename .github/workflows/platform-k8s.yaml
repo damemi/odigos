@@ -1,12 +1,14 @@
 # PR checks for the Odigos Kubernetes platform:
-# - Builds the instrumentor, insights, collector, operator, odiglet, agents and ui images on Depot from
+# - Builds the instrumentor, insights, collector, operator, odiglet, agents, ui and cli images on Depot from
 #   platform-k8s.docker-bake.hcl and scans each for vulnerabilities, along with the webapp's dependencies.
 # - Runs the unit tests of every platform module, with the collector modules in their own job, and
-#   builds the CLI.
+#   builds the CLI binaries with goreleaser.
 # - Packages the Helm charts and pushes the odigos chart to the project's Depot registry as an OCI chart.
-# - Runs the sampling e2e tests on kind clusters with those images and that chart.
+# - Runs e2e tests on kind clusters with those images and that chart, on Kubernetes 1.32 and the
+#   versions of the PR's "test-k8s/<version>" labels.
 #
-# PRs to release branches build the Depot images for both platforms without the layer cache.
+# PRs to release branches build the Depot images for both platforms without the layer cache, and
+# also run the e2e tests on Kubernetes 1.21.12, 1.29 and 1.37.
 # Otherwise the "build: arm" and "build: no-cache" PR labels pick their build options.
 #
 # "Platform K8s CI" is the single required check: it always runs, and passes when every job succeeded.
@@ -51,7 +53,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [instrumentor, insights, collector, operator, odiglet, agents, ui]
+        service: [instrumentor, insights, collector, operator, odiglet, agents, ui, cli]
     steps:
       - uses: actions/checkout@v7
 
@@ -77,7 +79,7 @@ jobs:
         uses: depot/bake-action@v1
         env:
           PLATFORMS: ${{ steps.build-opts.outputs.platforms }}
-          # The operator's embedded Helm chart version.
+          # The operator's and the CLI's embedded Helm chart version.
           ODIGOS_VERSION: v0.0.0-pr${{ github.event.number || github.run_number }}
           # Read by the bake file as odiglet's github_token secret, for the private instrumentation repos.
           GITHUB_TOKEN: ${{ matrix.service == 'odiglet' && secrets.RELEASE_BOT_TOKEN || '' }}
@@ -259,22 +261,60 @@ jobs:
           echo "Pushed oci://$CHART_REF" >> "$GITHUB_STEP_SUMMARY"
           echo "chart-ref=$CHART_REF" >> "$GITHUB_OUTPUT"
 
-  # Installs the odigos chart pushed by package-helm on a kind cluster, with the images saved by
-  # build-depot-images, and runs one sampling e2e test from tests/e2e against it.
-  e2e-sampling:
-    name: E2E (${{ matrix.test }})
+  # The Kubernetes versions the e2e tests run on: 1.32, plus one per "test-k8s/<version>" PR label.
+  # Release PRs and merge queue entries (targeting a release branch) also run on the oldest supported
+  # version, one in the middle and the latest.
+  resolve-kubernetes-versions:
+    name: Resolve Kubernetes versions
+    runs-on: depot-ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      versions: ${{ steps.k8s.outputs.versions }}
+    steps:
+      - name: Resolve Kubernetes versions from PR labels
+        id: k8s
+        uses: odigos-io/ci-core/resolve-kubernetes-test-versions@main
+        with:
+          default-version: "1.32"
+          release: ${{ startsWith(github.base_ref, 'releases/') || startsWith(github.event.merge_group.base_ref, 'refs/heads/releases/') }}
+          # Each must be in the supported-versions of .github/actions/kubernetes-tests.
+          release-versions: "1.21.12,1.29,1.37"
+
+  # Installs the odigos chart pushed by package-helm on a kind cluster of one Kubernetes version,
+  # with the images saved by build-depot-images, and runs one e2e test against it.
+  e2e:
+    name: E2E (${{ matrix.kube-version }}, ${{ matrix.test }})
     needs:
+      - resolve-kubernetes-versions
       - build-depot-images
       - package-helm
     runs-on: depot-ubuntu-24.04-4
     strategy:
       fail-fast: false
       matrix:
+        kube-version: ${{ fromJSON(needs.resolve-kubernetes-versions.outputs.versions) }}
         test:
           - head-sampling-http-nodejs
           - head-sampling-http-python
           - head-sampling-http-java
           - tail-sampling-nodejs
+          - instrumentation-rollback
+          - instrumentation-rollback-stability-window
+          - runtime-detection
+          - instrumentation-lifecycle
+          - environment-variables
+          - trace-collection
+          - log-collection
+          - source
+          - webhooks
+          - env-injection
+          - data-streams
+          - argo-rollouts
+          # enterprise/<name> runs tests/enterprise/e2e/<name>.
+          - enterprise/multi-apps
+          - enterprise/jvm-metrics
+          - enterprise/instrumentation-rules
     # id-token lets the job log in to the Depot registry over OIDC.
     permissions:
       contents: read
@@ -300,10 +340,27 @@ jobs:
       - name: Install chainsaw
         uses: kyverno/action-install-chainsaw@v0.2.13
 
+      # The kind node image and minor version of each supported version are listed in the
+      # kubernetes-tests action.
+      - name: Resolve kind node image
+        id: node-image
+        env:
+          KUBE_VERSION: ${{ matrix.kube-version }}
+        run: |
+          set -euo pipefail
+          version=$(yq '.inputs.supported-versions.default' .github/actions/kubernetes-tests/action.yml \
+            | jq -c --arg v "$KUBE_VERSION" '.[$v] // empty')
+          if [ -z "$version" ]; then
+            echo "::error::Unsupported Kubernetes version '$KUBE_VERSION'. Add it to the 'supported-versions' input of .github/actions/kubernetes-tests"
+            exit 1
+          fi
+          echo "node-image=$(jq -r .nodeImage <<<"$version")" >> "$GITHUB_OUTPUT"
+          echo "minor-version=$(jq -r .minorVersion <<<"$version")" >> "$GITHUB_OUTPUT"
+
       - name: Create kind cluster
         uses: helm/kind-action@v1.14.0
         with:
-          node_image: kindest/node:v1.32.11@sha256:5fc52d52a7b9574015299724bd68f183702956aa4a2116ae75a63cb574b35af8
+          node_image: ${{ steps.node-image.outputs.node-image }}
           version: "v0.33.0"
           cluster_name: kind
           config: tests/common/apply/kind-config.yaml
@@ -314,6 +371,17 @@ jobs:
 
       - name: Log in to the Depot registry
         run: echo "$DEPOT_TOKEN" | oras login registry.depot.dev --username x-token --password-stdin
+
+      # Copies the odigos binary out of the cli image saved by build-depot-images to cli/odigos,
+      # where the tests run it from. The image is distroless, so the container is created, never run.
+      - name: Extract the CLI binary from the cli image
+        run: |
+          set -euo pipefail
+          echo "$DEPOT_TOKEN" | docker login registry.depot.dev --username x-token --password-stdin
+          container=$(docker create "registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG-cli")
+          docker cp "$container:/odigos" cli/odigos
+          docker rm "$container"
+          cli/odigos version --cli
 
       # The cluster pulls the saved images from the Depot registry with a pull secret in the Odigos
       # namespace, as in odigos-local-env. Odiglet pre-pulls the agents image on every node, so the
@@ -329,8 +397,7 @@ jobs:
             --docker-password="$(depot pull-token --project "$DEPOT_PROJECT")"
 
       # Helm values that point each chart image component at its image saved by build-depot-images.
-      # The scheduler and autoscaler Deployments run 0 replicas and the CLI image only runs on
-      # uninstall, so they need no override.
+      # The scheduler and autoscaler Deployments run 0 replicas, so they need no override.
       - name: Write Helm values for the Depot images
         run: |
           set -euo pipefail
@@ -341,7 +408,7 @@ jobs:
             echo "images:"
             # <chart image component>=<build-depot-images service>
             for pair in enterprise-instrumentor=instrumentor enterprise-collector=collector \
-              enterprise-odiglet=odiglet enterprise-agents=agents enterprise-ui=ui; do
+              enterprise-odiglet=odiglet enterprise-agents=agents enterprise-ui=ui cli=cli; do
               echo "  ${pair%%=*}: registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG-${pair#*=}"
             done
             # Victoria Metrics is published, not built in this repo.
@@ -360,7 +427,21 @@ jobs:
       - name: Run E2E test
         env:
           ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
-        run: chainsaw test "tests/e2e/${{ matrix.test }}" --apply-timeout 30s
+          # The image.tag the tests install with, which the CLI reports as the cluster's version.
+          IMAGE_TAG: e2e-test
+          TEST: ${{ matrix.test }}
+          KUBERNETES_MINOR_VERSION: ${{ steps.node-image.outputs.minor-version }}
+        # The asserts read k8sMinorVersion (e.g. odiglet uses hostNetwork before 1.26), as passed by
+        # the kubernetes-tests action. None of these tests read its other values.
+        run: |
+          if [[ "$TEST" == enterprise/* ]]; then
+            test_dir="tests/enterprise/e2e/${TEST#enterprise/}"
+          else
+            test_dir="tests/e2e/$TEST"
+          fi
+          chainsaw test "$test_dir" --apply-timeout 30s --values - <<EOF
+          k8sMinorVersion: ${KUBERNETES_MINOR_VERSION}
+          EOF
 
       - name: Cluster diagnostics
         if: failure()
@@ -369,20 +450,28 @@ jobs:
           echo "==== Pods (all namespaces) ===="; kubectl get pods -A -o wide
           echo "==== Events ===="; kubectl get events -A --sort-by=.lastTimestamp | tail -n 200
 
+      # Artifact names cannot contain "/", which enterprise/<name> tests have.
       - name: Export kind logs
         if: failure()
-        run: kind export logs kind-logs
+        env:
+          TEST: ${{ matrix.test }}
+        run: |
+          echo "TEST_SLUG=${TEST//\//-}" >> "$GITHUB_ENV"
+          kind export logs kind-logs
         continue-on-error: true
 
       - name: Upload kind logs artifact
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: kind-logs-${{ matrix.test }}
+          name: kind-logs-${{ matrix.kube-version }}-${{ env.TEST_SLUG }}
           path: kind-logs
         continue-on-error: true
 
-  build-cli:
+  # Builds the CLI binaries for every OS and architecture with goreleaser, as the release does.
+  # The cli image is built by build-depot-images.
+  build-cli-goreleaser:
+    name: build-cli-goreleaser
     runs-on: depot-ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -473,8 +562,9 @@ jobs:
       - build-frontend
       - vulnerability-report
       - package-helm
-      - e2e-sampling
-      - build-cli
+      - resolve-kubernetes-versions
+      - e2e
+      - build-cli-goreleaser
       - test-platform-k8s-modules
       - test-collector-modules
     if: always()

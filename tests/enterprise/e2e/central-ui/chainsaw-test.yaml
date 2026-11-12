@@ -94,7 +94,8 @@ spec:
                 --create-namespace \
                 --namespace odigos-central \
                 --set image.tag=$IMAGE_TAG \
-                --set onPremToken=$ODIGOS_API_KEY
+                --set onPremToken=$ODIGOS_API_KEY \
+                --set auth.javaOpts="-Xms128m -Xmx256m -XX:ActiveProcessorCount=1"
 
               kubectl label namespace odigos-central odigos.io/system-object="true"
 

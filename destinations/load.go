@@ -4,6 +4,7 @@ import (
 	"embed"
 	"io/fs"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -17,8 +18,13 @@ var loadedDestinations []Destination
 // map from destination type to destination config object
 var destinationsByType map[string]Destination
 
+// loadOnce parses the embedded catalog the first time Load is called. It never changes at
+// runtime, and callers such as the VM agent's collector config generator call Load on every
+// regeneration.
+var loadOnce = sync.OnceValue(func() error { return load(destsFS) })
+
 func Load() error {
-	return load(destsFS)
+	return loadOnce()
 }
 
 func Get() []Destination {
