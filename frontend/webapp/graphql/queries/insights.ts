@@ -95,7 +95,7 @@ const OBSERVATION_SUMMARY_FIELDS = `
   traceId
   transactionId
   observedAt
-  durationMs
+  durationUs
   sampleReason
 `;
 

@@ -10,7 +10,7 @@ type Observation struct {
 	TraceID       string
 	TransactionID int64
 	ObservedAt    time.Time
-	DurationMs    int64
+	DurationUs    int64
 	SampleReason  string // "example" | "anomaly_evidence"
 	RawOTLP       []byte // empty on list; set on detail fetches
 }

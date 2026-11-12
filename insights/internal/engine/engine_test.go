@@ -970,8 +970,8 @@ func TestDecodeRequest_BuildsTrace(t *testing.T) {
 	if len(tr.Root.Children) != 1 || tr.Root.Children[0].Name != "child" {
 		t.Errorf("expected one child 'child', got %+v", tr.Root.Children)
 	}
-	if tr.DurationMs != 1 {
-		t.Errorf("expected duration 1ms, got %d", tr.DurationMs)
+	if tr.DurationUs != 1000 {
+		t.Errorf("expected duration 1000us, got %d", tr.DurationUs)
 	}
 }
 

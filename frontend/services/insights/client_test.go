@@ -70,7 +70,7 @@ func TestGetAnomalyEnrichesMissingCompareTraces(t *testing.T) {
 				"trace_id":"trace-anomaly",
 				"transaction_id":9,
 				"observed_at":"2026-08-06T12:00:00Z",
-				"duration_ms":1,
+				"duration_us":1,
 				"sample_reason":"anomaly:sig"
 			}]}`))
 		case r.URL.Path == "/api/v1/transactions/9/observations" && r.URL.Query().Get("sample_reason") == "example":
@@ -78,7 +78,7 @@ func TestGetAnomalyEnrichesMissingCompareTraces(t *testing.T) {
 				"trace_id":"trace-baseline",
 				"transaction_id":9,
 				"observed_at":"2026-08-06T11:00:00Z",
-				"duration_ms":0,
+				"duration_us":0,
 				"sample_reason":"example"
 			}]}`))
 		case r.URL.Path == "/api/v1/transactions/9/observations/trace-anomaly":
@@ -86,7 +86,7 @@ func TestGetAnomalyEnrichesMissingCompareTraces(t *testing.T) {
 				"trace_id":"trace-anomaly",
 				"transaction_id":9,
 				"observed_at":"2026-08-06T12:00:00Z",
-				"duration_ms":1,
+				"duration_us":1,
 				"sample_reason":"anomaly:sig",
 				"raw_otlp":"YW5vbQ=="
 			}`))
@@ -95,7 +95,7 @@ func TestGetAnomalyEnrichesMissingCompareTraces(t *testing.T) {
 				"trace_id":"trace-baseline",
 				"transaction_id":9,
 				"observed_at":"2026-08-06T11:00:00Z",
-				"duration_ms":0,
+				"duration_us":0,
 				"sample_reason":"example",
 				"raw_otlp":"YmFzZQ=="
 			}`))

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Odigos Insights Service API
-  version: 9.2.0
+  version: 10.0.0
   description: >
     HTTP API for the Odigos Insights (security) service. This spec is the source
     of truth for the contract: the Go server wire types (internal/api/http/apitypes)
@@ -2173,14 +2173,17 @@ components:
         trace_id: { type: string }
         transaction_id: { type: integer, format: int64 }
         observed_at: { type: string, format: date-time }
-        duration_ms: { type: integer, format: int64 }
+        duration_us:
+          type: integer
+          format: int64
+          description: Root span duration in microseconds.
         sample_reason: { $ref: "#/components/schemas/SampleReason" }
-      required: [trace_id, transaction_id, observed_at, duration_ms, sample_reason]
+      required: [trace_id, transaction_id, observed_at, duration_us, sample_reason]
       examples:
         - trace_id: "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f"
           transaction_id: 4211
           observed_at: "2026-07-20T14:03:22Z"
-          duration_ms: 137
+          duration_us: 137482
           sample_reason: example
 
     Observation:
@@ -2193,18 +2196,21 @@ components:
         trace_id: { type: string }
         transaction_id: { type: integer, format: int64 }
         observed_at: { type: string, format: date-time }
-        duration_ms: { type: integer, format: int64 }
+        duration_us:
+          type: integer
+          format: int64
+          description: Root span duration in microseconds.
         sample_reason: { $ref: "#/components/schemas/SampleReason" }
         raw_otlp:
           type: string
           format: byte
           description: Verbatim OTLP protobuf, base64-encoded.
-      required: [trace_id, transaction_id, observed_at, duration_ms, sample_reason, raw_otlp]
+      required: [trace_id, transaction_id, observed_at, duration_us, sample_reason, raw_otlp]
       examples:
         - trace_id: "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f"
           transaction_id: 4211
           observed_at: "2026-07-20T14:03:22Z"
-          duration_ms: 137
+          duration_us: 137482
           sample_reason: example
           raw_otlp: "b3RscC1wcm90b2J1Zi1ieXRlcw=="
 

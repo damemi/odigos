@@ -144,9 +144,9 @@ func TestBlastRadiusWire(t *testing.T) {
 // raw_otlp; detail always includes it.
 func TestObservationWire(t *testing.T) {
 	summary := FromObservationSummary(repo.Observation{TraceID: "abc", TransactionID: 1, SampleReason: "example", RawOTLP: []byte("x")})
-	assertKeys(t, jsonKeys(t, summary), "trace_id", "transaction_id", "observed_at", "duration_ms", "sample_reason")
+	assertKeys(t, jsonKeys(t, summary), "trace_id", "transaction_id", "observed_at", "duration_us", "sample_reason")
 	full := FromObservation(repo.Observation{TraceID: "abc", TransactionID: 1, SampleReason: "example", RawOTLP: []byte("x")})
-	assertKeys(t, jsonKeys(t, full), "trace_id", "transaction_id", "observed_at", "duration_ms", "sample_reason", "raw_otlp")
+	assertKeys(t, jsonKeys(t, full), "trace_id", "transaction_id", "observed_at", "duration_us", "sample_reason", "raw_otlp")
 }
 
 // TestAnomalyIssueDetailWire ensures the investigate base shape always carries

@@ -210,7 +210,7 @@ func FromObservationSummary(o repo.Observation) apitypes.ObservationSummary {
 		TraceId:       o.TraceID,
 		TransactionId: o.TransactionID,
 		ObservedAt:    o.ObservedAt,
-		DurationMs:    o.DurationMs,
+		DurationUs:    o.DurationUs,
 		SampleReason:  apitypes.SampleReason(o.SampleReason),
 	}
 }
@@ -222,7 +222,7 @@ func FromObservation(o repo.Observation) apitypes.Observation {
 		TraceId:       o.TraceID,
 		TransactionId: o.TransactionID,
 		ObservedAt:    o.ObservedAt,
-		DurationMs:    o.DurationMs,
+		DurationUs:    o.DurationUs,
 		SampleReason:  apitypes.SampleReason(o.SampleReason),
 		RawOtlp:       o.RawOTLP,
 	}

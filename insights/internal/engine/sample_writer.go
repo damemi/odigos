@@ -244,7 +244,7 @@ func (e *Engine) keepSample(ctx context.Context, t *Trace, tx repo.Transaction, 
 		TraceID:       t.TraceID,
 		TransactionID: tx.ID,
 		ObservedAt:    e.clock(),
-		DurationMs:    t.DurationMs,
+		DurationUs:    t.DurationUs,
 		SampleReason:  reason,
 		RawOTLP:       t.RawOTLP(),
 	}, func() {

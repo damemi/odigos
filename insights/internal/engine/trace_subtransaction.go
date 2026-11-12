@@ -140,7 +140,7 @@ func subTraces(t *Trace) []*Trace {
 			TraceID:       t.TraceID,
 			Root:          e,
 			Spans:         spans,
-			DurationMs:    spanDurationMs(e),
+			DurationUs:    spanDurationUs(e),
 			otlpSpansFn:   func() *tracepb.TracesData { return reRootedOTLP(t.otlpSpans, entryID, ids) },
 			CallerService: callerService(e, byID),
 		})
@@ -161,14 +161,13 @@ func callerService(entry *Span, byID map[string]*Span) string {
 	return ""
 }
 
-// spanDurationMs mirrors the root-duration math in DecodeRequest for an
-// arbitrary entry span, guarding against unsigned underflow on a clock-skewed
+// spanDurationUs guards against unsigned underflow on a clock-skewed
 // end-before-start span.
-func spanDurationMs(s *Span) int64 {
+func spanDurationUs(s *Span) int64 {
 	if s == nil || s.EndUnix < s.StartUnix {
 		return 0
 	}
-	return int64((s.EndUnix - s.StartUnix) / uint64(time.Millisecond))
+	return int64((s.EndUnix - s.StartUnix) / uint64(time.Microsecond))
 }
 
 // reRootedOTLP rebuilds a TracesData with only the spans in ids, preserving the

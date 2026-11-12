@@ -20,14 +20,14 @@ func (r *Repo) InsertObservations(ctx context.Context, obs []repo.Observation) e
 	}
 	now := time.Now()
 	err := r.insert(ctx,
-		"INSERT INTO trace_observations (transaction_id, trace_id, observed_at, duration_ms, sample_reason, raw_otlp)",
+		"INSERT INTO trace_observations (transaction_id, trace_id, observed_at, duration_us, sample_reason, raw_otlp)",
 		func(b driver.Batch) error {
 			for _, o := range obs {
 				observedAt := o.ObservedAt
 				if observedAt.IsZero() {
 					observedAt = now
 				}
-				if err := b.Append(o.TransactionID, o.TraceID, observedAt, o.DurationMs, o.SampleReason, string(o.RawOTLP)); err != nil {
+				if err := b.Append(o.TransactionID, o.TraceID, observedAt, o.DurationUs, o.SampleReason, string(o.RawOTLP)); err != nil {
 					return err
 				}
 			}
@@ -41,13 +41,13 @@ func (r *Repo) InsertObservations(ctx context.Context, obs []repo.Observation) e
 
 // Meta-only columns for list paths. raw_otlp is intentionally omitted - blobs
 // are loaded via GetObservationByTrace / GetLatestObservationByReason.
-const observationMetaCols = `transaction_id, trace_id, observed_at, duration_ms, sample_reason`
+const observationMetaCols = `transaction_id, trace_id, observed_at, duration_us, sample_reason`
 
 const observationCols = observationMetaCols + `, raw_otlp`
 
 func scanObservationMeta(s rowScanner) (repo.Observation, error) {
 	var o repo.Observation
-	if err := s.Scan(&o.TransactionID, &o.TraceID, &o.ObservedAt, &o.DurationMs, &o.SampleReason); err != nil {
+	if err := s.Scan(&o.TransactionID, &o.TraceID, &o.ObservedAt, &o.DurationUs, &o.SampleReason); err != nil {
 		return repo.Observation{}, err
 	}
 	return o, nil
@@ -58,7 +58,7 @@ func scanObservation(s rowScanner) (repo.Observation, error) {
 		o   repo.Observation
 		raw string
 	)
-	if err := s.Scan(&o.TransactionID, &o.TraceID, &o.ObservedAt, &o.DurationMs, &o.SampleReason, &raw); err != nil {
+	if err := s.Scan(&o.TransactionID, &o.TraceID, &o.ObservedAt, &o.DurationUs, &o.SampleReason, &raw); err != nil {
 		return repo.Observation{}, err
 	}
 	o.RawOTLP = []byte(raw)

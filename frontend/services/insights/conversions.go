@@ -555,7 +555,7 @@ func ObservationSummaryToModel(observation ObservationSummary) *model.InsightsOb
 		TraceID:       observation.TraceID,
 		TransactionID: FormatID(observation.TransactionID),
 		ObservedAt:    observation.ObservedAt,
-		DurationMs:    int64ToInt(observation.DurationMs),
+		DurationUs:    int64ToInt(observation.DurationUs),
 		SampleReason:  SampleReasonToModel(observation.SampleReason),
 	}
 }
@@ -569,7 +569,7 @@ func ObservationToModel(observation Observation) *model.InsightsObservation {
 		TraceID:       observation.TraceID,
 		TransactionID: FormatID(observation.TransactionID),
 		ObservedAt:    observation.ObservedAt,
-		DurationMs:    int64ToInt(observation.DurationMs),
+		DurationUs:    int64ToInt(observation.DurationUs),
 		SampleReason:  SampleReasonToModel(observation.SampleReason),
 		RawOtlp:       observation.RawOTLP,
 	}

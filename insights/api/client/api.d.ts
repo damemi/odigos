@@ -1537,7 +1537,7 @@ export interface components {
          *       "trace_id": "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f",
          *       "transaction_id": 4211,
          *       "observed_at": "2026-07-20T14:03:22Z",
-         *       "duration_ms": 137,
+         *       "duration_us": 137482,
          *       "sample_reason": "example"
          *     }
          */
@@ -1547,8 +1547,11 @@ export interface components {
             transaction_id: number;
             /** Format: date-time */
             observed_at: string;
-            /** Format: int64 */
-            duration_ms: number;
+            /**
+             * Format: int64
+             * @description Root span duration in microseconds.
+             */
+            duration_us: number;
             sample_reason: components["schemas"]["SampleReason"];
         };
         /**
@@ -1557,7 +1560,7 @@ export interface components {
          *       "trace_id": "3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f",
          *       "transaction_id": 4211,
          *       "observed_at": "2026-07-20T14:03:22Z",
-         *       "duration_ms": 137,
+         *       "duration_us": 137482,
          *       "sample_reason": "example",
          *       "raw_otlp": "b3RscC1wcm90b2J1Zi1ieXRlcw=="
          *     }
@@ -1568,8 +1571,11 @@ export interface components {
             transaction_id: number;
             /** Format: date-time */
             observed_at: string;
-            /** Format: int64 */
-            duration_ms: number;
+            /**
+             * Format: int64
+             * @description Root span duration in microseconds.
+             */
+            duration_us: number;
             sample_reason: components["schemas"]["SampleReason"];
             /**
              * Format: byte

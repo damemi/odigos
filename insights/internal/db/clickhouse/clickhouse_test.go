@@ -255,7 +255,7 @@ func TestObservationsAndPolicies(t *testing.T) {
 
 	obs := repo.Observation{
 		TraceID: fmt.Sprintf("trace-%d", rand.Int63()), TransactionID: txID,
-		ObservedAt: time.Now(), DurationMs: 42, SampleReason: "example", RawOTLP: []byte("rawbytes"),
+		ObservedAt: time.Now(), DurationUs: 42_000, SampleReason: "example", RawOTLP: []byte("rawbytes"),
 	}
 	if err := r.InsertObservations(ctx, []repo.Observation{obs}); err != nil {
 		t.Fatalf("insert observation: %v", err)
@@ -568,7 +568,7 @@ func TestObservationCountAndBoundedRead(t *testing.T) {
 	for i := 0; i < total; i++ {
 		batch = append(batch, repo.Observation{
 			TransactionID: tx.ID, TraceID: fmt.Sprintf("cap-%d-%d", tx.ID, i),
-			ObservedAt: base.Add(time.Duration(i) * time.Second), DurationMs: int64(i),
+			ObservedAt: base.Add(time.Duration(i) * time.Second), DurationUs: int64(i),
 			SampleReason: "example", RawOTLP: []byte(fmt.Sprintf("blob-%d", i)),
 		})
 	}

@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS trace_observations (
     transaction_id Int64,
     trace_id       String,
     observed_at    DateTime64(3),
-    duration_ms    Int64,
+    duration_us    Int64,
     sample_reason  LowCardinality(String),
     raw_otlp       String
 ) ENGINE = ReplacingMergeTree

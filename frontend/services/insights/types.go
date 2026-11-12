@@ -240,7 +240,7 @@ type ObservationSummary struct {
 	TraceID       string       `json:"trace_id"`
 	TransactionID int64        `json:"transaction_id"`
 	ObservedAt    string       `json:"observed_at"`
-	DurationMs    int64        `json:"duration_ms"`
+	DurationUs    int64        `json:"duration_us"`
 	SampleReason  SampleReason `json:"sample_reason"`
 }
 
@@ -248,7 +248,7 @@ type Observation struct {
 	TraceID       string       `json:"trace_id"`
 	TransactionID int64        `json:"transaction_id"`
 	ObservedAt    string       `json:"observed_at"`
-	DurationMs    int64        `json:"duration_ms"`
+	DurationUs    int64        `json:"duration_us"`
 	SampleReason  SampleReason `json:"sample_reason"`
 	RawOTLP       string       `json:"raw_otlp"`
 }

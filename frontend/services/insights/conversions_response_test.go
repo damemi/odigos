@@ -283,7 +283,7 @@ func TestObservationConvertersMapEveryField(t *testing.T) {
 			TraceID:       "trace-1",
 			TransactionID: 71,
 			ObservedAt:    "2026-09-01T13:00:00Z",
-			DurationMs:    72,
+			DurationUs:    72,
 			SampleReason:  SampleReasonExample,
 		}})
 
@@ -291,7 +291,7 @@ func TestObservationConvertersMapEveryField(t *testing.T) {
 			TraceID:       "trace-1",
 			TransactionID: "71",
 			ObservedAt:    "2026-09-01T13:00:00Z",
-			DurationMs:    72,
+			DurationUs:    72,
 			SampleReason:  model.InsightsSampleReasonExample,
 		}}, got)
 	})
@@ -301,7 +301,7 @@ func TestObservationConvertersMapEveryField(t *testing.T) {
 			TraceID:       "trace-2",
 			TransactionID: 73,
 			ObservedAt:    "2026-09-01T14:00:00Z",
-			DurationMs:    74,
+			DurationUs:    74,
 			SampleReason:  AnomalyEvidenceSampleReason("sig-1"),
 			RawOTLP:       "YWJj",
 		})
@@ -310,7 +310,7 @@ func TestObservationConvertersMapEveryField(t *testing.T) {
 			TraceID:       "trace-2",
 			TransactionID: "73",
 			ObservedAt:    "2026-09-01T14:00:00Z",
-			DurationMs:    74,
+			DurationUs:    74,
 			SampleReason:  model.InsightsSampleReasonAnomalyEvidence,
 			RawOtlp:       "YWJj",
 		}, got)
