@@ -339,6 +339,7 @@ type User struct {
 	Username            string             `json:"username"`
 	Role                Role               `json:"role"`
 	NeedsPasswordChange bool               `json:"needsPasswordChange"`
+	Sso                 bool               `json:"sso"`
 	Teams               []*Team            `json:"teams"`
 	ComputePlatforms    []*ComputePlatform `json:"computePlatforms"`
 }

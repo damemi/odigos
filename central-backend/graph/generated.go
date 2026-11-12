@@ -351,6 +351,7 @@ type ComplexityRoot struct {
 		ID                  func(childComplexity int) int
 		NeedsPasswordChange func(childComplexity int) int
 		Role                func(childComplexity int) int
+		Sso                 func(childComplexity int) int
 		Teams               func(childComplexity int) int
 		Username            func(childComplexity int) int
 	}
@@ -1841,6 +1842,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.Role(childComplexity), true
+	case "User.sso":
+		if e.ComplexityRoot.User.Sso == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.Sso(childComplexity), true
 	case "User.teams":
 		if e.ComplexityRoot.User.Teams == nil {
 			break
@@ -2571,6 +2578,8 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_role(ctx, field)
 	case "needsPasswordChange":
 		return ec.fieldContext_User_needsPasswordChange(ctx, field)
+	case "sso":
+		return ec.fieldContext_User_sso(ctx, field)
 	case "teams":
 		return ec.fieldContext_User_teams(ctx, field)
 	case "computePlatforms":
@@ -9009,6 +9018,29 @@ func (ec *executionContext) fieldContext_User_needsPasswordChange(_ context.Cont
 	return graphql.NewScalarFieldContext("User", field, false, false, errors.New("field of type Boolean does not have child fields"))
 }
 
+func (ec *executionContext) _User_sso(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_User_sso(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sso, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_User_sso(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("User", field, false, false, errors.New("field of type Boolean does not have child fields"))
+}
+
 func (ec *executionContext) _User_teams(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -13591,6 +13623,11 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "needsPasswordChange":
 			out.Values[i] = ec._User_needsPasswordChange(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sso":
+			out.Values[i] = ec._User_sso(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

@@ -3,10 +3,10 @@
 import React, { useCallback } from 'react';
 import { useAuth, useProxy } from '@/hooks';
 import { useNotificationStore } from '@odigos/ui-kit/store';
-import { CentralConnections } from '@odigos/ui-kit/containers';
+import { CentralConnectionsNext } from '@odigos/ui-kit/containers';
 import { StatusType, type Connection } from '@odigos/ui-kit/types';
 
-// `<CentralConnections>` is the OUT-OF-PROXY entry point: this page lists
+// `<CentralConnectionsNext>` is the OUT-OF-PROXY entry point: this page lists
 // all connected proxy clusters and lets the user pick one. Connection
 // list / create / delete run through `useOdigosApi().connectionsApi`
 // (wired by the host adapter as bare central-backend ops). This page
@@ -37,5 +37,5 @@ export default function Page() {
     [selectProxy, addNotification],
   );
 
-  return <CentralConnections onClickConnection={onClickConnection} configMinSupportedVersion='1.16' snapshotMinSupportedVersion='1.21' centralVersion={systemConfig?.version} />;
+  return <CentralConnectionsNext onClickConnection={onClickConnection} configMinSupportedVersion='1.16' snapshotMinSupportedVersion='1.21' centralVersion={systemConfig?.version} />;
 }

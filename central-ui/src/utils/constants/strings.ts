@@ -25,7 +25,6 @@ export const ACCESS_MANAGEMENT = 'Access Management';
 export const SIGN_IN = 'Sign In';
 export const SIGN_IN_SUBTITLE_1 = 'Log in to your Odigos Central account.';
 export const SIGN_IN_SUBTITLE_2 = 'Log in to your Odigos Central account using an email and password.';
-export const SIGN_OUT = 'Sign out';
 export const SIGN_UP = 'Sign Up';
 export const SIGN_UP_SUBTITLE_1 = 'Create your first user for this environment.';
 export const SIGN_UP_SUBTITLE_2 = 'Create your first user using an email and password.';
@@ -190,6 +189,3 @@ export const IDP_CALLBACK_URL_PENDING = (displayName: string) => `Save to get th
 export const IDP_SAVED = (displayName: string) => `${displayName} saved. Register the callback URL below in ${displayName} if you haven't yet.`;
 export const IDP_SAVE_ERROR = (displayName: string) => `Couldn't save ${displayName}. Check the values and that Keycloak is reachable, then try again.`;
 export const IDP_NOT_SET_UP_SIGN_IN = (displayName: string) => `${displayName} sign-in isn't set up. Sign in with email, or ask an Admin to connect ${displayName} in Access management.`;
-
-// App info strings
-export const VERSION_LABEL = (version: string) => `Version: ${version}`;

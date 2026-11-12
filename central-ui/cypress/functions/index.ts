@@ -137,74 +137,14 @@ export const interceptGraphqlWithDeadConnection = () => {
   }).as('gql');
 };
 
-type GetRowActions = (row: { cells: { key: string; rawValue: string }[] }) => Array<{ 'data-id'?: string; onClick?: () => void } | null>;
-
-type FiberNode = {
-  memoizedProps?: { getRowActions?: GetRowActions };
-  pendingProps?: { getRowActions?: GetRowActions };
-  return?: FiberNode | null;
-} | null;
-
-// HoverActions only mount while a row is hovered, and headless Cypress cannot
-// reliably drive that hover (native mouseenter / .trigger often never flip
-// React's onMouseEnter). Instead, resolve the same `getRowActions` the Table
-// receives from CentralConnections and invoke the delete action's onClick —
-// that opens DeleteModal exactly as the HoverAction would. Row presence is
-// still asserted via kit `data-id=connection-row-{id}`; approve uses `approve`.
-const findAllGetRowActions = (root: ParentNode): GetRowActions[] => {
-  const found: GetRowActions[] = [];
-  const seen = new Set<GetRowActions>();
-
-  for (const el of Array.from(root.querySelectorAll('*'))) {
-    const fiberKey = Object.keys(el).find((k) => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
-    if (!fiberKey) continue;
-    let fiber = (el as unknown as Record<string, FiberNode>)[fiberKey];
-    while (fiber) {
-      const fn = fiber.memoizedProps?.getRowActions ?? fiber.pendingProps?.getRowActions;
-      if (typeof fn === 'function' && !seen.has(fn)) {
-        seen.add(fn);
-        found.push(fn);
-      }
-      fiber = fiber.return ?? null;
-    }
-  }
-  return found;
-};
-
 /**
- * Delete a connection via the real UI path (row action → DeleteModal → approve).
- * Avoids hover: kit HoverActions unmount when not hovered, which flakes in CI.
+ * Delete a connection via the real UI path: its row's menu → Delete connection → approve. The menu is a button on
+ * every row (no hover), so headless Cypress drives it directly.
  */
 export const deleteConnectionViaUi = (proxyID: string) => {
-  const rowSel = `[data-id="connection-row-${proxyID}"]`;
-  const deleteDataId = `delete-connection-${proxyID}`;
-
-  cy.get(rowSel, { timeout: 60000 }).should('be.visible');
-
-  cy.document().then((doc) => {
-    const candidates = findAllGetRowActions(doc.body);
-    expect(candidates.length, 'Table getRowActions candidates').to.be.greaterThan(0);
-
-    const fakeRow = {
-      // Keys match ui-kit central-connections helpers (`Keys.Id` / `Keys.Status`).
-      cells: [
-        { key: 'id', rawValue: proxyID },
-        { key: 'status', rawValue: 'error' },
-      ],
-    };
-
-    let deleteAction: { 'data-id'?: string; onClick?: () => void } | null | undefined;
-    for (const getRowActions of candidates) {
-      const actions = getRowActions(fakeRow);
-      deleteAction = (actions ?? []).find((a) => a?.['data-id'] === deleteDataId || a?.['data-id'] === 'delete-connection');
-      if (typeof deleteAction?.onClick === 'function') break;
-      deleteAction = undefined;
-    }
-
-    expect(deleteAction?.onClick, `HoverAction ${deleteDataId}`).to.be.a('function');
-    deleteAction!.onClick!();
-  });
-
+  cy.get(`[data-id="connection-row-${proxyID}"]`, { timeout: 60000 }).should('be.visible');
+  cy.get(`[data-id="connection-actions-${proxyID}"]`).click();
+  cy.get(`[data-id="delete-connection-${proxyID}"]`, { timeout: 10000 }).should('be.visible').click();
   cy.get('[data-id=approve]', { timeout: 10000 }).should('be.visible').click();
 };
 

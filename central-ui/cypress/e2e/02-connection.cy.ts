@@ -18,8 +18,6 @@ describe('Select Connection', () => {
   it('Should fetch compute platforms (proxy connections) on /connections', () => {
     visitPage(ROUTES.CONNECTIONS, () => {
       waitForGraphqlOperation('GetComputePlatforms').then(() => {
-        // Scope to `:visible` — ui-kit Table MeasurementLayer duplicates cell
-        // text with visibility:hidden before the real row in DOM order.
         cy.contains(':visible', PROXY.NAME, { timeout: 60000 }).should('be.visible');
       });
     });
@@ -27,9 +25,6 @@ describe('Select Connection', () => {
 
   it(`Should show the test proxy "${PROXY.NAME}" as a live connection`, () => {
     visitPage(ROUTES.CONNECTIONS, () => {
-      // The ui-kit Table renders a hidden MeasurementLayer that duplicates
-      // cell text BEFORE the visible row in DOM order. Scope to `:visible`
-      // so we resolve the real cells instead of the hidden duplicates.
       cy.contains(':visible', PROXY.NAME, { timeout: 60000 }).should('be.visible');
       cy.contains(':visible', 'Connection live', { timeout: 60000 }).should('be.visible');
     });
@@ -42,7 +37,8 @@ describe('Select Connection', () => {
     visitPage(ROUTES.CONNECTIONS, () => {
       cy.contains(':visible', PROXY.NAME, { timeout: 60000 }).should('be.visible');
       cy.contains(':visible', 'Connection live', { timeout: 60000 }).should('be.visible');
-      cy.get('[data-table-row-index="0"]', { timeout: 60000 }).should('be.visible').click();
+      // A live connection's row opens it; the test proxy's id isn't known here, so find its row by name.
+      cy.contains('[data-id^="connection-row-"]', PROXY.NAME, { timeout: 60000 }).should('be.visible').click();
 
       cy.location('pathname', { timeout: 30000 }).should('eq', ROUTES.OVERVIEW);
 
@@ -65,10 +61,8 @@ describe('Select Connection', () => {
 // Regression for PLAT-1316: DeleteProxyConnection must send variables.proxyID.
 // Sending `{ id }` (or omitting proxyID) yields HTTP 422 / GRAPHQL_VALIDATION_FAILED.
 //
-// Driven through the real UI path (row action → DeleteModal → approve). Hover is
-// skipped: kit HoverActions only mount while hovered and that flakes in headless
-// CI. deleteConnectionViaUi asserts `connection-row-{id}`, invokes the same
-// getRowActions delete onClick the HoverAction would, then clicks `approve`.
+// Driven through the real UI path: the row's menu → Delete connection → approve
+// (see deleteConnectionViaUi).
 describe('Delete Connection (PLAT-1316)', () => {
   beforeEach(() => {
     handleExceptions();

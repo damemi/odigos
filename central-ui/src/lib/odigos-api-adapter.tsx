@@ -275,6 +275,13 @@ import type {
   TokenPayload,
   Workload,
   WorkloadId,
+  CentralUser,
+  UserPasswordResult,
+  UserWriteResult,
+  GroupRoleMapping,
+  IdentityProvider,
+  IdentityProviderId,
+  IdentityProviderWriteResult,
 } from '@odigos/ui-kit/types';
 import {
   // central-only direct gql operations
@@ -288,6 +295,19 @@ import {
   TEST_CLOUD_CONNECTOR_CONNECTION,
   UPDATE_CLOUD_CONNECTOR_COLLECTORS,
   GET_CLOUD_CONNECTOR_PROVIDERS,
+  GET_USERS,
+  CREATE_USER,
+  UPDATE_USER,
+  DELETE_USER,
+  RESET_USER_PASSWORD,
+  GET_CONFIGURED_IDENTITY_PROVIDERS,
+  GET_IDENTITY_PROVIDERS,
+  ENSURE_OIDC_IDENTITY_PROVIDER,
+  ENSURE_SAML_IDENTITY_PROVIDER,
+  GET_ALL_GROUP_ROLE_MAPPINGS,
+  CREATE_GROUP_ROLE_MAPPING,
+  UPDATE_GROUP_ROLE_MAPPING,
+  DELETE_GROUP_ROLE_MAPPING,
   GET_ALL_CLUSTER_SNAPSHOTS,
   GET_CLUSTER_SNAPSHOT,
   GET_HEALTH,
@@ -1741,6 +1761,73 @@ const operations: OdigosApiOperations = withSourceMutationWorkloadsRefresh(
       document: DELETE_CLOUD_CONNECTOR as DocumentNode,
       transformResult: (raw) => (raw as { deleteCloudConnector?: ConnectionCrudResult } | null | undefined)?.deleteCloudConnector,
     },
+
+    // users — central-only, direct. Who can sign in to Central (Keycloak realm users) and their role. The kit sends a
+    // role change as `{ userID, email, role }`; `updateUser` takes the whole WriteUserInput, teams left as they are.
+    GET_USERS: {
+      document: GET_USERS as DocumentNode,
+      transformResult: (raw) => (raw as { users?: CentralUser[] } | null | undefined)?.users ?? [],
+    },
+    CREATE_USER: {
+      // The result carries a one-time password: keep it out of Apollo's cache.
+      noCache: true,
+      document: CREATE_USER as DocumentNode,
+      transformVariables: ({ input }) => ({ input: { email: input.email, role: input.role, addTeamIds: [], removeTeamIds: [], addComputePlatformIds: [], removeComputePlatformIds: [] } }),
+      transformResult: (raw) => (raw as { createUser?: UserPasswordResult } | null | undefined)?.createUser,
+    },
+    UPDATE_USER_ROLE: {
+      document: UPDATE_USER as DocumentNode,
+      transformVariables: ({ userID, email, role }) => ({ userID, input: { email, role, addTeamIds: [], removeTeamIds: [] } }),
+      transformResult: (raw) => (raw as { updateUser?: UserWriteResult } | null | undefined)?.updateUser,
+    },
+    DELETE_USER: {
+      document: DELETE_USER as DocumentNode,
+      transformResult: (raw) => (raw as { deleteUser?: UserWriteResult } | null | undefined)?.deleteUser,
+    },
+    RESET_USER_PASSWORD: {
+      noCache: true,
+      document: RESET_USER_PASSWORD as DocumentNode,
+      transformResult: (raw) => (raw as { resetUserPassword?: UserPasswordResult } | null | undefined)?.resetUserPassword,
+    },
+
+    // SSO — central-only, direct. The identity providers people sign in with (settings and writes are Admin-only;
+    // the connected ids are the public sign-in list) and their groups' role mappings. The kit reads every provider's
+    // mappings at once (one aliased query).
+    GET_CONFIGURED_IDENTITY_PROVIDERS: {
+      document: GET_CONFIGURED_IDENTITY_PROVIDERS as DocumentNode,
+      transformResult: (raw) => (raw as { configuredIdentityProviders?: IdentityProviderId[] } | null | undefined)?.configuredIdentityProviders ?? [],
+    },
+    GET_IDENTITY_PROVIDERS: {
+      document: GET_IDENTITY_PROVIDERS as DocumentNode,
+      transformResult: (raw) => (raw as { identityProviders?: IdentityProvider[] } | null | undefined)?.identityProviders ?? [],
+    },
+    UPSERT_OIDC_IDENTITY_PROVIDER: {
+      // The input carries the client secret: keep it out of Apollo's cache.
+      noCache: true,
+      document: ENSURE_OIDC_IDENTITY_PROVIDER as DocumentNode,
+      transformResult: (raw) => (raw as { ensureOidcIdentityProvider?: IdentityProviderWriteResult } | null | undefined)?.ensureOidcIdentityProvider,
+    },
+    UPSERT_SAML_IDENTITY_PROVIDER: {
+      noCache: true,
+      document: ENSURE_SAML_IDENTITY_PROVIDER as DocumentNode,
+      transformResult: (raw) => (raw as { ensureSamlIdentityProvider?: IdentityProviderWriteResult } | null | undefined)?.ensureSamlIdentityProvider,
+    },
+    GET_GROUP_ROLE_MAPPINGS: {
+      document: GET_ALL_GROUP_ROLE_MAPPINGS as DocumentNode,
+      transformResult: (raw) => Object.values((raw ?? {}) as Record<string, unknown>).flatMap((rows) => (Array.isArray(rows) ? (rows as GroupRoleMapping[]) : [])),
+    },
+    CREATE_GROUP_ROLE_MAPPING: {
+      document: CREATE_GROUP_ROLE_MAPPING as DocumentNode,
+      transformResult: (raw) => (raw as { createGroupRoleMapping?: UserWriteResult } | null | undefined)?.createGroupRoleMapping,
+    },
+    UPDATE_GROUP_ROLE_MAPPING: {
+      document: UPDATE_GROUP_ROLE_MAPPING as DocumentNode,
+      transformResult: (raw) => (raw as { updateGroupRoleMapping?: UserWriteResult } | null | undefined)?.updateGroupRoleMapping,
+    },
+    DELETE_GROUP_ROLE_MAPPING: {
+      document: DELETE_GROUP_ROLE_MAPPING as DocumentNode,
+      transformResult: (raw) => (raw as { deleteGroupRoleMapping?: UserWriteResult } | null | undefined)?.deleteGroupRoleMapping,
+    },
   }),
 );
 
@@ -1881,6 +1968,8 @@ const OdigosApiAdapter: FC<AdapterProps> = ({ children }) => {
       cacheTypePolicies: {
         CloudConnectorSetupArtifact: { keyFields: false as const },
         CloudConnectorAuthMethod: { keyFields: false as const },
+        // A mapping's id is unique within its identity provider only.
+        GroupRoleMapping: { keyFields: ['providerId', 'id'] },
       },
       authHeader: (): Record<string, string> => {
         const accessToken = useUserStore.getState().accessToken;

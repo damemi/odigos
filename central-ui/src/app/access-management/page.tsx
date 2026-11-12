@@ -1,71 +1,37 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { Suspense, useCallback, useMemo } from 'react';
 import { useUserStore } from '@/store';
-import styled from 'styled-components';
-import { UsersTable, CreateUserModal, RoleMappingsTable, CreateRoleMappingModal, IdentityProvidersTable } from '@/components';
-import { Button, ButtonSize, FlexRow, PageContent, Segment, type SegmentProps, SegmentVariant } from '@odigos/ui-kit/components';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import type { CurrentUser, UserRole } from '@odigos/ui-kit/types';
+import { AccessManagementNext, type AccessTab } from '@odigos/ui-kit/containers';
 
-const PushRight = styled.div`
-  margin-left: auto;
-`;
+// The open tab lives in the URL (`?tab=`), so a refresh or a shared link opens on it.
+const AccessManagement = () => {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { user } = useUserStore();
+  // Central's roles and the kit's are the same strings.
+  const currentUser = useMemo<CurrentUser | null>(() => (user ? { id: user.id, role: user.role as unknown as UserRole } : null), [user]);
 
-enum AccessTab {
-  Users = 'Users',
-  RoleMappings = 'Role Mappings',
-  IdentityProviders = 'Identity Providers',
-  // Teams = 'Teams',
-  // Compute = 'Compute Platforms',
-}
+  const onTabChange = useCallback(
+    (tab: AccessTab) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', tab);
+      router.replace(`${pathname}?${params}`);
+    },
+    [router, pathname, searchParams],
+  );
 
-const renderActiveTab = ({ activeTab }: { activeTab: AccessTab }) => {
-  const tabFactories: Record<AccessTab, () => React.ReactNode> = {
-    [AccessTab.Users]: () => <UsersTable />,
-    [AccessTab.RoleMappings]: () => <RoleMappingsTable />,
-    [AccessTab.IdentityProviders]: () => <IdentityProvidersTable />,
-    // [AccessTab.Teams]: () => <TeamsTable />,
-    // [AccessTab.Compute]: () => <ComputePlatformsTable />,
-  };
-
-  return (tabFactories[activeTab] || tabFactories[AccessTab.Users])();
+  return <AccessManagementNext currentUser={currentUser} tab={searchParams.get('tab') ?? undefined} onTabChange={onTabChange} />;
 };
 
+// `useSearchParams` needs a Suspense boundary for the production build.
 export default function Page() {
-  const { isAdmin } = useUserStore();
-  const [activeTab, setActiveTab] = useState<AccessTab>(AccessTab.Users);
-  const [createModalOpenFor, setCreateModalOpenFor] = useState<AccessTab | null>(null);
-
-  const tabs: SegmentProps['options'] = [
-    { value: AccessTab.Users, label: AccessTab.Users },
-    { value: AccessTab.RoleMappings, label: AccessTab.RoleMappings },
-    // Identity providers are managed by ADMIN/OWNER only; the backend enforces the same.
-    ...(isAdmin ? [{ value: AccessTab.IdentityProviders, label: AccessTab.IdentityProviders }] : []),
-  ];
-
-  // Fall back to Users if the role changes while the Admin-only tab is open.
-  const visibleTab = activeTab === AccessTab.IdentityProviders && !isAdmin ? AccessTab.Users : activeTab;
-  // Identity providers have one fixed row per supported provider, so there is nothing to create.
-  const canCreate = isAdmin && visibleTab !== AccessTab.IdentityProviders;
-
-  const onClickCreate = () => setCreateModalOpenFor(visibleTab);
-  const onClickCloseCreate = () => setCreateModalOpenFor(null);
-
   return (
-    <PageContent>
-      <FlexRow>
-        <Segment variant={SegmentVariant.Underline} options={tabs} selected={visibleTab} setSelected={setActiveTab} />
-
-        {canCreate && (
-          <PushRight>
-            <Button size={ButtonSize.S} label={`Create ${visibleTab.substring(0, visibleTab.length - 1)}`} onClick={onClickCreate} />
-          </PushRight>
-        )}
-      </FlexRow>
-
-      {renderActiveTab({ activeTab: visibleTab })}
-
-      <CreateUserModal isOpen={createModalOpenFor === AccessTab.Users} onClose={onClickCloseCreate} />
-      <CreateRoleMappingModal isOpen={createModalOpenFor === AccessTab.RoleMappings} onClose={onClickCloseCreate} />
-    </PageContent>
+    <Suspense>
+      <AccessManagement />
+    </Suspense>
   );
 }

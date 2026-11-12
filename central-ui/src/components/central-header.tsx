@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useUserStore } from '@/store';
+import { ROLE_LABELS } from '@/utils';
 import { useTheme } from 'styled-components';
-import { AccountMenu } from './account-menu';
 import { StatusType } from '@odigos/ui-kit/types';
 import { useOdigos } from '@odigos/ui-kit/contexts';
-import { useConfig, useHealth, useProxy } from '@/hooks';
+import { useAuth, useConfig, useHealth, useProxy } from '@/hooks';
 import { VmDiagnoseDrawer } from '@/components/vm-diagnose-drawer';
 import { StatusKeys, useStatusStore, type StatusValues } from '../store';
 import { ExclamationTriangleIcon, TerminalIcon } from '@odigos/ui-kit/icons';
@@ -14,15 +15,18 @@ import { ButtonVariants, IconButton, WarningModal } from '@odigos/ui-kit/compone
 
 const toBadge = (id: string, value?: StatusValues): AppHeaderBadge[] => (value ? [{ id, label: value.label, status: value.status, leftIcon: value.leftIcon, tooltip: value.tooltip }] : []);
 
-// The kit's `AppHeader` with Central's data and the account menu. Central's own health shows everywhere; the cluster's
-// name, its statuses and its token show only inside a cluster (the token status of the last cluster stays in the store).
+// The kit's `AppHeader` with Central's data and the signed-in user for its account menu. Central's own health shows
+// everywhere; the cluster's name, its statuses and its token show only inside a cluster (the token status of the last
+// cluster stays in the store).
 export const CentralHeader = () => {
   useHealth();
 
   const theme = useTheme();
   const { isVm } = useOdigos();
+  const { user } = useUserStore();
   const { isReadonly } = useConfig();
   const { proxyID, proxyName } = useProxy();
+  const { systemConfig, signOut } = useAuth();
   const [isVmDiagnoseOpen, setIsVmDiagnoseOpen] = useState(false);
 
   const backendStatus = useStatusStore((state) => state[StatusKeys.Backend]);
@@ -40,12 +44,8 @@ export const CentralHeader = () => {
         rightBadges={toBadge('token-status', tokenStatus)}
         // The kit's System Overview drawer is Kubernetes-only; VM agents get their own diagnose drawer instead.
         showSystemDrawer={!!proxyID && !isVm}
-        extraRight={
-          <>
-            {!!proxyID && isVm && <IconButton icon={TerminalIcon} onClick={() => setIsVmDiagnoseOpen((prev) => !prev)} />}
-            <AccountMenu />
-          </>
-        }
+        extraRight={!!proxyID && isVm && <IconButton icon={TerminalIcon} onClick={() => setIsVmDiagnoseOpen((prev) => !prev)} />}
+        account={{ email: user?.email, role: user?.role && ROLE_LABELS[user.role], version: systemConfig?.version, onSignOut: () => signOut() }}
       />
       {isVm && <VmDiagnoseDrawer isOpen={isVmDiagnoseOpen} onClose={() => setIsVmDiagnoseOpen(false)} />}
 

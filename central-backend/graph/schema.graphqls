@@ -98,6 +98,9 @@ type User {
   username: String!
   role: Role!
   needsPasswordChange: Boolean!
+  # Signs in through an identity provider (SSO): their role mappings set the role at each sign-in, and their
+  # password is the identity provider's, not Central's.
+  sso: Boolean!
   teams: [Team!]!
   computePlatforms: [ComputePlatform!]!
 }

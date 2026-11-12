@@ -553,6 +553,14 @@ func (svc *UserService) mapKeycloakUserToModel(userData map[string]any, adminTok
 		teams = []*model.Team{}
 	}
 
+	// Linked to an identity provider: it signs in with SSO. Unknown counts as not, as for the other lookups here;
+	// ResetUserPassword checks it again and refuses on an error.
+	sso, err := svc.kcUser.HasFederatedIdentity(adminToken, id)
+	if err != nil {
+		logger.Log.Error("Failed to get user federated identities", "userID", id, "error", err)
+		sso = false
+	}
+
 	computePlatformIds, err := svc.kcUser.GetComputePlatformIdsForUser(adminToken, id)
 	if err != nil {
 		logger.Log.Error("Failed to get user compute platforms", "userID", id, "error", err)
@@ -570,6 +578,7 @@ func (svc *UserService) mapKeycloakUserToModel(userData map[string]any, adminTok
 		Username:            username,
 		Role:                modelRole,
 		NeedsPasswordChange: needsPasswordChange,
+		Sso:                 sso,
 		Teams:               teams,
 		ComputePlatforms:    computePlatformModels,
 	}, nil
