@@ -9,11 +9,12 @@ import (
 )
 
 // load() writes package globals, so any test that drives it with a synthetic filesystem has to
-// put the embedded catalog back for the tests that read it.
+// put the embedded catalog back for the tests that read it. Load() parses only once, so the
+// restore calls load(destsFS) directly.
 func dcLoadFrom(t *testing.T, files map[string]string) error {
 	t.Helper()
 	t.Cleanup(func() {
-		if err := Load(); err != nil {
+		if err := load(destsFS); err != nil {
 			t.Fatalf("restoring the embedded catalog: %v", err)
 		}
 	})
@@ -118,7 +119,7 @@ func TestLoadFailsOnMalformedYamlAndKeepsThePreviousCatalog(t *testing.T) {
 // that a file it cannot read is an error rather than a silently shorter catalog.
 func TestLoadFailsWhenADataEntryCannotBeRead(t *testing.T) {
 	t.Cleanup(func() {
-		if err := Load(); err != nil {
+		if err := load(destsFS); err != nil {
 			t.Fatalf("restoring the embedded catalog: %v", err)
 		}
 	})
@@ -438,5 +439,21 @@ func TestEveryEmbeddedEntryDeclaresAtLeastOneSupportedSignal(t *testing.T) {
 		if !s.Traces.Supported && !s.Metrics.Supported && !s.Logs.Supported && !s.Profiles.Supported {
 			t.Errorf("%s declares no supported signal, so it can be created but never exports anything", d.Metadata.Type)
 		}
+	}
+}
+
+// Load parses the embedded catalog once: a later call returns the same catalog instead of
+// re-reading every spec.
+func TestLoadParsesOnce(t *testing.T) {
+	if err := Load(); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	first := Get()
+	if err := Load(); err != nil {
+		t.Fatalf("second Load: %v", err)
+	}
+	second := Get()
+	if len(first) == 0 || len(first) != len(second) || &first[0] != &second[0] {
+		t.Fatal("the second Load parsed the catalog again")
 	}
 }

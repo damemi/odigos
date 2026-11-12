@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/odigos-io/odigos/common"
 	"gopkg.in/yaml.v3"
@@ -18,8 +19,12 @@ var recommendationsByType map[common.RecommendationType]Recommendation
 
 var recommendationsByK8sObjectName map[string]Recommendation
 
+// loadOnce parses the recommendations catalog the first time Load is called; it is embedded and never
+// changes at runtime.
+var loadOnce = sync.OnceValue(func() error { return load(recommendationsFS) })
+
 func Load() error {
-	return load(recommendationsFS)
+	return loadOnce()
 }
 
 func Get() []Recommendation {

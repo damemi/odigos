@@ -3,6 +3,7 @@ package actions
 import (
 	"embed"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v3"
 )
@@ -16,8 +17,12 @@ var loadedActions []Action
 // map from action type to action catalog config object
 var actionsByType map[string]Action
 
+// loadOnce parses the action catalog the first time Load is called; it is embedded and never
+// changes at runtime.
+var loadOnce = sync.OnceValue(func() error { return load(actionsFS) })
+
 func Load() error {
-	return load(actionsFS)
+	return loadOnce()
 }
 
 func Get() []Action {
