@@ -176,7 +176,7 @@ runs:
         if [[ "$BRANCH" == releases/* ]]; then
           VERSION_PREFIX=$(echo "$BRANCH" | sed -E 's|releases/v([0-9]+\.[0-9]+)\..*|\1|')
           echo "Release branch detected, looking for ${VERSION_PREFIX}.* in the chart registry"
-          LATEST_VERSION=$(grep -E "^${VERSION_PREFIX//./\\.}\." <<< "$STABLE_VERSIONS" | tail -n 1)
+          LATEST_VERSION=$(grep -E "^${VERSION_PREFIX//./\\.}\." <<< "$STABLE_VERSIONS" | tail -n 1 || true)
         fi
         # Non-release branches, and a release branch with no stable version yet, upgrade from the latest stable.
         if [ -z "$LATEST_VERSION" ]; then
