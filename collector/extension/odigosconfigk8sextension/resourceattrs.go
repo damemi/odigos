@@ -6,24 +6,9 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 	"github.com/odigos-io/odigos/common/consts"
 )
-
-// k8SArgoRolloutNameAttribute is the attribute key for Argo Rollout name (no semconv key).
-const k8SArgoRolloutNameAttribute = "k8s.argoproj.rollout.name"
-
-// attrKindPairs defines the order in which workload attributes are checked.
-// The first matching attribute supplies Name and Kind for the WorkloadKey.
-var attrKindPairs = []struct {
-	key  string
-	kind string
-}{
-	{key: string(semconv.K8SDeploymentNameKey), kind: "Deployment"},
-	{key: string(semconv.K8SStatefulSetNameKey), kind: "StatefulSet"},
-	{key: string(semconv.K8SDaemonSetNameKey), kind: "DaemonSet"},
-	{key: string(semconv.K8SCronJobNameKey), kind: "CronJob"},
-	{key: k8SArgoRolloutNameAttribute, kind: "Rollout"},
-}
 
 // workloadKeyFromResourceAttributes returns a key from OpenTelemetry resource
 // attributes when available. It reads k8s.namespace.name and the first present
@@ -47,33 +32,7 @@ func workloadIdentityFromResourceAttributes(attrs pcommon.Map) (string, pcommon.
 	if err != nil {
 		return "", pcommon.NewMap(), err
 	}
-	return cacheKey, identifyingResourceAttributes(attrs), nil
-}
-
-func identifyingResourceAttributes(attrs pcommon.Map) pcommon.Map {
-	identity := pcommon.NewMap()
-	if ns := getNamespace(attrs); ns != "" {
-		identity.PutStr(string(semconv.K8SNamespaceNameKey), ns)
-	}
-	if containerName := getContainerName(attrs); containerName != "" {
-		identity.PutStr(string(semconv.K8SContainerNameKey), containerName)
-	}
-
-	kind, kindOk := attrs.Get(consts.OdigosWorkloadKindAttribute)
-	name, nameOk := attrs.Get(consts.OdigosWorkloadNameAttribute)
-	if kindOk && nameOk {
-		kind.CopyTo(identity.PutEmpty(consts.OdigosWorkloadKindAttribute))
-		name.CopyTo(identity.PutEmpty(consts.OdigosWorkloadNameAttribute))
-		return identity
-	}
-
-	for _, pair := range attrKindPairs {
-		if val, ok := attrs.Get(pair.key); ok && val.Type() == pcommon.ValueTypeStr {
-			val.CopyTo(identity.PutEmpty(pair.key))
-			return identity
-		}
-	}
-	return identity
+	return cacheKey, sourceidentity.FromK8sResourceAttributes(attrs), nil
 }
 
 func getNamespace(attrs pcommon.Map) string {
@@ -93,9 +52,9 @@ func getKindAndName(attrs pcommon.Map) (string, string) {
 		return kind.Str(), name.Str()
 	}
 
-	for _, pair := range attrKindPairs {
-		if val, ok := attrs.Get(pair.key); ok && val.Type() == pcommon.ValueTypeStr {
-			return pair.kind, val.Str()
+	for _, attr := range sourceidentity.K8sWorkloadNameAttributes {
+		if val, ok := attrs.Get(attr.Key); ok && val.Type() == pcommon.ValueTypeStr {
+			return attr.Kind, val.Str()
 		}
 	}
 
