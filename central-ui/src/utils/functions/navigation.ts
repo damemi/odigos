@@ -1,6 +1,7 @@
 import { ROUTES } from '../constants';
 import { PlatformType, SVG } from '@odigos/ui-kit/types';
-import { NavbarProps } from '@odigos/ui-kit/components';
+import type { NavbarContext, NavbarProps } from '@odigos/ui-kit/components';
+import { getPlatformIcon, getPlatformLabel } from '@odigos/ui-kit/functions';
 import { GatedFeature } from '@odigos/ui-kit/constants';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import {
@@ -26,17 +27,16 @@ const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targe
   };
 };
 
+// Outside a connection: Connections and Access Management. Inside one, only its pages; the menu's context header
+// (`getNavbarContext`) names the connection and leads back to all of them.
 // Kubernetes lists every page Odigos UI has except Insights, which Central doesn't serve, so pages gated off in the
 // cluster still show why; a gated item (`gatedFeature`) is marked "Turned off" while its feature is. Cloud connectors
-// add Collectors only —
-// the page renders managed collectors there, and the Kubernetes pipeline view otherwise.
+// add Collectors only — the page renders managed collectors there, and the Kubernetes pipeline view otherwise.
 // VM agents stay on Overview. `NavbarNext` lists items under their group's label, with Settings at the bottom.
 export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, proxyID?: string, platformType?: PlatformType) => {
   const navIcons: NavbarProps['icons'] = [];
   const add = (path: string, label: string, icon: SVG, place: { group?: string; bottom?: boolean; gatedFeature?: GatedFeature } = {}) =>
     navIcons.push({ ...getPayloadForIcon(router, currentPath, path, label, icon), ...place });
-
-  add(ROUTES.CONNECTIONS, 'Connections', ConnectionsIcon);
 
   if (proxyID) {
     add(ROUTES.OVERVIEW, 'Overview', OverviewIcon);
@@ -53,8 +53,21 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, p
       add(ROUTES.COLLECTORS, 'Collectors', PipelineCollectorIcon, { group: 'Pipeline' });
     }
   } else {
+    add(ROUTES.CONNECTIONS, 'Connections', ConnectionsIcon);
     add(ROUTES.ACCESS_MANAGEMENT, 'Access Management', UserSettingsIcon);
   }
 
   return navIcons;
 };
+
+/** The open connection, heading the menu: its name and kind, and the way back to all connections. */
+export const getNavbarContext = (router: AppRouterInstance, proxyName?: string, platformType?: PlatformType): NavbarContext | undefined =>
+  proxyName
+    ? {
+        label: proxyName,
+        description: getPlatformLabel(platformType),
+        icon: getPlatformIcon(platformType),
+        backLabel: 'All connections',
+        onBack: () => router.push(ROUTES.CONNECTIONS),
+      }
+    : undefined;

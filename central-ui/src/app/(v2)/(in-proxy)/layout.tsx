@@ -3,7 +3,7 @@
 import React, { type PropsWithChildren } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import styled from 'styled-components';
-import { getNavbarIcons } from '@/utils';
+import { getNavbarContext, getNavbarIcons } from '@/utils';
 import { CentralHeader } from '@/components';
 import { NavbarNext } from '@odigos/ui-kit/components';
 import { useProxy, useSSE, useTokenTracker } from '@/hooks';
@@ -31,7 +31,7 @@ const ContentRow = styled(FlexRow)`
 function Layout({ children }: PropsWithChildren) {
   const router = useRouter();
   const pathname = usePathname();
-  const { proxyID, platformType } = useProxy();
+  const { proxyID, proxyName, platformType } = useProxy();
 
   return (
     <ErrorBoundary>
@@ -39,7 +39,7 @@ function Layout({ children }: PropsWithChildren) {
       <ViewportColumn $gap={0}>
         <CentralHeader />
         <ContentRow $gap={0}>
-          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, proxyID, platformType)} />
+          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, proxyID, platformType)} context={getNavbarContext(router, proxyName, platformType)} />
           {children}
         </ContentRow>
       </ViewportColumn>

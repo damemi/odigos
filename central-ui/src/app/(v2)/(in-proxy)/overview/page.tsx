@@ -14,6 +14,8 @@ export default function Page() {
   const onRedirectToSampling = useCallback(() => router.push(ROUTES.SAMPLING), [router]);
   // URL templatization actions are added and edited on their own page.
   const onRedirectToUrlTemplatization = useCallback(() => router.push(ROUTES.URL_TEMPLATIZATION), [router]);
+  // Cloud connectors: the notice of regions whose sources send nowhere opens Regional Collectors.
+  const onOpenRegionalCollectors = useCallback(() => router.push(ROUTES.COLLECTORS), [router]);
   const onRedirectToProfiling = useCallback(
     (sourceKey: string | null, unavailableSourceKey?: string) => {
       const params = new URLSearchParams({ ...(sourceKey ? { source: sourceKey } : {}), ...(unavailableSourceKey ? { unavailableSource: unavailableSourceKey } : {}) });
@@ -22,5 +24,12 @@ export default function Page() {
     [router],
   );
 
-  return <OverviewNext onRedirectToProfiling={onRedirectToProfiling} onRedirectToSampling={onRedirectToSampling} onRedirectToUrlTemplatization={onRedirectToUrlTemplatization} />;
+  return (
+    <OverviewNext
+      onRedirectToProfiling={onRedirectToProfiling}
+      onRedirectToSampling={onRedirectToSampling}
+      onRedirectToUrlTemplatization={onRedirectToUrlTemplatization}
+      onOpenRegionalCollectors={onOpenRegionalCollectors}
+    />
+  );
 }
