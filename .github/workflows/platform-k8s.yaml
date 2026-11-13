@@ -310,10 +310,9 @@ jobs:
           - env-injection
           - data-streams
           - argo-rollouts
-          # enterprise/<name> runs tests/enterprise/e2e/<name>.
-          - enterprise/multi-apps
-          - enterprise/jvm-metrics
-          - enterprise/instrumentation-rules
+          - multi-apps
+          - jvm-metrics
+          - instrumentation-rules
     # id-token lets the job log in to the Depot registry over OIDC.
     permissions:
       contents: read
@@ -420,12 +419,7 @@ jobs:
         # The asserts read k8sMinorVersion (e.g. odiglet uses hostNetwork before 1.26), as passed by
         # the kubernetes-tests action. None of these tests read its other values.
         run: |
-          if [[ "$TEST" == enterprise/* ]]; then
-            test_dir="tests/enterprise/e2e/${TEST#enterprise/}"
-          else
-            test_dir="tests/e2e/$TEST"
-          fi
-          chainsaw test "$test_dir" --apply-timeout 30s --values - <<EOF
+          chainsaw test "tests/e2e/$TEST" --apply-timeout 30s --values - <<EOF
           k8sMinorVersion: ${KUBERNETES_MINOR_VERSION}
           EOF
 
@@ -436,21 +430,16 @@ jobs:
           echo "==== Pods (all namespaces) ===="; kubectl get pods -A -o wide
           echo "==== Events ===="; kubectl get events -A --sort-by=.lastTimestamp | tail -n 200
 
-      # Artifact names cannot contain "/", which enterprise/<name> tests have.
       - name: Export kind logs
         if: failure()
-        env:
-          TEST: ${{ matrix.test }}
-        run: |
-          echo "TEST_SLUG=${TEST//\//-}" >> "$GITHUB_ENV"
-          kind export logs kind-logs
+        run: kind export logs kind-logs
         continue-on-error: true
 
       - name: Upload kind logs artifact
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: kind-logs-${{ matrix.kube-version }}-${{ env.TEST_SLUG }}
+          name: kind-logs-${{ matrix.kube-version }}-${{ matrix.test }}
           path: kind-logs
         continue-on-error: true
 

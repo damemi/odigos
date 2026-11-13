@@ -1,0 +1,211 @@
+apiVersion: chainsaw.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: mount-method
+spec:
+  description: This e2e test runs a multi-apps scenario testing all four mount methods (init-container, host-path, CSI driver)
+  skipDelete: true
+  steps:
+    - name: '[1 - Setup] Install - Simple Demo Apps'
+      try:
+        - apply:
+            file: ../../../tests/common/apply/install-simple-demo.yaml
+
+    - name: '[1 - Setup] Prepare destination'
+      try:
+        - apply:
+            file: ../../../tests/common/apply/simple-trace-db-deployment.yaml
+
+    - name: '[1 - Setup] Install Odigos'
+      try:
+        - script:
+            timeout: 5m
+            content: |
+              echo "Installing Odigos with tag $IMAGE_TAG"
+              ../../../cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-init-container
+              kubectl label namespace odigos-test odigos.io/system-object="true"
+              bash ../../../tests/common/verify_odigos_installation.sh odigos-test
+        - assert:
+            timeout: 4m
+            file: ../../common/assert/odigos-installed-no-device-plugin.yaml
+
+    - name: '[1 - Setup] Assert config set successfully with init container mount method'
+      try:
+        - script:
+            timeout: 1m10s
+            content: bash ../../../tests/common/assert_config_value.sh -k mountMethod -v k8s-init-container
+
+    - name: '[1 - Setup] Assert - Simple Demo Apps Installed'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../tests/common/assert/simple-demo-installed.yaml
+
+    # device-plugin container is dropped from the odiglet pod once a mount method is set, so wait for the rollout, and then assert it is no longer present.
+    - name: '[1 - Setup] Odiglet ready with init container mount method'
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              sleep 5
+              kubectl rollout status daemonset/odiglet -n odigos-test --timeout=5m
+        - assert:
+            file: 01-odiglet-ready-with-init-container.yaml
+
+    - name: '[1 - Setup] Assert Trace DB is up'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../tests/common/assert/simple-trace-db-running.yaml
+
+    - name: '[1 - Setup] Add Destination'
+      try:
+        - apply:
+            file: ../../../tests/common/apply/add-simple-trace-db-destination.yaml
+
+    - name: '[2 - Workload Instrumentation] Instrument default namespace workloads'
+      try:
+        - apply:
+            file: ../../../tests/common/apply/instrument-default-ns.yaml
+
+    - name: '[2 - Workload Instrumentation] Assert Runtime Detected'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../../tests/common/assert/simple-demo-runtime-detected.yaml
+
+    - name: '[2 - Workload Instrumentation] Odigos pipeline ready'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: ../../common/assert/pipeline-ready.yaml
+
+    - name: '[2 - Workload Instrumentation] Simple-demo instrumented after destination added'
+      try:
+        - assert:
+            timeout: 1m30s
+            file: 02-simple-demo-instrumented.yaml
+        - script:
+            timeout: 1m10s
+            content: bash ../../../tests/common/wait_for_rollout.sh
+      catch:
+        - script:
+            content: |
+              echo "=== frontend pods ==="
+              kubectl get pods -n default -l app=frontend -o yaml
+              echo "=== InstrumentationConfig for frontend ==="
+              kubectl get instrumentationconfig -n default deployment-frontend -o yaml
+              echo "=== Instrumentor logs (last 200 lines) ==="
+              kubectl logs -n odigos-test -l app.kubernetes.io/name=odigos-instrumentor --tail=200
+
+    - name: '[2 - Workload Instrumentation] Generate traffic and wait for trace'
+      try:
+        - script:
+            timeout: 1m20s
+            content: bash traffic-and-trace.sh
+      catch:
+        - script:
+            content: |
+              java_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^frontend)
+              kubectl logs $java_pod_name -n default
+
+    - name: '[3 - Host Path Test] Switch to host-path mount method'
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              ../../../cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-host-path
+              bash ../../../tests/common/assert_config_value.sh -k mountMethod -v k8s-host-path
+
+    - name: '[3 - Host Path Test] Odiglet ready with host-path'
+      try:
+        - script:
+            timeout: 4m10s
+            content: kubectl rollout status daemonset/odiglet -n odigos-test --timeout=5m
+        - assert:
+            timeout: 1m10s
+            file: 03-odiglet-ready-with-host-path.yaml
+
+    - name: '[3 - Host Path Test] Restart workloads to pick up host-path volumes'
+      try:
+        - script:
+            timeout: 1m30s
+            content: |
+              # Restart every simple-demo deployment so it re-injects with the current mount method.
+              kubectl rollout restart deployment -n default
+              for deploy in $(kubectl get deployment -n default -o name); do
+                kubectl rollout status "$deploy" -n default --timeout=3m
+              done
+
+    - name: '[3 - Host Path Test] Verify host-path volumes are mounted correctly'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: 03-simple-demo-instrumented-with-host-path.yaml
+
+    - name: '[4 - CSI Driver Test] Switch to CSI driver mount method'
+      try:
+        - script:
+            timeout: 1m10s
+            content: |
+              ../../../cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-csi-driver --set odiglet.odiglet.privileged=true
+              bash ../../../tests/common/assert_config_value.sh -k mountMethod -v k8s-csi-driver
+
+    - name: '[4 - CSI Driver Test] Odiglet ready with CSI driver'
+      try:
+        - script:
+            timeout: 2m10s
+            content: kubectl rollout status daemonset/odiglet -n odigos-test --timeout=5m
+        - assert:
+            timeout: 1m10s
+            file: 04-odiglet-ready-with-csi-driver.yaml
+
+    - name: '[4 - CSI Driver Test] Restart trace DB for fresh data'
+      try:
+        - script:
+            timeout: 1m40s
+            content: |
+              kubectl delete pod -l app=simple-trace-db -n traces
+              kubectl wait --for=condition=Ready pod -l app=simple-trace-db -n traces --timeout=2m
+
+    - name: '[4 - CSI Driver Test] Restart workloads to pick up CSI volumes'
+      try:
+        - script:
+            timeout: 1m30s
+            content: |
+              # Restart every simple-demo deployment so it re-injects with the current mount method.
+              kubectl rollout restart deployment -n default
+              for deploy in $(kubectl get deployment -n default -o name); do
+                kubectl rollout status "$deploy" -n default --timeout=3m
+              done
+
+    - name: '[4 - CSI Driver Test] Verify CSI volumes are mounted correctly'
+      try:
+        - assert:
+            timeout: 1m10s
+            file: 04-simple-demo-instrumented-with-csi.yaml
+
+    - name: '[4 - CSI Driver Test] Generate traffic and wait for trace'
+      try:
+        - script:
+            timeout: 1m20s
+            content: bash traffic-and-trace.sh
+
+    - name: 'Uninstall Odigos'
+      try:
+        - script:
+            timeout: 1m40s
+            content: ../../../cli/odigos uninstall --ns odigos-test
+        - script:
+            timeout: 1m20s
+            content: |
+              for i in $(seq 1 10); do
+                if bash ../../../tests/common/assert_odigos_uninstalled.sh; then
+                  exit 0
+                fi
+                echo "Attempt $i: Odigos uninstallation verification failed, retrying in 5 seconds..."
+                sleep 5
+              done
+
+              echo "Failed to verify Odigos uninstallation after 10 attempts"
+              exit 1

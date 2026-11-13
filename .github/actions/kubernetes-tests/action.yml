@@ -6,7 +6,7 @@ inputs:
     description: "Kubernetes version to test"
     required: true
   test-scenario:
-    description: "Name of the test scenario under tests/e2e, or enterprise/<name> for one under tests/enterprise/e2e"
+    description: "Name of the test scenario under tests/e2e"
     required: true
   customer:
     description: "Customer slug passed to the enterprise important-customers scenario"
@@ -71,18 +71,13 @@ runs:
           exit 1
         fi
 
-        if [[ "$TEST_SCENARIO" == enterprise/* ]]; then
-          TEST_DIR="tests/enterprise/e2e/${TEST_SCENARIO#enterprise/}"
-        else
-          TEST_DIR="tests/e2e/$TEST_SCENARIO"
-        fi
+        TEST_DIR="tests/e2e/$TEST_SCENARIO"
         if [[ ! -d "$TEST_DIR" ]]; then
           echo "::error::Unknown test scenario '$TEST_SCENARIO': $TEST_DIR does not exist"
           exit 1
         fi
         echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
-        # Artifact names cannot contain "/".
-        SCENARIO_SLUG="${TEST_SCENARIO//\//-}"
+        SCENARIO_SLUG="$TEST_SCENARIO"
         [[ "${{ inputs.wasp-enabled }}" == "true" ]] && SCENARIO_SLUG="$SCENARIO_SLUG-with-wasp"
         echo "scenario-slug=$SCENARIO_SLUG" >> "$GITHUB_OUTPUT"
         # Scenarios that need special node settings ship their own kind config.

@@ -97,7 +97,7 @@ spec:
               kubectl rollout status deployment -l app=geolocation
         - assert:
             timeout: 2m
-            file: ../../enterprise/e2e/mount-method/02-simple-demo-instrumented.yaml
+            file: ../mount-method/02-simple-demo-instrumented.yaml
 
     - name: '[3 - CSI + Karpenter] Switch to CSI with karpenter.enabled'
       try:
@@ -140,7 +140,7 @@ spec:
               kubectl rollout status deployment -l app=geolocation
         - assert:
             timeout: 2m
-            file: ../../enterprise/e2e/mount-method/04-simple-demo-instrumented-with-csi.yaml
+            file: ../mount-method/04-simple-demo-instrumented-with-csi.yaml
 
 
 
