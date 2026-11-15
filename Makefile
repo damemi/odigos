@@ -83,7 +83,8 @@ helm-values-docs:
 	./scripts/helm-values-docgen.sh
 
 TOOLS_DIR := .tools
-HELM_SCHEMA_VERSION := latest
+# A release: its tags have no v prefix, so @latest would build the unreleased main branch.
+HELM_SCHEMA_VERSION := 0.24.0
 HELM_SCHEMA_BIN := $(TOOLS_DIR)/helm-schema
 
 .PHONY: helm-schema

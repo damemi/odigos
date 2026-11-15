@@ -13,8 +13,13 @@
 {{- end -}}
 
 {{- define "utils.imageName" -}}
+{{- $componentImage := get ($.Values.images | default dict) .Component -}}
+{{- if $componentImage -}}
+{{- $componentImage -}}
+{{- else -}}
 {{- $prefix := include "utils.imagePrefix" (dict "Values" $.Values) -}}
 {{- printf "%s/odigos-enterprise-%s%s:%s" $prefix .Component (ternary "-rhel-certified" "" $.Values.openshift.enabled) .Tag -}}
+{{- end -}}
 {{- end -}}
 
 {{- define "odigos.onPremToken" -}}

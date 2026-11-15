@@ -9,6 +9,11 @@ image:
 imagePrefix: ''
 # -- Image pull secrets for private registries (k8s secret names)
 imagePullSecrets: []
+# -- Per-component image overrides: full image references that take precedence over imagePrefix and
+# image.tag, e.g. `central-backend: myregistry.io/central-backend:v1.0.0`. Components: central-backend,
+# central-ui, connector-runtime, connector-postgres, connector-opamp-gateway, connector-aws,
+# connector-gcp, connector-azure. A connector's own image value still takes precedence.
+images: {}
 
 # On-prem token for Odigos Enterprise (chart-managed odigos-central secret when set)
 # onPremToken: ''
