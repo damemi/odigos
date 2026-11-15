@@ -1,8 +1,0 @@
-{{define "txnSortTh"}}
-{{with .Link}}
-<a class="th-sort{{if .Active}} active{{end}}" href="{{.Href}}" title="Sort by {{.Label}}">
-  <span class="th-sort-label">{{.Label}}</span>
-  <span class="th-sort-icon" aria-hidden="true">{{if .Active}}{{if .Asc}}↑{{else}}↓{{end}}{{else}}↕{{end}}</span>
-</a>
-{{end}}
-{{end}}

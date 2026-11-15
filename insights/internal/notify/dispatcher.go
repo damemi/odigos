@@ -48,7 +48,7 @@ type Dispatcher struct {
 }
 
 // NewDispatcher wires a dispatcher. identity is the replica name recorded on
-// cursors (POD_NAME) so the debug UI shows who is sending.
+// cursors (POD_NAME) to show which replica is sending.
 func NewDispatcher(r repo.Repository, reg *Registry, log *slog.Logger, identity string, poll, overlap time.Duration) *Dispatcher {
 	if poll <= 0 {
 		poll = PollInterval
@@ -80,7 +80,7 @@ func (d *Dispatcher) Run(ctx context.Context) {
 }
 
 // RunOnce performs a single tick across all enabled integrations. Exported for
-// tests and for the debug UI's "run now".
+// tests.
 func (d *Dispatcher) RunOnce(ctx context.Context) error {
 	start := d.now()
 	integrations, err := d.repo.ListIntegrations(ctx)
@@ -459,7 +459,7 @@ func (d *Dispatcher) apply(integrationID string, ev Event, prev *repo.Notificati
 }
 
 // TestIntegration builds the sink for an integration (validating its config)
-// and runs its connectivity check. Shared by the API and the debug UI.
+// and runs its connectivity check.
 func (d *Dispatcher) TestIntegration(ctx context.Context, in repo.Integration) error {
 	sink, _, err := d.registry.Build(in)
 	if err != nil {

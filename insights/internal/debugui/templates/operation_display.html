@@ -1,8 +1,0 @@
-{{define "operationDisplay"}}
-<span class="operation-display">
-  <code class="operation-name">{{.Name}}</code>
-  {{range .Dims}}
-  <span class="badge badge-dim tip" data-tip="{{.Key}}">{{identityDimLabel .Key .Value}}</span>
-  {{end}}
-</span>
-{{end}}

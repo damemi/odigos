@@ -15,7 +15,7 @@ import (
 // also touch the engine's in-memory state, not just the DB - accepting an
 // anomaly folds its trace into the baseline; resetting a baseline drops it from
 // the cache; and every policy/guardrail write must reload the engine's snapshot
-// to apply live. It mirrors the debug UI's Admin and is satisfied by
+// to apply live. It is satisfied by
 // *engine.Engine. Wired via SetAdmin after the engine is constructed, so read
 // endpoints serve from startup while writes return 503 until then.
 type Admin interface {

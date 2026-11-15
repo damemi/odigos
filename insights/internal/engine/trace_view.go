@@ -61,7 +61,7 @@ func (v SpanView) AttrMap() map[string]string {
 }
 
 // SpansFromOTLP proto-decodes persisted raw OTLP bytes into rich per-span views
-// for the debug UI. Structural ordering goes through decodeTraceTrees - the
+// for the API. Structural ordering goes through decodeTraceTrees - the
 // same tree-building core the scoring engine uses - so what the UI shows matches
 // what the scorers saw, and skips the span selection DecodeRequest does for the
 // ingest path. Status, events, attributes, and scope are sideloaded from

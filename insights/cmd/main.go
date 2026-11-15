@@ -24,7 +24,6 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/cache"
 	"github.com/odigos-io/odigos/insights/internal/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/db/clickhouse/migrate"
-	"github.com/odigos-io/odigos/insights/internal/debugui"
 	"github.com/odigos-io/odigos/insights/internal/engine"
 	"github.com/odigos-io/odigos/insights/internal/leader"
 	"github.com/odigos-io/odigos/insights/internal/metrics"
@@ -113,20 +112,11 @@ func main() {
 	// schema is initialized.
 	router, apiHandle := apihttp.NewRouter(r, log)
 
-	// Findings integrations: the backend catalog serves the API/debug UI on
+	// Findings integrations: the backend catalog serves the API on
 	// every replica; the dispatcher that actually sends runs on the leader only
 	// (see runNotifier below, after the schema is ready).
 	integrationRegistry := sinks.NewRegistry(notify.DefaultDeps())
 	apiHandle.SetIntegrationRegistry(integrationRegistry)
-
-	// TODO(insights-skeleton): REMOVE BEFORE FIRST REAL CUSTOMER RELEASE.
-	// The /debug/* inspector ships unconditionally for now so the team can hit
-	// it from a port-forward.
-	debugHandle := debugui.Register(router, r)
-	// Wire ProductAPI before ListenAndServe so /debug reads never need a repo
-	// fallback. Admin-backed writes still 503 until SetAdmin below.
-	debugHandle.SetProductAPI(apiHandle)
-	log.Info("debug UI mounted (TODO: remove before release)", "path", "/debug")
 
 	httpSrv := &stdhttp.Server{
 		Addr:              httpAddr,
@@ -190,7 +180,7 @@ func main() {
 	}
 	go runSystemSettingsReloader(rootCtx, log, eng)
 
-	// Engine-backed admin for REST and debug UI writes (ProductAPI already wired).
+	// Engine-backed admin for REST writes.
 	apiHandle.SetAdmin(eng)
 
 	// The engine learns baselines in memory to keep the DB off the per-trace

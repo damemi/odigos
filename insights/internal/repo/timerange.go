@@ -2,7 +2,6 @@ package repo
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 )
 
@@ -73,16 +72,4 @@ func parseFindingsTimeBound(raw string, endOfDay bool) (time.Time, error) {
 		return day.Add(24*time.Hour - time.Nanosecond), nil
 	}
 	return day, nil
-}
-
-// ParseWindowHoursQuery parses ?window_hours=; empty or invalid yields 0 (default).
-func ParseWindowHoursQuery(raw string) int {
-	if raw == "" {
-		return 0
-	}
-	hours, err := strconv.Atoi(raw)
-	if err != nil || hours <= 0 {
-		return 0
-	}
-	return hours
 }

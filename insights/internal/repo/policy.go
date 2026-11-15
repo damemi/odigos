@@ -56,7 +56,7 @@ type Policy struct {
 
 // Delivery controls where a policy's or guardrail's findings are sent. The
 // zero value sends to every integration whose filters accept the finding, so a
-// source created anywhere (API, debug UI, engine auto-guardrails) delivers by
+// source created anywhere (API, engine auto-guardrails) delivers by
 // default.
 type Delivery struct {
 	// Muted sends this source's findings to no integration.

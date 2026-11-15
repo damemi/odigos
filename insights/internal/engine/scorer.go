@@ -123,7 +123,7 @@ func ScoredClasses() []repo.DeviationClass {
 //
 // A class has no row right after an operator "re-learn" wipes its baseline, or
 // before the transaction's first trace re-seeds it. Callers that present a
-// per-class view (the HTTP API and the debug UI) use this so a class never
+// per-class view (the HTTP API) use this so a class never
 // blinks out of the list during that window: a placeholder is unpromoted with a
 // zero observation count and empty data - exactly "learning, nothing yet".
 func FillScoredPlaceholders(transactionID int64, rows []repo.BaselineClass) []repo.BaselineClass {

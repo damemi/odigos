@@ -29,8 +29,8 @@ type entry struct {
 
 // Registry is the backend catalog: every supported integration type with its
 // Descriptor and Factory. Adding a backend is one Register call from its
-// package (see sinks/all.go) — the dispatcher, API, and debug UI are generic
-// over the registry.
+// package (see sinks/all.go) — the dispatcher and API are generic over the
+// registry.
 type Registry struct {
 	mu      sync.RWMutex
 	entries map[string]entry

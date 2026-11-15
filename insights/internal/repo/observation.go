@@ -2,7 +2,7 @@ package repo
 
 import "time"
 
-// Observation is a single trace kept as a debug UI example for a transaction.
+// Observation is a single trace kept as a UI example for a transaction.
 // RawOTLP holds the trace's spans as verbatim OTLP protobuf bytes when loaded
 // via GetObservationByTrace / GetLatestObservationByReason. List paths leave
 // it empty so ranking/listing never materializes large blobs.

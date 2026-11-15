@@ -45,7 +45,7 @@ func scanLearningPolicy(s rowScanner) (repo.LearningPolicy, error) {
 }
 
 // UpsertLearningPolicy inserts or updates one policy, keyed by (class, scope,
-// scopeKey). Backs the debug UI's policy editor.
+// scopeKey).
 func (r *Repo) UpsertLearningPolicy(ctx context.Context, p repo.LearningPolicy) error {
 	conditions, err := json.Marshal(p.Conditions)
 	if err != nil {

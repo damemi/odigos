@@ -66,10 +66,6 @@ func (a *API) ListAlertPolicies(ctx context.Context) ([]repo.Policy, error) {
 	return a.Repo.ListAlertPolicies(ctx)
 }
 
-func (a *API) ListEnabledPolicies(ctx context.Context) ([]repo.Policy, error) {
-	return a.Repo.ListEnabledPolicies(ctx)
-}
-
 func (a *API) UpsertAlertPolicy(ctx context.Context, p repo.Policy) error {
 	admin, err := a.adminOrErr()
 	if err != nil {
@@ -209,30 +205,6 @@ func (a *API) SeedServiceGuardrail(ctx context.Context, req apitypes.GuardrailSe
 	return admin.ReloadGuardrailConfig(ctx)
 }
 
-func (a *API) EnableTransactionGuardrail(ctx context.Context, namespace, service string) error {
-	admin, err := a.adminOrErr()
-	if err != nil {
-		return err
-	}
-	return admin.EnableTransactionGuardrail(ctx, namespace, service)
-}
-
-func (a *API) DisableTransactionGuardrail(ctx context.Context, namespace, service string) error {
-	admin, err := a.adminOrErr()
-	if err != nil {
-		return err
-	}
-	return admin.DisableTransactionGuardrail(ctx, namespace, service)
-}
-
-func (a *API) ForcePromoteService(ctx context.Context, namespace, service string) error {
-	admin, err := a.adminOrErr()
-	if err != nil {
-		return err
-	}
-	return admin.ForcePromoteService(ctx, namespace, service)
-}
-
 func (a *API) AcceptGuardrailViolation(ctx context.Context, scopeKey string, ruleKey repo.RuleKey, offending string) error {
 	admin, err := a.adminOrErr()
 	if err != nil {
@@ -269,8 +241,7 @@ func (a *API) ResolveGuardrailViolation(ctx context.Context, scopeKey string, ru
 // ---------- guardrail recommendations ----------
 
 // ListRecommendations is the product API for GET /api/v1/recommendations -
-// every kind in one list, same params and wire shape the real UI and debug UI
-// consume.
+// every kind in one list.
 func (a *API) ListRecommendations(ctx context.Context, params apitypes.ListRecommendationsParams) (apitypes.RecommendationList, error) {
 	admin, err := a.adminOrErr()
 	if err != nil {
@@ -472,8 +443,7 @@ func (a *API) ResetTransactionBaselines(ctx context.Context, txID int64) error {
 
 // ---------- transactions ----------
 
-// ListTransactions is the product API for GET /api/v1/transactions - same
-// OpenAPI params and wire shape the real UI and debug UI consume.
+// ListTransactions is the product API for GET /api/v1/transactions.
 func (a *API) ListTransactions(ctx context.Context, params apitypes.ListTransactionsParams) (apitypes.TransactionStatList, error) {
 	sortBy, err := repo.NormalizeTransactionSortBy(string(params.SortBy))
 	if err != nil {
@@ -505,7 +475,7 @@ func (a *API) ListTransactions(ctx context.Context, params apitypes.ListTransact
 }
 
 // GetTransaction returns one transaction's identity (service, namespace,
-// operation, kind). Shared by the HTTP detail handler and the debug UI.
+// operation, kind) for the HTTP detail handler.
 func (a *API) GetTransaction(ctx context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	return a.Repo.GetTransactionByID(ctx, transactionID)
 }
@@ -602,21 +572,20 @@ func (a *API) PromoteTransactions(ctx context.Context, transactionIDs []int64) (
 // ---------- observations ----------
 
 // ListObservations returns retained sample metadata for one transaction
-// (no raw_otlp). Shared by the HTTP list handler and the debug UI.
+// (no raw_otlp) for the HTTP list handler.
 func (a *API) ListObservations(ctx context.Context, transactionID int64, sampleReason string, limit int) ([]repo.Observation, error) {
 	return a.Repo.ListObservationsByTransaction(ctx, transactionID, sampleReason, limit)
 }
 
-// GetObservation returns one retained sample including raw_otlp.
-// Shared by the HTTP detail handler and the debug UI.
+// GetObservation returns one retained sample including raw_otlp for the HTTP
+// detail handler.
 func (a *API) GetObservation(ctx context.Context, transactionID int64, traceID string) (repo.Observation, bool, error) {
 	return a.Repo.GetObservationByTrace(ctx, transactionID, traceID)
 }
 
 // ---------- anomalies / findings ----------
 
-// ListFindings is the product API for GET /api/v1/findings - same params and
-// wire shape the real UI and debug UI consume.
+// ListFindings is the product API for GET /api/v1/findings.
 func (a *API) ListFindings(ctx context.Context, params apitypes.ListFindingsParams) (apitypes.FindingList, error) {
 	filter, err := findingListFilterFromTimeParams(
 		params.WindowHours, params.From, params.To,
@@ -680,16 +649,9 @@ func (a *API) ListAnomalies(ctx context.Context, params apitypes.ListAnomaliesPa
 	return apimap.AnomalyIssueList(issues), nil
 }
 
-// GetAnomalyIssue returns one issue including evidence (repo shape). Prefer
-// GetAnomalyIssueDetail for the investigate HTTP/UI payload.
-func (a *API) GetAnomalyIssue(ctx context.Context, transactionID int64, signature string) (repo.AnomalyIssue, bool, error) {
-	return a.Repo.GetAnomalyIssue(ctx, transactionID, signature)
-}
-
 // GetAnomalyIssueDetail is the product investigate payload for
 // GET /api/v1/anomalies/{transaction_id}/{signature}: issue + risk +
-// class_findings + anomaly/baseline compare traces. Shared by the HTTP handler
-// and the debug UI so both consume the same contract as the real UI.
+// class_findings + anomaly/baseline compare traces.
 func (a *API) GetAnomalyIssueDetail(ctx context.Context, transactionID int64, signature string) (apitypes.AnomalyIssue, bool, error) {
 	issue, ok, err := a.Repo.GetAnomalyIssue(ctx, transactionID, signature)
 	if err != nil || !ok {
@@ -805,7 +767,7 @@ func (a *API) ListGuardrailViolations(ctx context.Context, params apitypes.ListG
 
 // GetGuardrailViolationDetail is the product investigate payload for
 // GET /api/v1/guardrails/violations/evidence: violation + summary + span
-// highlights + evidence trace. Shared by the HTTP handler and the debug UI.
+// highlights + evidence trace.
 func (a *API) GetGuardrailViolationDetail(ctx context.Context, scopeKey string, ruleKey repo.RuleKey, offending string) (apitypes.GuardrailViolationDetail, bool, error) {
 	group, ok, err := a.Repo.GetGuardrailViolation(ctx, scopeKey, ruleKey, offending)
 	if err != nil || !ok {

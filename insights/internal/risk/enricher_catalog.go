@@ -146,19 +146,6 @@ func EnricherWeight(source repo.SignalSource) (int, bool) {
 	return 0, false
 }
 
-// EnrichersForClass returns the enricher signals that nest under a given
-// deviation class (its dangerous sub-cases), in catalog order. Empty for a class
-// with no enrichers.
-func EnrichersForClass(class repo.DeviationClass) []EnricherSignal {
-	var out []EnricherSignal
-	for _, e := range EnricherSignals {
-		if e.Parent == class {
-			out = append(out, e)
-		}
-	}
-	return out
-}
-
 // DefaultList returns the built-in default list for an enricher list key, or nil
 // if no enricher defines that key. Used by both the engine (as the fallback when
 // a scope has no override) and the editor (to pre-fill the textarea).

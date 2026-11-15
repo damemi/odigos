@@ -40,12 +40,3 @@ func TestSplitOperationIdentity(t *testing.T) {
 		t.Fatalf("escaped: name=%q dims=%v", name, dims)
 	}
 }
-
-func TestIdentityDimensionDisplayLabel(t *testing.T) {
-	if got := IdentityDimensionDisplayLabel(IdentityDimHTTPStatusCode, "403"); got != "403" {
-		t.Fatalf("http = %q", got)
-	}
-	if got := IdentityDimensionDisplayLabel(IdentityDimRPCGRPCStatus, "0"); got != "gRPC 0" {
-		t.Fatalf("grpc = %q", got)
-	}
-}

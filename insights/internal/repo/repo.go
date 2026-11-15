@@ -1,6 +1,6 @@
 // Package repo defines the database-agnostic interface used to persist
 // baselines, observations, anomalies, and policies. It is the swap seam: the
-// engine, debug UI, and HTTP handlers depend only on this interface, while
+// engine and HTTP handlers depend only on this interface, while
 // backends (ClickHouse today) implement it under internal/db/<backend>/.
 //
 // Domain types are split by area across the package (transaction.go,
@@ -14,7 +14,7 @@ import (
 )
 
 // Repository is the single backend-facing dependency callers hold, implemented
-// by the ClickHouse backend and consumed by the engine, debug UI, and HTTP
+// by the ClickHouse backend and consumed by the engine and HTTP
 // handlers. Implementations MUST be safe for concurrent use, since handlers,
 // the OTLP receiver, and background workers touch it at once.
 type Repository interface {
@@ -49,7 +49,7 @@ type Repository interface {
 	RecordActivity(ctx context.Context, deltas []ActivityDelta) error
 
 	// ListServiceStats returns per-(namespace, service) rollups, most active
-	// first. Backs the debug UI transactions page's group-by-service overview.
+	// first.
 	ListServiceStats(ctx context.Context, limit int) ([]ServiceStat, error)
 
 	// ListServiceNames returns every distinct service name seen in transactions,
@@ -77,11 +77,6 @@ type Repository interface {
 	// one query. Called by the engine on the scoring path, once per trace after
 	// a cache miss.
 	GetBaselineForTransaction(ctx context.Context, transactionID int64) ([]BaselineClass, error)
-
-	// ListBaselinePromotion returns each transaction's promoted-vs-total class
-	// tally in one aggregate query, avoiding an N+1 read. Backs the debug UI
-	// overview's promotion metrics.
-	ListBaselinePromotion(ctx context.Context) ([]BaselinePromotion, error)
 
 	// ListUnpromotedBaselines returns unpromoted (transaction, class) rows that
 	// may satisfy a time-based promotion condition, prefiltered by filter. Called
@@ -137,7 +132,7 @@ type Repository interface {
 
 	// ---------- observations ----------
 
-	// InsertObservations stores traces as UI/debug examples, all in one insert.
+	// InsertObservations stores traces as UI examples, all in one insert.
 	// Callers pre-decide the sample_reason; the repo does not sample. Called by
 	// the engine's background sample writer, which batches so ClickHouse sees a
 	// few large inserts instead of one per sampled trace.
@@ -270,7 +265,7 @@ type Repository interface {
 	GetAnomalyIssue(ctx context.Context, transactionID int64, signature string) (AnomalyIssue, bool, error)
 
 	// ResolveAnomalyIssue records an operator decision (accept, dismiss, or
-	// reopen) from the debug UI. The decision is sticky: the issue moves to the
+	// reopen). The decision is sticky: the issue moves to the
 	// matching status tab and stays there while its count keeps rising.
 	ResolveAnomalyIssue(ctx context.Context, transactionID int64, signature string, resolution AnomalyResolution) error
 
@@ -294,7 +289,7 @@ type Repository interface {
 
 	// ListGuardrailViolations returns policy-violation findings over the window,
 	// one row per (service, rule, offending item) with Status, worst/most-recent
-	// first. Backs the debug UI Findings feed's policy-violations section.
+	// first. Backs the Findings feed's policy-violations section.
 	ListGuardrailViolations(ctx context.Context, filter FindingListFilter) ([]GuardrailViolationGroup, error)
 
 	// GetGuardrailViolation returns one group by (scope_key, rule_key, offending),
@@ -302,7 +297,7 @@ type Repository interface {
 	GetGuardrailViolation(ctx context.Context, scopeKey string, rule RuleKey, offending string) (GuardrailViolationGroup, bool, error)
 
 	// ResolveGuardrailViolation records an operator decision (allow or dismiss)
-	// from the debug UI. The decision is sticky: the group moves to the matching
+	// The decision is sticky: the group moves to the matching
 	// status tab and stays there while its count keeps rising.
 	ResolveGuardrailViolation(ctx context.Context, scope PolicyScope, scopeKey string, rule RuleKey, offending string, resolution GuardrailResolution) error
 

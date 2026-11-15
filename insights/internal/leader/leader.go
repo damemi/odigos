@@ -96,7 +96,7 @@ func Identity() string {
 // Run blocks until ctx is cancelled, repeatedly campaigning for the lease.
 // run is invoked with a context that is cancelled when leadership is lost;
 // it must return promptly on cancellation. onChange, when set, is called with
-// true on acquisition and false on loss (metrics/debug UI).
+// true on acquisition and false on loss (metrics).
 func (e *Elector) Run(ctx context.Context, run func(ctx context.Context), onChange func(leader bool)) {
 	lock := &resourcelock.LeaseLock{
 		LeaseMeta:  metav1.ObjectMeta{Name: e.cfg.LeaseName, Namespace: e.cfg.Namespace},

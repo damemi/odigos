@@ -140,16 +140,6 @@ func (m *instrumentedRepo) GetBaselineForTransaction(ctx context.Context, transa
 	return out, err
 }
 
-func (m *instrumentedRepo) ListBaselinePromotion(ctx context.Context) ([]repo.BaselinePromotion, error) {
-	var out []repo.BaselinePromotion
-	err := observe("ListBaselinePromotion", func() error {
-		var e error
-		out, e = m.inner.ListBaselinePromotion(ctx)
-		return e
-	})
-	return out, err
-}
-
 func (m *instrumentedRepo) ListUnpromotedBaselines(ctx context.Context, filter repo.UnpromotedBaselineFilter) ([]repo.UnpromotedBaselineCandidate, error) {
 	var out []repo.UnpromotedBaselineCandidate
 	err := observe("ListUnpromotedBaselines", func() error {

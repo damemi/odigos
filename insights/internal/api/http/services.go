@@ -11,8 +11,8 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/api/http/apimap"
 )
 
-// blastRadiusDefaultDepth mirrors the debug UI's serviceMapDepth: how many hops
-// out the subgraph expands in each direction when the caller omits ?depth.
+// blastRadiusDefaultDepth is how many hops out the subgraph expands in each
+// direction when the caller omits ?depth.
 const blastRadiusDefaultDepth = 2
 
 // blastRadiusMaxDepth bounds the requested depth; the store also caps the total

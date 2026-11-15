@@ -33,7 +33,7 @@ func NewTransaction(service, namespace, operation string, kind TransactionKind) 
 }
 
 // TransactionKind classifies the trigger that started the trace. The engine
-// uses it to pick per-kind defaults and the debug UI uses it for filtering.
+// uses it to pick per-kind defaults and the API uses it for filtering.
 // A plain string in the DB, so adding a kind needs no migration.
 type TransactionKind string
 

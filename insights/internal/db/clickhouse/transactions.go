@@ -44,8 +44,7 @@ func (r *Repo) UpsertTransactions(ctx context.Context, txs []repo.Transaction) e
 }
 
 // ListTransactions returns transactions for internal id→identity lookups (UI
-// listings use ListServiceStats/ListTransactionStats instead). Used by the
-// debug UI overview.
+// listings use ListServiceStats/ListTransactionStats instead).
 func (r *Repo) ListTransactions(ctx context.Context, limit int) ([]repo.Transaction, error) {
 	if limit <= 0 {
 		limit = 100

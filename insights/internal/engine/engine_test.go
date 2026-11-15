@@ -1421,30 +1421,6 @@ func (f *fakeRepo) GetBaselineForTransaction(_ context.Context, transactionID in
 	return out, nil
 }
 
-func (f *fakeRepo) ListBaselinePromotion(_ context.Context) ([]repo.BaselinePromotion, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	byTxn := map[int64]*repo.BaselinePromotion{}
-	var order []int64
-	for _, b := range f.baselines {
-		p := byTxn[b.TransactionID]
-		if p == nil {
-			p = &repo.BaselinePromotion{TransactionID: b.TransactionID}
-			byTxn[b.TransactionID] = p
-			order = append(order, b.TransactionID)
-		}
-		p.Total++
-		if b.Settled() {
-			p.Promoted++
-		}
-	}
-	out := make([]repo.BaselinePromotion, 0, len(order))
-	for _, id := range order {
-		out = append(out, *byTxn[id])
-	}
-	return out, nil
-}
-
 func (f *fakeRepo) ListUnpromotedBaselines(_ context.Context, filter repo.UnpromotedBaselineFilter) ([]repo.UnpromotedBaselineCandidate, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

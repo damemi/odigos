@@ -11,7 +11,7 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
-// InsertObservations stores traces as UI/debug examples in one insert. The
+// InsertObservations stores traces as UI examples in one insert. The
 // caller (the engine's background sample writer) picks each sample_reason; the
 // repo does not sample.
 func (r *Repo) InsertObservations(ctx context.Context, obs []repo.Observation) error {

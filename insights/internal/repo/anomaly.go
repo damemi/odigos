@@ -69,9 +69,9 @@ const (
 )
 
 // AnomalySampleReason builds the sample_reason tag ("anomaly:<signature>")
-// stored on an anomaly's sample traces, so the debug UI compare view can fetch
-// recent examples via ListObservationsByTransaction. Shared by the engine
-// (writer) and debug UI (reader) so they agree on the format.
+// stored on an anomaly's sample traces, so readers can fetch recent examples
+// via ListObservationsByTransaction. Shared by the engine (writer) and the API
+// (reader) so they agree on the format.
 func AnomalySampleReason(signature string) string {
 	return "anomaly:" + signature
 }

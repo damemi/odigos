@@ -11,8 +11,7 @@ import (
 
 // HistogramPresentation builds the chart-ready BaselineHistogram for metric
 // classes that store exponential histograms. Returns nil when the class is not
-// histogram-backed or when data cannot be decoded into buckets. Shared by the
-// product API mapper and the debug UI so both render the same bounds/labels.
+// histogram-backed or when data cannot be decoded into buckets.
 func HistogramPresentation(class repo.DeviationClass, data json.RawMessage) *apitypes.BaselineHistogram {
 	if len(data) == 0 {
 		return nil

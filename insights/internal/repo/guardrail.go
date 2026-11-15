@@ -235,8 +235,8 @@ type GuardrailViolationGroup struct {
 
 // GuardrailEvidenceReason builds the sample_reason tag
 // ("guardrail:<rule>:<offending>") stored on a guardrail evidence trace, so the
-// debug UI / product API can fetch a violation group's trace via GetLatestObservationByReason.
-// Shared by the engine (writer) and debug UI (reader) so they agree.
+// product API can fetch a violation group's trace via GetLatestObservationByReason.
+// Shared by the engine (writer) and the API (reader) so they agree.
 func GuardrailEvidenceReason(rule RuleKey, offending string) string {
 	return "guardrail:" + string(rule) + ":" + offending
 }
