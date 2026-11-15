@@ -39,3 +39,31 @@ func TestFromK8sResourceAttributes_PrefersOdigosWorkloadAttributes(t *testing.T)
 		consts.OdigosWorkloadNameAttribute:  "checkout",
 	}, identity.AsRaw())
 }
+
+func TestFromK8sResourceAttributesMap(t *testing.T) {
+	identity := FromK8sResourceAttributesMap(map[string]string{
+		string(semconv.K8SNamespaceNameKey):  "default",
+		string(semconv.K8SDeploymentNameKey): "checkout",
+		string(semconv.K8SContainerNameKey):  "app",
+		string(semconv.K8SPodNameKey):        "checkout-abc",
+	})
+	require.Equal(t, map[string]string{
+		string(semconv.K8SNamespaceNameKey):  "default",
+		string(semconv.K8SDeploymentNameKey): "checkout",
+		string(semconv.K8SContainerNameKey):  "app",
+	}, identity)
+}
+
+func TestFromK8sResourceAttributesMap_PrefersOdigosWorkloadAttributes(t *testing.T) {
+	identity := FromK8sResourceAttributesMap(map[string]string{
+		string(semconv.K8SNamespaceNameKey):  "default",
+		string(semconv.K8SDeploymentNameKey): "checkout",
+		consts.OdigosWorkloadKindAttribute:   "DeploymentConfig",
+		consts.OdigosWorkloadNameAttribute:   "checkout",
+	})
+	require.Equal(t, map[string]string{
+		string(semconv.K8SNamespaceNameKey): "default",
+		consts.OdigosWorkloadKindAttribute:  "DeploymentConfig",
+		consts.OdigosWorkloadNameAttribute:  "checkout",
+	}, identity)
+}

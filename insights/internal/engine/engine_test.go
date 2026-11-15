@@ -626,7 +626,7 @@ func TestEngine_RelearnDeletesAnomalyIssues(t *testing.T) {
 	r := newFakeRepo()
 	eng := New(r, nil, countOnlyConfig(5), nil)
 
-	tx, err := r.UpsertTransaction(context.Background(), "svc", "ns", "/x", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(context.Background(), "svc", "ns", "/x", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -1215,8 +1215,8 @@ func newFakeRepo() *fakeRepo {
 	return &fakeRepo{}
 }
 
-func (f *fakeRepo) UpsertTransaction(_ context.Context, service, namespace, operation string, kind repo.TransactionKind) (repo.Transaction, error) {
-	tx := repo.NewTransaction(service, namespace, operation, kind)
+func (f *fakeRepo) UpsertTransaction(_ context.Context, service, namespace, operation string, kind repo.TransactionKind, sourceIdentity map[string]string) (repo.Transaction, error) {
+	tx := repo.NewTransaction(service, namespace, operation, kind, sourceIdentity)
 	if err := f.UpsertTransactions(context.Background(), []repo.Transaction{tx}); err != nil {
 		return repo.Transaction{}, err
 	}

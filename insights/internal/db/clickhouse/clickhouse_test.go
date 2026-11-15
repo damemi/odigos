@@ -66,12 +66,12 @@ func TestTransactions(t *testing.T) {
 	ctx := context.Background()
 	svc := uniqueService("txn")
 
-	tx, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	// Idempotent: same identity → same id, no duplicate.
-	again, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP)
+	again, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert again: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestAnomalyIssueLifecycle(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
 	svc := uniqueService("anom")
-	tx, err := r.UpsertTransaction(ctx, svc, "ns", "POST /x", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, svc, "ns", "POST /x", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert txn: %v", err)
 	}
@@ -404,7 +404,7 @@ func TestListAnomalyIssuesByTransactionScoped(t *testing.T) {
 	since := time.Now().Add(-time.Hour)
 
 	mkTxnWithIssue := func(op string) (int64, string) {
-		tx, err := r.UpsertTransaction(ctx, uniqueService("anom-scope"), "ns", op, repo.KindHTTP)
+		tx, err := r.UpsertTransaction(ctx, uniqueService("anom-scope"), "ns", op, repo.KindHTTP, nil)
 		if err != nil {
 			t.Fatalf("upsert txn: %v", err)
 		}
@@ -452,7 +452,7 @@ func TestListAnomalyIssuesByTransactionScoped(t *testing.T) {
 func TestDeleteAnomalyIssues(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
-	tx, err := r.UpsertTransaction(ctx, uniqueService("del-anom"), "ns", "POST /buy", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, uniqueService("del-anom"), "ns", "POST /buy", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -556,7 +556,7 @@ func TestSystemSettingsRoundTrip(t *testing.T) {
 func TestObservationCountAndBoundedRead(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
-	tx, err := r.UpsertTransaction(ctx, uniqueService("obs-cap"), "ns", "GET /c", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, uniqueService("obs-cap"), "ns", "GET /c", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert txn: %v", err)
 	}

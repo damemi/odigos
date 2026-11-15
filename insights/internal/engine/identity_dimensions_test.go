@@ -28,8 +28,8 @@ func TestApplyIdentityDimensions_StatusSplitsIdentity(t *testing.T) {
 	if op403 != "POST /buy [http.response.status_code=403]" {
 		t.Fatalf("403 op = %q", op403)
 	}
-	id200 := repo.HashTransactionID("svc", "ns", op200, repo.KindHTTP)
-	id403 := repo.HashTransactionID("svc", "ns", op403, repo.KindHTTP)
+	id200 := repo.HashTransactionID("svc", "ns", op200, repo.KindHTTP, nil)
+	id403 := repo.HashTransactionID("svc", "ns", op403, repo.KindHTTP, nil)
 	if id200 == id403 {
 		t.Fatal("expected different transaction ids for 200 vs 403")
 	}

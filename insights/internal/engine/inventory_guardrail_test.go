@@ -318,7 +318,7 @@ func TestProtectAndOptOutInventory(t *testing.T) {
 	eng.SetGuardrailConfig(guardrailConfigFrom())
 	eng.SetSystemConfig(newSystemConfig(repo.SystemSettings{AutoTransactionGuardrail: true}))
 
-	tx, err := r.UpsertTransaction(context.Background(), "shop", "ns", "GET /products", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(context.Background(), "shop", "ns", "GET /products", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,7 +373,7 @@ func TestForcePromoteServiceAutoEnablesGuardrail(t *testing.T) {
 	eng.SetGuardrailConfig(guardrailConfigFrom())
 	eng.SetSystemConfig(newSystemConfig(repo.SystemSettings{AutoTransactionGuardrail: true}))
 
-	tx, err := r.UpsertTransaction(context.Background(), "geolocation", "default", "GET /geo", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(context.Background(), "geolocation", "default", "GET /geo", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func TestPromoteTransactionsBaselinesDedupesAutoEnablePerService(t *testing.T) {
 		for _, service := range []string{"geolocation", "checkout"} {
 			for i := 0; i < 5; i++ {
 				op := "GET /" + service + "/" + string(rune('a'+i))
-				tx, err := r.UpsertTransaction(context.Background(), service, "default", op, repo.KindHTTP)
+				tx, err := r.UpsertTransaction(context.Background(), service, "default", op, repo.KindHTTP, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -482,7 +482,7 @@ func TestForcePromoteServiceAutoEnablesDespiteStalePromotedFlag(t *testing.T) {
 	eng.SetGuardrailConfig(guardrailConfigFrom())
 	eng.SetSystemConfig(newSystemConfig(repo.SystemSettings{AutoTransactionGuardrail: true}))
 
-	tx, err := r.UpsertTransaction(context.Background(), "geolocation", "default", "GET /geo", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(context.Background(), "geolocation", "default", "GET /geo", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +518,7 @@ func TestPromoteBaselineClassAutoEnablesWhenLastClassPromotes(t *testing.T) {
 	eng.SetGuardrailConfig(guardrailConfigFrom())
 	eng.SetSystemConfig(newSystemConfig(repo.SystemSettings{AutoTransactionGuardrail: true}))
 
-	tx, err := r.UpsertTransaction(context.Background(), "pricing", "default", "GET Price", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(context.Background(), "pricing", "default", "GET Price", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -568,7 +568,7 @@ func TestDeleteAllTransactionsClearsInventoryGuardrails(t *testing.T) {
 	}
 	eng.SetGuardrailConfig(guardrailConfigFrom(g))
 
-	if _, err := r.UpsertTransaction(context.Background(), "shop", "ns", "GET /old", repo.KindHTTP); err != nil {
+	if _, err := r.UpsertTransaction(context.Background(), "shop", "ns", "GET /old", repo.KindHTTP, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := eng.DeleteAllTransactions(context.Background()); err != nil {

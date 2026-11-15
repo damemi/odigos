@@ -24,7 +24,7 @@ type Repository interface {
 	// kind), creating it if missing. Idempotent; namespace is part of the
 	// identity. Cold path / tests - the engine resolves ids locally and
 	// persists via UpsertTransactions on the write-behind flush.
-	UpsertTransaction(ctx context.Context, service, namespace, operation string, kind TransactionKind) (Transaction, error)
+	UpsertTransaction(ctx context.Context, service, namespace, operation string, kind TransactionKind, sourceIdentity map[string]string) (Transaction, error)
 
 	// UpsertTransactions batch-inserts transaction identity rows. Idempotent
 	// (ReplacingMergeTree). Called by the engine's write-behind flusher so the

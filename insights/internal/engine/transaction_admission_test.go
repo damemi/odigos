@@ -41,11 +41,11 @@ func TestAdmissionDropsUnseenOverCap(t *testing.T) {
 			t.Fatalf("over-cap operation was persisted: %+v", tx)
 		}
 	}
-	known := repo.NewTransaction("api", "unknown", "GET /users/1", repo.KindHTTP)
+	known := repo.NewTransaction("api", "unknown", "GET /users/1", repo.KindHTTP, nil)
 	if r.activity[known.ID] != 2 {
 		t.Errorf("known transaction activity = %d, want 2 (still counted after the cap)", r.activity[known.ID])
 	}
-	dropped := repo.NewTransaction("api", "unknown", "GET /users/3", repo.KindHTTP)
+	dropped := repo.NewTransaction("api", "unknown", "GET /users/3", repo.KindHTTP, nil)
 	if _, ok := r.activity[dropped.ID]; ok {
 		t.Errorf("dropped transaction recorded activity")
 	}
@@ -61,7 +61,7 @@ func TestAdmissionSeededFromInventory(t *testing.T) {
 	ctx := context.Background()
 	r := newFakeRepo()
 	for i := 0; i < 3; i++ {
-		r.transactions = append(r.transactions, repo.NewTransaction("api", "unknown", fmt.Sprintf("GET /orders/%d", i), repo.KindHTTP))
+		r.transactions = append(r.transactions, repo.NewTransaction("api", "unknown", fmt.Sprintf("GET /orders/%d", i), repo.KindHTTP, nil))
 	}
 	eng := New(r, nil, nil, nil)
 	eng.SetSystemConfig(newSystemConfig(repo.SystemSettings{MaxTransactionsPerService: 3}))
@@ -77,7 +77,7 @@ func TestAdmissionSeededFromInventory(t *testing.T) {
 	if got := len(r.transactions); got != 3 {
 		t.Fatalf("transactions = %d, want 3 (unseen operation dropped)", got)
 	}
-	known := repo.NewTransaction("api", "unknown", "GET /orders/1", repo.KindHTTP)
+	known := repo.NewTransaction("api", "unknown", "GET /orders/1", repo.KindHTTP, nil)
 	if r.activity[known.ID] != 1 {
 		t.Errorf("seeded identity activity = %d, want 1 (admitted without this replica seeing it before)", r.activity[known.ID])
 	}
@@ -122,7 +122,7 @@ func TestAdmissionDeleteFreesSlot(t *testing.T) {
 		t.Fatalf("index = %d, want 1", got)
 	}
 
-	a := repo.NewTransaction("api", "unknown", "GET /a", repo.KindHTTP)
+	a := repo.NewTransaction("api", "unknown", "GET /a", repo.KindHTTP, nil)
 	if err := eng.DeleteTransaction(ctx, a.ID); err != nil {
 		t.Fatalf("delete: %v", err)
 	}

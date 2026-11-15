@@ -33,11 +33,11 @@ func observe(method string, fn func() error) error {
 	return err
 }
 
-func (m *instrumentedRepo) UpsertTransaction(ctx context.Context, service, namespace, operation string, kind repo.TransactionKind) (repo.Transaction, error) {
+func (m *instrumentedRepo) UpsertTransaction(ctx context.Context, service, namespace, operation string, kind repo.TransactionKind, sourceIdentity map[string]string) (repo.Transaction, error) {
 	var out repo.Transaction
 	err := observe("UpsertTransaction", func() error {
 		var e error
-		out, e = m.inner.UpsertTransaction(ctx, service, namespace, operation, kind)
+		out, e = m.inner.UpsertTransaction(ctx, service, namespace, operation, kind, sourceIdentity)
 		return e
 	})
 	return out, err

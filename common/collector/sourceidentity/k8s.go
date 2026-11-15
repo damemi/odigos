@@ -31,26 +31,50 @@ var K8sWorkloadNameAttributes = []struct {
 // otherwise the first present attribute from K8sWorkloadNameAttributes is used.
 func FromK8sResourceAttributes(attrs pcommon.Map) pcommon.Map {
 	identity := pcommon.NewMap()
-	if ns, ok := attrs.Get(string(semconv.K8SNamespaceNameKey)); ok && ns.Str() != "" {
-		identity.PutStr(string(semconv.K8SNamespaceNameKey), ns.Str())
+	for _, key := range k8sIdentityKeys(func(key string) (string, bool, bool) {
+		val, ok := attrs.Get(key)
+		return val.Str(), ok && val.Type() == pcommon.ValueTypeStr, ok
+	}) {
+		val, _ := attrs.Get(key)
+		val.CopyTo(identity.PutEmpty(key))
 	}
-	if containerName, ok := attrs.Get(string(semconv.K8SContainerNameKey)); ok && containerName.Str() != "" {
-		identity.PutStr(string(semconv.K8SContainerNameKey), containerName.Str())
+	return identity
+}
+
+// FromK8sResourceAttributesMap is FromK8sResourceAttributes for resource attributes held
+// as a plain string map, for consumers that don't work with pdata.
+func FromK8sResourceAttributesMap(attrs map[string]string) map[string]string {
+	identity := map[string]string{}
+	for _, key := range k8sIdentityKeys(func(key string) (string, bool, bool) {
+		val, ok := attrs[key]
+		return val, ok, ok
+	}) {
+		identity[key] = attrs[key]
+	}
+	return identity
+}
+
+// k8sIdentityKeys returns the keys that make up the k8s source identity, independent of the
+// map type holding the attributes. get reports an attribute's string value, whether it is a
+// string, and whether it is present at all.
+func k8sIdentityKeys(get func(key string) (val string, isStr bool, ok bool)) []string {
+	keys := make([]string, 0, 4)
+	for _, key := range []string{string(semconv.K8SNamespaceNameKey), string(semconv.K8SContainerNameKey)} {
+		if val, isStr, _ := get(key); isStr && val != "" {
+			keys = append(keys, key)
+		}
 	}
 
-	kind, kindOk := attrs.Get(consts.OdigosWorkloadKindAttribute)
-	name, nameOk := attrs.Get(consts.OdigosWorkloadNameAttribute)
+	_, _, kindOk := get(consts.OdigosWorkloadKindAttribute)
+	_, _, nameOk := get(consts.OdigosWorkloadNameAttribute)
 	if kindOk && nameOk {
-		kind.CopyTo(identity.PutEmpty(consts.OdigosWorkloadKindAttribute))
-		name.CopyTo(identity.PutEmpty(consts.OdigosWorkloadNameAttribute))
-		return identity
+		return append(keys, consts.OdigosWorkloadKindAttribute, consts.OdigosWorkloadNameAttribute)
 	}
 
 	for _, attr := range K8sWorkloadNameAttributes {
-		if val, ok := attrs.Get(attr.Key); ok && val.Type() == pcommon.ValueTypeStr {
-			val.CopyTo(identity.PutEmpty(attr.Key))
-			return identity
+		if _, isStr, _ := get(attr.Key); isStr {
+			return append(keys, attr.Key)
 		}
 	}
-	return identity
+	return keys
 }
