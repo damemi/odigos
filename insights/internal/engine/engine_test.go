@@ -626,7 +626,7 @@ func TestEngine_RelearnDeletesAnomalyIssues(t *testing.T) {
 	r := newFakeRepo()
 	eng := New(r, nil, countOnlyConfig(5), nil)
 
-	tx, err := r.UpsertTransaction(context.Background(), "svc", "ns", "/x", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(context.Background(), "svc", "ns", "/x", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -970,8 +970,8 @@ func TestDecodeRequest_BuildsTrace(t *testing.T) {
 	if len(tr.Root.Children) != 1 || tr.Root.Children[0].Name != "child" {
 		t.Errorf("expected one child 'child', got %+v", tr.Root.Children)
 	}
-	if tr.DurationMs != 1 {
-		t.Errorf("expected duration 1ms, got %d", tr.DurationMs)
+	if tr.DurationUs != 1000 {
+		t.Errorf("expected duration 1000us, got %d", tr.DurationUs)
 	}
 }
 
@@ -1215,8 +1215,8 @@ func newFakeRepo() *fakeRepo {
 	return &fakeRepo{}
 }
 
-func (f *fakeRepo) UpsertTransaction(_ context.Context, service, namespace, operation string, kind repo.TransactionKind) (repo.Transaction, error) {
-	tx := repo.NewTransaction(service, namespace, operation, kind)
+func (f *fakeRepo) UpsertTransaction(_ context.Context, service, namespace, operation string, kind repo.TransactionKind, sourceIdentity map[string]string) (repo.Transaction, error) {
+	tx := repo.NewTransaction(service, namespace, operation, kind, sourceIdentity)
 	if err := f.UpsertTransactions(context.Background(), []repo.Transaction{tx}); err != nil {
 		return repo.Transaction{}, err
 	}
@@ -1417,30 +1417,6 @@ func (f *fakeRepo) GetBaselineForTransaction(_ context.Context, transactionID in
 		if b.TransactionID == transactionID {
 			out = append(out, b)
 		}
-	}
-	return out, nil
-}
-
-func (f *fakeRepo) ListBaselinePromotion(_ context.Context) ([]repo.BaselinePromotion, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	byTxn := map[int64]*repo.BaselinePromotion{}
-	var order []int64
-	for _, b := range f.baselines {
-		p := byTxn[b.TransactionID]
-		if p == nil {
-			p = &repo.BaselinePromotion{TransactionID: b.TransactionID}
-			byTxn[b.TransactionID] = p
-			order = append(order, b.TransactionID)
-		}
-		p.Total++
-		if b.Settled() {
-			p.Promoted++
-		}
-	}
-	out := make([]repo.BaselinePromotion, 0, len(order))
-	for _, id := range order {
-		out = append(out, *byTxn[id])
 	}
 	return out, nil
 }

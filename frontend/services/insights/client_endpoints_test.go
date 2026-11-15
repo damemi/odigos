@@ -256,8 +256,8 @@ func TestClientEndpointContract(t *testing.T) {
 			wantMethod: http.MethodGet,
 			wantPath:   "/api/v1/transactions/7/observations",
 			wantQuery:  url.Values{"sample_reason": {"example"}},
-			response:   `{"items":[{"trace_id":"trace-1","transaction_id":7,"duration_ms":5}]}`,
-			want:       []ObservationSummary{{TraceID: "trace-1", TransactionID: 7, DurationMs: 5}},
+			response:   `{"items":[{"trace_id":"trace-1","transaction_id":7,"duration_us":5}]}`,
+			want:       []ObservationSummary{{TraceID: "trace-1", TransactionID: 7, DurationUs: 5}},
 		},
 		{
 			name:       "list observations without a sample reason",

@@ -49,6 +49,11 @@ require (
 )
 
 require (
+	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.67.0 // indirect
+)
+
+require (
 	github.com/ClickHouse/ch-go v0.61.5 // indirect
 	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/andybalholm/brotli v1.1.1 // indirect

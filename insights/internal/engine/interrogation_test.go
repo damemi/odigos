@@ -8,6 +8,8 @@ import (
 
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
+
 	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
 	"github.com/odigos-io/odigos/insights/internal/interrogation"
 	"github.com/odigos-io/odigos/insights/internal/repo"
@@ -53,7 +55,7 @@ func TestInterrogationBatchFromTrace_JavaEbpfOnly(t *testing.T) {
 		TraceID: traceID,
 		Root:    entry,
 		Spans:   []*Span{entry, child, other},
-	}, nil, nil)
+	}, nil, sourceidentity.FromK8sResourceAttributesMap, nil)
 	if !ok {
 		t.Fatal("expected java-ebpf batch")
 	}
@@ -61,7 +63,7 @@ func TestInterrogationBatchFromTrace_JavaEbpfOnly(t *testing.T) {
 		t.Fatalf("transactions = %d, want 1 (pricing is not java-ebpf)", len(batch.Transactions))
 	}
 	tx := batch.Transactions[0]
-	wantID := repo.NewTransaction("checkout", "default", "GET /buy", repo.KindHTTP)
+	wantID := repo.NewTransaction("checkout", "default", "GET /buy", repo.KindHTTP, sourceidentity.FromK8sResourceAttributesMap(javaRes))
 	if tx.TransactionID != strconv.FormatInt(wantID.ID, 10) || tx.WorkloadName != "checkout" {
 		t.Fatalf("unexpected tx: %+v want id %d", tx, wantID.ID)
 	}
@@ -81,17 +83,17 @@ func TestInterrogationBatchFromTrace_JavaEbpfOnly(t *testing.T) {
 	// never holds it, so the loop could never analyze it.
 	adm := newTransactionAdmission()
 	full := &Trace{TraceID: traceID, Root: entry, Spans: []*Span{entry, child, other}}
-	if _, ok := interrogationBatchFromTrace(full, nil, adm.contains); ok {
+	if _, ok := interrogationBatchFromTrace(full, nil, sourceidentity.FromK8sResourceAttributesMap, adm.contains); ok {
 		t.Fatal("expected unadmitted identity to be skipped")
 	}
 	adm.admit(repo.ServiceScopeKey("default", "checkout"), wantID.ID, 0)
-	if _, ok := interrogationBatchFromTrace(full, nil, adm.contains); !ok {
+	if _, ok := interrogationBatchFromTrace(full, nil, sourceidentity.FromK8sResourceAttributesMap, adm.contains); !ok {
 		t.Fatal("expected admitted identity to be recorded")
 	}
 
 	// Non-java root yields nothing.
 	entry.ResourceAttrs = otherRes
-	if _, ok := interrogationBatchFromTrace(&Trace{TraceID: traceID, Root: entry, Spans: []*Span{entry}}, nil, nil); ok {
+	if _, ok := interrogationBatchFromTrace(&Trace{TraceID: traceID, Root: entry, Spans: []*Span{entry}}, nil, sourceidentity.FromK8sResourceAttributesMap, nil); ok {
 		t.Fatal("expected non-java-ebpf trace to be skipped")
 	}
 }
@@ -107,17 +109,17 @@ func TestSameWorkloadSpan(t *testing.T) {
 	// Two workloads sharing service.name are different workloads.
 	a := &Span{Service: "checkout", ResourceAttrs: k8s("checkout")}
 	b := &Span{Service: "checkout", ResourceAttrs: k8s("checkout-canary")}
-	if sameWorkloadSpan(a, b) {
+	if sameWorkloadSpan(a, b, sourceidentity.FromK8sResourceAttributesMap) {
 		t.Fatal("different workloads with the same service.name must not match")
 	}
-	if !sameWorkloadSpan(a, &Span{Service: "other", ResourceAttrs: k8s("checkout")}) {
+	if !sameWorkloadSpan(a, &Span{Service: "other", ResourceAttrs: k8s("checkout")}, sourceidentity.FromK8sResourceAttributesMap) {
 		t.Fatal("same workload must match regardless of service.name")
 	}
 	// service.name is the fallback only when a side lacks a source identity.
-	if !sameWorkloadSpan(a, &Span{Service: "checkout"}) {
+	if !sameWorkloadSpan(a, &Span{Service: "checkout"}, sourceidentity.FromK8sResourceAttributesMap) {
 		t.Fatal("expected service.name fallback when one side has no identity")
 	}
-	if sameWorkloadSpan(a, &Span{Service: "pricing"}) {
+	if sameWorkloadSpan(a, &Span{Service: "pricing"}, sourceidentity.FromK8sResourceAttributesMap) {
 		t.Fatal("fallback must still compare service.name")
 	}
 }

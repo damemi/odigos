@@ -6,7 +6,7 @@ inputs:
     description: "Cloud provider to test against (eks or aks)"
     required: true
   test_scenario:
-    description: "Scenario under tests/e2e, or enterprise/<name> for tests/enterprise/e2e/<name>"
+    description: "Scenario under tests/e2e"
     required: true
   platform:
     description: "The platform to use [arm/amd]"
@@ -37,16 +37,10 @@ runs:
           exit 1
         fi
         SCENARIO="${{ inputs.test_scenario }}"
-        case "$SCENARIO" in
-          enterprise/*) TEST_DIR="tests/enterprise/e2e/${SCENARIO#enterprise/}" ;;
-          *) TEST_DIR="tests/e2e/$SCENARIO" ;;
-        esac
-        SCENARIO_SLUG="${SCENARIO//\//-}"
-        # Without the enterprise/ prefix: EKS name prefixes are limited to 38 characters and AKS node resource group names to 80.
-        CLUSTER_NAME="${SCENARIO##*/}-${{ inputs.platform }}-${GITHUB_RUN_ID}"
+        TEST_DIR="tests/e2e/$SCENARIO"
+        CLUSTER_NAME="$SCENARIO-${{ inputs.platform }}-${GITHUB_RUN_ID}"
         echo "TF_DIR=$TF_DIR" >> "$GITHUB_ENV"
         echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
-        echo "SCENARIO_SLUG=$SCENARIO_SLUG" >> "$GITHUB_ENV"
         echo "CLUSTER_NAME=$CLUSTER_NAME" >> "$GITHUB_ENV"
         echo "TF_VAR_cluster_name=$CLUSTER_NAME" >> "$GITHUB_ENV"
         echo "TF_VAR_resource_group_name=$CLUSTER_NAME" >> "$GITHUB_ENV"
@@ -190,7 +184,7 @@ runs:
       if: failure()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
       with:
-        name: run-details-${{ inputs.provider }}-${{ env.SCENARIO_SLUG }}-${{ inputs.platform }}
+        name: run-details-${{ inputs.provider }}-${{ inputs.test_scenario }}-${{ inputs.platform }}
         path: odigos_debug*.tar.gz
       continue-on-error: true
 

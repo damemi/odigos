@@ -255,7 +255,7 @@ func (e *Engine) loadRelationSamples(ctx context.Context, transactionID int64) (
 		}
 		sample := relationSample{full: full, observedAt: obs.ObservedAt}
 		for _, sub := range subTraces(full) {
-			if id, ok := subTransactionID(sub, dims); ok && id == transactionID {
+			if id, ok := e.subTransactionID(sub, dims); ok && id == transactionID {
 				sample.sub = sub
 				break
 			}

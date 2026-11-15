@@ -132,7 +132,7 @@ func coerce(f FieldSpec, v any) (any, error) {
 }
 
 // Redact returns raw with every secret field replaced by RedactedSecret, for
-// read-back through the API and debug UI. Non-object or empty input is
+// read-back through the API. Non-object or empty input is
 // returned as "{}".
 func Redact(fields []FieldSpec, raw json.RawMessage) json.RawMessage {
 	in := map[string]any{}

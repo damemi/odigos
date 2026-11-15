@@ -2,9 +2,11 @@ package engine
 
 import (
 	"encoding/hex"
+	"maps"
 	"strconv"
 	"time"
 
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
 	"github.com/odigos-io/odigos/insights/internal/interrogation"
@@ -12,19 +14,6 @@ import (
 )
 
 const javaEbpfDistroName = "java-ebpf-instrumentations"
-
-const k8SArgoRolloutNameAttribute = "k8s.argoproj.rollout.name"
-
-var interrogationWorkloadAttrs = []struct {
-	key  string
-	kind string
-}{
-	{key: "k8s.deployment.name", kind: "Deployment"},
-	{key: "k8s.statefulset.name", kind: "StatefulSet"},
-	{key: "k8s.daemonset.name", kind: "DaemonSet"},
-	{key: "k8s.cronjob.name", kind: "CronJob"},
-	{key: k8SArgoRolloutNameAttribute, kind: "Rollout"},
-}
 
 // SetInterrogation installs the optional Redis call-trie correlator.
 // Nil is a no-op (correlation stays off). Called from main after Open when
@@ -38,7 +27,7 @@ func (e *Engine) SetInterrogation(c *interrogation.Client) {
 
 // enqueueInterrogation queues java-ebpf service entries under t for Redis
 // call-trie correlation. Transaction inventory is the insights transactions
-// table (resource_attributes), written on the baseline flush. Runs after
+// table (source_identity), written on the baseline flush. Runs after
 // processOne so only identities the per-service cap admitted get a trie: a
 // dropped identity never reaches the inventory, so its trie would never be
 // analyzed. Off the scoring hot path: Record is non-blocking; Redis runs on
@@ -51,16 +40,18 @@ func (e *Engine) enqueueInterrogation(t *Trace) {
 	if e.system != nil {
 		dims = e.system.snapshot().settings.TransactionIdentityDimensions
 	}
-	batch, ok := interrogationBatchFromTrace(t, dims, e.admission.contains)
+	batch, ok := interrogationBatchFromTrace(t, dims, e.sourceIdentity, e.admission.contains)
 	if !ok {
 		return
 	}
 	e.interrogation.Record(batch)
 }
 
-// interrogationBatchFromTrace builds the Redis correlation batch for t. admitted,
-// when non-nil, filters out identities the inventory does not hold.
-func interrogationBatchFromTrace(t *Trace, dims []repo.TransactionIdentityDimension, admitted func(serviceKey string, id int64) bool) (interrogation.TraceBatch, bool) {
+// interrogationBatchFromTrace builds the Redis correlation batch for t.
+// sourceIdentity must be the engine's, so trie transaction ids match the
+// inventory. admitted, when non-nil, filters out identities the inventory does
+// not hold.
+func interrogationBatchFromTrace(t *Trace, dims []repo.TransactionIdentityDimension, sourceIdentity SourceIdentityFunc, admitted func(serviceKey string, id int64) bool) (interrogation.TraceBatch, bool) {
 	rawTraceID, err := hex.DecodeString(t.TraceID)
 	if err != nil || len(rawTraceID) == 0 {
 		return interrogation.TraceBatch{}, false
@@ -76,7 +67,7 @@ func interrogationBatchFromTrace(t *Trace, dims []repo.TransactionIdentityDimens
 		if !ok {
 			continue
 		}
-		spanIDs := sameWorkloadSpanIDs(entry)
+		spanIDs := sameWorkloadSpanIDs(entry, sourceIdentity)
 		if len(spanIDs) == 0 {
 			continue
 		}
@@ -85,7 +76,7 @@ func interrogationBatchFromTrace(t *Trace, dims []repo.TransactionIdentityDimens
 			continue
 		}
 		ident.Operation = applyIdentityDimensions(ident.Operation, entry, dims)
-		tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind)
+		tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind, sourceIdentity(entry.ResourceAttrs))
 		if admitted != nil && !admitted(repo.ServiceScopeKey(ident.Namespace, ident.Service), tx.ID) {
 			continue
 		}
@@ -133,25 +124,29 @@ func workloadIdentityFromSpan(s *Span) (workloadIdentity, bool) {
 	if s == nil {
 		return workloadIdentity{}, false
 	}
-	attrs := sourceResourceAttributes(s.ResourceAttrs)
+	// The trie is keyed by k8s workload columns, so this is the k8s source
+	// identity regardless of the engine's SourceIdentityFunc.
+	attrs := sourceidentity.FromK8sResourceAttributesMap(s.ResourceAttrs)
+	kind, name := workloadKindAndName(attrs)
 	w := workloadIdentity{
 		namespace: attrs[semconv.K8SNamespaceName],
-		kind:      attrs[consts.OdigosWorkloadKindAttribute],
-		name:      attrs[consts.OdigosWorkloadNameAttribute],
+		kind:      kind,
+		name:      name,
 		container: attrs[semconv.K8SContainerName],
 	}
 	return w, w.complete()
 }
 
+// workloadKindAndName reads the workload kind and name from a k8s source
+// identity: the Odigos workload attributes when present, otherwise the kind
+// matching whichever k8s workload name attribute it holds.
 func workloadKindAndName(attrs map[string]string) (string, string) {
-	if kind := attrs[consts.OdigosWorkloadKindAttribute]; kind != "" {
-		if name := attrs[consts.OdigosWorkloadNameAttribute]; name != "" {
-			return kind, name
-		}
+	if kind, name := attrs[consts.OdigosWorkloadKindAttribute], attrs[consts.OdigosWorkloadNameAttribute]; kind != "" && name != "" {
+		return kind, name
 	}
-	for _, pair := range interrogationWorkloadAttrs {
-		if name := attrs[pair.key]; name != "" {
-			return pair.kind, name
+	for _, attr := range sourceidentity.K8sWorkloadNameAttributes {
+		if name := attrs[attr.Key]; name != "" {
+			return attr.Kind, name
 		}
 	}
 	return "", ""
@@ -159,7 +154,7 @@ func workloadKindAndName(attrs map[string]string) (string, string) {
 
 // sameWorkloadSpanIDs returns the entry plus same-workload descendants as raw
 // span-id byte strings (exporter FixedString(8) form) for Redis stack matching.
-func sameWorkloadSpanIDs(entry *Span) []string {
+func sameWorkloadSpanIDs(entry *Span, sourceIdentity SourceIdentityFunc) []string {
 	if entry == nil {
 		return nil
 	}
@@ -169,7 +164,7 @@ func sameWorkloadSpanIDs(entry *Span) []string {
 		if s == nil {
 			return
 		}
-		if sameWorkloadSpan(s, entry) {
+		if sameWorkloadSpan(s, entry, sourceIdentity) {
 			if raw, err := hex.DecodeString(s.SpanID); err == nil && len(raw) > 0 {
 				out = append(out, string(raw))
 			}
@@ -185,13 +180,13 @@ func sameWorkloadSpanIDs(entry *Span) []string {
 // sameWorkloadSpan compares source identities when both spans have one, so two
 // workloads sharing a service.name stay apart. service.name is the fallback
 // only when either side lacks a source identity.
-func sameWorkloadSpan(a, b *Span) bool {
+func sameWorkloadSpan(a, b *Span, sourceIdentity SourceIdentityFunc) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	sa, sb := sourceResourceAttributes(a.ResourceAttrs), sourceResourceAttributes(b.ResourceAttrs)
+	sa, sb := sourceIdentity(a.ResourceAttrs), sourceIdentity(b.ResourceAttrs)
 	if len(sa) > 0 && len(sb) > 0 {
-		return sourceAttributesEqual(sa, sb)
+		return maps.Equal(sa, sb)
 	}
 	return a.Service != "" && a.Service == b.Service
 }

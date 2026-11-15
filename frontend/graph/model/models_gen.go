@@ -1424,21 +1424,23 @@ type InsightsLearningPolicyInput struct {
 }
 
 type InsightsObservation struct {
-	TraceID       string               `json:"traceId"`
-	TransactionID string               `json:"transactionId"`
-	ObservedAt    string               `json:"observedAt"`
-	DurationMs    int                  `json:"durationMs"`
-	SampleReason  InsightsSampleReason `json:"sampleReason"`
+	TraceID       string `json:"traceId"`
+	TransactionID string `json:"transactionId"`
+	ObservedAt    string `json:"observedAt"`
+	// Root span duration in microseconds.
+	DurationUs   int                  `json:"durationUs"`
+	SampleReason InsightsSampleReason `json:"sampleReason"`
 	// Base64-encoded OTLP protobuf; only available on the single-observation query.
 	RawOtlp string `json:"rawOtlp"`
 }
 
 type InsightsObservationSummary struct {
-	TraceID       string               `json:"traceId"`
-	TransactionID string               `json:"transactionId"`
-	ObservedAt    string               `json:"observedAt"`
-	DurationMs    int                  `json:"durationMs"`
-	SampleReason  InsightsSampleReason `json:"sampleReason"`
+	TraceID       string `json:"traceId"`
+	TransactionID string `json:"transactionId"`
+	ObservedAt    string `json:"observedAt"`
+	// Root span duration in microseconds.
+	DurationUs   int                  `json:"durationUs"`
+	SampleReason InsightsSampleReason `json:"sampleReason"`
 }
 
 type InsightsPolicy struct {

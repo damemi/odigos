@@ -96,6 +96,7 @@ spec:
               P="../../.."
               helm upgrade odigos $P/helm/odigos --set onPremToken="$ODIGOS_API_KEY" \
                 --namespace odigos-test \
+                -f ../../common/odigos-values.yaml \
                 --set image.tag=e2e-test \
                 --set nodeSelector."kubernetes\.io/os"=linux
             timeout: 1m10s

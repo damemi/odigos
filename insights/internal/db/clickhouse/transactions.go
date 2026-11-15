@@ -10,11 +10,11 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
-// UpsertTransaction returns the row for (service, namespace, operation, kind),
-// creating it if missing. Cold path / tests; the engine uses UpsertTransactions
-// on the write-behind flush instead.
-func (r *Repo) UpsertTransaction(ctx context.Context, service, namespace, operation string, kind repo.TransactionKind) (repo.Transaction, error) {
-	tx := repo.NewTransaction(service, namespace, operation, kind)
+// UpsertTransaction returns the row for (service, namespace, operation, kind,
+// source identity), creating it if missing. Cold path / tests; the
+// engine uses UpsertTransactions on the write-behind flush instead.
+func (r *Repo) UpsertTransaction(ctx context.Context, service, namespace, operation string, kind repo.TransactionKind, sourceIdentity map[string]string) (repo.Transaction, error) {
+	tx := repo.NewTransaction(service, namespace, operation, kind, sourceIdentity)
 	if err := r.UpsertTransactions(ctx, []repo.Transaction{tx}); err != nil {
 		return repo.Transaction{}, err
 	}
@@ -28,14 +28,10 @@ func (r *Repo) UpsertTransactions(ctx context.Context, txs []repo.Transaction) e
 		return nil
 	}
 	err := r.insert(ctx,
-		"INSERT INTO transactions (transaction_id, service, namespace, operation, kind, resource_attributes)",
+		"INSERT INTO transactions (transaction_id, service, namespace, operation, kind, source_identity)",
 		func(b driver.Batch) error {
 			for _, tx := range txs {
-				attrs := tx.ResourceAttributes
-				if attrs == nil {
-					attrs = map[string]string{}
-				}
-				if err := b.Append(tx.ID, tx.Service, tx.Namespace, tx.Operation, string(tx.Kind), attrs); err != nil {
+				if err := b.Append(tx.ID, tx.Service, tx.Namespace, tx.Operation, string(tx.Kind), tx.SourceIdentity); err != nil {
 					return err
 				}
 			}
@@ -48,14 +44,13 @@ func (r *Repo) UpsertTransactions(ctx context.Context, txs []repo.Transaction) e
 }
 
 // ListTransactions returns transactions for internal id→identity lookups (UI
-// listings use ListServiceStats/ListTransactionStats instead). Used by the
-// debug UI overview.
+// listings use ListServiceStats/ListTransactionStats instead).
 func (r *Repo) ListTransactions(ctx context.Context, limit int) ([]repo.Transaction, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 	return queryRows(ctx, r.conn, "list transactions",
-		"SELECT transaction_id, service, namespace, operation, kind, resource_attributes FROM transactions FINAL ORDER BY transaction_id ASC LIMIT ?",
+		"SELECT transaction_id, service, namespace, operation, kind, source_identity FROM transactions FINAL ORDER BY transaction_id ASC LIMIT ?",
 		scanTransaction, uint64(limit))
 }
 
@@ -74,7 +69,7 @@ func (r *Repo) ListTransactionRefs(ctx context.Context) ([]repo.TransactionRef, 
 // GetTransactionByID returns one transaction's identity. ok=false when unknown.
 func (r *Repo) GetTransactionByID(ctx context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	return queryRow(ctx, r.conn, "get transaction",
-		`SELECT transaction_id, service, namespace, operation, kind, resource_attributes
+		`SELECT transaction_id, service, namespace, operation, kind, source_identity
 		 FROM transactions FINAL
 		 WHERE transaction_id = ?
 		 LIMIT 1`,
@@ -84,7 +79,7 @@ func (r *Repo) GetTransactionByID(ctx context.Context, transactionID int64) (rep
 func scanTransaction(s rowScanner) (repo.Transaction, error) {
 	var t repo.Transaction
 	var kind string
-	if err := s.Scan(&t.ID, &t.Service, &t.Namespace, &t.Operation, &kind, &t.ResourceAttributes); err != nil {
+	if err := s.Scan(&t.ID, &t.Service, &t.Namespace, &t.Operation, &kind, &t.SourceIdentity); err != nil {
 		return repo.Transaction{}, err
 	}
 	t.Kind = repo.TransactionKind(kind)

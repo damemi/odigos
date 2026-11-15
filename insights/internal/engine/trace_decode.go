@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"strconv"
 	"strings"
-	"time"
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
@@ -51,7 +50,7 @@ func (s *Span) Attr(key string) string {
 }
 
 // Trace is a complete trace as the engine sees it: the root span plus every
-// span hanging off it, keyed by trace_id. DurationMs is the root span duration.
+// span hanging off it, keyed by trace_id. DurationUs is the root span duration.
 //
 // RawOTLP() returns the proto-encoded TracesData containing ONLY this trace's
 // spans (plus their resource/scope). The scoring engine doesn't need it; it's
@@ -62,7 +61,7 @@ type Trace struct {
 	TraceID    string
 	Root       *Span
 	Spans      []*Span
-	DurationMs int64
+	DurationUs int64
 
 	// otlpSpans is this trace's spans, sliced out of the batch they arrived in.
 	// Kept in decoded form because a transaction keeps only a handful of traces
@@ -211,7 +210,7 @@ func decodeTraceTrees(req *tracepb.TracesData) []*Trace {
 			TraceID:    tid,
 			Root:       root,
 			Spans:      spans,
-			DurationMs: int64((root.EndUnix - root.StartUnix) / uint64(time.Millisecond)),
+			DurationUs: spanDurationUs(root),
 		})
 	}
 	return out

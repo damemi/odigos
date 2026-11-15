@@ -14,7 +14,10 @@ CREATE TABLE IF NOT EXISTS transactions (
     service        String,
     namespace      String,
     operation      String,
-    kind           String
+    kind           String,
+    -- Resource attributes naming the Odigos source of the entry span (for k8s
+    -- the namespace, container and workload kind/name). Hashed into the id.
+    source_identity Map(LowCardinality(String), String)
 ) ENGINE = ReplacingMergeTree
 ORDER BY transaction_id;
 
@@ -50,7 +53,7 @@ CREATE TABLE IF NOT EXISTS trace_observations (
     transaction_id Int64,
     trace_id       String,
     observed_at    DateTime64(3),
-    duration_ms    Int64,
+    duration_us    Int64,
     sample_reason  LowCardinality(String),
     raw_otlp       String
 ) ENGINE = ReplacingMergeTree

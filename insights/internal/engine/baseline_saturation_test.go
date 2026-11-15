@@ -192,7 +192,7 @@ func TestSaturation_OversizedRowIsCappedOnLoad(t *testing.T) {
 	const cap = 3
 	r := newFakeRepo()
 	ctx := context.Background()
-	tx, err := r.UpsertTransaction(ctx, "orders", "unknown", "GET /orders", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, "orders", "unknown", "GET /orders", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert tx: %v", err)
 	}

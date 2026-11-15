@@ -66,8 +66,8 @@ type transactionEntry struct {
 
 	mu      sync.Mutex
 	classes map[repo.DeviationClass]*classState
-	// identity is the (service, namespace, operation, kind) resolved on the
-	// hot path. Written behind with baselines/activity so the transactions
+	// identity is the (service, namespace, operation, kind, source identity)
+	// resolved on the hot path. Written behind with baselines/activity so the transactions
 	// table is never upserted per trace.
 	identity repo.Transaction
 	// lastExampleAt is when this transaction last had a trace kept as an

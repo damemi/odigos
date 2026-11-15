@@ -12,34 +12,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  prepare-additional-kubernetes-versions:
-    runs-on: ubuntu-latest
-    outputs:
-      versions: ${{ steps.versions.outputs.versions }}
-      has_versions: ${{ steps.versions.outputs.has_versions }}
-    steps:
-      - name: Select Kubernetes versions
-        id: versions
-        shell: bash
-        env:
-          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-        run: |
-          PR_VERSION="1.32"
-          VERSIONS=$(jq -cn \
-            --arg pr "$PR_VERSION" \
-            --argjson labels "${PR_LABELS:-null}" \
-            '[
-              ($labels // [])[]
-              | select(startswith("test-k8s/"))
-              | sub("^test-k8s/"; "")
-              | select(. != $pr)
-            ] | unique')
-
-          HAS_VERSIONS=$(jq -r 'length > 0' <<< "$VERSIONS")
-          echo "Selected additional Kubernetes versions: $VERSIONS"
-          echo "versions=$VERSIONS" >> "$GITHUB_OUTPUT"
-          echo "has_versions=$HAS_VERSIONS" >> "$GITHUB_OUTPUT"
-
   build-cli:
     runs-on: depot-ubuntu-24.04
     steps:
@@ -145,7 +117,7 @@ jobs:
           key: ${{ github.run_id }}-odigos-images
 
   kubernetes-test:
-    name: kubernetes-test (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled && ', with_wasp' || '' }})
+    name: kubernetes-test (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer && format(', {0}', matrix.customer) || '' }})
     needs: [build-odigos-images, build-cli]
     runs-on: depot-ubuntu-24.04-8
     permissions:
@@ -159,33 +131,17 @@ jobs:
       matrix:
         kube-version: ["1.32"]
         test-scenario:
-          - "ui"
-          - "helm-chart"
-          - "helm-upgrade"
-          - "enterprise/mount-method"
-          - "enterprise/non-root"
-          - "enterprise/control-plane"
-          - "enterprise/python-ebpf"
-          - "enterprise/central-install"
-          - "enterprise/central-infrastructure"
-          - "enterprise/central-ui"
-          - "enterprise/central-auth-idp"
-        wasp-enabled: [false]
+          - "central-install"
+          - "central-infrastructure"
+          - "central-ui"
+          - "central-auth-idp"
         # Release PRs also run the important-customers configurations.
         include:
-          # The with_wasp jobs force the instrumentations that support WASP onto it (ODIGOS_FORCE_WASP),
-          # since the CI kernel does not require it.
           - kube-version: "1.32"
-            test-scenario: "helm-chart"
-            wasp-enabled: true
-          - kube-version: "1.32"
-            test-scenario: "enterprise/python-ebpf"
-            wasp-enabled: true
-          - kube-version: "1.32"
-            test-scenario: "enterprise/important-customers"
+            test-scenario: "important-customers"
             customer: greatwall
           - kube-version: "1.32"
-            test-scenario: "enterprise/important-customers"
+            test-scenario: "important-customers"
             customer: kratos
           - kube-version: "1.32"
             test-scenario: "karpenter-mount-methods"
@@ -194,7 +150,7 @@ jobs:
       - name: Check if test should run
         id: should-run
         run: |
-          if [[ "${{ matrix.test-scenario }}" == "enterprise/important-customers" || "${{ matrix.test-scenario }}" == "karpenter-mount-methods" ]]; then
+          if [[ "${{ matrix.test-scenario }}" == "important-customers" || "${{ matrix.test-scenario }}" == "karpenter-mount-methods" ]]; then
             HEAD_REF="${{ github.head_ref }}"
             BASE_REF="${{ github.base_ref }}"
             if [[ ( "$HEAD_REF" == pre-releases/* || "$HEAD_REF" == patch-release/* ) && "$BASE_REF" == releases/* ]]; then
@@ -217,38 +173,5 @@ jobs:
           kubernetes-version: ${{ matrix.kube-version }}
           test-scenario: ${{ matrix.test-scenario }}
           customer: ${{ matrix.customer || '' }}
-          wasp-enabled: ${{ matrix.wasp-enabled || false }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
-
-  additional-kubernetes-tests:
-    needs: [prepare-additional-kubernetes-versions, build-odigos-images, build-cli]
-    if: needs.prepare-additional-kubernetes-versions.outputs.has_versions == 'true'
-    runs-on: depot-ubuntu-24.04-8
-    permissions:
-      contents: read
-      packages: read
-    strategy:
-      fail-fast: false
-      matrix:
-        kube-version: ${{ fromJSON(needs.prepare-additional-kubernetes-versions.outputs.versions) }}
-        test-scenario:
-          - "ui"
-          - "helm-chart"
-          - "helm-upgrade"
-          - "enterprise/mount-method"
-          - "enterprise/non-root"
-          - "enterprise/control-plane"
-          - "enterprise/python-ebpf"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Run Kubernetes test
-        uses: ./.github/actions/kubernetes-tests
-        with:
-          kubernetes-version: ${{ matrix.kube-version }}
-          test-scenario: ${{ matrix.test-scenario }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}

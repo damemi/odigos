@@ -1446,9 +1446,10 @@ type LearningPolicyList struct {
 
 // Observation One retained sample including the verbatim OTLP blob. Returned by `getObservation` and embedded on the anomaly investigate detail as `anomaly_trace` / `baseline_trace`. Never returned by `listObservations`.
 //
-// Examples: {"duration_ms":137,"observed_at":"2026-07-20T14:03:22Z","raw_otlp":"b3RscC1wcm90b2J1Zi1ieXRlcw==","sample_reason":"example","trace_id":"3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f","transaction_id":4211}
+// Examples: {"duration_us":137482,"observed_at":"2026-07-20T14:03:22Z","raw_otlp":"b3RscC1wcm90b2J1Zi1ieXRlcw==","sample_reason":"example","trace_id":"3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f","transaction_id":4211}
 type Observation struct {
-	DurationMs int64     `json:"duration_ms"`
+	// DurationUs Root span duration in microseconds.
+	DurationUs int64     `json:"duration_us"`
 	ObservedAt time.Time `json:"observed_at"`
 
 	// RawOtlp Verbatim OTLP protobuf, base64-encoded.
@@ -1468,9 +1469,10 @@ type ObservationList struct {
 
 // ObservationSummary Metadata for one retained sample. **List path only** - used by `listObservations`. For the OTLP blob, call `getObservation`.
 //
-// Examples: {"duration_ms":137,"observed_at":"2026-07-20T14:03:22Z","sample_reason":"example","trace_id":"3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f","transaction_id":4211}
+// Examples: {"duration_us":137482,"observed_at":"2026-07-20T14:03:22Z","sample_reason":"example","trace_id":"3a5f9c7e1b2d4a6c8e0f1a2b3c4d5e6f","transaction_id":4211}
 type ObservationSummary struct {
-	DurationMs int64     `json:"duration_ms"`
+	// DurationUs Root span duration in microseconds.
+	DurationUs int64     `json:"duration_us"`
 	ObservedAt time.Time `json:"observed_at"`
 
 	// SampleReason How this sample was retained / which bucket to list. `example` = learning-phase normal traffic for baseline compare. `relation` = learning-phase traces kept for the correlation recommendation miner (larger cap, 14-day retention). Stored anomaly evidence uses `anomaly:<signature>` (one write-once sample per issue); pass that exact string when filtering. The legacy enum token `anomaly_evidence` is kept for contract compatibility - it is not the tag written to storage. Open set: storage tags like `anomaly:<signature>` and `guardrail:<rule>:<offending>` are valid values too, so clients must tolerate values not listed here.

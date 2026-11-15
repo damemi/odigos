@@ -40,7 +40,7 @@ api-lint:
 api-mock:
 	npx --yes @stoplight/prism-cli@latest mock $(OPENAPI)
 
-# Background port-forward to the insights service (debug UI at http://localhost:<port>/debug).
+# Background port-forward to the insights service API at http://localhost:<port>.
 INSIGHTS_NS ?= odigos-system
 INSIGHTS_PORT ?= 8080
 INSIGHTS_PF_PID := /tmp/odigos-insights-port-forward.pid
@@ -56,7 +56,7 @@ port-forward:
 	@kubectl port-forward -n $(INSIGHTS_NS) deploy/odigos-insights $(INSIGHTS_PORT):8080 > $(INSIGHTS_PF_LOG) 2>&1 & echo $$! > $(INSIGHTS_PF_PID)
 	@sleep 1
 	@if kill -0 $$(cat $(INSIGHTS_PF_PID)) 2>/dev/null; then \
-		echo "✅ ready: http://localhost:$(INSIGHTS_PORT)/debug  (pid $$(cat $(INSIGHTS_PF_PID)), logs: $(INSIGHTS_PF_LOG))"; \
+		echo "✅ ready: http://localhost:$(INSIGHTS_PORT)/api/v1  (pid $$(cat $(INSIGHTS_PF_PID)), logs: $(INSIGHTS_PF_LOG))"; \
 		echo "   stop with: make port-forward-stop"; \
 	else \
 		echo "❌ port-forward failed to start:"; cat $(INSIGHTS_PF_LOG); rm -f $(INSIGHTS_PF_PID); exit 1; \

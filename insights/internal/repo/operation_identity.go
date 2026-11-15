@@ -15,7 +15,6 @@ type TransactionIdentityValue struct {
 const (
 	IdentityDimHTTPStatusCode = "http.response.status_code"
 	IdentityDimRPCGRPCStatus  = "rpc.grpc.status_code"
-	legacyHTTPStatusCode      = "http.status_code"
 )
 
 // SplitOperationIdentity splits a stored operation into the entry-span name and
@@ -106,16 +105,4 @@ func unescapeIdentityDimToken(s string) string {
 		b.WriteByte(s[i])
 	}
 	return b.String()
-}
-
-// IdentityDimensionDisplayLabel returns a short human label for UI badges.
-func IdentityDimensionDisplayLabel(key, value string) string {
-	switch key {
-	case IdentityDimHTTPStatusCode, legacyHTTPStatusCode:
-		return value
-	case IdentityDimRPCGRPCStatus:
-		return "gRPC " + value
-	default:
-		return value
-	}
 }

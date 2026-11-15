@@ -23,7 +23,7 @@ on:
         options:
           - all
           - helm-chart
-          - enterprise/multi-apps
+          - multi-apps
       platform:
         description: 'Cross-cloud tests: CPU architecture'
         required: false
@@ -239,7 +239,7 @@ jobs:
       fail-fast: false
       matrix:
         provider: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.provider == 'all') && '["aks","eks"]' || format('["{0}"]', inputs.provider)) }}
-        test_scenario: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.test_scenario == 'all') && '["enterprise/multi-apps","helm-chart"]' || format('["{0}"]', inputs.test_scenario)) }}
+        test_scenario: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.test_scenario == 'all') && '["multi-apps","helm-chart"]' || format('["{0}"]', inputs.test_scenario)) }}
         platform: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.platform == 'all') && '["amd","arm"]' || format('["{0}"]', inputs.platform)) }}
     steps:
       - name: Checkout
@@ -298,24 +298,24 @@ jobs:
           - "head-sampling-http-python"
           - "head-sampling-http-java"
           - "tail-sampling-nodejs"
-          - "enterprise/multi-apps"
-          - "enterprise/jvm-metrics"
-          - "enterprise/mount-method"
-          - "enterprise/non-root"
-          - "enterprise/instrumentation-rules"
-          - "enterprise/python-ebpf"
+          - "multi-apps"
+          - "jvm-metrics"
+          - "mount-method"
+          - "non-root"
+          - "instrumentation-rules"
+          - "python-ebpf"
         include:
           # Control plane instrumentation is tested from k8s 1.29: older control plane binaries are built with
           # Go versions the enterprise Go agent does not fully support (stripped binaries, gRPC context propagation).
           - kubernetes-version: "1.29"
-            test-scenario: "enterprise/control-plane"
+            test-scenario: "control-plane"
           - kubernetes-version: "1.37"
-            test-scenario: "enterprise/control-plane"
+            test-scenario: "control-plane"
           # non-root also ran on these versions in the enterprise CI.
           - kubernetes-version: "1.23"
-            test-scenario: "enterprise/non-root"
+            test-scenario: "non-root"
           - kubernetes-version: "1.32"
-            test-scenario: "enterprise/non-root"
+            test-scenario: "non-root"
 
     steps:
       - name: Checkout

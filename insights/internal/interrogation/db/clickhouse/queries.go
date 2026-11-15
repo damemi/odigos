@@ -59,11 +59,8 @@ ORDER BY Namespace, WorkloadKind, WorkloadName, ContainerName
 // ListTransactions returns the transactions that have a call trie under the
 // source, with their identity from the insights inventory. Membership comes
 // from the trie (keyed by workload + TransactionId), not from
-// transactions.resource_attributes: transaction_id does not include the
-// workload, so two workloads sharing service, namespace and operation share one
-// inventory row whose resource_attributes is last-write-wins. Matching on the
-// trie gives each workload its own transactions regardless of which one wrote
-// the inventory row last.
+// transactions.source_identity, so a source lists exactly the transactions it
+// recorded tries for.
 func (c *Client) ListTransactions(ctx context.Context, source SourceKey) ([]Transaction, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("clickhouse: nil connection")

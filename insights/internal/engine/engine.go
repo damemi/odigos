@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
 	"github.com/odigos-io/odigos/insights/internal/interrogation"
@@ -32,6 +33,11 @@ type Engine struct {
 	learning *LearningConfig
 	alerts   *AlertConfig
 	system   *SystemConfig
+
+	// sourceIdentity picks the resource attributes that, with service,
+	// namespace, operation and kind, identify a transaction. Defaults to the
+	// k8s source identity.
+	sourceIdentity SourceIdentityFunc
 
 	// guardrails owns the service-guardrail snapshot plus the runtime state for
 	// enforcing it (violation buffer, in-mesh service registry, evidence
@@ -86,15 +92,16 @@ type warnState struct {
 // Resolve on a nil receiver).
 func New(r repo.Repository, logger *commonlogger.OdigosLogger, learning *LearningConfig, alerts *AlertConfig) *Engine {
 	e := &Engine{
-		repo:         r,
-		logger:       logger,
-		scorers:      defaultScorers(),
-		clock:        time.Now,
-		learning:     learning,
-		alerts:       alerts,
-		system:       newSystemConfig(repo.DefaultSystemSettings()),
-		warnThrottle: map[string]*warnState{},
-		admission:    newTransactionAdmission(),
+		repo:           r,
+		logger:         logger,
+		scorers:        defaultScorers(),
+		clock:          time.Now,
+		learning:       learning,
+		alerts:         alerts,
+		system:         newSystemConfig(repo.DefaultSystemSettings()),
+		sourceIdentity: sourceidentity.FromK8sResourceAttributesMap,
+		warnThrottle:   map[string]*warnState{},
+		admission:      newTransactionAdmission(),
 	}
 	e.store = newBaselineStore(r, logger)
 	e.samples = newSampleWriter(r, e.warn)
@@ -199,10 +206,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// come from the same settings generation.
 	system := e.system.snapshot()
 	ident.Operation = applyIdentityDimensions(ident.Operation, t.Root, system.settings.TransactionIdentityDimensions)
-	tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind)
-	if attrs := sourceResourceAttributes(t.Root.ResourceAttrs); len(attrs) > 0 {
-		tx.ResourceAttributes = attrs
-	}
+	tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind, e.sourceIdentity(t.Root.ResourceAttrs))
 	// 1a. Per-service cap on distinct transactions. An identity the inventory
 	// does not know yet is dropped once its service is full, before anything
 	// (guardrail state, baselines, activity, samples) is recorded for it. This
@@ -237,9 +241,6 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	}
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
-	if len(tx.ResourceAttributes) == 0 && len(entry.identity.ResourceAttributes) > 0 {
-		tx.ResourceAttributes = entry.identity.ResourceAttributes
-	}
 	entry.identity = tx
 	e.seedEntryClasses(entry)
 

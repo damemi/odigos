@@ -9,7 +9,7 @@ import (
 
 // Client correlates java-ebpf traces with Redis profile stacks and merges a
 // structure-only call trie into Redis (DB 1). Transaction inventory is the
-// insights transactions table (resource_attributes), written on the engine
+// insights transactions table (source_identity), written on the engine
 // flush. Structure trie dumps to ClickHouse are handled by the leader flusher.
 type Client struct {
 	batcher *invocationBatcher

@@ -12,7 +12,7 @@ import (
 )
 
 // Operator actions on guardrail recommendations. Every action is exposed through
-// the HTTP API and the debug UI alike; nothing here touches the ingest path
+// the HTTP API; nothing here touches the ingest path
 // except the guardrail snapshot reload, which is the same one a manual
 // guardrail edit triggers.
 

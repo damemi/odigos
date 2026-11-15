@@ -111,7 +111,7 @@ type Sink interface {
 	Deliver(ctx context.Context, events []Event, externalIDs ExternalIDHint) []DeliveryResult
 	// Test performs a cheap connectivity check with the configured
 	// credentials (a synthetic event or a backend ping). Used by
-	// POST /integrations/{id}/test and the debug UI.
+	// POST /integrations/{id}/test.
 	Test(ctx context.Context) error
 }
 

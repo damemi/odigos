@@ -1,6 +1,6 @@
 // Package sinks assembles the backend catalog. Adding a backend is a new
 // package under sinks/ plus one line in NewRegistry; everything else
-// (dispatcher, API, debug UI) is generic over the registry.
+// (dispatcher, API) is generic over the registry.
 package sinks
 
 import (

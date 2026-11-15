@@ -359,7 +359,8 @@ type InsightsObservationSummary {
   traceId: String!
   transactionId: ID!
   observedAt: String!
-  durationMs: Int!
+  "Root span duration in microseconds."
+  durationUs: Int!
   sampleReason: InsightsSampleReason!
 }
 
@@ -367,7 +368,8 @@ type InsightsObservation {
   traceId: String!
   transactionId: ID!
   observedAt: String!
-  durationMs: Int!
+  "Root span duration in microseconds."
+  durationUs: Int!
   sampleReason: InsightsSampleReason!
   """
   Base64-encoded OTLP protobuf; only available on the single-observation query.

@@ -9,53 +9,35 @@ import (
 )
 
 // countingRepo embeds the interface (so unused methods exist) and counts how
-// many UpsertTransaction calls reach the backing store.
+// many UpsertTransaction calls reach the backing store. Like the real
+// repository, it identifies a transaction by its hashed id.
 type countingRepo struct {
 	repo.Repository
 	mu    sync.Mutex
 	calls int
-	byKey map[string]repo.Transaction
-	next  int64
+	byID  map[int64]repo.Transaction
 }
 
 func newCountingRepo() *countingRepo {
-	return &countingRepo{byKey: map[string]repo.Transaction{}, next: 1}
+	return &countingRepo{byID: map[int64]repo.Transaction{}}
 }
 
-func (c *countingRepo) UpsertTransaction(_ context.Context, service, namespace, operation string, kind repo.TransactionKind) (repo.Transaction, error) {
+func (c *countingRepo) UpsertTransaction(_ context.Context, service, namespace, operation string, kind repo.TransactionKind, sourceIdentity map[string]string) (repo.Transaction, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.calls++
-	k := service + "|" + namespace + "|" + operation + "|" + string(kind)
-	if tx, ok := c.byKey[k]; ok {
-		return tx, nil
+	tx := repo.NewTransaction(service, namespace, operation, kind, sourceIdentity)
+	if existing, ok := c.byID[tx.ID]; ok {
+		return existing, nil
 	}
-	tx := repo.Transaction{ID: c.next, Service: service, Namespace: namespace, Operation: operation, Kind: kind}
-	c.next++
-	c.byKey[k] = tx
+	c.byID[tx.ID] = tx
 	return tx, nil
-}
-
-func (c *countingRepo) GetTransactionByID(_ context.Context, transactionID int64) (repo.Transaction, bool, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, tx := range c.byKey {
-		if tx.ID == transactionID {
-			return tx, true, nil
-		}
-	}
-	return repo.Transaction{}, false, nil
 }
 
 func (c *countingRepo) DeleteTransaction(_ context.Context, transactionID int64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for k, tx := range c.byKey {
-		if tx.ID == transactionID {
-			delete(c.byKey, k)
-			return nil
-		}
-	}
+	delete(c.byID, transactionID)
 	return nil
 }
 
@@ -65,13 +47,13 @@ func TestTxnCache_ServesRepeatsFromMemory(t *testing.T) {
 	ctx := context.Background()
 
 	// First lookup is a miss → hits the repo.
-	tx1, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP)
+	tx1, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	// Many repeats are all hits → no further repo calls.
 	for i := 0; i < 100; i++ {
-		got, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP)
+		got, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP, nil)
 		if err != nil {
 			t.Fatalf("upsert: %v", err)
 		}
@@ -84,7 +66,7 @@ func TestTxnCache_ServesRepeatsFromMemory(t *testing.T) {
 	}
 
 	// A different identity is a distinct miss.
-	if _, err := c.UpsertTransaction(ctx, "user-svc", "ns", "GET /cart", repo.KindHTTP); err != nil {
+	if _, err := c.UpsertTransaction(ctx, "user-svc", "ns", "GET /cart", repo.KindHTTP, nil); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	if inner.calls != 2 {
@@ -93,21 +75,25 @@ func TestTxnCache_ServesRepeatsFromMemory(t *testing.T) {
 }
 
 // TestTxnCache_KeyedByAllIdentityFields guards that service, namespace,
-// operation, AND kind each participate in the cache key (so e.g. an HTTP vs
-// GRPC same-name op, or the same service in two namespaces, are not conflated).
+// operation, kind AND source identity each participate in the cache key (so
+// e.g. an HTTP vs GRPC same-name op, the same service in two namespaces, or
+// the same op in two workloads, are not conflated).
 func TestTxnCache_KeyedByAllIdentityFields(t *testing.T) {
 	inner := newCountingRepo()
 	c := WrapTransactions(inner)
 	ctx := context.Background()
 
-	_, _ = c.UpsertTransaction(ctx, "svc", "ns", "op", repo.KindHTTP)
-	_, _ = c.UpsertTransaction(ctx, "svc", "ns", "op", repo.KindGRPC)  // kind differs
-	_, _ = c.UpsertTransaction(ctx, "svc", "ns", "op2", repo.KindHTTP) // operation differs
-	_, _ = c.UpsertTransaction(ctx, "svc2", "ns", "op", repo.KindHTTP) // service differs
-	_, _ = c.UpsertTransaction(ctx, "svc", "ns2", "op", repo.KindHTTP) // namespace differs
+	_, _ = c.UpsertTransaction(ctx, "svc", "ns", "op", repo.KindHTTP, nil)
+	_, _ = c.UpsertTransaction(ctx, "svc", "ns", "op", repo.KindGRPC, nil)  // kind differs
+	_, _ = c.UpsertTransaction(ctx, "svc", "ns", "op2", repo.KindHTTP, nil) // operation differs
+	_, _ = c.UpsertTransaction(ctx, "svc2", "ns", "op", repo.KindHTTP, nil) // service differs
+	_, _ = c.UpsertTransaction(ctx, "svc", "ns2", "op", repo.KindHTTP, nil) // namespace differs
+	_, _ = c.UpsertTransaction(ctx, "svc", "ns", "op", repo.KindHTTP,
+		map[string]string{"odigos.workload.name": "a"}) // source identity differs
+	_, _ = c.UpsertTransaction(ctx, "svc", "ns", "op", repo.KindHTTP, map[string]string{}) // empty = nil
 
-	if inner.calls != 5 {
-		t.Fatalf("expected 5 distinct identities, got %d backing calls", inner.calls)
+	if inner.calls != 6 {
+		t.Fatalf("expected 6 distinct identities, got %d backing calls", inner.calls)
 	}
 }
 
@@ -116,11 +102,11 @@ func TestTxnCache_InvalidatesOnDelete(t *testing.T) {
 	c := WrapTransactions(inner)
 	ctx := context.Background()
 
-	tx, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP)
+	tx, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	if _, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP); err != nil {
+	if _, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP, nil); err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	if inner.calls != 1 {
@@ -130,7 +116,7 @@ func TestTxnCache_InvalidatesOnDelete(t *testing.T) {
 	if err := c.DeleteTransaction(ctx, tx.ID); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
-	if _, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP); err != nil {
+	if _, err := c.UpsertTransaction(ctx, "user-svc", "ns", "POST /checkout", repo.KindHTTP, nil); err != nil {
 		t.Fatalf("upsert after delete: %v", err)
 	}
 	if inner.calls != 2 {

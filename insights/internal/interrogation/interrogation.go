@@ -31,7 +31,7 @@ type Options struct {
 	// (clickhouse://user:pass@host:9000/interrogation).
 	ClickHouseDSN string
 	// InsightsDatabase is the insights inventory database that holds
-	// transactions.resource_attributes (usually odigos_insights).
+	// transactions.source_identity (usually odigos_insights).
 	InsightsDatabase string
 	// RedisEndpoint is the cacheDb Redis address (host:port) the loop flushes
 	// call tries from (logical DB 1). When empty the flush is skipped.

@@ -1119,7 +1119,7 @@ type ComplexityRoot struct {
 	}
 
 	InsightsObservation struct {
-		DurationMs    func(childComplexity int) int
+		DurationUs    func(childComplexity int) int
 		ObservedAt    func(childComplexity int) int
 		RawOtlp       func(childComplexity int) int
 		SampleReason  func(childComplexity int) int
@@ -1128,7 +1128,7 @@ type ComplexityRoot struct {
 	}
 
 	InsightsObservationSummary struct {
-		DurationMs    func(childComplexity int) int
+		DurationUs    func(childComplexity int) int
 		ObservedAt    func(childComplexity int) int
 		SampleReason  func(childComplexity int) int
 		TraceID       func(childComplexity int) int
@@ -7927,12 +7927,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsLearningPolicy.ScopeKey(childComplexity), true
 
-	case "InsightsObservation.durationMs":
-		if e.complexity.InsightsObservation.DurationMs == nil {
+	case "InsightsObservation.durationUs":
+		if e.complexity.InsightsObservation.DurationUs == nil {
 			break
 		}
 
-		return e.complexity.InsightsObservation.DurationMs(childComplexity), true
+		return e.complexity.InsightsObservation.DurationUs(childComplexity), true
 
 	case "InsightsObservation.observedAt":
 		if e.complexity.InsightsObservation.ObservedAt == nil {
@@ -7969,12 +7969,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsObservation.TransactionID(childComplexity), true
 
-	case "InsightsObservationSummary.durationMs":
-		if e.complexity.InsightsObservationSummary.DurationMs == nil {
+	case "InsightsObservationSummary.durationUs":
+		if e.complexity.InsightsObservationSummary.DurationUs == nil {
 			break
 		}
 
-		return e.complexity.InsightsObservationSummary.DurationMs(childComplexity), true
+		return e.complexity.InsightsObservationSummary.DurationUs(childComplexity), true
 
 	case "InsightsObservationSummary.observedAt":
 		if e.complexity.InsightsObservationSummary.ObservedAt == nil {
@@ -39002,8 +39002,8 @@ func (ec *executionContext) fieldContext_Insights_observations(ctx context.Conte
 				return ec.fieldContext_InsightsObservationSummary_transactionId(ctx, field)
 			case "observedAt":
 				return ec.fieldContext_InsightsObservationSummary_observedAt(ctx, field)
-			case "durationMs":
-				return ec.fieldContext_InsightsObservationSummary_durationMs(ctx, field)
+			case "durationUs":
+				return ec.fieldContext_InsightsObservationSummary_durationUs(ctx, field)
 			case "sampleReason":
 				return ec.fieldContext_InsightsObservationSummary_sampleReason(ctx, field)
 			}
@@ -39066,8 +39066,8 @@ func (ec *executionContext) fieldContext_Insights_observation(ctx context.Contex
 				return ec.fieldContext_InsightsObservation_transactionId(ctx, field)
 			case "observedAt":
 				return ec.fieldContext_InsightsObservation_observedAt(ctx, field)
-			case "durationMs":
-				return ec.fieldContext_InsightsObservation_durationMs(ctx, field)
+			case "durationUs":
+				return ec.fieldContext_InsightsObservation_durationUs(ctx, field)
 			case "sampleReason":
 				return ec.fieldContext_InsightsObservation_sampleReason(ctx, field)
 			case "rawOtlp":
@@ -41595,8 +41595,8 @@ func (ec *executionContext) fieldContext_InsightsAnomalyIssue_anomalyTrace(_ con
 				return ec.fieldContext_InsightsObservation_transactionId(ctx, field)
 			case "observedAt":
 				return ec.fieldContext_InsightsObservation_observedAt(ctx, field)
-			case "durationMs":
-				return ec.fieldContext_InsightsObservation_durationMs(ctx, field)
+			case "durationUs":
+				return ec.fieldContext_InsightsObservation_durationUs(ctx, field)
 			case "sampleReason":
 				return ec.fieldContext_InsightsObservation_sampleReason(ctx, field)
 			case "rawOtlp":
@@ -41650,8 +41650,8 @@ func (ec *executionContext) fieldContext_InsightsAnomalyIssue_baselineTrace(_ co
 				return ec.fieldContext_InsightsObservation_transactionId(ctx, field)
 			case "observedAt":
 				return ec.fieldContext_InsightsObservation_observedAt(ctx, field)
-			case "durationMs":
-				return ec.fieldContext_InsightsObservation_durationMs(ctx, field)
+			case "durationUs":
+				return ec.fieldContext_InsightsObservation_durationUs(ctx, field)
 			case "sampleReason":
 				return ec.fieldContext_InsightsObservation_sampleReason(ctx, field)
 			case "rawOtlp":
@@ -50885,8 +50885,8 @@ func (ec *executionContext) fieldContext_InsightsGuardrailViolationDetail_eviden
 				return ec.fieldContext_InsightsObservation_transactionId(ctx, field)
 			case "observedAt":
 				return ec.fieldContext_InsightsObservation_observedAt(ctx, field)
-			case "durationMs":
-				return ec.fieldContext_InsightsObservation_durationMs(ctx, field)
+			case "durationUs":
+				return ec.fieldContext_InsightsObservation_durationUs(ctx, field)
 			case "sampleReason":
 				return ec.fieldContext_InsightsObservation_sampleReason(ctx, field)
 			case "rawOtlp":
@@ -53185,8 +53185,8 @@ func (ec *executionContext) fieldContext_InsightsObservation_observedAt(_ contex
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsObservation_durationMs(ctx context.Context, field graphql.CollectedField, obj *model.InsightsObservation) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsObservation_durationMs(ctx, field)
+func (ec *executionContext) _InsightsObservation_durationUs(ctx context.Context, field graphql.CollectedField, obj *model.InsightsObservation) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsObservation_durationUs(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -53199,7 +53199,7 @@ func (ec *executionContext) _InsightsObservation_durationMs(ctx context.Context,
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.DurationMs, nil
+		return obj.DurationUs, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -53216,7 +53216,7 @@ func (ec *executionContext) _InsightsObservation_durationMs(ctx context.Context,
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsObservation_durationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsObservation_durationUs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsObservation",
 		Field:      field,
@@ -53449,8 +53449,8 @@ func (ec *executionContext) fieldContext_InsightsObservationSummary_observedAt(_
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsObservationSummary_durationMs(ctx context.Context, field graphql.CollectedField, obj *model.InsightsObservationSummary) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsObservationSummary_durationMs(ctx, field)
+func (ec *executionContext) _InsightsObservationSummary_durationUs(ctx context.Context, field graphql.CollectedField, obj *model.InsightsObservationSummary) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsObservationSummary_durationUs(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -53463,7 +53463,7 @@ func (ec *executionContext) _InsightsObservationSummary_durationMs(ctx context.C
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.DurationMs, nil
+		return obj.DurationUs, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -53480,7 +53480,7 @@ func (ec *executionContext) _InsightsObservationSummary_durationMs(ctx context.C
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsObservationSummary_durationMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsObservationSummary_durationUs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsObservationSummary",
 		Field:      field,
@@ -111038,8 +111038,8 @@ func (ec *executionContext) _InsightsObservation(ctx context.Context, sel ast.Se
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "durationMs":
-			out.Values[i] = ec._InsightsObservation_durationMs(ctx, field, obj)
+		case "durationUs":
+			out.Values[i] = ec._InsightsObservation_durationUs(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -111102,8 +111102,8 @@ func (ec *executionContext) _InsightsObservationSummary(ctx context.Context, sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "durationMs":
-			out.Values[i] = ec._InsightsObservationSummary_durationMs(ctx, field, obj)
+		case "durationUs":
+			out.Values[i] = ec._InsightsObservationSummary_durationUs(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

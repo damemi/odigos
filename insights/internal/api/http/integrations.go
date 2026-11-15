@@ -50,8 +50,7 @@ func (a *API) registryOrErr() (*notify.Registry, error) {
 	return reg, nil
 }
 
-// IntegrationCatalog is the shared read path for GET /integrations/catalog and
-// the debug UI's integration editor.
+// IntegrationCatalog is the read path for GET /integrations/catalog.
 func (a *API) IntegrationCatalog() ([]notify.Descriptor, error) {
 	reg, err := a.registryOrErr()
 	if err != nil {
@@ -61,7 +60,7 @@ func (a *API) IntegrationCatalog() ([]notify.Descriptor, error) {
 }
 
 // ListIntegrations returns every integration with redacted config and derived
-// health. Shared by GET /integrations and the debug UI.
+// health for GET /integrations.
 func (a *API) ListIntegrations(ctx context.Context) ([]apitypes.Integration, error) {
 	reg, err := a.registryOrErr()
 	if err != nil {
@@ -105,7 +104,7 @@ func (a *API) GetIntegration(ctx context.Context, id string) (apitypes.Integrati
 }
 
 // CreateIntegration validates the body against the backend's descriptor and
-// stores it with a new id. Shared by POST /integrations and the debug UI.
+// stores it with a new id for POST /integrations.
 func (a *API) CreateIntegration(ctx context.Context, body apitypes.IntegrationWrite) (apitypes.Integration, error) {
 	reg, err := a.registryOrErr()
 	if err != nil {
@@ -177,7 +176,7 @@ func (a *API) DeleteIntegration(ctx context.Context, id string) error {
 }
 
 // TestIntegration builds the sink from stored config and runs its
-// connectivity check. Shared by POST /integrations/{id}/test and the debug UI.
+// connectivity check for POST /integrations/{id}/test.
 func (a *API) TestIntegration(ctx context.Context, id string) error {
 	reg, err := a.registryOrErr()
 	if err != nil {
@@ -239,7 +238,7 @@ func (a *API) ListIntegrationAttempts(ctx context.Context, id string, windowHour
 }
 
 // FindingDeliveries returns a finding's ledger rows across every integration.
-// Shared by GET /findings/deliveries and the investigate pages in the debug UI.
+// Backs GET /findings/deliveries.
 func (a *API) FindingDeliveries(ctx context.Context, findingKey string) ([]repo.NotificationDispatch, error) {
 	if findingKey == "" {
 		return nil, fmt.Errorf("%w: finding_key is required", errBadRequest)

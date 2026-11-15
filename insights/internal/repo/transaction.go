@@ -2,13 +2,16 @@ package repo
 
 import (
 	"hash/fnv"
+	"slices"
 	"time"
 )
 
 // HashTransactionID derives a stable, non-negative id from the transaction's
-// identity, so the same (service, namespace, operation, kind) maps to the same
-// id on every replica with no DB round-trip or auto-increment.
-func HashTransactionID(service, namespace, operation string, kind TransactionKind) int64 {
+// identity, so the same (service, namespace, operation, kind, source identity)
+// maps to the same id on every replica with no DB round-trip or auto-increment.
+// Source identity pairs are hashed in key order; an empty source identity adds
+// nothing, so it hashes the same as (service, namespace, operation, kind).
+func HashTransactionID(service, namespace, operation string, kind TransactionKind, sourceIdentity map[string]string) int64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(service))
 	_, _ = h.Write([]byte{0})
@@ -17,23 +20,35 @@ func HashTransactionID(service, namespace, operation string, kind TransactionKin
 	_, _ = h.Write([]byte(operation))
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(kind))
+	keys := make([]string, 0, len(sourceIdentity))
+	for k := range sourceIdentity {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	for _, k := range keys {
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(k))
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(sourceIdentity[k]))
+	}
 	return int64(h.Sum64() >> 1) // drop the sign bit → always non-negative
 }
 
 // NewTransaction builds a Transaction with a deterministic id from its identity
 // fields. Safe to call on the hot path - no DB.
-func NewTransaction(service, namespace, operation string, kind TransactionKind) Transaction {
+func NewTransaction(service, namespace, operation string, kind TransactionKind, sourceIdentity map[string]string) Transaction {
 	return Transaction{
-		ID:        HashTransactionID(service, namespace, operation, kind),
-		Service:   service,
-		Namespace: namespace,
-		Operation: operation,
-		Kind:      kind,
+		ID:             HashTransactionID(service, namespace, operation, kind, sourceIdentity),
+		Service:        service,
+		Namespace:      namespace,
+		Operation:      operation,
+		Kind:           kind,
+		SourceIdentity: sourceIdentity,
 	}
 }
 
 // TransactionKind classifies the trigger that started the trace. The engine
-// uses it to pick per-kind defaults and the debug UI uses it for filtering.
+// uses it to pick per-kind defaults and the API uses it for filtering.
 // A plain string in the DB, so adding a kind needs no migration.
 type TransactionKind string
 
@@ -63,12 +78,11 @@ type Transaction struct {
 	Namespace string
 	Operation string
 	Kind      TransactionKind
-	// ResourceAttributes are the source-identity attributes used for keyed
-	// lookups (k8s workload, host, instance, …). They are not part of the
-	// transaction_id hash: the same (service, namespace, operation, kind) is
-	// one transaction across replicas. Agents choose which keys to write so
-	// the inventory is not bound to Kubernetes columns.
-	ResourceAttributes map[string]string
+	// SourceIdentity holds the resource attributes that name the Odigos source
+	// the entry span came from (see engine.SourceIdentityFunc). It is part of
+	// the identity hash, so the same operation in two workloads is two
+	// transactions.
+	SourceIdentity map[string]string
 }
 
 // TransactionRef is a transaction's id and the service it belongs to, without

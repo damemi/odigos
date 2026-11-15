@@ -19,7 +19,7 @@ import (
 func seedPromotedService(t *testing.T, r *fakeRepo, namespace, service string, operations ...string) {
 	t.Helper()
 	for _, op := range operations {
-		tx, err := r.UpsertTransaction(context.Background(), service, namespace, op, repo.KindHTTP)
+		tx, err := r.UpsertTransaction(context.Background(), service, namespace, op, repo.KindHTTP, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -109,7 +109,7 @@ func TestServiceGuardrailRecommendation_NotOfferedWhileLearning(t *testing.T) {
 	ctx := context.Background()
 
 	seedPromotedService(t, r, "ns", "shop", "GET /products")
-	if _, err := r.UpsertTransaction(ctx, "shop", "ns", "GET /cart", repo.KindHTTP); err != nil {
+	if _, err := r.UpsertTransaction(ctx, "shop", "ns", "GET /cart", repo.KindHTTP, nil); err != nil {
 		t.Fatal(err)
 	}
 	written, err := eng.refreshServiceGuardrailRecommendation(ctx, "ns", "shop")

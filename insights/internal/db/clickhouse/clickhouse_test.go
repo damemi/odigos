@@ -94,12 +94,12 @@ func TestTransactions(t *testing.T) {
 	ctx := context.Background()
 	svc := uniqueService("txn")
 
-	tx, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	// Idempotent: same identity → same id, no duplicate.
-	again, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP)
+	again, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert again: %v", err)
 	}
@@ -138,17 +138,16 @@ func TestTransactions(t *testing.T) {
 	}
 }
 
-func TestTransactionResourceAttributes(t *testing.T) {
+func TestTransactionSourceIdentity(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
 	svc := uniqueService("res")
-	tx := repo.NewTransaction(svc, "ns", "GET /x", repo.KindHTTP)
-	tx.ResourceAttributes = map[string]string{
+	tx := repo.NewTransaction(svc, "ns", "GET /x", repo.KindHTTP, map[string]string{
 		"k8s.namespace.name":   "ns",
 		"odigos.workload.kind": "Deployment",
 		"odigos.workload.name": "api",
 		"k8s.container.name":   "app",
-	}
+	})
 	if err := r.UpsertTransactions(ctx, []repo.Transaction{tx}); err != nil {
 		t.Fatal(err)
 	}
@@ -156,8 +155,8 @@ func TestTransactionResourceAttributes(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("get: ok=%v err=%v", ok, err)
 	}
-	if got.ResourceAttributes["odigos.workload.name"] != "api" {
-		t.Fatalf("resource_attributes = %#v", got.ResourceAttributes)
+	if got.SourceIdentity["odigos.workload.name"] != "api" {
+		t.Fatalf("source_identity = %#v", got.SourceIdentity)
 	}
 }
 
@@ -306,7 +305,7 @@ func TestObservationsAndPolicies(t *testing.T) {
 
 	obs := repo.Observation{
 		TraceID: fmt.Sprintf("trace-%d", rand.Int63()), TransactionID: txID,
-		ObservedAt: time.Now(), DurationMs: 42, SampleReason: "example", RawOTLP: []byte("rawbytes"),
+		ObservedAt: time.Now(), DurationUs: 42_000, SampleReason: "example", RawOTLP: []byte("rawbytes"),
 	}
 	if err := r.InsertObservations(ctx, []repo.Observation{obs}); err != nil {
 		t.Fatalf("insert observation: %v", err)
@@ -358,7 +357,7 @@ func TestAnomalyIssueLifecycle(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
 	svc := uniqueService("anom")
-	tx, err := r.UpsertTransaction(ctx, svc, "ns", "POST /x", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, svc, "ns", "POST /x", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert txn: %v", err)
 	}
@@ -455,7 +454,7 @@ func TestListAnomalyIssuesByTransactionScoped(t *testing.T) {
 	since := time.Now().Add(-time.Hour)
 
 	mkTxnWithIssue := func(op string) (int64, string) {
-		tx, err := r.UpsertTransaction(ctx, uniqueService("anom-scope"), "ns", op, repo.KindHTTP)
+		tx, err := r.UpsertTransaction(ctx, uniqueService("anom-scope"), "ns", op, repo.KindHTTP, nil)
 		if err != nil {
 			t.Fatalf("upsert txn: %v", err)
 		}
@@ -503,7 +502,7 @@ func TestListAnomalyIssuesByTransactionScoped(t *testing.T) {
 func TestDeleteAnomalyIssues(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
-	tx, err := r.UpsertTransaction(ctx, uniqueService("del-anom"), "ns", "POST /buy", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, uniqueService("del-anom"), "ns", "POST /buy", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -607,7 +606,7 @@ func TestSystemSettingsRoundTrip(t *testing.T) {
 func TestObservationCountAndBoundedRead(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
-	tx, err := r.UpsertTransaction(ctx, uniqueService("obs-cap"), "ns", "GET /c", repo.KindHTTP)
+	tx, err := r.UpsertTransaction(ctx, uniqueService("obs-cap"), "ns", "GET /c", repo.KindHTTP, nil)
 	if err != nil {
 		t.Fatalf("upsert txn: %v", err)
 	}
@@ -619,7 +618,7 @@ func TestObservationCountAndBoundedRead(t *testing.T) {
 	for i := 0; i < total; i++ {
 		batch = append(batch, repo.Observation{
 			TransactionID: tx.ID, TraceID: fmt.Sprintf("cap-%d-%d", tx.ID, i),
-			ObservedAt: base.Add(time.Duration(i) * time.Second), DurationMs: int64(i),
+			ObservedAt: base.Add(time.Duration(i) * time.Second), DurationUs: int64(i),
 			SampleReason: "example", RawOTLP: []byte(fmt.Sprintf("blob-%d", i)),
 		})
 	}

@@ -97,16 +97,18 @@ spec:
               kubectl rollout status deployment -l app=geolocation
         - assert:
             timeout: 2m
-            file: ../mount-method/simple-demo-instrumented.yaml
+            file: ../mount-method/02-simple-demo-instrumented.yaml
 
     - name: '[3 - CSI + Karpenter] Switch to CSI with karpenter.enabled'
       try:
+        # The CSI driver mounts with Bidirectional propagation, so the chart requires a privileged odiglet for it.
         - script:
             timeout: 2m
             content: |
               ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" \
                 --set image.tag=e2e-test \
                 --set instrumentor.mountMethod=k8s-csi-driver \
+                --set odiglet.odiglet.privileged=true \
                 --set karpenter.enabled=true
         - script:
             timeout: 1m
@@ -138,7 +140,7 @@ spec:
               kubectl rollout status deployment -l app=geolocation
         - assert:
             timeout: 2m
-            file: ../mount-method/simple-demo-instrumented-with-csi.yaml
+            file: ../mount-method/04-simple-demo-instrumented-with-csi.yaml
 
 
 

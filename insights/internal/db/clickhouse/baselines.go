@@ -35,27 +35,6 @@ const settledClassesSQL = `SELECT transaction_id, class,
 		 FROM baseline_meta
 		 GROUP BY transaction_id, class`
 
-// ListBaselinePromotion tallies settled-vs-total classes per transaction in a
-// single aggregate query (see settledClassesSQL). Cold path; backs overview
-// metrics without the per-transaction reads baselinesFor would need.
-func (r *Repo) ListBaselinePromotion(ctx context.Context) ([]repo.BaselinePromotion, error) {
-	return queryRows(ctx, r.conn, "list baseline promotion",
-		`SELECT transaction_id, countIf(is_settled = 1) AS promoted, count() AS total
-		 FROM (`+settledClassesSQL+`)
-		 GROUP BY transaction_id`,
-		func(s rowScanner) (repo.BaselinePromotion, error) {
-			var (
-				p               repo.BaselinePromotion
-				promoted, total uint64
-			)
-			if err := s.Scan(&p.TransactionID, &promoted, &total); err != nil {
-				return repo.BaselinePromotion{}, err
-			}
-			p.Promoted, p.Total = int(promoted), int(total)
-			return p, nil
-		})
-}
-
 // ListUnpromotedBaselines returns unpromoted classes that may be eligible for
 // time-based promotion, prefiltered by filter. The engine re-evaluates each row
 // with shouldPromote before promoting.
@@ -385,7 +364,7 @@ func (r *Repo) ApplyBaselineDeltas(ctx context.Context, deltas []repo.BaselineDe
 }
 
 // PromoteBaselineClass flips a class's promoted flag on. Called by the
-// promotion gate (and the debug UI) once a class clears the observation/age
+// promotion gate once a class clears the observation/age
 // thresholds.
 func (r *Repo) PromoteBaselineClass(ctx context.Context, transactionID int64, class repo.DeviationClass) error {
 	// promoted is max()-aggregated, so appending a promoted=1 meta row flips it

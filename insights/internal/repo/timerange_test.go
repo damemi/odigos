@@ -51,22 +51,3 @@ func TestResolveFindingsTimeRangeRejectsInverted(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
-
-func TestParseWindowHoursQuery(t *testing.T) {
-	cases := []struct {
-		in   string
-		want int
-	}{
-		{"", 0},
-		{"24", 24},
-		{"0", 0},
-		{"-3", 0},
-		{"abc", 0},
-		{"12.5", 0},
-	}
-	for _, tc := range cases {
-		if got := ParseWindowHoursQuery(tc.in); got != tc.want {
-			t.Fatalf("ParseWindowHoursQuery(%q) = %d, want %d", tc.in, got, tc.want)
-		}
-	}
-}

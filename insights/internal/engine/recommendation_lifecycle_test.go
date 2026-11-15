@@ -76,7 +76,7 @@ func newRecommendationHarness(t *testing.T, promoteAfter int64) *recommendationH
 	h.eng = New(h.r, nil, countOnlyConfig(promoteAfter), nil)
 	h.eng.clock = func() time.Time { return h.now }
 	h.eng.SetGuardrailConfig(guardrailConfigFrom())
-	id, ok := subTransactionID(otlpAccountTrace(0, "1", "1"), nil)
+	id, ok := h.eng.subTransactionID(otlpAccountTrace(0, "1", "1"), nil)
 	if !ok {
 		t.Fatal("test trace has no transaction identity")
 	}

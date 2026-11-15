@@ -51,7 +51,7 @@ func testClient(t *testing.T) *Client {
 
 func (c *Client) insertInventory(t *testing.T, id int64, operation string, attrs map[string]string) {
 	t.Helper()
-	sql := fmt.Sprintf("INSERT INTO %q.%q (transaction_id, service, namespace, operation, kind, resource_attributes) VALUES (?, ?, ?, ?, ?, ?)",
+	sql := fmt.Sprintf("INSERT INTO %q.%q (transaction_id, service, namespace, operation, kind, source_identity) VALUES (?, ?, ?, ?, ?, ?)",
 		c.insightsDatabase, insightsTransactionsTable)
 	if err := c.conn.Exec(context.Background(), sql, id, "svc", "ns", operation, "http", attrs); err != nil {
 		t.Fatalf("insert inventory: %v", err)
@@ -84,8 +84,8 @@ func k8sAttrs(s SourceKey) map[string]string {
 
 // TestSourcesComeFromTrie covers the loop's source and transaction discovery:
 // a source with inventory rows but no trie is never listed, a transaction id
-// shared by two workloads is listed under both (resource_attributes on the
-// inventory row is last-write-wins), and DeleteSource takes a source out of
+// shared by two workloads is listed under both (membership comes from the
+// trie, not from the inventory row's source_identity), and DeleteSource takes a source out of
 // the listing so it is not re-deleted every tick.
 func TestSourcesComeFromTrie(t *testing.T) {
 	c := testClient(t)

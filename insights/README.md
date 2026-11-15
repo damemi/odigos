@@ -23,7 +23,6 @@ insights/
     api/http/                              # Gin HTTP server: /api/v1/* + /healthz + /readyz
     otlp/                                  # OTLP gRPC receiver - thin shell; hands traces to engine
     engine/                                # scoring core: decode, identify transaction, score, fire-or-merge
-    debugui/                               # /debug/* HTML inspector (local-dev only)
 ```
 
 ## Data model
@@ -44,7 +43,7 @@ merges to do the cross-replica merge instead of locking and rewriting rows:
 | `baseline_set_members` | ReplacingMergeTree | one row per member of a **set** baseline (D1 edges, D2 peers, D5 libs, D6 accesses/shapes). The union across flushes and replicas is free, and duplicate inserts collapse (idempotent, no dedup key). |
 | `baseline_counters` | SummingMergeTree | one row per bucket of an **additive** baseline (the D7 payload-size histogram). Each flush appends a delta and ClickHouse sums. |
 | `baseline_meta` | AggregatingMergeTree | per-class scalars: `observation_count` (summed), `promoted` and `saturated` (OR'd via max), `learning_started_at` (anchored via min), `data_schema_version` (max). |
-| `trace_observations` | ReplacingMergeTree | sampled traces kept as UI/debug examples per transaction. Stores the original OTLP protobuf bytes for just this trace's spans (`raw_otlp String`), so the UI gets Jaeger-grade fidelity (events, links, status, typed attributes) without an external trace backend. **NOT every trace is stored**; the engine keeps a bounded set (`example`) plus the trace that fired each anomaly (`anomaly_evidence`). A 120-day `TTL` matches the findings lookback ceiling. |
+| `trace_observations` | ReplacingMergeTree | sampled traces kept as UI examples per transaction. Stores the original OTLP protobuf bytes for just this trace's spans (`raw_otlp String`), so the UI gets Jaeger-grade fidelity (events, links, status, typed attributes) without an external trace backend. **NOT every trace is stored**; the engine keeps a bounded set (`example`) plus the trace that fired each anomaly (`anomaly_evidence`). A 120-day `TTL` matches the findings lookback ceiling. |
 | `alert_policies` | ReplacingMergeTree(updated_at) | rules: which combinations of deviated classes fire. One policy per scope (`scope_type`/`scope_key`: global, service, or transaction); most-specific scope wins and fully replaces the broader one. Seeded with the global `default-any-1-of-8`. |
 | `anomalies` | ReplacingMergeTree(version) | one row per fired alert, with per-class evidence so the UI explains itself. Acknowledgement re-inserts the row with a higher `version`. |
 | `learning_policies` | ReplacingMergeTree(updated_at) | per-class learning-phase configuration: a `conditions` list combined by `match_mode` (`all`/`any`/`k_of` with `min_matches`), scoped by `scope_type`/`scope_key` (global, service, or transaction). Seeded at startup. See [Learning-phase configuration](#learning-phase-configuration). |
@@ -170,7 +169,7 @@ runs for every trace the OTLP receiver decodes and does the following:
 6. Sample the trace as a `trace_observations` row for the UI.
    Transactions represent a *class* of traces (everything with the same
    root span); the engine keeps a small bounded set of representatives so
-   the debug UI / future product UI can render concrete examples. The
+   the UI can render concrete examples. The
    sampling rules (see `sampler.go`):
    - `example` - at most one normal trace per transaction per
      `ExampleSampleInterval` (default 30s), capped at
@@ -292,7 +291,7 @@ Instead the engine freezes the class as **saturated**:
   auto guardrail, recommendation mining), so one leaking class does not hold
   the rest of the transaction in learning forever;
 - it is surfaced as `saturated` on the class, `saturated_classes` on the
-  transaction, a `saturated` badge in the debug UI, and the
+  transaction, and the
   `insights_engine_baseline_classes_saturated_total` metric.
 
 The flag lives in `baseline_meta.saturated` as a `max()` aggregate, like
@@ -319,7 +318,7 @@ Promotion follows the per-class
 D1/D2/D5 promote after ~50 normal traces while D3/D4 need ~100-200 (or
 their time window). To graduate every class quickly in local dev, send ~200
 traces or lower the counts in the `learning_policies` table and restart.
-Promotion is visible in `/debug/transactions/:id`. Once D1 is promoted, send
+Promotion is visible in `GET /api/v1/transactions/{transaction_id}/baseline`. Once D1 is promoted, send
 one trace with a brand-new child span name to fire a D1 deviation.
 
 ## Modularity
@@ -359,37 +358,6 @@ Env vars the service reads:
 - `ODIGOS_LOG_LEVEL` (`error|warn|info|debug`, default `info`).
 - `ODIGOS_ONPREM_TOKEN` (or `ODIGOS_CLOUD_TOKEN`) - required to pass
   `odigosauth.AssertEnterpriseOdigosToken` at startup.
-
-## Debug UI
-
-The service mounts a server-rendered HTML inspector at
-`http://localhost:8080/debug` **unconditionally** while we're in the
-skeleton phase, so the team can hit it from a port-forward without any
-extra config. There is a `TODO` in `cmd/main.go` to gate it behind an env
-var or remove it before the first customer release.
-
-Pages:
-
-- `/debug` - counts of transactions, baseline rows, observations, anomalies, policies.
-- `/debug/transactions` - transactions grouped by service, most active first. Click a service to drill into its transactions, or "all transactions" for the flat list (both ordered by volume).
-- `/debug/transactions/:id` - drill into one: per-class baseline rows (with the rebuilt `data` JSON pretty-printed in a collapsible block) and the sampled trace observations. Each observation shows a waterfall (proto-decoded from `raw_otlp` at render time, same code path the engine uses) and a "show proto-JSON" expander with the full OTLP payload - events, links, status, all attributes.
-- `/debug/anomalies` - last 24h of fired anomalies with their per-class evidence blobs.
-- `/debug/anomaly-policies` - the scoped alert-policy editor: the global default plus per-service and per-transaction overrides (most-specific wins). Edits apply live.
-- `/debug/learning-policies` - the scoped learning-policy editor (per class, per scope).
-
-The UI is read-only for trace data - no seed, no wipe, no ingest routes;
-the only way trace data appears is by sending real OTLP traces to the
-receiver on `:4317` (the overview page has a one-liner with
-`telemetrygen`). It does expose policy/baseline admin actions (edit
-policies, reset baselines, accept/dismiss anomalies) that write through
-the same `Repository`. To start from a clean slate, drop the bundled
-ClickHouse PVC and let the migration Job + the engine repopulate.
-
-The UI talks to the same `Repository` the production HTTP API uses, so
-what you see is exactly what the scoring engine sees at runtime. It
-exists only to make engine development self-contained - no need to wire
-a real UI or query ClickHouse by hand while iterating on scorer logic.
-
 
 ## Building the image
 

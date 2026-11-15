@@ -70,15 +70,6 @@ type BaselineClass struct {
 // runaway class cannot hold the rest of the transaction hostage.
 func (b BaselineClass) Settled() bool { return b.Promoted || b.Saturated }
 
-// BaselinePromotion is one transaction's promotion tally: graduated classes
-// (Promoted) out of the total learned (Total). Returned by
-// ListBaselinePromotion for the debug UI overview's promotion metrics.
-type BaselinePromotion struct {
-	TransactionID int64
-	Promoted      int
-	Total         int
-}
-
 // UnpromotedBaselineFilter narrows ListUnpromotedBaselines to classes that may
 // be eligible for time-based promotion. The repo applies a coarse SQL prefilter;
 // the engine re-evaluates shouldPromote on each candidate.
