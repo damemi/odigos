@@ -121,6 +121,23 @@ target "agents" {
   tags = ["${ORG}/odigos-enterprise-agents:${TAG}"]
 }
 
+# The -extended variants also package legacy .NET and Ruby 2.7, for odiglet.extended.
+target "odiglet-extended" {
+  inherits = ["odiglet"]
+  args = {
+    EXTENDED = "true"
+  }
+  tags = ["${ORG}/odigos-enterprise-odiglet:${TAG}-extended"]
+}
+
+target "agents-extended" {
+  inherits = ["agents"]
+  args = {
+    EXTENDED = "true"
+  }
+  tags = ["${ORG}/odigos-enterprise-agents:${TAG}-extended"]
+}
+
 target "ui" {
   inherits   = ["_platform-k8s"]
   dockerfile = "ui/Dockerfile"

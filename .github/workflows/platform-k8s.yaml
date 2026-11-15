@@ -1,6 +1,7 @@
 # PR checks for the Odigos Kubernetes platform:
-# - Builds the instrumentor, insights, collector, operator, odiglet, agents, ui and cli images on Depot from
-#   platform-k8s.docker-bake.hcl and scans each for vulnerabilities, along with the webapp's dependencies.
+# - Builds the instrumentor, insights, collector, operator, odiglet, agents, ui and cli images, and the
+#   extended odiglet and agents images, on Depot from platform-k8s.docker-bake.hcl and scans each for
+#   vulnerabilities, along with the webapp's dependencies.
 # - Runs the unit tests of every platform module, with the collector modules in their own job, and
 #   builds the CLI binaries with goreleaser.
 # - Packages the Helm charts and pushes the odigos chart to the project's Depot registry as an OCI chart.
@@ -34,8 +35,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Each job bakes one target of platform-k8s.docker-bake.hcl on Depot, saves it to Depot's
-  # registry as <DEPOT_SAVE_TAG>-<target>, and scans it from there.
+  # Each job bakes one target of platform-k8s.docker-bake.hcl on Depot and saves it to Depot's
+  # registry as <DEPOT_SAVE_TAG>-<target>.
   build-depot-images:
     name: build-${{ matrix.service }}
     runs-on: depot-ubuntu-latest
@@ -54,7 +55,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [instrumentor, insights, collector, operator, odiglet, agents, ui, cli]
+        service: [instrumentor, insights, collector, operator, odiglet, agents, ui, cli, odiglet-extended, agents-extended]
     steps:
       - uses: actions/checkout@v7
 
@@ -83,7 +84,7 @@ jobs:
           # The operator's and the CLI's embedded Helm chart version.
           ODIGOS_VERSION: v0.0.0-pr${{ github.event.number || github.run_number }}
           # Read by the bake file as odiglet's github_token secret, for the private instrumentation repos.
-          GITHUB_TOKEN: ${{ matrix.service == 'odiglet' && secrets.RELEASE_BOT_TOKEN || '' }}
+          GITHUB_TOKEN: ${{ startsWith(matrix.service, 'odiglet') && secrets.RELEASE_BOT_TOKEN || '' }}
         with:
           files: platform-k8s.docker-bake.hcl
           targets: ${{ matrix.service }}
@@ -92,42 +93,63 @@ jobs:
           save: true
           save-tag: ${{ env.DEPOT_SAVE_TAG }}
 
-      - name: Scan image for vulnerabilities
+  # Scans the images saved by build-depot-images, after the builds, so the e2e tests don't wait for the scans.
+  scan-depot-images:
+    name: scan-depot-images
+    needs: build-depot-images
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/setup-action authenticate to Depot over OIDC.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGES_SAVE_TAG: ${{ needs.build-depot-images.outputs.save-tag }}
+    steps:
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      # registry: makes grype read the saved images from Depot instead of the local Docker daemon.
+      - name: Log in to the Depot registry
+        run: |
+          echo "$DEPOT_TOKEN" | docker login registry.depot.dev --username x-token --password-stdin
+          echo "IMAGE=registry:registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG" >> "$GITHUB_ENV"
+
+      # Findings are reported, not failed on; an image that could not be scanned fails the step.
+      - name: Scan images for vulnerabilities
         id: scan
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          # registry: makes grype read the saved image from Depot instead of the local Docker daemon.
-          image: registry:registry.depot.dev/${{ env.DEPOT_PROJECT }}:${{ env.DEPOT_SAVE_TAG }}-${{ matrix.service }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
+          images: |
+            odigos-instrumentor=${{ env.IMAGE }}-instrumentor
+            odigos-insights=${{ env.IMAGE }}-insights
+            odigos-collector=${{ env.IMAGE }}-collector
+            odigos-operator=${{ env.IMAGE }}-operator
+            odigos-odiglet=${{ env.IMAGE }}-odiglet
+            odigos-agents=${{ env.IMAGE }}-agents
+            odigos-ui=${{ env.IMAGE }}-ui
+            odigos-cli=${{ env.IMAGE }}-cli
+          severity-cutoff: ""
 
-      - name: Save ${{ matrix.service }} scan JSON
+      - name: Save scan JSONs
         if: always()
         env:
-          RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
-          IMAGE_NAME: odigos-${{ matrix.service }}
-          SCAN_OUTCOME: ${{ steps.scan.outcome }}
-          CUTOFF_EXCEEDED: ${{ steps.scan.outputs.cutoff-exceeded }}
+          RESULTS_DIR: ${{ steps.scan.outputs.results-dir }}
         run: |
-          # The scanner fails both on findings over the cutoff (allowed here) and when grype
-          # could not scan, e.g. reading the Depot registry; it then writes an empty report.
-          if [ "$SCAN_OUTCOME" = "failure" ] && [ "$CUTOFF_EXCEEDED" != "true" ]; then
-            echo "::error::The vulnerability scan did not run; see the scan step's log."
-            exit 1
-          fi
           mkdir -p /tmp/scan-results
-          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
-            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
-            exit 1
-          fi
-          jq --arg img "$IMAGE_NAME" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > "/tmp/scan-results/$IMAGE_NAME.json"
+          for results in "$RESULTS_DIR"/*.json; do
+            [ -e "$results" ] || continue
+            name=$(basename "$results" .json)
+            jq --arg img "$name" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$results" > "/tmp/scan-results/$name.json"
+          done
 
-      - name: Upload ${{ matrix.service }} scan results
+      - name: Upload scan results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vuln-scan-result-${{ matrix.service }}-${{ github.sha }}.json
-          path: /tmp/scan-results/odigos-${{ matrix.service }}.json
+          name: vuln-scan-result-platform-k8s-${{ github.sha }}
+          path: /tmp/scan-results/
           retention-days: 30
 
   build-frontend:
@@ -183,7 +205,7 @@ jobs:
   vulnerability-report:
     name: Generate Vulnerability Report
     needs:
-      - build-depot-images
+      - scan-depot-images
       - build-frontend
     runs-on: depot-ubuntu-latest
     if: always()
@@ -272,6 +294,7 @@ jobs:
       pull-requests: read
     outputs:
       versions: ${{ steps.k8s.outputs.versions }}
+      release-tests: ${{ steps.release-tests.outputs.tests }}
     steps:
       - name: Resolve Kubernetes versions from PR labels
         id: k8s
@@ -282,14 +305,32 @@ jobs:
           # Each must be in the supported-versions of .github/actions/kubernetes-tests.
           release-versions: "1.21.12,1.29,1.37"
 
+      # Release PRs (from a pre-releases/* or patch-release/* branch into releases/*) also run
+      # important-customers, once per customer, and karpenter-mount-methods on the default version.
+      - name: Resolve release-only tests
+        id: release-tests
+        env:
+          RUN_RELEASE_TESTS: ${{ (startsWith(github.head_ref, 'pre-releases/') || startsWith(github.head_ref, 'patch-release/')) && startsWith(github.base_ref, 'releases/') }}
+          RELEASE_TESTS: >-
+            [{"kube-version": "1.32", "test": "important-customers", "customer": "greatwall", "extended": true},
+            {"kube-version": "1.32", "test": "important-customers", "customer": "kratos"},
+            {"kube-version": "1.32", "test": "karpenter-mount-methods"}]
+        run: |
+          tests='[]'
+          if [[ "$RUN_RELEASE_TESTS" == true ]]; then
+            tests=$RELEASE_TESTS
+          fi
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
+
   # Installs Odigos on a kind cluster of one Kubernetes version, with the images saved by
   # build-depot-images, and runs one e2e test against it.
   e2e:
-    name: E2E (${{ matrix.kube-version }}, ${{ matrix.test }})
+    name: E2E (${{ matrix.kube-version }}, ${{ matrix.test }}${{ matrix.customer && format(', {0}', matrix.customer) || '' }})
     needs:
       - resolve-kubernetes-versions
       - build-depot-images
-    runs-on: depot-ubuntu-24.04-4
+    # On 4 CPUs, Odigos and the test apps start slowly enough to fail probes and asserts.
+    runs-on: depot-ubuntu-24.04-8
     strategy:
       fail-fast: false
       matrix:
@@ -329,6 +370,7 @@ jobs:
           # Go versions the enterprise Go agent does not fully support (stripped binaries, gRPC context propagation).
           - kube-version: "1.21.12"
             test: control-plane
+        include: ${{ fromJSON(needs.resolve-kubernetes-versions.outputs.release-tests) }}
     permissions:
       contents: read
       id-token: write
@@ -351,6 +393,19 @@ jobs:
 
       - name: Install chainsaw
         uses: kyverno/action-install-chainsaw@v0.2.13
+
+      # karpenter-mount-methods builds the Karpenter KWOK controller into the kind cluster with ko.
+      - name: Set up Go
+        if: matrix.test == 'karpenter-mount-methods'
+        uses: actions/setup-go@v7
+        with:
+          go-version: "~1.26.6"
+          check-latest: true
+          cache: true
+
+      - name: Install ko
+        if: matrix.test == 'karpenter-mount-methods'
+        uses: ko-build/setup-ko@v0.9
 
       # A test with its own kind-config.yaml runs on that cluster layout, as in the kubernetes-tests action.
       - name: Resolve test directory
@@ -420,7 +475,11 @@ jobs:
 
       # Points each chart image component at its image saved by build-depot-images, in the values file
       # every test installs with. The scheduler and autoscaler Deployments run 0 replicas, so they need no override.
+      # The chart does not add the -extended suffix to an image override, so a test that installs with
+      # odiglet.extended gets the extended images here.
       - name: Write Helm values for the Depot images
+        env:
+          EXTENDED_SUFFIX: ${{ matrix.extended && '-extended' || '' }}
         run: |
           set -euo pipefail
           IMAGE="registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG"
@@ -430,8 +489,8 @@ jobs:
           images:
             enterprise-instrumentor: $IMAGE-instrumentor
             enterprise-collector: $IMAGE-collector
-            enterprise-odiglet: $IMAGE-odiglet
-            enterprise-agents: $IMAGE-agents
+            enterprise-odiglet: $IMAGE-odiglet$EXTENDED_SUFFIX
+            enterprise-agents: $IMAGE-agents$EXTENDED_SUFFIX
             enterprise-ui: $IMAGE-ui
             cli: $IMAGE-cli
             # Victoria Metrics is published, not built in this repo.
@@ -463,11 +522,13 @@ jobs:
           WASP_ENABLED: ${{ endsWith(matrix.test, '+wasp') }}
           LATEST_RELEASE_TAG: ${{ steps.latest-release.outputs.tag }}
           KUBERNETES_MINOR_VERSION: ${{ steps.node-image.outputs.minor-version }}
-        # The asserts read k8sMinorVersion (e.g. odiglet uses hostNetwork before 1.26), as passed by
-        # the kubernetes-tests action. None of these tests read its other values.
+          CUSTOMER: ${{ matrix.customer }}
+        # The asserts read k8sMinorVersion (e.g. odiglet uses hostNetwork before 1.26), and
+        # important-customers reads customer.
         run: |
           chainsaw test "$TEST_DIR" --apply-timeout 30s --values - <<EOF
           k8sMinorVersion: ${KUBERNETES_MINOR_VERSION}
+          customer: "${CUSTOMER}"
           EOF
 
       - name: Cluster diagnostics
@@ -486,7 +547,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: kind-logs-${{ matrix.kube-version }}-${{ matrix.test }}
+          name: kind-logs-${{ matrix.kube-version }}-${{ matrix.test }}${{ matrix.customer && format('-{0}', matrix.customer) || '' }}
           path: kind-logs
         continue-on-error: true
 
@@ -597,6 +658,7 @@ jobs:
     name: Platform K8s CI
     needs:
       - build-depot-images
+      - scan-depot-images
       - build-frontend
       - vulnerability-report
       - package-helm

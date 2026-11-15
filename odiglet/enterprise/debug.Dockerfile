@@ -128,7 +128,7 @@ COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.62.0@sha2
 COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.62.0@sha256:666a455f9408f03d10911ec33725a873782098a3c2fb3ac2bca4529eb9f1cd51 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # php-community
-COPY --from=public.ecr.aws/odigos/agents/php-community:v0.10.0@sha256:84462b470d6f552fd37d9cf2552b521b74cf76df591ed57ae4348d6318faeec6 /instrumentations/php /instrumentations/php
+COPY --from=public.ecr.aws/odigos/agents/php-community:v0.12.0@sha256:29b949cebd81bf9e8d5d715bfb72e6b45f9e2151f8e7fb8419c520faae2af16c /instrumentations/php /instrumentations/php
 
 # ruby-community
 COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.11@sha256:1cb067fa84fdd24316b0c9e0fbfc057bb7055263d92fe1f31a898a8e55edcf67 /instrumentations/ruby /instrumentations/ruby

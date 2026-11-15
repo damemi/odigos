@@ -37,7 +37,7 @@ spec:
         - script:
             timeout: 5m
             content: |
-              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test
+              ../../../cli/odigos install --ns odigos-test -f ../../common/odigos-values.yaml --set onPremToken="$ODIGOS_API_KEY" --set image.tag=e2e-test
               kubectl label namespace odigos-test odigos.io/system-object="true"
               ../../common/verify_odigos_installation.sh odigos-test
         - assert:
@@ -80,7 +80,7 @@ spec:
         - script:
             timeout: 2m
             content: |
-              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" \
+              ../../../cli/odigos install --ns odigos-test -f ../../common/odigos-values.yaml --set onPremToken="$ODIGOS_API_KEY" \
                 --set image.tag=e2e-test \
                 --set instrumentor.mountMethod=k8s-init-container
         - script:
@@ -105,7 +105,7 @@ spec:
         - script:
             timeout: 2m
             content: |
-              ../../../cli/odigos install --ns odigos-test --set onPremToken="$ODIGOS_API_KEY" \
+              ../../../cli/odigos install --ns odigos-test -f ../../common/odigos-values.yaml --set onPremToken="$ODIGOS_API_KEY" \
                 --set image.tag=e2e-test \
                 --set instrumentor.mountMethod=k8s-csi-driver \
                 --set odiglet.odiglet.privileged=true \
