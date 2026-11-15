@@ -8,10 +8,6 @@ inputs:
   test-scenario:
     description: "Name of the test scenario under tests/e2e"
     required: true
-  customer:
-    description: "Customer slug passed to the enterprise important-customers scenario"
-    required: false
-    default: ""
   github-token:
     description: "Token with packages: read (the GITHUB_TOKEN), written to ~/.npmrc so the UI test's yarn install can fetch the UI Kit from GitHub Packages"
     required: true
@@ -79,23 +75,6 @@ runs:
         else
           echo "KIND_CONFIG=tests/common/apply/kind-config.yaml" >> "$GITHUB_ENV"
         fi
-
-    - name: Set up Go
-      if: inputs.test-scenario == 'karpenter-mount-methods'
-      uses: actions/setup-go@v7
-      with:
-        go-version: "~1.26.6"
-        check-latest: true
-        cache: true
-
-    - name: Install ko
-      if: inputs.test-scenario == 'karpenter-mount-methods'
-      uses: ko-build/setup-ko@v0.9
-
-    - name: Install jq
-      if: inputs.test-scenario == 'karpenter-mount-methods'
-      shell: bash
-      run: sudo apt-get update && sudo apt-get install -y jq
 
     - name: Set up Helm
       uses: azure/setup-helm@v4
@@ -166,14 +145,12 @@ runs:
         TEST_SCENARIO: ${{ inputs.test-scenario }}
         ODIGOS_API_KEY: ${{ inputs.onprem-token }}
         IMAGE_TAG: e2e-test
-        CUSTOMER: ${{ inputs.customer }}
         KUBERNETES_MINOR_VERSION: ${{ fromJSON(inputs.supported-versions)[inputs.kubernetes-version].minorVersion }}
       run: |
         chainsaw test "$TEST_DIR" \
           --apply-timeout 30s \
           --values - <<EOF
         k8sMinorVersion: ${KUBERNETES_MINOR_VERSION}
-        customer: "${CUSTOMER}"
         EOF
 
     - name: Cluster diagnostics

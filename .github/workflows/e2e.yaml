@@ -117,7 +117,7 @@ jobs:
           key: ${{ github.run_id }}-odigos-images
 
   kubernetes-test:
-    name: kubernetes-test (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer && format(', {0}', matrix.customer) || '' }})
+    name: kubernetes-test (${{ matrix.kube-version }}, ${{ matrix.test-scenario }})
     needs: [build-odigos-images, build-cli]
     runs-on: depot-ubuntu-24.04-8
     permissions:
@@ -135,43 +135,15 @@ jobs:
           - "central-infrastructure"
           - "central-ui"
           - "central-auth-idp"
-        # Release PRs also run the important-customers configurations.
-        include:
-          - kube-version: "1.32"
-            test-scenario: "important-customers"
-            customer: greatwall
-          - kube-version: "1.32"
-            test-scenario: "important-customers"
-            customer: kratos
-          - kube-version: "1.32"
-            test-scenario: "karpenter-mount-methods"
 
     steps:
-      - name: Check if test should run
-        id: should-run
-        run: |
-          if [[ "${{ matrix.test-scenario }}" == "important-customers" || "${{ matrix.test-scenario }}" == "karpenter-mount-methods" ]]; then
-            HEAD_REF="${{ github.head_ref }}"
-            BASE_REF="${{ github.base_ref }}"
-            if [[ ( "$HEAD_REF" == pre-releases/* || "$HEAD_REF" == patch-release/* ) && "$BASE_REF" == releases/* ]]; then
-              echo "skip=false" >> $GITHUB_OUTPUT
-            else
-              echo "skip=true" >> $GITHUB_OUTPUT
-            fi
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Checkout
-        if: steps.should-run.outputs.skip != 'true'
         uses: actions/checkout@v5
 
       - name: Run Kubernetes test
-        if: steps.should-run.outputs.skip != 'true'
         uses: ./.github/actions/kubernetes-tests
         with:
           kubernetes-version: ${{ matrix.kube-version }}
           test-scenario: ${{ matrix.test-scenario }}
-          customer: ${{ matrix.customer || '' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
