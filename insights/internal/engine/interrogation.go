@@ -25,83 +25,72 @@ func (e *Engine) SetInterrogation(c *interrogation.Client) {
 	e.interrogation = c
 }
 
-// enqueueInterrogation queues java-ebpf service entries under t for Redis
-// call-trie correlation. Transaction inventory is the insights transactions
-// table (source_identity), written on the baseline flush. Runs after
-// processOne so only identities the per-service cap admitted get a trie: a
-// dropped identity never reaches the inventory, so its trie would never be
-// analyzed. Off the scoring hot path: Record is non-blocking; Redis runs on
-// the batcher flush.
-func (e *Engine) enqueueInterrogation(t *Trace) {
-	if e == nil || e.interrogation == nil || t == nil || t.Root == nil {
+// enqueueInterrogation queues one sub-transaction for Redis call-trie
+// correlation, as called by Process for each sub-trace processOne resolved and
+// admitted. tx is processOne's transaction, so the trie's transaction id is the
+// inventory's (source_identity, written on the baseline flush) and a dropped
+// identity never gets a trie it could not be analyzed under. Off the scoring
+// hot path: Record is non-blocking and the batcher merges a trace's
+// sub-transactions back into one batch; Redis runs on the batcher flush.
+// rawTraceID is the trace's raw id bytes, from interrogationTraceID.
+func (e *Engine) enqueueInterrogation(rawTraceID string, sub *Trace, tx repo.Transaction) {
+	if e == nil || e.interrogation == nil || rawTraceID == "" || sub == nil || sub.Root == nil {
 		return
 	}
-	var dims []repo.TransactionIdentityDimension
-	if e.system != nil {
-		dims = e.system.snapshot().settings.TransactionIdentityDimensions
-	}
-	batch, ok := interrogationBatchFromTrace(t, dims, e.sourceIdentity, e.admission.contains)
+	itx, ok := interrogationTransaction(sub.Root, tx, e.sourceIdentity)
 	if !ok {
 		return
 	}
-	e.interrogation.Record(batch)
+	e.interrogation.Record(interrogation.TraceBatch{
+		TraceID:      rawTraceID,
+		Transactions: []interrogation.TraceTransaction{itx},
+	})
 }
 
-// interrogationBatchFromTrace builds the Redis correlation batch for t.
-// sourceIdentity must be the engine's, so trie transaction ids match the
-// inventory. admitted, when non-nil, filters out identities the inventory does
-// not hold.
-func interrogationBatchFromTrace(t *Trace, dims []repo.TransactionIdentityDimension, sourceIdentity SourceIdentityFunc, admitted func(serviceKey string, id int64) bool) (interrogation.TraceBatch, bool) {
-	rawTraceID, err := hex.DecodeString(t.TraceID)
-	if err != nil || len(rawTraceID) == 0 {
-		return interrogation.TraceBatch{}, false
+// interrogationTraceID returns t's raw trace id bytes for the Redis profile
+// key, decoded once per trace by Process. Empty when interrogation is off or
+// the id doesn't decode, which skips interrogation for the whole trace.
+func (e *Engine) interrogationTraceID(t *Trace) string {
+	if e == nil || e.interrogation == nil {
+		return ""
 	}
+	raw, err := hex.DecodeString(t.TraceID)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
 
-	entries := serviceEntrySpans(t)
-	txs := make([]interrogation.TraceTransaction, 0, len(entries))
-	for _, entry := range entries {
-		if !isJavaEbpfInstrumentation(entry) {
-			continue
-		}
-		wl, ok := workloadIdentityFromSpan(entry)
-		if !ok {
-			continue
-		}
-		spanIDs := sameWorkloadSpanIDs(entry, sourceIdentity)
-		if len(spanIDs) == 0 {
-			continue
-		}
-		ident, ok := identifyTransaction(&Trace{Root: entry})
-		if !ok {
-			continue
-		}
-		ident.Operation = applyIdentityDimensions(ident.Operation, entry, dims)
-		tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind, sourceIdentity(entry.ResourceAttrs))
-		if admitted != nil && !admitted(repo.ServiceScopeKey(ident.Namespace, ident.Service), tx.ID) {
-			continue
-		}
-		ts := time.Unix(0, int64(entry.StartUnix)).UTC()
-		if entry.StartUnix == 0 {
-			ts = time.Now().UTC()
-		}
-		txs = append(txs, interrogation.TraceTransaction{
-			Timestamp:     ts,
-			Namespace:     wl.namespace,
-			WorkloadKind:  wl.kind,
-			WorkloadName:  wl.name,
-			ContainerName: wl.container,
-			TransactionID: strconv.FormatInt(tx.ID, 10),
-			RootSpanName:  entry.Name,
-			RootSpanKind:  entry.Kind.String(),
-			SpanIDs:       spanIDs,
-		})
+// interrogationTransaction builds the correlation entry for one sub-transaction
+// rooted at entry. Only java-ebpf entries with a complete k8s workload identity
+// and at least one same-workload span qualify. sourceIdentity must be the
+// engine's, so same-workload matching agrees with the transaction identity.
+func interrogationTransaction(entry *Span, tx repo.Transaction, sourceIdentity SourceIdentityFunc) (interrogation.TraceTransaction, bool) {
+	if !isJavaEbpfInstrumentation(entry) {
+		return interrogation.TraceTransaction{}, false
 	}
-	if len(txs) == 0 {
-		return interrogation.TraceBatch{}, false
+	wl, ok := workloadIdentityFromSpan(entry)
+	if !ok {
+		return interrogation.TraceTransaction{}, false
 	}
-	return interrogation.TraceBatch{
-		TraceID:      string(rawTraceID),
-		Transactions: txs,
+	spanIDs := sameWorkloadSpanIDs(entry, sourceIdentity)
+	if len(spanIDs) == 0 {
+		return interrogation.TraceTransaction{}, false
+	}
+	ts := time.Unix(0, int64(entry.StartUnix)).UTC()
+	if entry.StartUnix == 0 {
+		ts = time.Now().UTC()
+	}
+	return interrogation.TraceTransaction{
+		Timestamp:     ts,
+		Namespace:     wl.namespace,
+		WorkloadKind:  wl.kind,
+		WorkloadName:  wl.name,
+		ContainerName: wl.container,
+		TransactionID: strconv.FormatInt(tx.ID, 10),
+		RootSpanName:  entry.Name,
+		RootSpanKind:  entry.Kind.String(),
+		SpanIDs:       spanIDs,
 	}, true
 }
 

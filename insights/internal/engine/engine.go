@@ -172,12 +172,14 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 	// each firing down the trace and keeps it to a single finding on the
 	// outermost transaction that flagged it. See anomaly_claims.go.
 	claims := newAnomalyClaims(t)
+	rawTraceID := e.interrogationTraceID(t)
 	for _, sub := range subs {
-		e.processOne(ctx, sub, t, claims)
+		// Only identities processOne resolved and the per-service cap admitted
+		// get a call trie; see enqueueInterrogation.
+		if tx, ok := e.processOne(ctx, sub, t, claims); ok {
+			e.enqueueInterrogation(rawTraceID, sub, tx)
+		}
 	}
-	// After processOne so the per-service cap has admitted (or dropped) each
-	// identity; see enqueueInterrogation.
-	e.enqueueInterrogation(t)
 }
 
 // processOne scores and learns a single (sub-)transaction. The Trace passed
@@ -187,7 +189,9 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 // can capture the whole trace as evidence (the offending caller lives above
 // this sub-trace's root and isn't in t's subtree). claims is shared across the
 // trace's entries and suppresses deviations an enclosing entry already fired.
-func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *anomalyClaims) {
+// Returns the sub-trace's transaction, with ok=false when the trace was dropped
+// before the per-service cap admitted it.
+func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *anomalyClaims) (repo.Transaction, bool) {
 	// 1. Resolve transaction identity locally (deterministic hash — no DB).
 	// Persistence of the transactions row rides the write-behind flush with
 	// activity/baselines, so delete+recreate works across replicas without a
@@ -196,7 +200,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	if !ok {
 		// Broken-context trace (root is an outbound client span). Drop
 		// silently - see discardableRoot for the reasoning.
-		return
+		return repo.Transaction{}, false
 	}
 	// Fold configured low-cardinality dimensions from the entry span only into
 	// Operation before hashing. Changing settings creates new transaction_ids
@@ -217,7 +221,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 		metrics.IncTransactionsDroppedOverCap()
 		e.warn("drop unseen transaction, service at max_transactions_per_service",
 			fmt.Errorf("%s: %q holds %d transactions", serviceKey, ident.Operation, system.settings.MaxTransactionsPerService))
-		return
+		return repo.Transaction{}, false
 	}
 	// Every service that anchors a transaction is in-mesh; remember it so
 	// guardrail egress enforcement won't police a call to it just because its
@@ -237,7 +241,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	entry, err := e.store.get(ctx, tx.ID)
 	if err != nil {
 		e.warn("load baselines", err)
-		return
+		return tx, true
 	}
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
@@ -403,6 +407,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 		e.recordExampleSample(ctx, t, tx, entry)
 		e.recordRelationSample(ctx, full, tx, entry)
 	}
+	return tx, true
 }
 
 // allClassesPromoted reports whether every scored class for this transaction has

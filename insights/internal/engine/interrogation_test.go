@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"encoding/hex"
 	"strconv"
 	"testing"
@@ -15,8 +16,7 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
-func TestInterrogationBatchFromTrace_JavaEbpfOnly(t *testing.T) {
-	traceID := hex.EncodeToString([]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
+func TestInterrogationTransaction_JavaEbpfOnly(t *testing.T) {
 	entryID := hex.EncodeToString([]byte{1, 2, 3, 4, 5, 6, 7, 8})
 	childID := hex.EncodeToString([]byte{8, 7, 6, 5, 4, 3, 2, 1})
 	otherSvcID := hex.EncodeToString([]byte{9, 9, 9, 9, 9, 9, 9, 9})
@@ -51,50 +51,54 @@ func TestInterrogationBatchFromTrace_JavaEbpfOnly(t *testing.T) {
 	}
 	entry.Children = []*Span{child, other}
 
-	batch, ok := interrogationBatchFromTrace(&Trace{
-		TraceID: traceID,
-		Root:    entry,
-		Spans:   []*Span{entry, child, other},
-	}, nil, sourceidentity.FromK8sResourceAttributesMap, nil)
+	// The trie is filed under the transaction processOne resolved for the entry.
+	tx := repo.NewTransaction("checkout", "default", "GET /buy", repo.KindHTTP, sourceidentity.FromK8sResourceAttributesMap(javaRes))
+	itx, ok := interrogationTransaction(entry, tx, sourceidentity.FromK8sResourceAttributesMap)
 	if !ok {
-		t.Fatal("expected java-ebpf batch")
+		t.Fatal("expected java-ebpf entry to be recorded")
 	}
-	if len(batch.Transactions) != 1 {
-		t.Fatalf("transactions = %d, want 1 (pricing is not java-ebpf)", len(batch.Transactions))
+	if itx.TransactionID != strconv.FormatInt(tx.ID, 10) || itx.WorkloadName != "checkout" || itx.WorkloadKind != "Deployment" {
+		t.Fatalf("unexpected tx: %+v want id %d", itx, tx.ID)
 	}
-	tx := batch.Transactions[0]
-	wantID := repo.NewTransaction("checkout", "default", "GET /buy", repo.KindHTTP, sourceidentity.FromK8sResourceAttributesMap(javaRes))
-	if tx.TransactionID != strconv.FormatInt(wantID.ID, 10) || tx.WorkloadName != "checkout" {
-		t.Fatalf("unexpected tx: %+v want id %d", tx, wantID.ID)
-	}
-	if tx.RootSpanName != "GET /buy" || tx.RootSpanKind == "" {
-		t.Fatalf("missing root span fields: %+v", tx)
+	if itx.RootSpanName != "GET /buy" || itx.RootSpanKind == "" {
+		t.Fatalf("missing root span fields: %+v", itx)
 	}
 	// Same-workload only: entry + child, not pricing.
-	if len(tx.SpanIDs) != 2 {
-		t.Fatalf("span ids = %d, want 2", len(tx.SpanIDs))
+	if len(itx.SpanIDs) != 2 {
+		t.Fatalf("span ids = %d, want 2", len(itx.SpanIDs))
 	}
-	wantRaw := string([]byte{1, 2, 3, 4, 5, 6, 7, 8})
-	if tx.SpanIDs[0] != wantRaw {
+	if itx.SpanIDs[0] != string([]byte{1, 2, 3, 4, 5, 6, 7, 8}) {
 		t.Fatalf("entry span id not raw bytes")
 	}
 
-	// An identity the per-service cap dropped gets no trie: the inventory
-	// never holds it, so the loop could never analyze it.
-	adm := newTransactionAdmission()
-	full := &Trace{TraceID: traceID, Root: entry, Spans: []*Span{entry, child, other}}
-	if _, ok := interrogationBatchFromTrace(full, nil, sourceidentity.FromK8sResourceAttributesMap, adm.contains); ok {
-		t.Fatal("expected unadmitted identity to be skipped")
+	// A non-java-ebpf entry (pricing's own sub-transaction) yields nothing.
+	pricingTx := repo.NewTransaction("pricing", "default", "POST /calc", repo.KindHTTP, sourceidentity.FromK8sResourceAttributesMap(otherRes))
+	if _, ok := interrogationTransaction(other, pricingTx, sourceidentity.FromK8sResourceAttributesMap); ok {
+		t.Fatal("expected non-java-ebpf entry to be skipped")
 	}
-	adm.admit(repo.ServiceScopeKey("default", "checkout"), wantID.ID, 0)
-	if _, ok := interrogationBatchFromTrace(full, nil, sourceidentity.FromK8sResourceAttributesMap, adm.contains); !ok {
-		t.Fatal("expected admitted identity to be recorded")
-	}
+}
 
-	// Non-java root yields nothing.
-	entry.ResourceAttrs = otherRes
-	if _, ok := interrogationBatchFromTrace(&Trace{TraceID: traceID, Root: entry, Spans: []*Span{entry}}, nil, sourceidentity.FromK8sResourceAttributesMap, nil); ok {
-		t.Fatal("expected non-java-ebpf trace to be skipped")
+// TestProcessOne_ReportsAdmission guards what keeps dropped identities out of
+// interrogation: processOne reports ok=false for a sub-transaction the
+// per-service cap dropped, so Process never enqueues a trie for it.
+func TestProcessOne_ReportsAdmission(t *testing.T) {
+	ctx := context.Background()
+	eng := New(newFakeRepo(), nil, nil, nil)
+	eng.SetSystemConfig(newSystemConfig(repo.SystemSettings{MaxTransactionsPerService: 1}))
+
+	process := func(op string) (repo.Transaction, bool) {
+		tr := serverTrace("api", op)
+		return eng.processOne(ctx, tr, tr, newAnomalyClaims(tr))
+	}
+	admitted, ok := process("GET /a")
+	if !ok || admitted.Operation != "GET /a" {
+		t.Fatalf("first identity: ok=%v tx=%+v, want admitted", ok, admitted)
+	}
+	if _, ok := process("GET /b"); ok {
+		t.Fatal("identity over the per-service cap must not be reported as admitted")
+	}
+	if _, ok := process("GET /a"); !ok {
+		t.Fatal("known identity must stay admitted")
 	}
 }
 
