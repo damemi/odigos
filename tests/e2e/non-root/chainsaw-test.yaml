@@ -30,6 +30,7 @@ spec:
               # use the helm chart from main repo which is expected to be in a sibling directory to this repo
               helm upgrade --install odigos \
                 ../../../helm/odigos \
+                -f ../../common/odigos-values.yaml \
                 --create-namespace \
                 --namespace odigos-test \
                 --set image.tag=$IMAGE_TAG \

@@ -13,13 +13,13 @@ metadata:
 spec:
   initContainers:
     - name: init
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
   containers:
     - name: odiglet
       resources: {}
       securityContext:
         privileged: true
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
     - name: data-collection
       securityContext:
         privileged: false
@@ -58,7 +58,7 @@ spec:
         limits:
           (memory != null): true
     - name: csi-driver
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
       securityContext:
         privileged: true
       resources:
@@ -103,13 +103,13 @@ metadata:
 spec:
   initContainers:
     - name: init
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
   containers:
     - name: odiglet
       resources: {}
       securityContext:
         privileged: true
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
     - name: data-collection
       securityContext:
         privileged: false
@@ -148,7 +148,7 @@ spec:
         limits:
           (memory != null): true
     - name: csi-driver
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
       securityContext:
         privileged: true
       resources:

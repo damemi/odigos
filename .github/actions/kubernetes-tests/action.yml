@@ -12,10 +12,6 @@ inputs:
     description: "Customer slug passed to the enterprise important-customers scenario"
     required: false
     default: ""
-  wasp-enabled:
-    description: "Exported to chainsaw as WASP_ENABLED; scenarios that support it force the instrumentations onto WASP"
-    required: false
-    default: "false"
   github-token:
     description: "Token with packages: read (the GITHUB_TOKEN), written to ~/.npmrc so the UI test's yarn install can fetch the UI Kit from GitHub Packages"
     required: true
@@ -77,9 +73,6 @@ runs:
           exit 1
         fi
         echo "TEST_DIR=$TEST_DIR" >> "$GITHUB_ENV"
-        SCENARIO_SLUG="$TEST_SCENARIO"
-        [[ "${{ inputs.wasp-enabled }}" == "true" ]] && SCENARIO_SLUG="$SCENARIO_SLUG-with-wasp"
-        echo "scenario-slug=$SCENARIO_SLUG" >> "$GITHUB_OUTPUT"
         # Scenarios that need special node settings ship their own kind config.
         if [[ -f "$TEST_DIR/kind-config.yaml" ]]; then
           echo "KIND_CONFIG=$TEST_DIR/kind-config.yaml" >> "$GITHUB_ENV"
@@ -193,7 +186,6 @@ runs:
         ODIGOS_API_KEY: ${{ inputs.onprem-token }}
         IMAGE_TAG: e2e-test
         CUSTOMER: ${{ inputs.customer }}
-        WASP_ENABLED: ${{ inputs.wasp-enabled }}
         KUBERNETES_MINOR_VERSION: ${{ fromJSON(inputs.supported-versions)[inputs.kubernetes-version].minorVersion }}
         IS_HELM: ${{ inputs.test-scenario == 'helm-chart' || inputs.test-scenario == 'helm-upgrade' }}
       run: |
@@ -236,7 +228,7 @@ runs:
       if: failure() && inputs.test-scenario != 'ui'
       uses: actions/upload-artifact@v4
       with:
-        name: run-details-${{ steps.validate.outputs.scenario-slug }}-${{ inputs.kubernetes-version }}
+        name: run-details-${{ inputs.test-scenario }}-${{ inputs.kubernetes-version }}
         path: odigos_debug*.tar.gz
       continue-on-error: true
 
@@ -250,7 +242,7 @@ runs:
       if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: kind-logs-${{ steps.validate.outputs.scenario-slug }}-${{ inputs.kubernetes-version }}
+        name: kind-logs-${{ inputs.test-scenario }}-${{ inputs.kubernetes-version }}
         path: kind-logs
       continue-on-error: true
 
@@ -258,7 +250,7 @@ runs:
       if: failure() && inputs.test-scenario == 'ui'
       uses: actions/upload-artifact@v4
       with:
-        name: ui-screenshots-${{ steps.validate.outputs.scenario-slug }}-${{ inputs.kubernetes-version }}
+        name: ui-screenshots-${{ inputs.test-scenario }}-${{ inputs.kubernetes-version }}
         path: frontend/webapp/cypress/screenshots
       continue-on-error: true
 
@@ -266,7 +258,7 @@ runs:
       if: failure() && inputs.test-scenario == 'ui'
       uses: actions/upload-artifact@v4
       with:
-        name: ui-videos-${{ steps.validate.outputs.scenario-slug }}-${{ inputs.kubernetes-version }}
+        name: ui-videos-${{ inputs.test-scenario }}-${{ inputs.kubernetes-version }}
         path: frontend/webapp/cypress/videos
       continue-on-error: true
 

@@ -22,7 +22,7 @@ spec:
             timeout: 5m
             content: |
               echo "Installing Odigos with tag $IMAGE_TAG"
-              ../../../cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-init-container
+              ../../../cli/odigos install --ns odigos-test -f ../../common/odigos-values.yaml --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-init-container
               kubectl label namespace odigos-test odigos.io/system-object="true"
               bash ../../../tests/common/verify_odigos_installation.sh odigos-test
         - assert:
@@ -114,7 +114,7 @@ spec:
         - script:
             timeout: 1m10s
             content: |
-              ../../../cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-host-path
+              ../../../cli/odigos install --ns odigos-test -f ../../common/odigos-values.yaml --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-host-path
               bash ../../../tests/common/assert_config_value.sh -k mountMethod -v k8s-host-path
 
     - name: '[3 - Host Path Test] Odiglet ready with host-path'
@@ -148,7 +148,7 @@ spec:
         - script:
             timeout: 1m10s
             content: |
-              ../../../cli/odigos install --ns odigos-test --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-csi-driver --set odiglet.odiglet.privileged=true
+              ../../../cli/odigos install --ns odigos-test -f ../../common/odigos-values.yaml --set image.tag=$IMAGE_TAG --set onPremToken=$ODIGOS_API_KEY --set instrumentor.mountMethod=k8s-csi-driver --set odiglet.odiglet.privileged=true
               bash ../../../tests/common/assert_config_value.sh -k mountMethod -v k8s-csi-driver
 
     - name: '[4 - CSI Driver Test] Odiglet ready with CSI driver'

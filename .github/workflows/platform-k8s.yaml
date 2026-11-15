@@ -313,6 +313,19 @@ jobs:
           - multi-apps
           - jvm-metrics
           - instrumentation-rules
+          - helm-chart
+          - mount-method
+          - non-root
+          - control-plane
+          - python-ebpf
+          # <test>+wasp runs <test> with WASP_ENABLED.
+          - helm-chart+wasp
+          - python-ebpf+wasp
+        exclude:
+          # Control plane instrumentation is tested from k8s 1.29: older control plane binaries are built with
+          # Go versions the enterprise Go agent does not fully support (stripped binaries, gRPC context propagation).
+          - kube-version: "1.21.12"
+            test: control-plane
     # id-token lets the job log in to the Depot registry over OIDC.
     permissions:
       contents: read
@@ -334,6 +347,19 @@ jobs:
 
       - name: Install chainsaw
         uses: kyverno/action-install-chainsaw@v0.2.13
+
+      # A test with its own kind-config.yaml runs on that cluster layout, as in the kubernetes-tests action.
+      - name: Resolve test directory
+        env:
+          TEST: ${{ matrix.test }}
+        run: |
+          test_dir="tests/e2e/${TEST%+wasp}"
+          kind_config="$test_dir/kind-config.yaml"
+          [ -f "$kind_config" ] || kind_config=tests/common/apply/kind-config.yaml
+          {
+            echo "TEST_DIR=$test_dir"
+            echo "KIND_CONFIG=$kind_config"
+          } >> "$GITHUB_ENV"
 
       # The kind node image and minor version of each supported version are listed in the
       # kubernetes-tests action.
@@ -358,7 +384,7 @@ jobs:
           node_image: ${{ steps.node-image.outputs.node-image }}
           version: "v0.33.0"
           cluster_name: kind
-          config: tests/common/apply/kind-config.yaml
+          config: ${{ env.KIND_CONFIG }}
           ignore_failed_clean: true
 
       - name: Wait for cluster readiness
@@ -414,12 +440,12 @@ jobs:
           ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
           # The image.tag the tests install with, which the CLI reports as the cluster's version.
           IMAGE_TAG: e2e-test
-          TEST: ${{ matrix.test }}
+          WASP_ENABLED: ${{ endsWith(matrix.test, '+wasp') }}
           KUBERNETES_MINOR_VERSION: ${{ steps.node-image.outputs.minor-version }}
         # The asserts read k8sMinorVersion (e.g. odiglet uses hostNetwork before 1.26), as passed by
         # the kubernetes-tests action. None of these tests read its other values.
         run: |
-          chainsaw test "tests/e2e/$TEST" --apply-timeout 30s --values - <<EOF
+          chainsaw test "$TEST_DIR" --apply-timeout 30s --values - <<EOF
           k8sMinorVersion: ${KUBERNETES_MINOR_VERSION}
           EOF
 

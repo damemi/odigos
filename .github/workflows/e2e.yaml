@@ -145,7 +145,7 @@ jobs:
           key: ${{ github.run_id }}-odigos-images
 
   kubernetes-test:
-    name: kubernetes-test (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer && format(', {0}', matrix.customer) || '' }}${{ matrix.wasp-enabled && ', with_wasp' || '' }})
+    name: kubernetes-test (${{ matrix.kube-version }}, ${{ matrix.test-scenario }}${{ matrix.customer && format(', {0}', matrix.customer) || '' }})
     needs: [build-odigos-images, build-cli]
     runs-on: depot-ubuntu-24.04-8
     permissions:
@@ -160,27 +160,13 @@ jobs:
         kube-version: ["1.32"]
         test-scenario:
           - "ui"
-          - "helm-chart"
           - "helm-upgrade"
-          - "mount-method"
-          - "non-root"
-          - "control-plane"
-          - "python-ebpf"
           - "central-install"
           - "central-infrastructure"
           - "central-ui"
           - "central-auth-idp"
-        wasp-enabled: [false]
         # Release PRs also run the important-customers configurations.
         include:
-          # The with_wasp jobs force the instrumentations that support WASP onto it (ODIGOS_FORCE_WASP),
-          # since the CI kernel does not require it.
-          - kube-version: "1.32"
-            test-scenario: "helm-chart"
-            wasp-enabled: true
-          - kube-version: "1.32"
-            test-scenario: "python-ebpf"
-            wasp-enabled: true
           - kube-version: "1.32"
             test-scenario: "important-customers"
             customer: greatwall
@@ -217,7 +203,6 @@ jobs:
           kubernetes-version: ${{ matrix.kube-version }}
           test-scenario: ${{ matrix.test-scenario }}
           customer: ${{ matrix.customer || '' }}
-          wasp-enabled: ${{ matrix.wasp-enabled || false }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
 
@@ -234,12 +219,7 @@ jobs:
         kube-version: ${{ fromJSON(needs.prepare-additional-kubernetes-versions.outputs.versions) }}
         test-scenario:
           - "ui"
-          - "helm-chart"
           - "helm-upgrade"
-          - "mount-method"
-          - "non-root"
-          - "control-plane"
-          - "python-ebpf"
 
     steps:
       - name: Checkout

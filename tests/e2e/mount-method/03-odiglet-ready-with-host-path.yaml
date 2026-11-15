@@ -13,13 +13,13 @@ metadata:
 spec:
   initContainers:
     - name: init
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
   containers:
     - name: odiglet
       resources: {}
       securityContext:
         privileged: false
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
     - name: data-collection
       securityContext:
         privileged: false
@@ -90,13 +90,13 @@ metadata:
 spec:
   initContainers:
     - name: init
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
   containers:
     - name: odiglet
       resources: {}
       securityContext:
         privileged: false
-      image: registry.odigos.io/odigos-enterprise-odiglet:e2e-test
+      (contains(image, 'odiglet')): true
     - name: data-collection
       securityContext:
         privileged: false
