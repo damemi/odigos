@@ -35,8 +35,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Each job bakes one target of platform-k8s.docker-bake.hcl on Depot, saves it to Depot's
-  # registry as <DEPOT_SAVE_TAG>-<target>, and scans it from there.
+  # Each job bakes one target of platform-k8s.docker-bake.hcl on Depot and saves it to Depot's
+  # registry as <DEPOT_SAVE_TAG>-<target>.
   build-depot-images:
     name: build-${{ matrix.service }}
     runs-on: depot-ubuntu-latest
@@ -93,42 +93,63 @@ jobs:
           save: true
           save-tag: ${{ env.DEPOT_SAVE_TAG }}
 
-      - name: Scan image for vulnerabilities
+  # Scans the images saved by build-depot-images, after the builds, so the e2e tests don't wait for the scans.
+  scan-depot-images:
+    name: scan-depot-images
+    needs: build-depot-images
+    runs-on: depot-ubuntu-latest
+    # id-token lets depot/setup-action authenticate to Depot over OIDC.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGES_SAVE_TAG: ${{ needs.build-depot-images.outputs.save-tag }}
+    steps:
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      # registry: makes grype read the saved images from Depot instead of the local Docker daemon.
+      - name: Log in to the Depot registry
+        run: |
+          echo "$DEPOT_TOKEN" | docker login registry.depot.dev --username x-token --password-stdin
+          echo "IMAGE=registry:registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG" >> "$GITHUB_ENV"
+
+      # Findings are reported, not failed on; an image that could not be scanned fails the step.
+      - name: Scan images for vulnerabilities
         id: scan
         uses: odigos-io/ci-core/vulnerabilities-scanner@main
         with:
-          # registry: makes grype read the saved image from Depot instead of the local Docker daemon.
-          image: registry:registry.depot.dev/${{ env.DEPOT_PROJECT }}:${{ env.DEPOT_SAVE_TAG }}-${{ matrix.service }}
-          severity-cutoff: "CRITICAL"
-        continue-on-error: true
+          images: |
+            odigos-instrumentor=${{ env.IMAGE }}-instrumentor
+            odigos-insights=${{ env.IMAGE }}-insights
+            odigos-collector=${{ env.IMAGE }}-collector
+            odigos-operator=${{ env.IMAGE }}-operator
+            odigos-odiglet=${{ env.IMAGE }}-odiglet
+            odigos-agents=${{ env.IMAGE }}-agents
+            odigos-ui=${{ env.IMAGE }}-ui
+            odigos-cli=${{ env.IMAGE }}-cli
+          severity-cutoff: ""
 
-      - name: Save ${{ matrix.service }} scan JSON
+      - name: Save scan JSONs
         if: always()
         env:
-          RESULTS_FILE: ${{ steps.scan.outputs.results-file }}
-          IMAGE_NAME: odigos-${{ matrix.service }}
-          SCAN_OUTCOME: ${{ steps.scan.outcome }}
-          CUTOFF_EXCEEDED: ${{ steps.scan.outputs.cutoff-exceeded }}
+          RESULTS_DIR: ${{ steps.scan.outputs.results-dir }}
         run: |
-          # The scanner fails both on findings over the cutoff (allowed here) and when grype
-          # could not scan, e.g. reading the Depot registry; it then writes an empty report.
-          if [ "$SCAN_OUTCOME" = "failure" ] && [ "$CUTOFF_EXCEEDED" != "true" ]; then
-            echo "::error::The vulnerability scan did not run; see the scan step's log."
-            exit 1
-          fi
           mkdir -p /tmp/scan-results
-          if [ -z "${RESULTS_FILE:-}" ] || [ ! -s "$RESULTS_FILE" ]; then
-            echo "::error::No scan results produced; expected a report at '${RESULTS_FILE:-<unset>}'."
-            exit 1
-          fi
-          jq --arg img "$IMAGE_NAME" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$RESULTS_FILE" > "/tmp/scan-results/$IMAGE_NAME.json"
+          for results in "$RESULTS_DIR"/*.json; do
+            [ -e "$results" ] || continue
+            name=$(basename "$results" .json)
+            jq --arg img "$name" --arg tag "$IMAGE_TAG" '. + {imageName: $img, imageTag: $tag}' "$results" > "/tmp/scan-results/$name.json"
+          done
 
-      - name: Upload ${{ matrix.service }} scan results
+      - name: Upload scan results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vuln-scan-result-${{ matrix.service }}-${{ github.sha }}.json
-          path: /tmp/scan-results/odigos-${{ matrix.service }}.json
+          name: vuln-scan-result-platform-k8s-${{ github.sha }}
+          path: /tmp/scan-results/
           retention-days: 30
 
   build-frontend:
@@ -184,7 +205,7 @@ jobs:
   vulnerability-report:
     name: Generate Vulnerability Report
     needs:
-      - build-depot-images
+      - scan-depot-images
       - build-frontend
     runs-on: depot-ubuntu-latest
     if: always()
@@ -637,6 +658,7 @@ jobs:
     name: Platform K8s CI
     needs:
       - build-depot-images
+      - scan-depot-images
       - build-frontend
       - vulnerability-report
       - package-helm
