@@ -514,11 +514,12 @@ collectorGateway:
   #   nodes in the graph. For example, if the same service is deployed in multiple namespaces
   #   (e.g. staging and production in the same cluster), adding "k8s.namespace.name" will
   #   produce a separate node per namespace instead of merging them into one.
+  #   It is on by default and Insights needs it, so keep it when overriding this list.
   #   NOTE: both span-level and resource-level attributes (e.g. k8s.namespace.name) are
   #   supported here.
   # @schema
-  # serviceGraphExtraDimensions:
-  #   - k8s.namespace.name
+  serviceGraphExtraDimensions:
+    - k8s.namespace.name
 
   # @schema
   # type: array

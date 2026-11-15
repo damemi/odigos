@@ -98,3 +98,44 @@ func TestClusterCollectorMetricsConcurrentDestinationAccess(t *testing.T) {
 		t.Fatalf("expected %d tracked destinations, got %d", destinations, got)
 	}
 }
+
+func serviceGraphDataPoint(labels map[string]string, value int64) pmetric.NumberDataPoint {
+	dp := pmetric.NewNumberDataPoint()
+	for k, v := range labels {
+		dp.Attributes().PutStr(k, v)
+	}
+	dp.SetIntValue(value)
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+	return dp
+}
+
+func TestServiceGraphPeerLabelsDoNotSplitNodes(t *testing.T) {
+	sg := newServiceGraph()
+
+	sg.UpdateFromDataPoint(serviceGraphDataPoint(map[string]string{
+		"client": "order-service", "server": "mysql", "connection_type": "virtual_node",
+		"peer_server_address": "mysql",
+	}, 1))
+	sg.UpdateFromDataPoint(serviceGraphDataPoint(map[string]string{
+		"client": "order-service", "server": "mysql", "connection_type": "virtual_node",
+		"peer_db_system": "mysql", "peer_server_address": "mysql",
+	}, 2))
+	sg.UpdateFromDataPoint(serviceGraphDataPoint(map[string]string{
+		"client": "order-service", "server": "mysql", "server_service_name": "mysql",
+	}, 3))
+
+	servers := sg.edges["order-service"]
+	if len(servers) != 1 {
+		t.Fatalf("expected a single mysql node, got %v", servers)
+	}
+	edge, ok := servers["mysql"]
+	if !ok {
+		t.Fatalf("expected node id \"mysql\", got %v", servers)
+	}
+	if edge.ToNodeIsVirtual {
+		t.Error("an instrumented series must mark the target as instrumented")
+	}
+	if edge.Attributes["peer_db_system"] != "mysql" {
+		t.Errorf("expected peer details from all series to be kept, got %v", edge.Attributes)
+	}
+}

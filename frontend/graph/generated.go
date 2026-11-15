@@ -2255,7 +2255,7 @@ type ComplexityRoot struct {
 		Namespaces                        func(childComplexity int) int
 		OdigletDaemonSetInfo              func(childComplexity int) int
 		OdigletPods                       func(childComplexity int) int
-		PeerSources                       func(childComplexity int, serviceName string) int
+		PeerSources                       func(childComplexity int, serviceName string, namespace *string) int
 		Pod                               func(childComplexity int, namespace string, name string) int
 		PotentialDestinations             func(childComplexity int) int
 		ProfilingSlots                    func(childComplexity int) int
@@ -2732,7 +2732,7 @@ type QueryResolver interface {
 	ProfilingSlots(ctx context.Context) (*model.ProfilingSlots, error)
 	Sampling(ctx context.Context) (*model.Sampling, error)
 	GetServiceMap(ctx context.Context) (*model.ServiceMap, error)
-	PeerSources(ctx context.Context, serviceName string) (*model.PeerSources, error)
+	PeerSources(ctx context.Context, serviceName string, namespace *string) (*model.PeerSources, error)
 	K8sManifest(ctx context.Context, namespace string, kind model.K8sResourceKind, name string) (string, error)
 	SourceConditions(ctx context.Context) ([]*model.SourceConditions, error)
 	InstrumentationInstanceComponents(ctx context.Context, namespace string, kind string, name string) ([]*model.InstrumentationInstanceComponent, error)
@@ -13359,7 +13359,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.PeerSources(childComplexity, args["serviceName"].(string)), true
+		return e.complexity.Query.PeerSources(childComplexity, args["serviceName"].(string), args["namespace"].(*string)), true
 
 	case "Query.pod":
 		if e.complexity.Query.Pod == nil {
@@ -19479,6 +19479,11 @@ func (ec *executionContext) field_Query_peerSources_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["serviceName"] = arg0
+	arg1, err := ec.field_Query_peerSources_argsNamespace(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["namespace"] = arg1
 	return args, nil
 }
 func (ec *executionContext) field_Query_peerSources_argsServiceName(
@@ -19496,6 +19501,24 @@ func (ec *executionContext) field_Query_peerSources_argsServiceName(
 	}
 
 	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_peerSources_argsNamespace(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (*string, error) {
+	if _, ok := rawArgs["namespace"]; !ok {
+		var zeroVal *string
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("namespace"))
+	if tmp, ok := rawArgs["namespace"]; ok {
+		return ec.unmarshalOString2ᚖstring(ctx, tmp)
+	}
+
+	var zeroVal *string
 	return zeroVal, nil
 }
 
@@ -87711,7 +87734,7 @@ func (ec *executionContext) _Query_peerSources(ctx context.Context, field graphq
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().PeerSources(rctx, fc.Args["serviceName"].(string))
+		return ec.resolvers.Query().PeerSources(rctx, fc.Args["serviceName"].(string), fc.Args["namespace"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)

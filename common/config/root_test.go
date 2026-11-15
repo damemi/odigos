@@ -441,8 +441,7 @@ func TestServiceGraphOptions(t *testing.T) {
 
 // TestServiceGraphInsights verifies that when insights is active the gateway
 // adds the insights OTLP exporter to the existing metrics/servicegraph pipeline
-// (alongside prometheus/servicegraph) and forces the k8s.namespace.name
-// dimension so edges can be joined to anomalies keyed by (namespace, service).
+// (alongside prometheus/servicegraph) and keeps the configured dimensions as-is.
 func TestServiceGraphInsights(t *testing.T) {
 	on := true
 	gatewayOptions := pipelinegen.GatewayConfigOptions{
@@ -473,9 +472,9 @@ func TestServiceGraphInsights(t *testing.T) {
 	assert.Contains(t, out, "k8s.pod.name")
 	assert.Contains(t, out, "${POD_NAME}")
 
-	// Namespace dimension is forced on so edges carry it; user extras and
-	// virtual-node peer attributes are preserved.
-	assert.Contains(t, out, "- k8s.namespace.name\n")
+	// The namespace dimension comes from the Helm default, not from insights;
+	// user extras and virtual-node peer attributes are preserved.
+	assert.NotContains(t, out, "- k8s.namespace.name\n")
 	assert.Contains(t, out, "- http.method\n")
 	assert.Contains(t, out, "virtual_node_peer_attributes:")
 	assert.Contains(t, out, "- peer.service\n")
@@ -542,30 +541,6 @@ func TestServiceGraphInsightsDisabled(t *testing.T) {
 	require.True(t, ok)
 	assert.Empty(t, pipe.Processors)
 	assert.Equal(t, []string{"prometheus/servicegraph"}, pipe.Exporters)
-}
-
-func TestServiceGraphInsightsDoesNotDuplicateNamespaceDimension(t *testing.T) {
-	on := true
-	gatewayOptions := pipelinegen.GatewayConfigOptions{
-		OdigosNamespace:      "odigos-system",
-		Insights:             &common.InsightsConfiguration{Enabled: &on},
-		InsightsOtlpEndpoint: "dns:///odigos-insights-headless.odigos-system:4317",
-		ServiceGraph: common.ServiceGraphOptions{
-			ExtraDimensions: []string{"k8s.namespace.name"},
-		},
-	}
-	cfg, err, _, _ := pipelinegen.CalculateGatewayConfig(
-		[]config.ExporterConfigurer{DummyTraceDestination{ID: "t1"}},
-		[]config.ProcessorConfigurer{},
-		selfMetricsReceiver(), nil, &gatewayOptions,
-	)
-	require.NoError(t, err)
-
-	connector, ok := cfg.Connectors[consts.ServiceGraphConnectorName].(config.GenericMap)
-	require.True(t, ok)
-	dims, ok := connector["dimensions"].([]string)
-	require.True(t, ok)
-	assert.Equal(t, []string{"service.name", "k8s.namespace.name"}, dims)
 }
 
 func TestTracesPipelineSplitAfterGroupByTrace(t *testing.T) {

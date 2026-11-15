@@ -30,8 +30,28 @@ This package is copied from [opentelemetry-collector-contrib](https://github.com
 | Item | Detail |
 |------|--------|
 | **Where** | `connector.go` — `buildDimensions` (virtual-node / database branch) and `sortedMapKeys` |
-| **Why** | Odigos UI expects `server_*` labels for virtual-node and database peers (e.g. `server_db.system`). Upstream only copies `e.Dimensions` onto the datapoint. Database edges are completed immediately during span processing (before `onExpire`), so they must be handled alongside virtual-node edges. |
-| **What it does** | For `virtual_node` **or `database`** edges with non-empty `e.Peer`, adds `server_<peerKey>` unless already in `e.Dimensions`. Uses **sorted** peer keys (same order as §2). |
+| **Why** | Odigos UI shows peer details on virtual-node and database nodes (e.g. `peer_db.system`); the `peer_` prefix keeps them out of the `server_*` dimensions that identify a node. Upstream only copies `e.Dimensions` onto the datapoint. Database edges are completed immediately during span processing (before `onExpire`), so they must be handled alongside virtual-node edges. |
+| **What it does** | For `virtual_node` **or `database`** edges with non-empty `e.Peer`, adds `peer_<peerKey>` unless `server_<peerKey>` is already in `e.Dimensions`. Uses **sorted** peer keys (same order as §2). |
+
+---
+
+## 4. Database node naming
+
+| Item | Detail |
+|------|--------|
+| **Where** | `connector.go` — client span handling, database branch |
+| **Odigos** | `server` is the first `virtual_node_peer_attributes` value on the span, falling back to the `database_name_attributes` value (upstream uses only the latter). |
+| **Why** | Clients set `db.name` inconsistently, so one database got different names. |
+
+---
+
+## 5. In-cluster peer namespace (`resolveInClusterPeer`)
+
+| Item | Detail |
+|------|--------|
+| **Where** | `connector.go` — `resolveInClusterPeer`, for database edges and expired virtual-node edges |
+| **Odigos** | When `k8s.namespace.name` is a dimension and the peer host is a Kubernetes Service (`mysql` in the client's namespace, or `mysql.<ns>.svc…`), names the server after the Service and sets `server_k8s.namespace.name`. |
+| **Why** | These edges have no server span, so same-named Services in different namespaces merged into one node. |
 
 ---
 

@@ -26,14 +26,14 @@ import (
 // db.system], which names databases but misses plain HTTP/gRPC egress: those
 // spans carry server.address / net.peer.name / rpc.service, not peer.service.
 // We widen it so external hosts (APIs, third-party endpoints) resolve to real
-// names. Ordered most-specific first: an explicit peer.service wins, then the
-// database identity, then the network host, then the RPC service.
+// names. An explicit peer.service wins, then the network host, which every
+// client of the same dependency reports regardless of language.
 var defaultServiceGraphPeerAttributes = []string{
 	"peer.service",   // explicit logical peer name (operator/instrumentation intent)
-	"db.name",        // logical database
-	"db.system",      // database engine, when db.name is absent
 	"server.address", // HTTP/gRPC host (current semconv)
 	"net.peer.name",  // host on older instrumentations (deprecated semconv)
+	"db.name",        // logical database
+	"db.system",      // database engine, when db.name is absent
 	"rpc.service",    // gRPC service
 }
 
@@ -435,14 +435,6 @@ func insertServiceGraphPipeline(currentConfig *config.Config, gatewayOptions *Ga
 	// Build dimensions: always include service.name as the base, then append any extras
 	dimensions := []string{string(semconv.ServiceNameKey)}
 	dimensions = append(dimensions, extraDimensions...)
-
-	// When insights is active, the emitted edges must carry the namespace so the
-	// blast-radius topology can be joined to anomalies keyed by (namespace, service).
-	// service.name alone is ambiguous across namespaces, so force k8s.namespace.name
-	// into the connector dimensions (deduped against user-provided extras).
-	if insightsOn && !slices.Contains(dimensions, string(semconv.K8SNamespaceNameKey)) {
-		dimensions = append(dimensions, string(semconv.K8SNamespaceNameKey))
-	}
 
 	// Add the service graph connector to receive the service graph metrics from the root traces pipeline
 	// Retain incomplete edges for up to 15s to allow delayed span matching
