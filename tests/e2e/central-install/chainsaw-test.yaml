@@ -24,6 +24,7 @@ spec:
               # Install regular Odigos in odigos-test namespace
               helm upgrade --install odigos \
                 ../../../helm/odigos \
+                -f ../../common/odigos-values.yaml \
                 --create-namespace \
                 --namespace odigos-test \
                 --set image.tag=$IMAGE_TAG \
@@ -41,6 +42,7 @@ spec:
               # Install Odigos Central in odigos-central namespace
               helm upgrade --install odigos-central \
                 ../../../helm/odigos-central \
+                -f ../../common/central-values.yaml \
                 --create-namespace \
                 --namespace odigos-central \
                 --set image.tag=$IMAGE_TAG \
@@ -141,107 +143,9 @@ spec:
             timeout: 1m10s
             file: ../../common/assert/pipeline-ready.yaml
 
+    # helm-upgrade's assert for the latest release, which CI installs. The Odigos tests check the traces.
     - name: Simple-demo instrumented after destination added
       try:
         - assert:
             timeout: 1m30s
-            file: ../../common/assert/instrumented-and-pipeline.yaml
-
-    # The first request through a freshly instrumented java app can't propagate
-    # context (http client instrumentations load lazily on first use). /rate only
-    # reaches currency, so warmup traces don't affect the trace assertions below.
-    - name: Warm Up Java Frontend
-      try:
-        - script:
-            timeout: 3m
-            content: |
-              kubectl delete pod warmup-traffic -n default --ignore-not-found
-              kubectl run warmup-traffic -n default --image=curlimages/curl:8.4.0 --restart=Never --command -- \
-                sh -c 'for i in 1 2 3; do curl -s -o /dev/null "http://frontend:8080/rate/usd-eur"; sleep 2; done'
-              kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/warmup-traffic -n default --timeout=90s
-              kubectl delete pod warmup-traffic -n default --ignore-not-found
-
-    - name: Generate Traffic
-      try:
-        - apply:
-            file: ../../../tests/common/apply/generate-traffic-job.yaml
-        - script:
-            timeout: 1m10s
-            content: |
-              kubectl wait --for=condition=complete job/$(kubectl get -f ../../../tests/common/apply/generate-traffic-job.yaml -o=jsonpath='{.metadata.name}')
-        - delete:
-            file: ../../../tests/common/apply/generate-traffic-job.yaml
-
-    - name: Wait For Trace
-      try:
-        - script:
-            timeout: 1m10s
-            content: |
-              yaml=$(mktemp)
-              script=$(mktemp)
-              cp ../../../tests/common/queries/wait-for-trace.yaml "$yaml"
-              cp ../../../tests/common/simple_trace_db_query_runner.sh "$script"
-
-              while true; do
-                bash "$script" "$yaml"
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              rm -f "$yaml" "$script"
-      catch:
-        - script:
-            content: |
-              java_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^frontend)
-              kubectl logs $java_pod_name -n default
-
-    - name: Verify Trace - Context Propagation
-      try:
-        - script:
-            timeout: 1m10s
-            content: |
-              yaml=$(mktemp)
-              script=$(mktemp)
-
-              cp ../../../tests/common/queries/context-propagation.yaml "$yaml"
-              cp ../../../tests/common/simple_trace_db_query_runner.sh "$script"
-
-              while true; do
-                bash "$script" "$yaml"
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              rm -f "$yaml" "$script"
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
-
-    - name: Verify Trace - Resource Attributes
-      try:
-        - script:
-            content: |
-              yaml=$(mktemp)
-              cp ../../../tests/common/queries/resource-attributes.yaml "$yaml"
-              bash ../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
-
-    - name: Verify Trace - Span Attributes
-      try:
-        - script:
-            content: |
-              yaml=$(mktemp)
-              cp ../../../tests/common/queries/span-attributes.yaml "$yaml"
-              bash ../../../tests/common/simple_trace_db_query_runner.sh "$yaml"
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-system
+            file: ../helm-upgrade/simple-demo-instrumented-pre-upgrade.yaml

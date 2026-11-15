@@ -3,6 +3,7 @@
 # - Runs the central-backend and central-proxy unit tests and the central-ui lint.
 # - Packages the Helm charts and pushes the odigos-central chart to Central's Depot registry as
 #   an OCI chart.
+# - Runs the central e2e tests on kind clusters with those images and the repo's odigos-central chart.
 #
 # The jobs run only when Central, its Helm chart, a local module it depends on, or this workflow changed.
 # PRs to release branches always run them, building both platforms without the layer cache.
@@ -73,7 +74,7 @@ jobs:
             echo "central=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          paths='^(central-backend|central-proxy|central-ui|actions|api|common|config|connectors|destinations|distros|frontend|instrumentationrules|k8sutils|odigosauth|recommendations|status|helm/odigos-central)/|^scripts/package-charts\.sh$|^\.github/actions/npm-auth/|^\.github/workflows/central\.yaml$'
+          paths='^(central-backend|central-proxy|central-ui|actions|api|common|config|connectors|destinations|distros|frontend|instrumentationrules|k8sutils|odigosauth|recommendations|status|helm/odigos-central|tests/common)/|^tests/e2e/central-|^scripts/package-charts\.sh$|^\.github/actions/npm-auth/|^\.github/workflows/central\.yaml$'
           changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -E "$paths" || true)
           if [ -n "$changed" ]; then
             echo "Central-related changes:"
@@ -99,6 +100,10 @@ jobs:
       id-token: write
       packages: read
       pull-requests: read
+    # DEPOT_SAVE_TAG includes the run attempt; re-running only a failed e2e job keeps this attempt's
+    # output, so the e2e job reads the tag the images were saved with from here.
+    outputs:
+      save-tag: ${{ env.DEPOT_SAVE_TAG }}
     strategy:
       fail-fast: false
       matrix:
@@ -325,11 +330,172 @@ jobs:
       - name: Lint
         run: yarn lint
 
+  # Installs Odigos Central on a kind cluster with the images saved by build-central-images, and runs
+  # one tests/e2e test against it. A new central test only needs to be added to the test list.
+  # A test that also installs Odigos gets the latest released odigos chart, with central-proxy from
+  # build-central-images.
+  e2e:
+    name: E2E (${{ matrix.test }})
+    needs: [changes, build-central-images]
+    if: needs.changes.outputs.central == 'true'
+    runs-on: depot-ubuntu-24.04-8
+    # id-token lets depot/setup-action authenticate to Depot over OIDC;
+    # packages lets central-ui's Cypress run install the private @odigos-io/ui-kit from GitHub Packages.
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - central-infrastructure
+          - central-auth-idp
+          - central-install
+          - central-ui
+    env:
+      IMAGES_SAVE_TAG: ${{ needs.build-central-images.outputs.save-tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.15.2
+
+      - name: Install chainsaw
+        uses: kyverno/action-install-chainsaw@v0.2.13
+
+      # Runs kind's default node image for this kind version.
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          version: "v0.33.0"
+          cluster_name: kind
+          config: tests/common/apply/kind-config.yaml
+          ignore_failed_clean: true
+
+      - name: Wait for cluster readiness
+        run: bash tests/common/wait_for_kind_ready.sh
+
+      - name: Get latest release tag
+        id: latest-release
+        uses: ./.github/actions/latest-release-tag
+        with:
+          onprem-token: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
+
+      - name: Log in to the Odigos chart registry
+        env:
+          ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
+        run: echo "$ODIGOS_API_KEY" | helm registry login registry.odigos.io -u odigos --password-stdin
+
+      # Replaces the repo's odigos chart with the latest release, which the tests install.
+      - name: Use the released odigos chart
+        env:
+          TAG: ${{ steps.latest-release.outputs.tag }}
+        run: |
+          rm -rf helm/odigos
+          helm pull oci://registry.odigos.io/charts/odigos --version "${TAG#v}" --untar --untardir helm
+
+      # The cluster pulls the saved images from Central's Depot registry with a pull secret in the
+      # Odigos and Central namespaces.
+      - name: Create the Depot registry pull secret
+        run: |
+          set -euo pipefail
+          password=$(depot pull-token --project "$DEPOT_PROJECT")
+          for namespace in odigos-test odigos-central; do
+            kubectl create namespace "$namespace"
+            kubectl create secret docker-registry depot-registry \
+              --namespace "$namespace" \
+              --docker-server=registry.depot.dev \
+              --docker-username=x-token \
+              --docker-password="$password"
+          done
+
+      # Points the charts' images at the ones saved by build-central-images, in the values files every
+      # odigos and odigos-central install uses.
+      - name: Write Helm values for the Depot images
+        run: |
+          set -euo pipefail
+          IMAGE="registry.depot.dev/$DEPOT_PROJECT:$IMAGES_SAVE_TAG"
+          cat > tests/common/odigos-values.yaml <<EOF
+          imagePullSecrets:
+            - depot-registry
+          images:
+            enterprise-central-proxy: $IMAGE-central-proxy
+          EOF
+          cat > tests/common/central-values.yaml <<EOF
+          imagePullSecrets:
+            - depot-registry
+          images:
+            central-backend: $IMAGE-central-backend
+            central-ui: $IMAGE-central-ui
+          EOF
+          cat tests/common/odigos-values.yaml tests/common/central-values.yaml
+
+      # central-ui runs yarn install in central-ui, which reads ~/.npmrc.
+      - name: Write npm auth
+        if: matrix.test == 'central-ui'
+        uses: ./.github/actions/npm-auth
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: ~/.npmrc
+
+      # The asserts read k8sMinorVersion (e.g. odiglet uses hostNetwork before 1.26).
+      - name: Run E2E test
+        env:
+          TEST: ${{ matrix.test }}
+          ODIGOS_API_KEY: ${{ secrets.ODIGOS_E2E_TESTS_API_KEY }}
+          # The release the tests install the odigos chart and its images with. Central's own images
+          # come from central-values.yaml.
+          IMAGE_TAG: ${{ steps.latest-release.outputs.tag }}
+          LATEST_RELEASE_TAG: ${{ steps.latest-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          minor=$(kubectl version -o json | jq -r '.serverVersion.minor' | tr -dc '0-9')
+          chainsaw test "tests/e2e/$TEST" --apply-timeout 30s --values - <<EOF
+          k8sMinorVersion: ${minor}
+          EOF
+
+      - name: Cluster diagnostics
+        if: failure()
+        run: |
+          echo "==== Nodes ===="; kubectl get nodes -o wide
+          echo "==== Pods (all namespaces) ===="; kubectl get pods -A -o wide
+          echo "==== Events ===="; kubectl get events -A --sort-by=.lastTimestamp | tail -n 200
+
+      - name: Export kind logs
+        if: failure()
+        run: kind export logs kind-logs
+        continue-on-error: true
+
+      - name: Upload kind logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-logs-${{ matrix.test }}
+          path: kind-logs
+
+      - name: Upload Cypress screenshots and videos
+        if: failure() && matrix.test == 'central-ui'
+        uses: actions/upload-artifact@v4
+        with:
+          name: central-ui-cypress
+          path: |
+            central-ui/cypress/screenshots
+            central-ui/cypress/videos
+        continue-on-error: true
+
   # The single required check for this workflow. It always runs, and passes when nothing
   # Central-related changed or when every Central job succeeded.
   central-ci:
     name: Central CI
-    needs: [changes, build-central-images, vulnerability-report, package-helm, test-central-modules, central-ui-lint]
+    needs: [changes, build-central-images, vulnerability-report, package-helm, test-central-modules, central-ui-lint, e2e]
     if: always()
     runs-on: depot-ubuntu-latest
     steps:

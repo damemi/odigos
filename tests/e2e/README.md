@@ -71,8 +71,8 @@ See the [following document](https://kyverno.github.io/chainsaw/latest/test/) fo
 
 Scenarios should be placed in the `tests/e2e/<scenraio-name>` directory and Trace validations should be placed in the `tests/e2e/<scenraio-name>/queries` directory.
 
-After writing and testing new scenario, you should also add it to the GitHub Action file location at:
-`.github/workflows/e2e.yaml` to run it on every pull request.
+After writing and testing a new scenario, add it to the e2e test list in `.github/workflows/platform-k8s.yaml`
+to run it on every pull request, or in `.github/workflows/central.yaml` for an Odigos Central scenario.
 
 ### Karpenter mount-methods
 

@@ -17,6 +17,7 @@ spec:
                 --create-namespace \
                 --namespace odigos-central \
                 --set image.tag=$IMAGE_TAG \
+                -f ../../common/central-values.yaml \
                 --set imagePrefix=registry.odigos.io \
                 --set onPremToken=$ODIGOS_API_KEY \
                 --set auth.adminUsername=admin \

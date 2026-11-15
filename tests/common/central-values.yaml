@@ -1,0 +1,2 @@
+# Extra Helm values every odigos-central e2e install passes with -f. Empty for local runs; the platform-k8s
+# workflow overwrites it with the images.<component> overrides for the images it built on Depot.

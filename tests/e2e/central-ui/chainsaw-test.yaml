@@ -23,8 +23,7 @@ spec:
 
     # Install Odigos as a Central Proxy. Mirrors the helm flow documented at
     #   https://docs.odigos.io/central/adding-connections/remote-clusters
-    # plus `image.tag=$IMAGE_TAG` so the e2e cluster picks the locally-built
-    # images that were `kind load`ed by the CI workflow.
+    # plus `image.tag=$IMAGE_TAG`, which CI sets to the release it installs.
     - name: Install Odigos OSS as Central Proxy
       try:
         - script:
@@ -32,6 +31,7 @@ spec:
             content: |
               helm upgrade --install odigos \
                 ../../../helm/odigos \
+                -f ../../common/odigos-values.yaml \
                 --create-namespace \
                 --namespace odigos-test \
                 --set image.tag=$IMAGE_TAG \
@@ -91,6 +91,7 @@ spec:
             content: |
               helm upgrade --install odigos-central \
                 ../../../helm/odigos-central \
+                -f ../../common/central-values.yaml \
                 --create-namespace \
                 --namespace odigos-central \
                 --set image.tag=$IMAGE_TAG \

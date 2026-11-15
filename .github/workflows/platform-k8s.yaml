@@ -130,6 +130,8 @@ jobs:
             odigos-agents=${{ env.IMAGE }}-agents
             odigos-ui=${{ env.IMAGE }}-ui
             odigos-cli=${{ env.IMAGE }}-cli
+            odigos-odiglet-extended=${{ env.IMAGE }}-odiglet-extended
+            odigos-agents-extended=${{ env.IMAGE }}-agents-extended
           severity-cutoff: ""
 
       - name: Save scan JSONs
