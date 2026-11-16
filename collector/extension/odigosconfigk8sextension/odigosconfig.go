@@ -11,6 +11,7 @@ import (
 
 	commonapi "github.com/odigos-io/odigos/common/api"
 	"github.com/odigos-io/odigos/common/collector"
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 )
 
 // OdigosWorkloadConfig is an extension that runs a dynamic informer for InstrumentationConfigs
@@ -50,7 +51,7 @@ func (o *OdigosWorkloadConfig) Shutdown(ctx context.Context) error {
 }
 
 func (o *OdigosWorkloadConfig) GetFromResource(res pcommon.Resource) (*commonapi.SourceCollectorConfig, bool) {
-	key, err := workloadKeyFromResourceAttributes(res.Attributes())
+	key, err := sourceidentity.K8sSourceKeyFromResourceAttributes(res.Attributes())
 	if err != nil {
 		return nil, false
 	}

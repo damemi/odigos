@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 
 	commonapi "github.com/odigos-io/odigos/common/api"
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -187,7 +188,7 @@ func (o *OdigosWorkloadConfig) parseWorkloadCollectorConfig(workloadKey workload
 			o.logger.Error("skipping container collector config with empty containerName", zap.String("namespace", workloadKey.Namespace), zap.String("kind", workloadKey.Kind), zap.String("name", workloadKey.Name))
 			continue
 		}
-		key := k8sSourceKey(workloadKey.Namespace, workloadKey.Kind, workloadKey.Name, c.ContainerName)
+		key := sourceidentity.K8sSourceKey(workloadKey.Namespace, workloadKey.Kind, workloadKey.Name, c.ContainerName)
 		out = append(out, containerEntry{key: key, cfg: &c.SourceCollectorConfig})
 	}
 	return out
