@@ -483,7 +483,7 @@ export interface paths {
          */
         put: operations["upsertGuardrail"];
         post?: never;
-        /** Delete a service guardrail */
+        /** Delete a guardrail */
         delete: operations["deleteGuardrail"];
         options?: never;
         head?: never;
@@ -3672,7 +3672,9 @@ export interface operations {
     deleteGuardrail: {
         parameters: {
             query: {
-                /** @description The guardrail's namespace/service scope key. */
+                /** @description The guardrail's scope; service when omitted. */
+                scope?: "service" | "transaction";
+                /** @description The guardrail's scope key - namespace/service for a service guardrail, the transaction id for a transaction guardrail. */
                 scope_key: string;
             };
             header?: never;

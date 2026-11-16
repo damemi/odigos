@@ -146,6 +146,10 @@ type ComplexityRoot struct {
 		URLTemplatization func(childComplexity int) int
 	}
 
+	CentralProxyConfig struct {
+		CentralBackendURL func(childComplexity int) int
+	}
+
 	ClearProfilingBufferResult struct {
 		ActiveSlots func(childComplexity int) int
 		SourceKey   func(childComplexity int) int
@@ -460,6 +464,7 @@ type ComplexityRoot struct {
 		AutoRollback                     func(childComplexity int) int
 		CardinalityControl               func(childComplexity int) int
 		CentralBackendURL                func(childComplexity int) int
+		CentralProxy                     func(childComplexity int) int
 		ClickhouseJSONTypeEnabled        func(childComplexity int) int
 		ClusterName                      func(childComplexity int) int
 		CollectorGateway                 func(childComplexity int) int
@@ -3180,6 +3185,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.CardinalityControlConfig.URLTemplatization(childComplexity), true
 
+	case "CentralProxyConfig.centralBackendURL":
+		if e.complexity.CentralProxyConfig.CentralBackendURL == nil {
+			break
+		}
+
+		return e.complexity.CentralProxyConfig.CentralBackendURL(childComplexity), true
+
 	case "ClearProfilingBufferResult.activeSlots":
 		if e.complexity.ClearProfilingBufferResult.ActiveSlots == nil {
 			break
@@ -4624,6 +4636,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.EffectiveConfig.CentralBackendURL(childComplexity), true
+
+	case "EffectiveConfig.centralProxy":
+		if e.complexity.EffectiveConfig.CentralProxy == nil {
+			break
+		}
+
+		return e.complexity.EffectiveConfig.CentralProxy(childComplexity), true
 
 	case "EffectiveConfig.clickhouseJsonTypeEnabled":
 		if e.complexity.EffectiveConfig.ClickhouseJSONTypeEnabled == nil {
@@ -22359,6 +22378,47 @@ func (ec *executionContext) fieldContext_CardinalityControlConfig_urlTemplatizat
 	return fc, nil
 }
 
+func (ec *executionContext) _CentralProxyConfig_centralBackendURL(ctx context.Context, field graphql.CollectedField, obj *model.CentralProxyConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CentralProxyConfig_centralBackendURL(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CentralBackendURL, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CentralProxyConfig_centralBackendURL(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CentralProxyConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ClearProfilingBufferResult_status(ctx context.Context, field graphql.CollectedField, obj *model.ClearProfilingBufferResult) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_ClearProfilingBufferResult_status(ctx, field)
 	if err != nil {
@@ -32253,6 +32313,51 @@ func (ec *executionContext) fieldContext_EffectiveConfig_centralBackendURL(_ con
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _EffectiveConfig_centralProxy(ctx context.Context, field graphql.CollectedField, obj *model.EffectiveConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_EffectiveConfig_centralProxy(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CentralProxy, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.CentralProxyConfig)
+	fc.Result = res
+	return ec.marshalOCentralProxyConfig2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐCentralProxyConfig(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_EffectiveConfig_centralProxy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EffectiveConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "centralBackendURL":
+				return ec.fieldContext_CentralProxyConfig_centralBackendURL(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type CentralProxyConfig", field.Name)
 		},
 	}
 	return fc, nil
@@ -86760,6 +86865,8 @@ func (ec *executionContext) fieldContext_Query_effectiveConfig(_ context.Context
 				return ec.fieldContext_EffectiveConfig_uiRemoteUrl(ctx, field)
 			case "centralBackendURL":
 				return ec.fieldContext_EffectiveConfig_centralBackendURL(ctx, field)
+			case "centralProxy":
+				return ec.fieldContext_EffectiveConfig_centralProxy(ctx, field)
 			case "clusterName":
 				return ec.fieldContext_EffectiveConfig_clusterName(ctx, field)
 			case "instrumentor":
@@ -101960,6 +102067,42 @@ func (ec *executionContext) _CardinalityControlConfig(ctx context.Context, sel a
 	return out
 }
 
+var centralProxyConfigImplementors = []string{"CentralProxyConfig"}
+
+func (ec *executionContext) _CentralProxyConfig(ctx context.Context, sel ast.SelectionSet, obj *model.CentralProxyConfig) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, centralProxyConfigImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CentralProxyConfig")
+		case "centralBackendURL":
+			out.Values[i] = ec._CentralProxyConfig_centralBackendURL(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
 var clearProfilingBufferResultImplementors = []string{"ClearProfilingBufferResult"}
 
 func (ec *executionContext) _ClearProfilingBufferResult(ctx context.Context, sel ast.SelectionSet, obj *model.ClearProfilingBufferResult) graphql.Marshaler {
@@ -104282,6 +104425,8 @@ func (ec *executionContext) _EffectiveConfig(ctx context.Context, sel ast.Select
 			out.Values[i] = ec._EffectiveConfig_uiRemoteUrl(ctx, field, obj)
 		case "centralBackendURL":
 			out.Values[i] = ec._EffectiveConfig_centralBackendURL(ctx, field, obj)
+		case "centralProxy":
+			out.Values[i] = ec._EffectiveConfig_centralProxy(ctx, field, obj)
 		case "clusterName":
 			out.Values[i] = ec._EffectiveConfig_clusterName(ctx, field, obj)
 		case "instrumentor":
@@ -128721,6 +128866,13 @@ func (ec *executionContext) marshalOCardinalityControlConfig2ᚖgithubᚗcomᚋo
 		return graphql.Null
 	}
 	return ec._CardinalityControlConfig(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCentralProxyConfig2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐCentralProxyConfig(ctx context.Context, sel ast.SelectionSet, v *model.CentralProxyConfig) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CentralProxyConfig(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOClusterAttribute2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐClusterAttributeᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.ClusterAttribute) graphql.Marshaler {

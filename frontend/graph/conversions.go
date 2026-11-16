@@ -266,6 +266,9 @@ func EffectiveConfigToModel(config *common.OdigosConfiguration, prov map[string]
 	if config.CentralBackendURL != "" {
 		result.CentralBackendURL = ptrStr(config.CentralBackendURL)
 		pc.record("centralBackendURL")
+		// Also under its Helm path, which Settings reads the field by (and the rest of this config follows).
+		result.CentralProxy = &model.CentralProxyConfig{CentralBackendURL: ptrStr(config.CentralBackendURL)}
+		pc.record("centralProxy.centralBackendURL")
 	}
 	if config.ClusterName != "" {
 		result.ClusterName = ptrStr(config.ClusterName)

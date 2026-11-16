@@ -256,6 +256,10 @@ type AgentsInitContainerResourcesConfig {
   limitMemoryMiB: Int
 }
 
+type CentralProxyConfig {
+  centralBackendURL: String
+}
+
 type OdigosOwnTelemetryConfig {
   metricsStoreDisabled: Boolean
 }
@@ -278,6 +282,8 @@ type EffectiveConfig {
   uiPaginationLimit: Int
   uiRemoteUrl: String
   centralBackendURL: String
+  # The same URL under its Helm path (centralProxy.centralBackendURL), which Settings reads the field by.
+  centralProxy: CentralProxyConfig
   clusterName: String
   instrumentor: InstrumentorConfig
   customContainerRuntimeSocketPath: String

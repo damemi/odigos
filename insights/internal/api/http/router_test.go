@@ -55,6 +55,7 @@ func TestWritesReturn503BeforeAdmin(t *testing.T) {
 		method, path, body string
 	}{
 		{http.MethodPut, "/api/v1/guardrails", `{"scope_key":"ns/svc","rules":[]}`},
+		{http.MethodDelete, "/api/v1/guardrails?scope=transaction&scope_key=42", ""},
 		{http.MethodPost, "/api/v1/guardrails/seed", `{"scope_key":"ns/svc","items":{}}`},
 		{http.MethodPost, "/api/v1/guardrails/violations/accept", `{"scope_key":"ns/svc","rule_key":"allowed_egress","offending":"x"}`},
 		{http.MethodPut, "/api/v1/policies", `{"scope":"global"}`},

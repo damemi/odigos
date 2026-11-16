@@ -766,13 +766,18 @@ paths:
         "503": { $ref: "#/components/responses/Unavailable" }
     delete:
       tags: [guardrails]
-      summary: Delete a service guardrail
+      summary: Delete a guardrail
       operationId: deleteGuardrail
       parameters:
+        - name: scope
+          in: query
+          required: false
+          description: The guardrail's scope; service when omitted.
+          schema: { type: string, enum: [service, transaction], default: service }
         - name: scope_key
           in: query
           required: true
-          description: The guardrail's namespace/service scope key.
+          description: The guardrail's scope key - namespace/service for a service guardrail, the transaction id for a transaction guardrail.
           schema: { type: string }
       responses:
         "204": { $ref: "#/components/responses/NoContent" }

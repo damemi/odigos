@@ -784,7 +784,7 @@ func (a *API) GetGuardrailViolationDetail(ctx context.Context, scopeKey string, 
 		out.EvidenceTrace = &wire
 		if len(obs.RawOTLP) > 0 {
 			spans := engine.SpansFromOTLP(obs.RawOTLP)
-			out.SpanHighlights = apimap.FromSpanHighlights(engine.GuardrailSpanHighlights(ruleKey, offending, spans))
+			out.SpanHighlights = apimap.FromSpanHighlights(engine.GuardrailSpanHighlights(ruleKey, scopeKey, offending, spans))
 		}
 	}
 	return out, true, nil

@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -91,14 +92,20 @@ func (a *API) upsertGuardrail(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// deleteGuardrail is the DELETE /api/v1/guardrails?scope_key=ns/svc handler; it
-// removes one service's guardrail and reloads the engine snapshot. scope_key is
-// a query param since it contains a slash.
+// deleteGuardrail is the DELETE /api/v1/guardrails?scope=&scope_key= handler; it
+// removes one guardrail - a service's (scope_key ns/svc) or a transaction's
+// (scope=transaction, scope_key the transaction id) - and reloads the engine
+// snapshot. scope_key is a query param since it contains a slash.
 func (a *API) deleteGuardrail(c *gin.Context) {
 	if _, ok := a.requireAdmin(c); !ok {
 		return
 	}
-	if err := a.DeleteServiceGuardrail(c.Request.Context(), repo.ScopeService, c.Query("scope_key")); err != nil {
+	scope, err := guardrailScopeFromQuery(c.Query("scope"))
+	if err != nil {
+		writeError(c, http.StatusBadRequest, err)
+		return
+	}
+	if err := a.DeleteServiceGuardrail(c.Request.Context(), scope, c.Query("scope_key")); err != nil {
 		if strings.Contains(err.Error(), "missing scope_key") {
 			writeError(c, http.StatusBadRequest, err)
 			return
@@ -107,6 +114,22 @@ func (a *API) deleteGuardrail(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+// guardrailScopeFromQuery reads a guardrail delete's ?scope=. Empty means service,
+// as on upsert (apimap.ToServiceGuardrail), so a caller that predates
+// transaction guardrails keeps deleting service ones. A guardrail has no global
+// scope, so anything else is a bad request rather than a delete that matches
+// nothing and still answers 204.
+func guardrailScopeFromQuery(raw string) (repo.PolicyScope, error) {
+	switch scope := repo.PolicyScope(strings.TrimSpace(raw)); scope {
+	case "", repo.ScopeService:
+		return repo.ScopeService, nil
+	case repo.ScopeTransaction:
+		return repo.ScopeTransaction, nil
+	default:
+		return "", fmt.Errorf("unknown guardrail scope %q: want service or transaction", raw)
+	}
 }
 
 // seedGuardrail is the POST /api/v1/guardrails/seed handler; it adopts observed

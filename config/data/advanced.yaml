@@ -33,7 +33,7 @@ spec:
       isHelmOnly: true
       description: URL of the Odigos Central backend for proxy mode.
       helmValuePath: centralProxy.centralBackendURL
-    - displayName: Odigos Own Telemetry Store Disabled
+    - displayName: Disable Odigos Own Telemetry Store
       componentType: toggle
       isHelmOnly: true
       description: When true, Odigos will not deploy its own metrics store (VictoriaMetrics).

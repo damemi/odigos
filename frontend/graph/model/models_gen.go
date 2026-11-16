@@ -126,6 +126,10 @@ type CardinalityControlConfig struct {
 	URLTemplatization *URLTemplatizationCardinalityControlConfig `json:"urlTemplatization,omitempty"`
 }
 
+type CentralProxyConfig struct {
+	CentralBackendURL *string `json:"centralBackendURL,omitempty"`
+}
+
 // Clearing buffered OTLP data for a workload slot
 type ClearProfilingBufferResult struct {
 	Status      string `json:"status"`
@@ -525,6 +529,7 @@ type EffectiveConfig struct {
 	UIPaginationLimit                *int                                `json:"uiPaginationLimit,omitempty"`
 	UIRemoteURL                      *string                             `json:"uiRemoteUrl,omitempty"`
 	CentralBackendURL                *string                             `json:"centralBackendURL,omitempty"`
+	CentralProxy                     *CentralProxyConfig                 `json:"centralProxy,omitempty"`
 	ClusterName                      *string                             `json:"clusterName,omitempty"`
 	Instrumentor                     *InstrumentorConfig                 `json:"instrumentor,omitempty"`
 	CustomContainerRuntimeSocketPath *string                             `json:"customContainerRuntimeSocketPath,omitempty"`
