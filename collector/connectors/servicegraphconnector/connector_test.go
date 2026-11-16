@@ -823,11 +823,13 @@ func TestVirtualNodeEmitsAllPeerAttributesOnMetrics(t *testing.T) {
 	v, ok := attrs.Get("server")
 	require.True(t, ok)
 	assert.Equal(t, "downstream-svc", v.Str())
-	_, ok = attrs.Get("server_peer.service")
-	require.True(t, ok, "expected server_peer.service label")
+	_, ok = attrs.Get("peer_peer.service")
+	require.True(t, ok, "expected peer_peer.service label")
+	_, ok = attrs.Get("peer_db.system")
+	require.True(t, ok, "expected peer_db.system label")
+	assert.Equal(t, "postgresql", attrs.AsRaw()["peer_db.system"])
 	_, ok = attrs.Get("server_db.system")
-	require.True(t, ok, "expected server_db.system label")
-	assert.Equal(t, "postgresql", attrs.AsRaw()["server_db.system"])
+	assert.False(t, ok, "peer attributes must not be emitted as server_* labels")
 }
 
 // TestGetPeerHostResolvesHTTPEgress is the minimal reproducer for the "unknown"
@@ -1011,4 +1013,71 @@ func verifyExpDuration(t *testing.T, m pmetric.Metric, expectedDp pmetric.Expone
 // ptr returns a pointer to the given value.
 func ptr[T any](value T) *T {
 	return &value
+}
+
+func TestPeerNodeNaming(t *testing.T) {
+	tests := []struct {
+		name          string
+		spanAttrs     map[string]string
+		dimensions    []string
+		wantServer    string
+		wantNamespace string
+	}{
+		{name: "database named by host", spanAttrs: map[string]string{"db.name": "odimall", "db.system": "mysql", "net.peer.name": "mysql-host"}, wantServer: "mysql-host"},
+		{name: "short name resolves in the client namespace", spanAttrs: map[string]string{"server.address": "mysql"}, dimensions: []string{"k8s.namespace.name"}, wantServer: "mysql", wantNamespace: "catalog"},
+		{name: "fqdn carries its own namespace", spanAttrs: map[string]string{"server.address": "mysql.odimall.svc.cluster.local"}, dimensions: []string{"k8s.namespace.name"}, wantServer: "mysql", wantNamespace: "odimall"},
+		{name: "external host is left alone", spanAttrs: map[string]string{"server.address": "api.stripe.com"}, dimensions: []string{"k8s.namespace.name"}, wantServer: "api.stripe.com"},
+		{name: "ip is left alone", spanAttrs: map[string]string{"server.address": "10.0.0.12"}, dimensions: []string{"k8s.namespace.name"}, wantServer: "10.0.0.12"},
+		{name: "no namespace dimension", spanAttrs: map[string]string{"server.address": "mysql"}, wantServer: "mysql"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			traces := ptrace.NewTraces()
+			rs := traces.ResourceSpans().AppendEmpty()
+			rs.Resource().Attributes().PutStr(string(semconv.ServiceNameKey), "stock-service")
+			rs.Resource().Attributes().PutStr(string(semconv.K8SNamespaceNameKey), "catalog")
+			span := rs.ScopeSpans().AppendEmpty().Spans().AppendEmpty()
+			span.SetSpanID(pcommon.SpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8}))
+			span.SetTraceID(pcommon.TraceID([16]byte{3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3}))
+			span.SetKind(ptrace.SpanKindClient)
+			for k, v := range tt.spanAttrs {
+				span.Attributes().PutStr(k, v)
+			}
+
+			cfg := &Config{
+				Dimensions:                tt.dimensions,
+				LatencyHistogramBuckets:   []time.Duration{time.Second},
+				Store:                     StoreConfig{MaxItems: 10, TTL: time.Nanosecond},
+				VirtualNodePeerAttributes: []string{"peer.service", "server.address", "net.peer.name", "db.name", "db.system", "rpc.service"},
+				MetricsFlushInterval:      ptr(time.Millisecond),
+			}
+			conn, err := newConnector(componenttest.NewNopTelemetrySettings(), cfg, newMockMetricsExporter())
+			require.NoError(t, err)
+			require.NoError(t, conn.Start(t.Context(), componenttest.NewNopHost()))
+			require.NoError(t, conn.ConsumeTraces(t.Context(), traces))
+			conn.store.Expire()
+
+			var metrics []pmetric.Metrics
+			require.Eventually(t, func() bool {
+				metrics = conn.metricsConsumer.(*mockMetricsExporter).GetMetrics()
+				return len(metrics) > 0
+			}, 5*time.Second, 10*time.Millisecond)
+			require.NoError(t, conn.Shutdown(t.Context()))
+
+			var attrs map[string]any
+			ms := metrics[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+			for i := 0; i < ms.Len(); i++ {
+				if ms.At(i).Name() == "traces_service_graph_request_total" {
+					attrs = ms.At(i).Sum().DataPoints().At(0).Attributes().AsRaw()
+				}
+			}
+			require.NotNil(t, attrs)
+			assert.Equal(t, tt.wantServer, attrs["server"])
+			if tt.wantNamespace == "" {
+				assert.NotContains(t, attrs, "server_k8s.namespace.name")
+			} else {
+				assert.Equal(t, tt.wantNamespace, attrs["server_k8s.namespace.name"])
+			}
+		})
+	}
 }

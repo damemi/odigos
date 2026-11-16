@@ -391,8 +391,7 @@
           "title": "serviceGraphDisabled"
         },
         "serviceGraphExtraDimensions": {
-          "default": "",
-          "description": "Extra attribute names to include as additional dimensions in service graph metrics,\non top of the default service.name dimension.\nUse this when multiple services share the same service.name but should appear as distinct\nnodes in the graph. For example, if the same service is deployed in multiple namespaces\n(e.g. staging and production in the same cluster), adding \"k8s.namespace.name\" will\nproduce a separate node per namespace instead of merging them into one.\nNOTE: both span-level and resource-level attributes (e.g. k8s.namespace.name) are\nsupported here.",
+          "description": "Extra attribute names to include as additional dimensions in service graph metrics,\non top of the default service.name dimension.\nUse this when multiple services share the same service.name but should appear as distinct\nnodes in the graph. For example, if the same service is deployed in multiple namespaces\n(e.g. staging and production in the same cluster), adding \"k8s.namespace.name\" will\nproduce a separate node per namespace instead of merging them into one.\nIt is on by default and Insights needs it, so keep it when overriding this list.\nNOTE: both span-level and resource-level attributes (e.g. k8s.namespace.name) are\nsupported here.",
           "items": {
             "type": "string"
           },

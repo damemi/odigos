@@ -39,11 +39,11 @@ func (r *queryResolver) GetServiceMap(ctx context.Context) (*model.ServiceMap, e
 }
 
 // PeerSources is the resolver for the peerSources field.
-func (r *queryResolver) PeerSources(ctx context.Context, serviceName string) (*model.PeerSources, error) {
+func (r *queryResolver) PeerSources(ctx context.Context, serviceName string, namespace *string) (*model.PeerSources, error) {
 	if r.MetricsConsumer == nil {
 		return nil, fmt.Errorf("metrics consumer not initialized")
 	}
 
 	allEdges := r.MetricsConsumer.GetServiceGraphEdges()
-	return services.PeerSources(allEdges, serviceName), nil
+	return services.PeerSources(allEdges, serviceName, services.DerefString(namespace)), nil
 }

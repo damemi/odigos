@@ -12,7 +12,8 @@ spec:
       helmValuePath: clusterName
     - displayName: Telemetry Enabled
       componentType: toggle
-      isHelmOnly: false
+      # Helm-only: an overlay (the UI's or Central's) can't turn it off, as `telemetryEnabled` is a plain bool there.
+      isHelmOnly: true
       description: Enable anonymous usage telemetry to help improve Odigos.
       helmValuePath: telemetryEnabled
     - displayName: OpenShift Enabled

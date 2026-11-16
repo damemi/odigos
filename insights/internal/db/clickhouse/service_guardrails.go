@@ -138,8 +138,11 @@ func (r *Repo) UpsertServiceGuardrail(ctx context.Context, guardrail repo.Servic
 
 // DeleteServiceGuardrail drops one scoped guardrail via an ALTER ... DELETE
 // mutation (ReplacingMergeTree has no real delete); admin action, off the hot path.
+// Synchronous (see syncMutationCtx): the caller reloads the guardrail snapshot
+// right after, and an async mutation would still show it the deleted row - the
+// engine would keep enforcing it, and the UI's refetch would list it again.
 func (r *Repo) DeleteServiceGuardrail(ctx context.Context, scope repo.PolicyScope, scopeKey string) error {
-	if err := r.conn.Exec(ctx,
+	if err := r.conn.Exec(syncMutationCtx(ctx),
 		"ALTER TABLE service_guardrails DELETE WHERE scope_type = ? AND scope_key = ?",
 		string(repo.NormalizePolicyScope(scope)), scopeKey); err != nil {
 		return fmt.Errorf("delete service guardrail %s/%s: %w", scope, scopeKey, err)

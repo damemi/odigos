@@ -4,9 +4,12 @@
 package servicegraphconnector // import "github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector"
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,6 +35,7 @@ const (
 	metricKeySeparator = string(byte(0))
 	clientKind         = "client"
 	serverKind         = "server"
+	peerKind           = "peer"
 	virtualNodeLabel   = "virtual_node"
 	millisecondsUnit   = "ms"
 	secondsUnit        = "s"
@@ -290,6 +294,10 @@ func (p *serviceGraphConnector) aggregateMetrics(ctx context.Context, td ptrace.
 						if dbName, ok := getFirstMatchingValue(p.config.DatabaseNameAttributes, rAttributes, span.Attributes()); ok {
 							e.ConnectionType = store.Database
 							e.ServerService = dbName
+							if peerName, ok := getFirstMatchingValue(p.config.VirtualNodePeerAttributes, span.Attributes()); ok {
+								e.ServerService = peerName
+							}
+							p.resolveInClusterPeer(e)
 							e.ServerLatencySec = spanDuration(span)
 						}
 					})
@@ -383,6 +391,7 @@ func (p *serviceGraphConnector) onExpire(e *store.Edge) {
 
 		if e.ServerService == "" {
 			e.ServerService = p.getPeerHost(p.config.VirtualNodePeerAttributes, e.Peer)
+			p.resolveInClusterPeer(e)
 			if p.config.VirtualNodeExtraLabel {
 				e.VirtualNodeLabel = store.ServerVirtualNode
 			}
@@ -499,15 +508,14 @@ func buildDimensions(e *store.Edge) pcommon.Map {
 	}
 
 	// Virtual-node and database edges: peer attributes describe the downstream from the client span.
-	// Emit as server_* for consistency with other server-side dimensions. Skip keys already in
+	// Emit as peer_* so they don't split nodes the way server_* dimensions do. Skip keys already in
 	// e.Dimensions to avoid duplicate label names. Sorted peer keys align with buildMetricKeyFromEdge.
 	if (e.ConnectionType == store.VirtualNode || e.ConnectionType == store.Database) && len(e.Peer) > 0 {
 		for _, key := range sortedMapKeys(e.Peer) {
-			dim := serverKind + "_" + key
-			if _, exists := e.Dimensions[dim]; exists {
+			if _, exists := e.Dimensions[serverKind+"_"+key]; exists {
 				continue
 			}
-			dims.PutStr(dim, e.Peer[key])
+			dims.PutStr(peerKind+"_"+key, e.Peer[key])
 		}
 	}
 	return dims
@@ -781,6 +789,35 @@ func (*serviceGraphConnector) getPeerHost(m []string, peers map[string]string) s
 		}
 	}
 	return peerStr
+}
+
+// resolveInClusterPeer names a virtual or database server after the Kubernetes Service its host points to,
+// in that Service's namespace. A single-label host resolves in the client's namespace:
+// https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/#namespaces-of-services
+func (p *serviceGraphConnector) resolveInClusterPeer(e *store.Edge) {
+	namespaceKey := string(semconv.K8SNamespaceNameKey)
+	if !slices.Contains(p.config.Dimensions, namespaceKey) {
+		return
+	}
+	host := cmp.Or(e.Peer[string(semconv.ServerAddressKey)], e.Peer["net.peer.name"])
+	if host == "" || net.ParseIP(host) != nil {
+		return
+	}
+	labels := strings.Split(strings.TrimSuffix(host, "."), ".")
+	var namespace string
+	switch {
+	case len(labels) == 1:
+		namespace = e.Dimensions[clientKind+"_"+namespaceKey]
+	case len(labels) >= 3 && labels[2] == "svc":
+		namespace = labels[1]
+	}
+	if namespace == "" {
+		return
+	}
+	if e.ServerService == host {
+		e.ServerService = labels[0]
+	}
+	e.Dimensions[serverKind+"_"+namespaceKey] = namespace
 }
 
 // cacheLoop periodically cleans the cache

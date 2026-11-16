@@ -1,6 +1,7 @@
 package collectormetrics
 
 import (
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -477,10 +478,10 @@ func (sg *ServiceGraph) UpdateFromDataPoint(dp pmetric.NumberDataPoint) {
 		sg.edges[clientID] = make(map[string]*ServiceGraphEdge)
 	}
 
+	// a server node is not virtual if it has service.name attribute
+	_, isServerInstrumentedNode := attrs.Get("server_service_name")
 	edge, exists := sg.edges[clientID][serverID]
 	if !exists {
-		// a server node is not virtual if it has service.name attribute
-		_, isServerInstrumentedNode := attrs.Get("server_service_name")
 		sg.edges[clientID][serverID] = &ServiceGraphEdge{
 			ToNodeIsVirtual: !isServerInstrumentedNode,
 			RequestCount:    val,
@@ -488,6 +489,12 @@ func (sg *ServiceGraph) UpdateFromDataPoint(dp pmetric.NumberDataPoint) {
 			Attributes:      copyClientServerStringAttrs(attrs),
 		}
 	} else {
+		// Series that differ only by peer_* labels share a node pair: keep the details of all of them.
+		// A new map, since readers may still hold the previous one.
+		edge.ToNodeIsVirtual = edge.ToNodeIsVirtual && !isServerInstrumentedNode
+		merged := copyClientServerStringAttrs(attrs)
+		maps.Copy(merged, edge.Attributes)
+		edge.Attributes = merged
 		// always overwrite because it's a cumulative counter
 		edge.RequestCount = val
 		edge.LastUpdated = timestamp
@@ -495,11 +502,11 @@ func (sg *ServiceGraph) UpdateFromDataPoint(dp pmetric.NumberDataPoint) {
 }
 
 // Returns a new map of all string attributes whose keys start with
-// "client" or "server", this is used to build the service graph edges attributes
+// "client", "server" or "peer", this is used to build the service graph edges attributes
 func copyClientServerStringAttrs(attrs pcommon.Map) map[string]string {
 	out := make(map[string]string)
 	attrs.Range(func(k string, v pcommon.Value) bool {
-		if strings.HasPrefix(k, "client") || strings.HasPrefix(k, "server") {
+		if strings.HasPrefix(k, "client") || strings.HasPrefix(k, "server") || strings.HasPrefix(k, "peer") {
 			if v.Type() == pcommon.ValueTypeStr {
 				out[k] = v.Str()
 			}

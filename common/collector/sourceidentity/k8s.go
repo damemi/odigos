@@ -31,10 +31,7 @@ var K8sWorkloadNameAttributes = []struct {
 // otherwise the first present attribute from K8sWorkloadNameAttributes is used.
 func FromK8sResourceAttributes(attrs pcommon.Map) pcommon.Map {
 	identity := pcommon.NewMap()
-	for _, key := range k8sIdentityKeys(func(key string) (string, bool, bool) {
-		val, ok := attrs.Get(key)
-		return val.Str(), ok && val.Type() == pcommon.ValueTypeStr, ok
-	}) {
+	for _, key := range k8sIdentityKeys(pcommonGetter(attrs)) {
 		val, _ := attrs.Get(key)
 		val.CopyTo(identity.PutEmpty(key))
 	}
@@ -45,19 +42,32 @@ func FromK8sResourceAttributes(attrs pcommon.Map) pcommon.Map {
 // as a plain string map, for consumers that don't work with pdata.
 func FromK8sResourceAttributesMap(attrs map[string]string) map[string]string {
 	identity := map[string]string{}
-	for _, key := range k8sIdentityKeys(func(key string) (string, bool, bool) {
-		val, ok := attrs[key]
-		return val, ok, ok
-	}) {
+	for _, key := range k8sIdentityKeys(mapGetter(attrs)) {
 		identity[key] = attrs[key]
 	}
 	return identity
 }
 
-// k8sIdentityKeys returns the keys that make up the k8s source identity, independent of the
-// map type holding the attributes. get reports an attribute's string value, whether it is a
-// string, and whether it is present at all.
-func k8sIdentityKeys(get func(key string) (val string, isStr bool, ok bool)) []string {
+// attrGetter reads one resource attribute independent of the map type holding the attributes:
+// its string value, whether it is a string, and whether it is present at all.
+type attrGetter func(key string) (val string, isStr bool, ok bool)
+
+func pcommonGetter(attrs pcommon.Map) attrGetter {
+	return func(key string) (string, bool, bool) {
+		val, ok := attrs.Get(key)
+		return val.Str(), ok && val.Type() == pcommon.ValueTypeStr, ok
+	}
+}
+
+func mapGetter(attrs map[string]string) attrGetter {
+	return func(key string) (string, bool, bool) {
+		val, ok := attrs[key]
+		return val, ok, ok
+	}
+}
+
+// k8sIdentityKeys returns the keys that make up the k8s source identity.
+func k8sIdentityKeys(get attrGetter) []string {
 	keys := make([]string, 0, 4)
 	for _, key := range []string{string(semconv.K8SNamespaceNameKey), string(semconv.K8SContainerNameKey)} {
 		if val, isStr, _ := get(key); isStr && val != "" {

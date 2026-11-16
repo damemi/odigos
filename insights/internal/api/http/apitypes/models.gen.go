@@ -608,6 +608,24 @@ func (e ViolationStatus) Valid() bool {
 	}
 }
 
+// Defines values for DeleteGuardrailParamsScope.
+const (
+	DeleteGuardrailParamsScopeService     DeleteGuardrailParamsScope = "service"
+	DeleteGuardrailParamsScopeTransaction DeleteGuardrailParamsScope = "transaction"
+)
+
+// Valid indicates whether the value is a known member of the DeleteGuardrailParamsScope enum.
+func (e DeleteGuardrailParamsScope) Valid() bool {
+	switch e {
+	case DeleteGuardrailParamsScopeService:
+		return true
+	case DeleteGuardrailParamsScopeTransaction:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListObservationsParamsSampleReason.
 const (
 	AnomalyEvidence ListObservationsParamsSampleReason = "anomaly_evidence"
@@ -2193,9 +2211,15 @@ type GetFindingDeliveriesParams struct {
 
 // DeleteGuardrailParams defines parameters for DeleteGuardrail.
 type DeleteGuardrailParams struct {
-	// ScopeKey The guardrail's namespace/service scope key.
+	// Scope The guardrail's scope; service when omitted.
+	Scope DeleteGuardrailParamsScope `form:"scope,omitempty" json:"scope,omitempty"`
+
+	// ScopeKey The guardrail's scope key - namespace/service for a service guardrail, the transaction id for a transaction guardrail.
 	ScopeKey string `form:"scope_key" json:"scope_key"`
 }
+
+// DeleteGuardrailParamsScope defines parameters for DeleteGuardrail.
+type DeleteGuardrailParamsScope string
 
 // ListGuardrailViolationsParams defines parameters for ListGuardrailViolations.
 type ListGuardrailViolationsParams struct {

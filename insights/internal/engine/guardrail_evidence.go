@@ -18,10 +18,13 @@ import (
 //   - caller/callee rules: the offending item is a service name, so every span
 //     owned by that service is highlighted;
 //   - egress rule: the offending item is "host" or "host:port", so the CLIENT
-//     span(s) whose destination matches are highlighted.
+//     span(s) whose destination matches are highlighted;
+//   - transactions rule: the offending item is the transaction identity, so the
+//     guarded service's entry span(s) that identity was built from are
+//     highlighted (scopeKey names the service).
 //
 // Adding a rule type here is one case, matching its extractor.
-func GuardrailSpanHighlights(rule repo.RuleKey, offending string, spans []SpanView) []SpanHighlight {
+func GuardrailSpanHighlights(rule repo.RuleKey, scopeKey, offending string, spans []SpanView) []SpanHighlight {
 	switch rule {
 	case risk.RuleAllowedCallers:
 		return highlightByService(spans, offending, "unauthorized caller")
@@ -31,6 +34,8 @@ func GuardrailSpanHighlights(rule repo.RuleKey, offending string, spans []SpanVi
 		return highlightEgress(spans, offending)
 	case risk.RuleAttributeCorrelation:
 		return highlightCorrelation(spans, offending)
+	case risk.RuleAllowedTransactions:
+		return highlightTransaction(spans, scopeKey, offending)
 	default:
 		return nil
 	}
@@ -121,6 +126,40 @@ func spanViewMatchesSite(s SpanView, site correlationSite) bool {
 		}
 	}
 	return false
+}
+
+// highlightTransaction flags the entry span(s) of a transaction that isn't on the
+// service's allowlist. The offending item is repo.TransactionIdentity: the kind,
+// a tab, then the operation - the entry span's name plus any identity
+// dimensions (" [http.response.status_code=200]", see applyIdentityDimensions).
+// A span matches when it belongs to the guarded service, is an entry the way
+// serviceEntrySpans picks them (the trace root, or a SERVER / CONSUMER span),
+// and carries that name. Both conditions matter: the caller's CLIENT span is
+// usually named the same (the evidence trace is the whole trace, callers
+// included), and the guarded service may make the same call itself.
+func highlightTransaction(spans []SpanView, scopeKey, offending string) []SpanHighlight {
+	_, service, ok := strings.Cut(scopeKey, "/")
+	if !ok || service == "" {
+		return nil
+	}
+	operation := offending
+	if _, op, found := strings.Cut(offending, "\t"); found {
+		operation = op
+	}
+	var out []SpanHighlight
+	for _, s := range spans {
+		if !strings.EqualFold(s.Service, service) || s.Name == "" {
+			continue
+		}
+		if s.Depth != 0 && s.Kind != "SERVER" && s.Kind != "CONSUMER" {
+			continue
+		}
+		if operation != s.Name && !strings.HasPrefix(operation, s.Name+" [") {
+			continue
+		}
+		out = append(out, SpanHighlight{SpanID: s.SpanID, Severity: "high", Reason: "transaction not on the allowlist"})
+	}
+	return out
 }
 
 // highlightByService flags every span owned by the named service.

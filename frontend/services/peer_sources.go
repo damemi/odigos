@@ -1,6 +1,7 @@
 package services
 
 import (
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -13,7 +14,11 @@ type ServiceGraphEdges = map[string]map[string]collectormetrics.ServiceGraphEdge
 
 // ServiceGraphNodeAttributesForServer prepares labels for the TO node row (metrics are edge-centric; API is node-centric).
 func ServiceGraphNodeAttributesForServer(attrs map[string]string) map[string]string {
-	return serviceGraphLabelsForPrefix(attrs, "server")
+	// peer_* labels also describe the target, on virtual-node and database edges.
+	out := map[string]string{}
+	maps.Copy(out, serviceGraphLabelsForPrefix(attrs, "peer"))
+	maps.Copy(out, serviceGraphLabelsForPrefix(attrs, "server"))
+	return out
 }
 
 // ServiceGraphNodeAttributesForClient prepares labels for the FROM node row (inbound peers).
@@ -91,11 +96,11 @@ func EdgeToModel(compositeKey string, edge collectormetrics.ServiceGraphEdge, no
 	}
 }
 
-// mergeEdge aggregates an edge into m keyed by base service name,
+// mergeEdge aggregates an edge into m keyed by base service name and namespace,
 // summing request counts and keeping the most recent timestamp.
-func mergeEdge(m map[string]*model.ServiceMapToSource, compositeKey string, edge collectormetrics.ServiceGraphEdge, nodeAttrs map[string]string) {
-	base := BaseServiceName(compositeKey)
-	if existing, ok := m[base]; ok {
+func mergeEdge(m map[string]*model.ServiceMapToSource, compositeKey, namespace string, edge collectormetrics.ServiceGraphEdge, nodeAttrs map[string]string) {
+	key := BaseServiceName(compositeKey) + "|" + namespace
+	if existing, ok := m[key]; ok {
 		existing.Requests += int(edge.RequestCount)
 		ts := edge.LastUpdated.Format(time.RFC3339)
 		if ts > existing.DateTime {
@@ -106,7 +111,7 @@ func mergeEdge(m map[string]*model.ServiceMapToSource, compositeKey string, edge
 			existing.IsVirtual = true
 		}
 	} else {
-		m[base] = EdgeToModel(compositeKey, edge, nodeAttrs)
+		m[key] = EdgeToModel(compositeKey, edge, nodeAttrs)
 	}
 }
 
@@ -120,21 +125,27 @@ func mapValues(m map[string]*model.ServiceMapToSource) []*model.ServiceMapToSour
 
 // PeerSources finds all inbound and outbound peers for a given base service name.
 // The allEdges map may contain composite keys (e.g. "redis|ns1") so we compare
-// against the base name extracted from each key. Results are deduplicated by
-// base service name, summing request counts and keeping the latest timestamp.
-func PeerSources(allEdges ServiceGraphEdges, serviceName string) *model.PeerSources {
+// against the base name extracted from each key. When namespace is set, only the
+// service in that namespace matches. Results are deduplicated by base service name
+// and namespace, summing request counts and keeping the latest timestamp.
+func PeerSources(allEdges ServiceGraphEdges, serviceName, namespace string) *model.PeerSources {
 	inboundMap := make(map[string]*model.ServiceMapToSource)
 	outboundMap := make(map[string]*model.ServiceMapToSource)
+	isQueried := func(nodeKey, nodeNamespace string) bool {
+		return BaseServiceName(nodeKey) == serviceName && (namespace == "" || nodeNamespace == "" || nodeNamespace == namespace)
+	}
 
 	for callerKey, targets := range allEdges {
-		if BaseServiceName(callerKey) == serviceName {
-			for targetKey, edge := range targets {
-				mergeEdge(outboundMap, targetKey, edge, ServiceGraphNodeAttributesForServer(edge.Attributes))
-			}
-		}
 		for targetKey, edge := range targets {
-			if BaseServiceName(targetKey) == serviceName {
-				mergeEdge(inboundMap, callerKey, edge, ServiceGraphNodeAttributesForClient(edge.Attributes))
+			callerNamespace, targetNamespace := edge.Attributes["client_k8s_namespace_name"], edge.Attributes["server_k8s_namespace_name"]
+			if isQueried(callerKey, callerNamespace) {
+				mergeEdge(outboundMap, targetKey, targetNamespace, edge, ServiceGraphNodeAttributesForServer(edge.Attributes))
+			}
+			if isQueried(targetKey, targetNamespace) {
+				// ToNodeIsVirtual describes the target; a caller is never virtual.
+				caller := edge
+				caller.ToNodeIsVirtual = false
+				mergeEdge(inboundMap, callerKey, callerNamespace, caller, ServiceGraphNodeAttributesForClient(edge.Attributes))
 			}
 		}
 	}

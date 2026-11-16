@@ -74,6 +74,9 @@ export const GET_EFFECTIVE_CONFIG = gql`
       uiPaginationLimit
       uiRemoteUrl
       centralBackendURL
+      centralProxy {
+        centralBackendURL
+      }
       clusterName
       instrumentor {
         mountMethod

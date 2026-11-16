@@ -25,6 +25,7 @@ func registerTopologyTools(s *server.MCPServer, deps Deps) {
 			readAnno(),
 			mcp.WithDescription("Inbound and outbound peer services for one service. Smaller / focused alternative to get_service_map when you already know the service."),
 			mcp.WithString("service_name", mcp.Required(), mcp.Description("Service name as it appears in the service map (matches OTel service.name).")),
+			mcp.WithString("namespace", mcp.Description("Kubernetes namespace of the service, to tell apart same-named services in different namespaces.")),
 		),
 		getPeerSourcesHandler(deps),
 	)
@@ -69,7 +70,7 @@ func getPeerSourcesHandler(deps Deps) server.ToolHandlerFunc {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		peers := services.PeerSources(deps.MetricsConsumer.GetServiceGraphEdges(), svc)
+		peers := services.PeerSources(deps.MetricsConsumer.GetServiceGraphEdges(), svc, req.GetString("namespace", ""))
 		return withGuidance(peers, fmt.Sprintf("Inbound and outbound peers for service %q.", svc), nil)
 	}
 }

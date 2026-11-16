@@ -34,5 +34,5 @@ type PeerSources {
 
 extend type Query {
   getServiceMap: ServiceMap!
-  peerSources(serviceName: String!): PeerSources!
+  peerSources(serviceName: String!, namespace: String): PeerSources!
 }
