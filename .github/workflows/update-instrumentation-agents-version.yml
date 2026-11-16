@@ -57,6 +57,30 @@ jobs:
         with:
           token: ${{ steps.sts.outputs.GH_TOKEN }}
 
+      # upgrade-agent runs `go get` / `go mod tidy` in odiglet/enterprise, which resolves the private
+      # instrumentation modules, so git needs a read token for each of them.
+      - name: Get ro tokens for private module dependencies
+        uses: odigos-io/ci-core/sts@main
+        with:
+          pairs: |
+            odigos-io/ebpf-core:ro
+            odigos-io/ebpf-java-instrumentation:enterprise-ro
+            odigos-io/ebpf-nodejs-instrumentation:enterprise-ro
+            odigos-io/ebpf-generic-instrumentation:enterprise-ro
+            odigos-io/enterprise-go-instrumentation:enterprise-ro
+            odigos-io/mysql-instrumentation:enterprise-ro
+            odigos-io/python-ebpf:enterprise-ro
+            odigos-io/odigos-device-plugin:ro
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: odiglet/enterprise/go.mod
+          cache: false
+
+      - name: Set GOPRIVATE
+        run: echo "GOPRIVATE=github.com/odigos-io/*" >> "$GITHUB_ENV"
+
       - name: Update agent version and open PR
         uses: odigos-io/ci-core/apply-agent-version-update@main
         with:
