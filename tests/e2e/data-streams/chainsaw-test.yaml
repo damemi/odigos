@@ -79,11 +79,11 @@ spec:
 
     - name: '[2 - Workload Instrumentation] Simple-demo instrumented after destination added'
       try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
         - assert:
             file: ../../common/assert/simple-demo-instrumented.yaml
-        - script:
-            timeout: 1m10s
-            content: ../../common/wait_for_rollout.sh
         - script:
             timeout: 1m10s
             content: |
@@ -134,24 +134,10 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh ../../common/queries/wait-for-trace-stream-1.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/wait-for-trace-stream-1.yaml
 
     - name: Wait For Trace Stream 2
       try:
         - script:
             timeout: 1m10s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh ../../common/queries/wait-for-trace-stream-2.yaml false traces-2 simple-trace-db-2
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait -n traces-2 -s simple-trace-db-2 ../../common/queries/wait-for-trace-stream-2.yaml

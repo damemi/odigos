@@ -55,7 +55,7 @@ func (b *nodeCollectorBaseReconciler) SyncConfigMap(ctx context.Context, sources
 		profilingCfg = cfg.Profiling
 	}
 
-	configDomains, configAsYamlText, err := calculateCollectorConfigDomains(ctx, b.odigosNamespace, datacollection, sources, clusterCollectorGroup.Status.ReceiverSignals, processors, pipeline.ControllerConfig.OnGKE, tracingLoadBalancingNeeded, profilingCfg, b.tier)
+	configDomains, configAsYamlText, err := calculateCollectorConfigDomains(ctx, b.odigosNamespace, datacollection, sources, clusterCollectorGroup.Status.ReceiverSignals, processors, pipeline.ControllerConfig.OnGKE, tracingLoadBalancingNeeded, profilingCfg)
 	if err != nil {
 		return errors.Join(err, errors.New("failed to calculate collector config domains"))
 	}
@@ -176,14 +176,13 @@ func calculateCollectorConfigDomains(
 	processors []*odigosv1.Processor,
 	onGKE bool,
 	loadBalancingNeeded bool,
-	profiling *odigoscommon.ProfilingConfiguration,
-	tier odigoscommon.OdigosTier) (map[string]config.Config, string, error) {
+	profiling *odigoscommon.ProfilingConfiguration) (map[string]config.Config, string, error) {
 
 	logger := k8slogger.FromContext(ctx)
 
 	// common config domains - always set and active
 	configDomains := map[string]config.Config{
-		"common": collectorconfig.CommonConfig(tier),
+		"common": collectorconfig.CommonConfig(),
 	}
 
 	ownMetricsPort := k8sconsts.OdigosNodeCollectorOwnTelemetryPortDefault
@@ -218,13 +217,12 @@ func calculateCollectorConfigDomains(
 
 	// resource detectors [ec2, eks, azure, aks, gcp] built once.
 	detectors := collectorconfig.BuildResourceDetectors(nodeCG.Spec.ResourceDetectors, onGKE)
-	configDomains["common_application_telemetry"] = collectorconfig.CommonApplicationTelemetryConfig(nodeCG, onGKE, odigosNamespace, detectors, tier)
+	configDomains["common_application_telemetry"] = collectorconfig.CommonApplicationTelemetryConfig(nodeCG, onGKE, odigosNamespace, detectors)
 
 	commonSignalConfig := collectorconfig.CommonSignalConfig{
 		Logger:                   logger.Logr(),
 		OdigosNamespace:          odigosNamespace,
 		ResourceDetectionEnabled: collectorconfig.ResourceDetectionEnabled(detectors),
-		Tier:                     tier,
 	}
 
 	// metrics
@@ -297,9 +295,7 @@ func calculateCollectorConfigDomains(
 		configDomains["logs"] = logsConfig
 	}
 
-	// The profiling pipeline's receiver is enterprise-only, so community tier never gets one
-	// regardless of what OdigosConfiguration asks for.
-	if tier.IsEnterprise() && odigoscommon.ProfilingPipelineActive(profiling) {
+	if odigoscommon.ProfilingPipelineActive(profiling) {
 		configDomains["profiling"] = collectorconfig.ProfilingPipelineConfig(odigosNamespace, profiling, processorsResults.ProfilesProcessors)
 	}
 

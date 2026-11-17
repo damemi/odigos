@@ -7,11 +7,9 @@ import (
 
 var JavaNativeInstrumentationsProfile = profile.Profile{
 	ProfileName:      common.ProfileName("java-native-instrumentations"),
-	MinimumTier:      common.OnPremOdigosTier,
 	ShortDescription: "Deprecated, native instrumentations are now enabled by default",
 }
 var JavaEbpfInstrumentationsProfile = profile.Profile{
 	ProfileName:      common.ProfileName("java-ebpf-instrumentations"),
-	MinimumTier:      common.OnPremOdigosTier,
 	ShortDescription: "Deprecated, eBPF instrumentations are now enabled by default",
 }

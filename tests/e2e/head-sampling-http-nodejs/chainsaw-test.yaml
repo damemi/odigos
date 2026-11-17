@@ -79,9 +79,9 @@ spec:
 
     - name: Wait for apps ready after instrumentation
       try:
-        - assert:
+        - script:
             timeout: 3m
-            file: assert/assert-apps-ready.yaml
+            content: bash ../../common/wait_for_instrumentation.sh
         - script:
             timeout: 1m
             content: |
@@ -104,85 +104,13 @@ spec:
       try:
         - script:
             timeout: 3m
-            content: |
-              # chainsaw invokes scripts with /usr/bin/sh (dash on Ubuntu CI); use bash for pipefail/arrays
-              bash <<'EOF'
-              set -euo pipefail
-              deadline=$(($(date +%s) + 170))
-              queries=(
-                queries/http-server-exact.yaml
-                queries/http-server-prefix.yaml
-                queries/http-server-prefix-nested.yaml
-                queries/http-server-templatized-exact.yaml
-                queries/http-server-templatized-prefix.yaml
-                queries/http-server-templatized-prefix-nested.yaml
-                queries/http-client-exact.yaml
-                queries/http-client-post.yaml
-                queries/http-client-prefix-templatized.yaml
-                queries/kubelet-liveness.yaml
-                queries/kubelet-readiness.yaml
-                queries/kubelet-startup.yaml
-              )
-              last_failed=""
-              last_failed_output=""
-              while true; do
-                ok=true
-                for q in "${queries[@]}"; do
-                  output=""
-                  if ! output=$(../../common/simple_trace_db_query_runner.sh "$q" 2>&1); then
-                    ok=false
-                    last_failed="$q"
-                    last_failed_output="$output"
-                    break
-                  fi
-                done
-                if [ "$ok" = true ]; then
-                  echo "all sampling span assertions passed"
-                  exit 0
-                fi
-                if [ "$(date +%s)" -ge "$deadline" ]; then
-                  echo "sampling span assertions did not pass within timeout" >&2
-                  echo "first failing assertion: ${last_failed}" >&2
-                  echo "--- ${last_failed} output ---" >&2
-                  echo "${last_failed_output}" >&2
-                  echo "--- status of all queries ---" >&2
-                  for q in "${queries[@]}"; do
-                    if out=$(../../common/simple_trace_db_query_runner.sh "$q" 2>&1); then
-                      echo "PASS: $q" >&2
-                    else
-                      echo "FAIL: $q" >&2
-                      echo "$out" >&2
-                    fi
-                  done
-                  exit 1
-                fi
-                sleep 2
-              done
-              EOF
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait queries/*.yaml
       catch:
         - script:
             content: |
-              echo "=== Per-query pass/fail summary ==="
-              for q in queries/*.yaml; do
-                if out=$(../../common/simple_trace_db_query_runner.sh "$q" 2>&1); then
-                  echo "PASS: $q"
-                else
-                  echo "FAIL: $q"
-                  echo "$out"
-                fi
-              done
-              echo "=== Verbose dumps for failing queries ==="
-              for q in queries/*.yaml; do
-                if ! ../../common/simple_trace_db_query_runner.sh "$q" >/dev/null 2>&1; then
-                  echo "--- $q ---"
-                  ../../common/simple_trace_db_query_runner.sh "$q" --verbose || true
-                fi
-              done
               echo "=== Sampling CRs ==="
               kubectl get sampling -n odigos-test -o yaml || true
               echo "=== InstrumentationConfigs ==="
               kubectl get instrumentationconfigs -A || true
               echo "=== Gateway logs ==="
               kubectl logs -n odigos-test -l odigos.io/collector-role=CLUSTER_GATEWAY --tail=80 || true
-              echo "=== App pods ==="
-              kubectl get pods -n default -o wide || true

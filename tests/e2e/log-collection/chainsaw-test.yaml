@@ -66,15 +66,11 @@ spec:
         - apply:
             file: ../../common/apply/add-simple-trace-db-destination-logs.yaml
 
-    # Instrumenting the namespace rolls the workloads, so this waits for the new pods rather than
-    # the ones that were running before. simple-demo-installed.yaml checks updatedReplicas, so it
-    # is only satisfied once the instrumented replica set is the ready one. Without this the
-    # traffic job can be scheduled while the frontend is still rolling and never complete.
     - name: Assert Apps Ready After Instrumentation
       try:
-        - assert:
-            timeout: 2m
-            file: ../../common/assert/simple-demo-installed.yaml
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
 
     - name: Assert Pipeline
       try:
@@ -128,23 +124,14 @@ spec:
               kubectl delete pod traffic-generator -n default --ignore-not-found
       catch:
         - script:
-            content: |
-              kubectl logs traffic-generator -n default || true
-              kubectl describe pod traffic-generator -n default || true
+            content: kubectl logs traffic-generator -n default || true
 
     ############# Verify Logs #############
     - name: Assert Logs Collected And Enriched
       try:
         - script:
             timeout: 2m
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh log-collection-validation.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 2
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait log-collection-validation.yaml
       catch:
         - script:
             content: |

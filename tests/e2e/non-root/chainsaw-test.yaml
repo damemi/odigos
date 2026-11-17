@@ -41,13 +41,6 @@ spec:
                 --set signals="{traces}"
               kubectl label namespace odigos-test odigos.io/system-object="true"
               bash ../../../tests/common/verify_odigos_installation.sh odigos-test
-      catch:
-        - script:
-            content: |
-              echo "🔍 Listing all resources in namespace 'odigos-test'..."
-              kubectl get all -n odigos-test
-              echo "📝 Describing odiglet daemonset..."
-              kubectl describe daemonset odiglet -n odigos-test
 
     - name: Verify Odigos Installed as non-root / unprivileged
       try:
@@ -108,11 +101,8 @@ spec:
     - name: Instrumentation healthy after destination added
       try:
         - script:
-            timeout: 2m
-            content: |
-              bash ../../../tests/common/wait_for_rollout.sh
-              kubectl rollout status deployment -l app=currency
-              kubectl rollout status deployment -l app=geolocation
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
         # We intentionally do NOT reuse the shared instrumented-and-pipeline.yaml here: that assert is written
         # for the default device-plugin mount method and expects the instrumentation.odigos.io/generic device
         # resource, which is not injected with mountMethod=k8s-init-container.
@@ -122,10 +112,6 @@ spec:
       catch:
         - script:
             content: |
-              echo "=== default ns pods ==="
-              kubectl get pods -n default -o wide
-              echo "=== non-running pods described (shows Pending/CrashLoop/OOM reason + events) ==="
-              kubectl get pods -n default --field-selector=status.phase!=Running -o name | while read -r p; do kubectl describe -n default "$p"; done
               echo "=== node allocated resources ==="
               kubectl describe nodes | grep -A6 "Allocated resources"
               echo "=== recent default ns events ==="
@@ -187,32 +173,12 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              yaml=$(mktemp)
-              script=$(mktemp)
-              cp ../../../tests/common/queries/wait-for-trace.yaml "$yaml"
-              cp ../../../tests/common/simple_trace_db_query_runner.sh "$script"
-
-              while true; do
-                bash "$script" "$yaml"
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              rm -f "$yaml" "$script"
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/wait-for-trace.yaml
       catch:
         - script:
-            content: |
-              echo "=== All traces ==="
-              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .
+            content: ../../common/simple_trace_db_report.sh
         - script:
             content: |
-              # Which services are actually present in the trace DB (find the missing ones fast).
-              echo "=== service names seen in trace DB ==="
-              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" \
-                | jq -r '..|.serviceName? // empty' | sort -u
               echo "=== instrumentation configs (runtimeVersion + per-container agentEnabled reason/message) ==="
               kubectl get instrumentationconfig -n default -o yaml
               # currency (php) and geolocation (ruby) are the version-gated languages most likely to be
@@ -234,29 +200,10 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              yaml=$(mktemp)
-              script=$(mktemp)
-              cp ../../../tests/common/queries/context-propagation.yaml "$yaml"
-              cp ../../../tests/common/simple_trace_db_query_runner.sh "$script"
-
-              while true; do
-                bash "$script" "$yaml"
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              rm -f "$yaml" "$script"
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/context-propagation.yaml
       catch:
         - script:
-            content: |
-              echo "=== All traces ==="
-              kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/traces" | jq .
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
+            content: ../../common/simple_trace_db_report.sh
 
     - name: Uninstall Odigos
       try:

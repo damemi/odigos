@@ -23,7 +23,6 @@ type CommonSignalConfig struct {
 	OdigosNamespace          string
 	ManifestProcessorNames   []string
 	ResourceDetectionEnabled bool
-	Tier                     common.OdigosTier
 }
 
 // WithProcessors returns a copy of the config with the given manifest processor names set.
@@ -33,10 +32,7 @@ func (c CommonSignalConfig) WithProcessors(names []string) CommonSignalConfig {
 }
 
 const (
-	healthCheckExtensionName = "health_check"
-	// odigosebpf and odigos_enterprise_auth are only compiled into the enterprise collector image.
-	// The collector rejects unknown component types when it loads the config, even if no pipeline
-	// references them, so both the definition and the pipeline wiring must be gated on tier.
+	healthCheckExtensionName            = "health_check"
 	odigosEbpfReceiverName              = "odigosebpf"
 	pprofExtensionName                  = "pprof"
 	odigosEnterpriseAuthExtensionName   = "odigos_enterprise_auth"
@@ -177,8 +173,8 @@ func init() {
 }
 
 // commonReceivers returns the receivers every signal pipeline shares.
-func commonReceivers(tier common.OdigosTier) config.GenericMap {
-	receivers := config.GenericMap{
+func commonReceivers() config.GenericMap {
+	return config.GenericMap{
 		OTLPInReceiverName: config.GenericMap{
 			"protocols": config.GenericMap{
 				"grpc": config.GenericMap{
@@ -192,18 +188,13 @@ func commonReceivers(tier common.OdigosTier) config.GenericMap {
 				},
 			},
 		},
+		odigosEbpfReceiverName: config.GenericMap{},
 	}
-
-	if tier.IsEnterprise() {
-		receivers[odigosEbpfReceiverName] = config.GenericMap{}
-	}
-
-	return receivers
 }
 
-// commonExtensions returns the extension definitions for the given tier.
-func commonExtensions(tier common.OdigosTier) config.GenericMap {
-	extensions := config.GenericMap{
+// commonExtensions returns the extension definitions.
+func commonExtensions() config.GenericMap {
+	return config.GenericMap{
 		healthCheckExtensionName: config.GenericMap{
 			"endpoint": "0.0.0.0:13133",
 		},
@@ -211,38 +202,27 @@ func commonExtensions(tier common.OdigosTier) config.GenericMap {
 			"endpoint": "0.0.0.0:1777",
 		},
 		consts.OdigosCapabilitiesExtensionType: config.GenericMap{},
+		odigosEnterpriseAuthExtensionName:      config.GenericMap{},
 	}
-
-	if tier.IsEnterprise() {
-		extensions[odigosEnterpriseAuthExtensionName] = config.GenericMap{}
-	}
-
-	return extensions
 }
 
 // commonService returns the service block listing the extensions commonExtensions defined.
-func commonService(tier common.OdigosTier) config.Service {
-	extensions := []string{healthCheckExtensionName, pprofExtensionName, consts.OdigosCapabilitiesExtensionType}
-
-	if tier.IsEnterprise() {
-		extensions = append(extensions, odigosEnterpriseAuthExtensionName)
-	}
-
-	return config.Service{Extensions: extensions}
+func commonService() config.Service {
+	return config.Service{Extensions: []string{healthCheckExtensionName, pprofExtensionName, consts.OdigosCapabilitiesExtensionType, odigosEnterpriseAuthExtensionName}}
 }
 
-func CommonApplicationTelemetryConfig(nodeCG *odigosv1.CollectorsGroup, onGKE bool, odigosNamespace string, detectors []string, tier common.OdigosTier) config.Config {
+func CommonApplicationTelemetryConfig(nodeCG *odigosv1.CollectorsGroup, onGKE bool, odigosNamespace string, detectors []string) config.Config {
 	return config.Config{
-		Receivers:  commonReceivers(tier),
+		Receivers:  commonReceivers(),
 		Exporters:  getCommonExporters(nodeCG.Spec.OtlpExporterConfiguration, odigosNamespace),
 		Processors: commonProcessors(nodeCG, onGKE, detectors),
 	}
 }
 
-func CommonConfig(tier common.OdigosTier) config.Config {
+func CommonConfig() config.Config {
 	return config.Config{
-		Extensions: commonExtensions(tier),
-		Service:    commonService(tier),
+		Extensions: commonExtensions(),
+		Service:    commonService(),
 	}
 }
 

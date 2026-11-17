@@ -183,10 +183,9 @@ func TestCalculateConfigMapData(t *testing.T) {
 				},
 			},
 		},
-		false,                   /* onGKE */
-		true,                    /* loadBalancingNeeded */
-		nil,                     /* profiling */
-		common.OnPremOdigosTier, /* tier */
+		false, /* onGKE */
+		true,  /* loadBalancingNeeded */
+		nil,   /* profiling */
 	)
 
 	assert.Equal(t, err, nil)
@@ -267,11 +266,10 @@ func TestNodeCollectorUsesLoadBalancingExporterForTailSampling(t *testing.T) {
 			},
 		},
 		[]common.ObservabilitySignal{common.TracesObservabilitySignal},
-		nil,                     /* processors */
-		false,                   /* onGKE */
-		loadBalancingNeeded,     /* loadBalancingNeeded */
-		nil,                     /* profiling */
-		common.OnPremOdigosTier, /* tier */
+		nil,                 /* processors */
+		false,               /* onGKE */
+		loadBalancingNeeded, /* loadBalancingNeeded */
+		nil,                 /* profiling */
 	)
 
 	assert.NoError(t, err)
@@ -337,10 +335,9 @@ func TestCalculateConfigMapDataTracesOnlyNoLoadBalancing(t *testing.T) {
 				},
 			},
 		},
-		false,                   /* onGKE */
-		false,                   /* loadBalancingNeeded */
-		nil,                     /* profiling */
-		common.OnPremOdigosTier, /* tier */
+		false, /* onGKE */
+		false, /* loadBalancingNeeded */
+		nil,   /* profiling */
 	)
 
 	assert.Equal(t, err, nil)

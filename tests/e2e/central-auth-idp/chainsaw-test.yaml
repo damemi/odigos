@@ -40,8 +40,6 @@ spec:
       catch:
         - script:
             content: |
-              kubectl get all -n odigos-central
-              kubectl describe deployments -n odigos-central
               kubectl logs -n odigos-central deploy/central-backend --tail=100 || true
               kubectl logs -n odigos-central deploy/keycloak --tail=100 || true
 
@@ -56,7 +54,6 @@ spec:
         - script:
             content: |
               echo "Debugging central-auth-idp failure..."
-              kubectl get all -n odigos-central
               kubectl logs -n odigos-central deploy/central-backend --tail=150 || true
               kubectl logs -n odigos-central deploy/keycloak --tail=150 || true
               kubectl logs -n odigos-central deploy/mock-oidc --tail=100 || true

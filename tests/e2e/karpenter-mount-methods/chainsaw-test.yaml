@@ -59,15 +59,12 @@ spec:
         - assert:
             timeout: 1m30s
             file: ../../common/assert/pipeline-ready.yaml
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
         - assert:
             timeout: 2m
             file: ../../common/assert/simple-demo-instrumented.yaml
-        - script:
-            timeout: 1m30s
-            content: |
-              ../../common/wait_for_rollout.sh
-              kubectl rollout status deployment -l app=currency
-              kubectl rollout status deployment -l app=geolocation
 
     - name: '[1 - Virtual Device] Scale inventory — Pending without NodeOverlay, NodeClaim after'
       try:
@@ -92,9 +89,10 @@ spec:
               kubectl rollout status daemonset/odiglet -n odigos-test --timeout=5m
               sleep 2
               kubectl rollout restart deployment -n default
-              ../../common/wait_for_rollout.sh
-              kubectl rollout status deployment -l app=currency
-              kubectl rollout status deployment -l app=geolocation
+              for deploy in $(kubectl get deployment -n default -o name); do
+                kubectl rollout status "$deploy" -n default --timeout=3m
+              done
+              bash ../../common/wait_for_instrumentation.sh
         - assert:
             timeout: 2m
             file: ../mount-method/02-simple-demo-instrumented.yaml
@@ -135,9 +133,10 @@ spec:
             content: |
               sleep 2
               kubectl rollout restart deployment -n default
-              ../../common/wait_for_rollout.sh
-              kubectl rollout status deployment -l app=currency
-              kubectl rollout status deployment -l app=geolocation
+              for deploy in $(kubectl get deployment -n default -o name); do
+                kubectl rollout status "$deploy" -n default --timeout=3m
+              done
+              bash ../../common/wait_for_instrumentation.sh
         - assert:
             timeout: 2m
             file: ../mount-method/04-simple-demo-instrumented-with-csi.yaml

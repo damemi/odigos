@@ -82,12 +82,12 @@ spec:
 
     - name: '[2 - Workload Instrumentation] Simple-demo instrumented after destination added'
       try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
         - assert:
             timeout: 1m30s
             file: 02-simple-demo-instrumented.yaml
-        - script:
-            timeout: 1m10s
-            content: bash ../../../tests/common/wait_for_rollout.sh
       catch:
         - script:
             content: |
@@ -178,6 +178,12 @@ spec:
               for deploy in $(kubectl get deployment -n default -o name); do
                 kubectl rollout status "$deploy" -n default --timeout=3m
               done
+
+    - name: '[4 - CSI Driver Test] Wait for instrumentation'
+      try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
 
     - name: '[4 - CSI Driver Test] Verify CSI volumes are mounted correctly'
       try:

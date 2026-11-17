@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/util/retry"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 )
@@ -27,23 +26,8 @@ func IsGKEManagedNode(nodeName string) bool {
 	return strings.HasPrefix(nodeName, k8sconsts.GKEManagedNodeNamePrefix)
 }
 
-func DetermineNodeOdigletInstalledLabelByTier() string {
-	odigosTier := env.GetOdigosTierFromEnv()
-	switch string(odigosTier) {
-	case string(common.CommunityOdigosTier):
-		return k8sconsts.OdigletOSSInstalledLabel
-	case string(common.OnPremOdigosTier):
-		return k8sconsts.OdigletEnterpriseInstalledLabel
-	default:
-		return k8sconsts.OdigletOSSInstalledLabel
-	}
-}
-
 func PrepareNodeForOdigosInstallation(clientset *kubernetes.Clientset, nodeName string) error {
 	ctx := context.Background()
-
-	// Determine Odigos Installed label [OSS/Enterprise]
-	labelKey := DetermineNodeOdigletInstalledLabelByTier()
 
 	return retry.OnError(retry.DefaultBackoff, apierrors.IsConflict, func() error {
 		node, err := clientset.CoreV1().Nodes().Get(ctx, nodeName, metav1.GetOptions{})
@@ -66,16 +50,9 @@ func PrepareNodeForOdigosInstallation(clientset *kubernetes.Clientset, nodeName 
 			node.Labels = make(map[string]string)
 		}
 
-		// For migration between tiers: ensure only the correct odiglet label is set
-		// by removing the other tier's label if it exists.
-		switch labelKey {
-		case k8sconsts.OdigletOSSInstalledLabel:
-			delete(node.Labels, k8sconsts.OdigletEnterpriseInstalledLabel)
-		case k8sconsts.OdigletEnterpriseInstalledLabel:
-			delete(node.Labels, k8sconsts.OdigletOSSInstalledLabel)
-		}
-
-		node.Labels[labelKey] = k8sconsts.OdigletInstalledLabelValue
+		// Installs that ran the OSS odiglet labeled their nodes with the OSS label.
+		delete(node.Labels, k8sconsts.OdigletOSSInstalledLabel)
+		node.Labels[k8sconsts.OdigletEnterpriseInstalledLabel] = k8sconsts.OdigletInstalledLabelValue
 
 		_, err = clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 		return err

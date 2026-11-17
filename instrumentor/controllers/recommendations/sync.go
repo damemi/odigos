@@ -20,9 +20,6 @@ const (
 func syncRecommendations(ctx context.Context, c client.Client) error {
 	ns := env.GetCurrentNamespace()
 	for _, rec := range recommendationcatalog.Get() {
-		if !isRelevantForTier(rec) {
-			continue
-		}
 		if err := syncRecommendation(ctx, c, rec, ns); err != nil {
 			return err
 		}

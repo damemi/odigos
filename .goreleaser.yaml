@@ -64,6 +64,11 @@ brews:
     commit_msg_template: "release: {{ .Tag }}"
     ids:
       - odigos
+    # release.yml pushes the archives to odigos-cli-artifacts, so each blob digest is the archive's sha256.
+    url_template: "https://registry.odigos.io/v2/odigos-cli-artifacts/blobs/sha256:{{ sha256 .ArtifactPath }}"
+    # Lives in the tap repos; it authenticates with HOMEBREW_ODIGOS_ONPREM_TOKEN.
+    download_strategy: OdigosRegistryDownloadStrategy
+    custom_require: lib/odigos_registry_download_strategy
     commit_author:
       name: odigos-ci
       email: info@keyval.dev

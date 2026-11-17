@@ -3,7 +3,6 @@ package clustercollector
 import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	autoscalerpredicate "github.com/odigos-io/odigos/instrumentor/controllers/predicate"
-	"github.com/odigos-io/odigos/common"
 	odigospredicate "github.com/odigos-io/odigos/k8sutils/pkg/predicate"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -12,7 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-func SetupWithManager(mgr ctrl.Manager, odigosVersion string, tier common.OdigosTier) error {
+func SetupWithManager(mgr ctrl.Manager, odigosVersion string) error {
 
 	err := builder.
 		ControllerManagedBy(mgr).
@@ -27,7 +26,6 @@ func SetupWithManager(mgr ctrl.Manager, odigosVersion string, tier common.Odigos
 			Client:        mgr.GetClient(),
 			Scheme:        mgr.GetScheme(),
 			OdigosVersion: odigosVersion,
-			Tier:          tier,
 		})
 	if err != nil {
 		return err
@@ -44,7 +42,6 @@ func SetupWithManager(mgr ctrl.Manager, odigosVersion string, tier common.Odigos
 			Client:        mgr.GetClient(),
 			Scheme:        mgr.GetScheme(),
 			OdigosVersion: odigosVersion,
-			Tier:          tier,
 		})
 	if err != nil {
 		return err
@@ -64,7 +61,6 @@ func SetupWithManager(mgr ctrl.Manager, odigosVersion string, tier common.Odigos
 			Client:        mgr.GetClient(),
 			Scheme:        mgr.GetScheme(),
 			OdigosVersion: odigosVersion,
-			Tier:          tier,
 		})
 	if err != nil {
 		return err
@@ -81,7 +77,6 @@ func SetupWithManager(mgr ctrl.Manager, odigosVersion string, tier common.Odigos
 			Client:        mgr.GetClient(),
 			Scheme:        mgr.GetScheme(),
 			OdigosVersion: odigosVersion,
-			Tier:          tier,
 		})
 	if err != nil {
 		return err
@@ -101,7 +96,6 @@ func SetupWithManager(mgr ctrl.Manager, odigosVersion string, tier common.Odigos
 			Client:        mgr.GetClient(),
 			Scheme:        mgr.GetScheme(),
 			OdigosVersion: odigosVersion,
-			Tier:          tier,
 		})
 	if err != nil {
 		return err
@@ -119,7 +113,6 @@ func SetupWithManager(mgr ctrl.Manager, odigosVersion string, tier common.Odigos
 			Client:        mgr.GetClient(),
 			Scheme:        mgr.GetScheme(),
 			OdigosVersion: odigosVersion,
-			Tier:          tier,
 		})
 	if err != nil {
 		return err

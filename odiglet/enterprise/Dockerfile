@@ -82,9 +82,9 @@ COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.91@sha256:ae87619
 COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.14@sha256:168a709d9e586f209d2a92581bacc9786099b5ce3613bdf9e3ec8b1d6a0a317b /instrumentations/python-ebpf /instrumentations/python-ebpf
 
 # nodejs-enterprise
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.18.0@sha256:c0b8981293040174aaa79eaf61710ee8c84ba3689c0b47aa815c2265c43b1a2d /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.18.0@sha256:c0b8981293040174aaa79eaf61710ee8c84ba3689c0b47aa815c2265c43b1a2d /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.18.0@sha256:c0b8981293040174aaa79eaf61710ee8c84ba3689c0b47aa815c2265c43b1a2d /instrumentations/nodejs-community /instrumentations/nodejs-community
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/nodejs-community /instrumentations/nodejs-community
 # nodejs-enterprise-14
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.21@sha256:b9d5a9c17c66a3b2a68b169af0482871a5d499e402617b256c686dc4edcfbd13 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.21@sha256:b9d5a9c17c66a3b2a68b169af0482871a5d499e402617b256c686dc4edcfbd13 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
@@ -100,10 +100,10 @@ RUN --mount=type=bind,from=dotnet-builder,source=/legacy-dotnet-instrumentation,
     fi
 
 # java-ebpf-instrumentations
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.62.0@sha256:bb8fe42359a144bce741187277041dbd94183dec6a69ab398315ca98501dfb3c /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.63.0@sha256:d5fd2bef8e2632ab14eab4fd3be932066c2428c17d779a519a9c537157e1ccee /instrumentations/java-ebpf /instrumentations/java-ebpf
 
 # java-enterprise
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.62.0@sha256:666a455f9408f03d10911ec33725a873782098a3c2fb3ac2bca4529eb9f1cd51 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.63.0@sha256:ff1d4de09f5997c0f046adca4c76e655ca162fe6f0d0678ffcca558b3ddf1dd2 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # php-community
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.12.0@sha256:29b949cebd81bf9e8d5d715bfb72e6b45f9e2151f8e7fb8419c520faae2af16c /instrumentations/php /instrumentations/php
@@ -125,9 +125,49 @@ RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/
 
 ######### Odiglet builder #########
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
+ENV GOINSECURE=go.opentelemetry.io*
+ENV GOPRIVATE=github.com/odigos-io/odigos-device-plugin
 
+# 1) Materialize OBI under odiglet/enterprise/.obi/ - only obi.mk (OBI_COMMIT / OBI_VERSION).
+# Cached independently of the Makefile, go.mod and sources.
+WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
+COPY odiglet/obi.mk /go/src/github.com/odigos-io/odigos/odiglet/
+RUN make -f ../obi.mk materialize-obi
+
+# 2) Generate - go.mod/sum of odiglet/enterprise and its local replaces only (not full sources).
+# Cached until module metadata or the Makefile changes.
 WORKDIR /go/src/github.com/odigos-io/odigos
-# odiglet/enterprise replaces these odigos modules with local paths.
+COPY api/go.mod api/go.sum ./api/
+COPY common/go.mod common/go.sum ./common/
+COPY deviceplugin/go.mod deviceplugin/go.sum ./deviceplugin/
+COPY distros/go.mod distros/go.sum ./distros/
+COPY instrumentation/go.mod instrumentation/go.sum ./instrumentation/
+COPY k8sutils/go.mod k8sutils/go.sum ./k8sutils/
+COPY odigosauth/go.mod odigosauth/go.sum ./odigosauth/
+COPY opampserver/go.mod opampserver/go.sum ./opampserver/
+COPY procdiscovery/go.mod procdiscovery/go.sum ./procdiscovery/
+COPY odiglet/go.mod odiglet/go.sum ./odiglet/
+COPY odiglet/pkg/ebpf/sdks/obi/go.mod odiglet/pkg/ebpf/sdks/obi/go.sum ./odiglet/pkg/ebpf/sdks/obi/
+COPY odiglet/enterprise/go.mod odiglet/enterprise/go.sum odiglet/enterprise/Makefile ./odiglet/enterprise/
+WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
+# The instrumentation and device plugin modules are private, so the github_token BuildKit secret is required
+# (the Makefile and the bake file pass it from GITHUB_TOKEN). required=true only catches a missing secret; a
+# secret declared from an unset variable arrives empty, hence the test. git gets the token only as
+# per-command config, so it is never written into a layer.
+# Same /go/pkg cache as compile so the generated eBPF objects are visible to the build step.
+RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
+    --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg \
+    test -n "$GITHUB_TOKEN" || { echo "The github_token secret is empty; set GITHUB_TOKEN." >&2; exit 1; } && \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0="url.https://x-access-token:${GITHUB_TOKEN}@github.com/.insteadOf" \
+    GIT_CONFIG_VALUE_0="https://github.com/" \
+    make generate
+
+# 3) Compile - full sources. COPY overwrites go.mod, so re-apply the OBI replace (ensure-generated runs
+# go-mod), regenerate any eBPF objects missing from the /go/pkg cache mount, then build.
+# .dockerignore excludes **/.obi/, so COPY odiglet/ keeps the materialized OBI tree.
+WORKDIR /go/src/github.com/odigos-io/odigos
 COPY api/ api/
 COPY common/ common/
 COPY deviceplugin/ deviceplugin/
@@ -143,12 +183,6 @@ WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
 ARG TARGETARCH
 ARG LD_FLAGS
 ARG RHEL=false
-ENV GOINSECURE=go.opentelemetry.io*
-ENV GOPRIVATE=github.com/odigos-io/odigos-device-plugin
-# The instrumentation and device plugin modules are private, so the github_token BuildKit secret is required
-# (the Makefile and the bake file pass it from GITHUB_TOKEN). required=true only catches a missing secret; a
-# secret declared from an unset variable arrives empty, hence the test. git gets the token only as
-# per-command config, so it is never written into a layer.
 RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
@@ -156,7 +190,8 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="url.https://x-access-token:${GITHUB_TOKEN}@github.com/.insteadOf" \
     GIT_CONFIG_VALUE_0="https://github.com/" \
-    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make build-odiglet
+    make ensure-generated && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH LD_FLAGS="${LD_FLAGS}" make compile-odiglet
 # File capabilities so the binary can use eBPF privileges when run as non-root.
 # Setting this caps as the permitted set (=p) so that the binary can be executed with a sub set of these capabilities
 # if the environment does not require all of them. A sub-set can be configured with helm values.

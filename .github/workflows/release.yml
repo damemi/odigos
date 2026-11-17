@@ -356,6 +356,46 @@ jobs:
           failure-description: "ERROR: Failed to publish CLI GitHub release assets (goreleaser)"
           tag: ${{ env.TAG }}
 
+      - name: Install oras
+        uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+
+      # The token from the earlier login can expire while goreleaser builds.
+      - id: gcp-auth-cli-artifacts
+        name: Authenticate with Google Cloud for the CLI archives
+        uses: google-github-actions/auth@v3
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      # Homebrew downloads the CLI archives from registry.odigos.io with the customer's on-prem token,
+      # since the GitHub release assets are private. The tap formula points at these blobs by digest.
+      - name: Push the CLI archives to the registry
+        id: cli_artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACCESS_TOKEN: ${{ steps.gcp-auth-cli-artifacts.outputs.access_token }}
+          TAG: ${{ env.TAG }}
+        run: |
+          echo "$ACCESS_TOKEN" | oras login us-central1-docker.pkg.dev -u oauth2accesstoken --password-stdin
+          # A re-run skips goreleaser when the GitHub release already has the archives, so dist/ is missing.
+          if [ ! -d dist ]; then
+            gh release download "$TAG" --dir dist --pattern 'cli_*.tar.gz' --pattern checksums.txt
+          fi
+          cd dist
+          oras push "us-central1-docker.pkg.dev/odigos-cloud/components-private/odigos-cli-artifacts:${TAG}" \
+            --artifact-type application/vnd.odigos.cli.v1 \
+            $(for f in cli_*.tar.gz; do printf '%s:application/gzip ' "$f"; done) checksums.txt:text/plain
+
+      - name: Notify Slack (CLI archives)
+        if: failure() && steps.cli_artifacts.outcome == 'failure'
+        uses: odigos-io/ci-core/.github/actions/slack-release-notification@main
+        with:
+          webhook-url: ${{ secrets.ODIGOS_RELEASE_STATUS_WEBHOOK_URL }}
+          success-description: "CLI archives pushed to the registry"
+          failure-description: "ERROR: Failed to push the CLI archives to the registry; brew install fails until this succeeds"
+          tag: ${{ env.TAG }}
+
       - name: Generate and update release notes
         id: release_notes
         if: env.IS_FEATURE_RELEASE != 'true'

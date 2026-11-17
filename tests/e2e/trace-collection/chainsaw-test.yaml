@@ -70,6 +70,12 @@ spec:
             timeout: 1m10s
             file: assert-instrumentation-configs.yaml
 
+    - name: Wait for instrumentation
+      try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
+
     ############# Generate Traffic #############
     - name: Apply Traffic Generator
       try:
@@ -93,14 +99,7 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh initial-trace-validation.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait initial-trace-validation.yaml
       catch:
         - script:
             timeout: 2m

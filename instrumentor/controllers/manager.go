@@ -26,7 +26,6 @@ import (
 
 	argorolloutsv1alpha1 "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	apiactions "github.com/odigos-io/odigos/api/actions/v1alpha1"
-	"github.com/odigos-io/odigos/common"
 	cacheutils "github.com/odigos-io/odigos/k8sutils/pkg/cache"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
@@ -192,13 +191,12 @@ func CreateManager(opts KubeManagerOptions) (ctrl.Manager, error) {
 }
 
 type OdigosConfigurationOptions struct {
-	Tier          common.OdigosTier
 	OdigosVersion string
 	DynamicClient *dynamic.DynamicClient
 }
 
 func SetupWithManager(ctx context.Context, mgr manager.Manager, dp *distros.Provider, k8sVersion *version.Version, scheduleOdigletOnlyOnInstrumentedNodes bool, instrumentedPodsNodeLabelRetention time.Duration, configOpts OdigosConfigurationOptions) error {
-	err := odigosconfiguration.SetupWithManager(mgr, configOpts.Tier, configOpts.OdigosVersion, configOpts.DynamicClient)
+	err := odigosconfiguration.SetupWithManager(mgr, configOpts.OdigosVersion, configOpts.DynamicClient)
 	if err != nil {
 		return fmt.Errorf("failed to create controllers for odigos configuration: %w", err)
 	}
@@ -240,12 +238,12 @@ func SetupWithManager(ctx context.Context, mgr manager.Manager, dp *distros.Prov
 		}
 	}
 
-	err = nodecollector.SetupWithManager(mgr, configOpts.Tier)
+	err = nodecollector.SetupWithManager(mgr)
 	if err != nil {
 		return fmt.Errorf("failed to create controller for node collector: %w", err)
 	}
 
-	err = clustercollector.SetupWithManager(mgr, configOpts.OdigosVersion, configOpts.Tier)
+	err = clustercollector.SetupWithManager(mgr, configOpts.OdigosVersion)
 	if err != nil {
 		return fmt.Errorf("failed to create controller for cluster collector: %w", err)
 	}

@@ -31,7 +31,7 @@ func convertOdigosToGQL(odigos *odigos.OdigosAnalyze) *model.OdigosAnalyze {
 	return &model.OdigosAnalyze{
 		OdigosVersion:        describe_utils.ConvertEntityPropertyToGQL(&odigos.OdigosVersion),
 		KubernetesVersion:    describe_utils.ConvertEntityPropertyToGQL(&odigos.KubernetesVersion),
-		Tier:                 describe_utils.ConvertEntityPropertyToGQL(&odigos.Tier),
+		Tier:                 &model.EntityProperty{Name: "Tier", Value: string(model.TierOnprem)}, // Central still queries the tier, which is always on-prem now.
 		InstallationMethod:   describe_utils.ConvertEntityPropertyToGQL(&odigos.InstallationMethod),
 		NumberOfDestinations: odigos.NumberOfDestinations,
 		NumberOfSources:      odigos.NumberOfSources,

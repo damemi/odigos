@@ -113,9 +113,9 @@ COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.91@sha256:ae87619
 COPY --from=python-builder /python-instrumentation/enterprise-workspace /instrumentations/python-ebpf
 
 # nodejs-enterprise
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.18.0@sha256:c0b8981293040174aaa79eaf61710ee8c84ba3689c0b47aa815c2265c43b1a2d /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.18.0@sha256:c0b8981293040174aaa79eaf61710ee8c84ba3689c0b47aa815c2265c43b1a2d /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.18.0@sha256:c0b8981293040174aaa79eaf61710ee8c84ba3689c0b47aa815c2265c43b1a2d /instrumentations/nodejs-community /instrumentations/nodejs-community
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/nodejs-community /instrumentations/nodejs-community
 # nodejs-enterprise-14
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.21@sha256:b9d5a9c17c66a3b2a68b169af0482871a5d499e402617b256c686dc4edcfbd13 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.21@sha256:b9d5a9c17c66a3b2a68b169af0482871a5d499e402617b256c686dc4edcfbd13 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
@@ -124,8 +124,8 @@ COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.21@sha256:b9d
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 # java-ebpf-instrumentations
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.62.0@sha256:bb8fe42359a144bce741187277041dbd94183dec6a69ab398315ca98501dfb3c /instrumentations/java-ebpf /instrumentations/java-ebpf
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.62.0@sha256:666a455f9408f03d10911ec33725a873782098a3c2fb3ac2bca4529eb9f1cd51 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.63.0@sha256:d5fd2bef8e2632ab14eab4fd3be932066c2428c17d779a519a9c537157e1ccee /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.63.0@sha256:ff1d4de09f5997c0f046adca4c76e655ca162fe6f0d0678ffcca558b3ddf1dd2 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # php-community
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.12.0@sha256:29b949cebd81bf9e8d5d715bfb72e6b45f9e2151f8e7fb8419c520faae2af16c /instrumentations/php /instrumentations/php

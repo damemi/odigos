@@ -7,7 +7,6 @@ import (
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/k8sutils/pkg/describe/properties"
 )
 
@@ -46,7 +45,6 @@ type OdigosProAnalyze struct {
 type OdigosAnalyze struct {
 	OdigosVersion        properties.EntityProperty `json:"odigosVersion"`
 	KubernetesVersion    properties.EntityProperty `json:"kubernetesVersion"`
-	Tier                 properties.EntityProperty `json:"tier"`
 	InstallationMethod   properties.EntityProperty `json:"installationMethod"`
 	NumberOfDestinations int                       `json:"numberOfDestinations"`
 	NumberOfSources      int                       `json:"numberOfSources"`
@@ -422,7 +420,6 @@ func AnalyzeOdigos(resources *OdigosResources) *OdigosAnalyze {
 	isSettled, hasErrors := summarizeStatus(&clusterCollector, &nodeCollector)
 
 	odigosVersion := resources.OdigosDeployment.Data[k8sconsts.OdigosDeploymentConfigMapVersionKey]
-	tier := resources.OdigosDeployment.Data[k8sconsts.OdigosDeploymentConfigMapTierKey]
 
 	installationMethod := resources.OdigosDeployment.Data[k8sconsts.OdigosDeploymentConfigMapInstallationMethodKey]
 	k8sVersion := resources.OdigosDeployment.Data[k8sconsts.OdigosDeploymentConfigMapKubernetesVersionKey]
@@ -431,12 +428,6 @@ func AnalyzeOdigos(resources *OdigosResources) *OdigosAnalyze {
 		Name:    "Odigos Version",
 		Value:   odigosVersion,
 		Explain: "the version of odigos deployment currently installed in the cluster",
-	}
-
-	odigosTierProperty := properties.EntityProperty{
-		Name:    "Tier",
-		Value:   tier,
-		Explain: "the tier of odigos deployment (community, enterprise, cloud)",
 	}
 
 	installationMethodProperty := properties.EntityProperty{
@@ -454,18 +445,14 @@ func AnalyzeOdigos(resources *OdigosResources) *OdigosAnalyze {
 	odigosAnalyze := &OdigosAnalyze{
 		OdigosVersion:        odigosVersionProperty,
 		KubernetesVersion:    k8sVersionProperty,
-		Tier:                 odigosTierProperty,
 		InstallationMethod:   installationMethodProperty,
 		NumberOfDestinations: len(resources.Destinations.Items),
 		NumberOfSources:      len(resources.InstrumentationConfigs.Items),
 		ClusterCollector:     clusterCollector,
 		NodeCollector:        nodeCollector,
+		OdigosPro:            analyzePro(resources),
 		IsSettled:            isSettled,
 		HasErrors:            hasErrors,
-	}
-
-	if odigosTierProperty.Value == string(common.OnPremOdigosTier) {
-		odigosAnalyze.OdigosPro = analyzePro(resources)
 	}
 
 	return odigosAnalyze

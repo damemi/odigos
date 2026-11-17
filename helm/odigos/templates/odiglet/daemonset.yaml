@@ -116,11 +116,6 @@ spec:
                 fieldRef:
                   apiVersion: v1
                   fieldPath: spec.nodeName
-            - name: ODIGOS_TIER
-              valueFrom:
-                configMapKeyRef:
-                  key: ODIGOS_TIER
-                  name: odigos-deployment
             - name: CURRENT_NS
               valueFrom:
                 fieldRef:

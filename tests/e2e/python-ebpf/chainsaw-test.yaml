@@ -40,10 +40,6 @@ spec:
         - assert:
             timeout: 4m
             file: ../../common/assert/odigos-installed.yaml
-      catch:
-        - script:
-            content: |
-              kubectl describe pods -n odigos-test
 
     - name: Assert Trace DB is up
       try:
@@ -110,11 +106,6 @@ spec:
             content: |
               kubectl get instrumentationconfig deployment-inventory -n default -o yaml
               kubectl get instrumentationinstances -n default -o yaml
-              kubectl describe pods -n default -l app=inventory
-        - podLogs:
-            selector: app.kubernetes.io/name=odiglet
-            namespace: odigos-test
-            tail: 200
 
     - name: Inventory Pod Not Restarted
       try:
@@ -131,11 +122,11 @@ spec:
               kubectl get pods -n default -l app=inventory -o wide
               kubectl get events -n default --field-selector involvedObject.kind=Pod
 
-    - name: Assert simple demo apps ready
+    - name: Wait for instrumentation
       try:
-        - assert:
-            timeout: 1m10s
-            file: ../../../tests/common/assert/simple-demo-installed.yaml
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
 
     # The first request through a freshly instrumented java app can't propagate context (http client
     # instrumentations load lazily on first use), so traffic repeats until inventory's span
@@ -166,10 +157,6 @@ spec:
               echo "inventory spans currently in the trace db:"
               kubectl get --raw "/api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/spans" \
                 | jq -c '[.[] | select(.serviceName == "inventory") | {name, kind, traceId, parentSpanId, distro: .resourceAttributes."telemetry.distro.name"}] | .[:20][]'
-        - podLogs:
-            selector: app.kubernetes.io/name=odiglet
-            namespace: odigos-test
-            tail: 200
 
     - name: No Other Python Agent In inventory
       try:

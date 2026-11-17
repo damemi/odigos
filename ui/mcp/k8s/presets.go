@@ -28,8 +28,7 @@ func registerPresetTools(s *server.MCPServer, deps Deps) {
 	s.AddTool(
 		mcp.NewTool("list_profiles",
 			readAnno(),
-			mcp.WithDescription("List curated profiles (presets) available for this Odigos tier (community / cloud / onprem). Each profile bundles a set of OdigosConfiguration tweaks (e.g. full-payload-collection, ebpf-log-capture)."),
-			mcp.WithString("tier", mcp.Description("Optional: 'community' | 'cloud' | 'onprem'. Defaults to community.")),
+			mcp.WithDescription("List curated profiles (presets). Each profile bundles a set of OdigosConfiguration tweaks (e.g. full-payload-collection, ebpf-log-capture)."),
 		),
 		listProfilesHandler(),
 	)
@@ -46,8 +45,7 @@ func registerPresetTools(s *server.MCPServer, deps Deps) {
 
 func listProfilesHandler() server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		tier := common.OdigosTier(stringArg(req, "tier", string(common.CommunityOdigosTier)))
-		ps := profiles.GetAvailableProfilesForTier(tier)
+		ps := profiles.AllProfiles
 		type row struct {
 			Name             string   `json:"name"`
 			ShortDescription string   `json:"shortDescription"`
@@ -61,7 +59,7 @@ func listProfilesHandler() server.ToolHandlerFunc {
 			}
 			out = append(out, row{Name: string(p.ProfileName), ShortDescription: p.ShortDescription, Dependencies: deps})
 		}
-		return withGuidance(out, fmt.Sprintf("%d profiles available for tier %q.", len(out), tier), []NextStep{
+		return withGuidance(out, fmt.Sprintf("%d profiles available.", len(out)), []NextStep{
 			{When: "to apply one", Tool: "apply_profile"},
 		})
 	}

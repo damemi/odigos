@@ -3,7 +3,6 @@ package odigosauth
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -120,26 +119,6 @@ func verifyOnpremClaims(token *jwt.Token) (string, error) {
 	return aud, nil
 }
 
-func verifyCloudApiKey(cloudApiKey string) error {
-	url := fmt.Sprintf("https://compute-platform.keyval.dev/cloudtoken/%s/verify", cloudApiKey)
-
-	// Make the GET request
-	response, err := http.Get(url)
-	if err != nil {
-		// Handle error from the GET request
-		return err
-	}
-	defer response.Body.Close()
-
-	// Check if the status code is 200 OK
-	if response.StatusCode == http.StatusOK {
-		return nil
-	} else {
-		// Return an error for any status code other than 200
-		return errors.New("invalid cloud api key or error in verification")
-	}
-}
-
 // TokenExpirationChannel returns a channel that will receive a time.Time value when the token expires
 // or an error if the token is not present or invalid.
 // The caller can use this channel to trigger actions when the token expires.
@@ -190,19 +169,6 @@ func AssertEnterpriseOdigosToken(logger *commonlogger.OdigosLogger) {
 		}
 
 		logger.Info("Odigos onprem token verified", "audience", aud)
-		return
-	}
-
-	cloudToken := os.Getenv("ODIGOS_CLOUD_TOKEN")
-	if cloudToken != "" {
-
-		err := verifyCloudApiKey(cloudToken)
-		if err != nil {
-			logger.Error("Failed to verify cloud token", "error", err)
-			os.Exit(-1)
-		}
-
-		logger.Info("Odigos cloud token verified")
 		return
 	}
 

@@ -1,7 +1,6 @@
 package odigosconfiguration
 
 import (
-	"github.com/odigos-io/odigos/common"
 	odigospredicates "github.com/odigos-io/odigos/k8sutils/pkg/predicate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/dynamic"
@@ -9,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-func SetupWithManager(mgr ctrl.Manager, tier common.OdigosTier, odigosVersion string, dynamicClient *dynamic.DynamicClient) error {
+func SetupWithManager(mgr ctrl.Manager, odigosVersion string, dynamicClient *dynamic.DynamicClient) error {
 
 	err := ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.ConfigMap{}).
@@ -21,7 +20,6 @@ func SetupWithManager(mgr ctrl.Manager, tier common.OdigosTier, odigosVersion st
 		Complete(&odigosConfigurationController{
 			Client:        mgr.GetClient(),
 			Scheme:        mgr.GetScheme(),
-			Tier:          tier,
 			OdigosVersion: odigosVersion,
 			DynamicClient: dynamicClient,
 		})
@@ -36,7 +34,6 @@ func SetupWithManager(mgr ctrl.Manager, tier common.OdigosTier, odigosVersion st
 		Complete(&odigosConfigurationController{
 			Client:        mgr.GetClient(),
 			Scheme:        mgr.GetScheme(),
-			Tier:          tier,
 			OdigosVersion: odigosVersion,
 			DynamicClient: dynamicClient,
 		})

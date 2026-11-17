@@ -40,14 +40,6 @@ spec:
             timeout: 4m
             file: ../../common/assert/odigos-installed.yaml
 
-      catch:
-        - script:
-            content: |
-              echo "🔍 Listing all resources in namespace 'odigos-test'..."
-              kubectl get all -n odigos-test
-
-              echo "📝 Describing all resources in namespace 'odigos-test'..."
-              kubectl describe deployments -n odigos-test
 
     - name: Verify Node Odiglet label has been added
       try:
@@ -100,23 +92,7 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              script=$(mktemp)
-              cp ../../../tests/common/simple_trace_db_query_runner.sh "$script"
-
-              while true; do
-                bash "$script" ../../common/queries/control-plane-traces.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
-
-              rm -f "$script"
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/control-plane-traces.yaml
 
     - name: Un-instrument Control Plane
       try:

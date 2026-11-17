@@ -45,7 +45,7 @@ func calculateEffectiveProfiles(configProfiles []common.ProfileName, availablePr
 	effectiveProfiles := []common.ProfileName{}
 	for _, profileName := range configProfiles {
 
-		// ignored missing profiles (either not available for tier or typos)
+		// ignored missing profiles (typos or removed profiles)
 		p := profile.FindProfileByName(profileName, availableProfiles)
 		if p == nil {
 			continue

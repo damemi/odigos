@@ -7,6 +7,5 @@ import (
 
 var JavaEnterpriseProfile = profile.Profile{
 	ProfileName:      common.ProfileName("java-enterprise"),
-	MinimumTier:      common.OnPremOdigosTier,
 	ShortDescription: "Instrument Java applications using the java-enterprise distro",
 }

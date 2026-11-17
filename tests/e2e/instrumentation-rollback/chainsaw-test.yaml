@@ -39,14 +39,6 @@ spec:
         - assert:
             timeout: 4m
             file: ../../common/assert/odigos-installed.yaml
-      catch:
-        - script:
-            content: |
-              echo "🔍 Listing all resources in namespace 'odigos-test'..."
-              kubectl get all -n odigos-test
-
-              echo "📝 Describing all resources in namespace 'odigos-test'..."
-              kubectl describe all -n odigos-test
 
     - name: Verify Node Odiglet label has been added
       try:

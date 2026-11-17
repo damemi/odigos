@@ -189,7 +189,6 @@ func New(opts Options) (*Instrumentor, error) {
 	// wire up the controllers and webhooks
 	scheduleOdigletOnlyOnInstrumentedNodes, instrumentedPodsNodeLabelRetention := parseFirstInstrumentedPodAtNodeLabelRetention()
 	configOpts := controllers.OdigosConfigurationOptions{
-		Tier:          env.GetOdigosTierFromEnv(),
 		OdigosVersion: os.Getenv(consts.OdigosVersionEnvVarName),
 		DynamicClient: dynamicClient,
 	}

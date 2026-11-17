@@ -108,10 +108,6 @@ spec:
       catch:
         - script:
             content: |
-              echo "🔍 Listing all resources in namespace 'odigos-test'..."
-              kubectl get all -n odigos-test
-              echo "📝 Describing all deployments in namespace 'odigos-test'..."
-              kubectl describe deployments -n odigos-test
               echo "📜 Dumping logs of non-ready pods in namespace 'odigos-test'..."
               for POD in $(kubectl get pods -n odigos-test \
                 -o jsonpath='{range .items[?(@.status.containerStatuses[0].ready==false)]}{.metadata.name}{"\n"}{end}'); do
@@ -127,13 +123,6 @@ spec:
             # Keycloak cold-start on kind regularly exceeds ~2m; backend waits on it.
             timeout: 5m
             file: ../../common/assert/odigos-central-installed.yaml
-      catch:
-        - script:
-            content: |
-              echo "🔍 Listing all resources in namespace 'odigos-central'..."
-              kubectl get all -n odigos-central
-              echo "📝 Describing all deployments in namespace 'odigos-central'..."
-              kubectl describe deployments -n odigos-central
 
     - name: Verify - Jaeger Installed
       try:

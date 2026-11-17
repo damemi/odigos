@@ -26,7 +26,6 @@ type odigosproOffsetsController struct {
 }
 
 func (r *odigosproOffsetsController) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	logger := k8slogger.FromContext(ctx)
 	odigosNs := env.GetCurrentNamespace()
 
 	// the effective config is the only document that carries the UI (odigos-local-ui-config) and
@@ -51,15 +50,6 @@ func (r *odigosproOffsetsController) Reconcile(ctx context.Context, _ ctrl.Reque
 
 	if odigosConfiguration.GoAutoOffsetsCron == "" || mode == k8sconsts.OffsetCronJobModeOff {
 		return ctrl.Result{}, deleteCronJob(ctx, r.Client, odigosNs)
-	}
-
-	tier, err := getCurrentOdigosTier(ctx, r.Client, odigosNs)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get current Odigos tier: %v", err)
-	}
-	if tier == common.CommunityOdigosTier {
-		logger.Error(fmt.Errorf("custom offsets support is only available in Odigos pro tier"), "could not reconcile go offsets cron job")
-		return ctrl.Result{}, nil
 	}
 
 	// Determine image name and command based on mode
@@ -171,23 +161,4 @@ func applyCronJob(ctx context.Context, kubeClient client.Client, ns string, cron
 	}
 
 	return nil
-}
-
-func getCurrentOdigosTier(ctx context.Context, kubeClient client.Client, ns string) (common.OdigosTier, error) {
-	secret := &corev1.Secret{}
-	err := kubeClient.Get(ctx, client.ObjectKey{Namespace: ns, Name: k8sconsts.OdigosProSecretName}, secret)
-	if apierrors.IsNotFound(err) {
-		return common.CommunityOdigosTier, nil
-	}
-	if err != nil {
-		return common.CommunityOdigosTier, err
-	}
-
-	if _, exists := secret.Data[k8sconsts.OdigosCloudApiKeySecretKey]; exists {
-		return common.CloudOdigosTier, nil
-	}
-	if _, exists := secret.Data[k8sconsts.OdigosOnpremTokenSecretKey]; exists {
-		return common.OnPremOdigosTier, nil
-	}
-	return common.CommunityOdigosTier, nil
 }

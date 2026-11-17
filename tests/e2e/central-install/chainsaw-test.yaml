@@ -70,14 +70,6 @@ spec:
             timeout: 2m50s
             file: ../../common/assert/odigos-installed.yaml
 
-      catch:
-        - script:
-            content: |
-              echo "🔍 Listing all resources in namespace 'odigos-test'..."
-              kubectl get all -n odigos-test
-
-              echo "📝 Describing all resources in namespace 'odigos-test'..."
-              kubectl describe deployments -n odigos-test
 
     - name: Verify Odigos Central Installation
       try:
@@ -86,14 +78,6 @@ spec:
             timeout: 5m
             file: ../../common/assert/odigos-central-installed.yaml
 
-      catch:
-        - script:
-            content: |
-              echo "🔍 Listing all resources in namespace 'odigos-central'..."
-              kubectl get all -n odigos-central
-
-              echo "📝 Describing deployments in namespace 'odigos-central'..."
-              kubectl describe deployments -n odigos-central
 
     - name: Test Central GraphQL Integration By Instrumenting Namespace on the testing odigos installation
       try:

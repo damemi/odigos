@@ -7,7 +7,6 @@ import (
 
 var AllowConcurrentAgents = profile.Profile{
 	ProfileName:      common.ProfileName("allow_concurrent_agents"),
-	MinimumTier:      common.CommunityOdigosTier,
 	ShortDescription: "This profile allows Odigos to run concurrently with other agents",
 	ModifyConfigFunc: func(c *common.OdigosConfiguration) {
 		if c.AllowConcurrentAgents == nil {

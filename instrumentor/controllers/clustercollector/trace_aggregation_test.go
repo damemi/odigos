@@ -17,8 +17,7 @@ func ptr[T any](v T) *T { return &v }
 
 func TestGatewayConfig_GroupByWritesOnlySetFields(t *testing.T) {
 	on := true
-	tier := common.OnPremOdigosTier
-	insightsCfg := effectiveInsightsConfig(&common.InsightsConfiguration{Enabled: &on}, tier)
+	insightsCfg := &common.InsightsConfiguration{Enabled: &on}
 	ext := k8sconsts.OdigosConfigK8sExtensionType
 	tailSampling := false
 	gatewayOptions := pipelinegen.GatewayConfigOptions{

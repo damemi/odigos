@@ -17,6 +17,13 @@ webhooks:
         namespace: {{ .Release.Namespace }}
         path: /mutate--v1-pod
         port: 9443
+    # Some platforms, such as GKE, flag webhooks that intercept kube-system pods.
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - kube-system
     rules:
       - operations:
           - CREATE

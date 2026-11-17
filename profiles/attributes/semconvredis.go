@@ -7,6 +7,5 @@ import (
 
 var SemconvRedisProfile = profile.Profile{
 	ProfileName:      common.ProfileName("semconvredis"),
-	MinimumTier:      common.CommunityOdigosTier,
 	ShortDescription: "Convert db.system.name to db.system for Redis spans",
 }

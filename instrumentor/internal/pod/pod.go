@@ -4,12 +4,10 @@ import (
 	"slices"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
-	k8snode "github.com/odigos-io/odigos/k8sutils/pkg/node"
 	corev1 "k8s.io/api/core/v1"
 )
 
 func AddOdigletInstalledAffinity(pod *corev1.Pod) {
-	odigletInstalledLabel := k8snode.DetermineNodeOdigletInstalledLabelByTier()
 	// Ensure Affinity exists
 	if pod.Spec.Affinity == nil {
 		pod.Spec.Affinity = &corev1.Affinity{}
@@ -30,7 +28,7 @@ func AddOdigletInstalledAffinity(pod *corev1.Pod) {
 	// Check if the term already exists to avoid duplicates
 	for _, term := range pod.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
 		for _, expr := range term.MatchExpressions {
-			if expr.Key == odigletInstalledLabel && expr.Operator == corev1.NodeSelectorOpIn {
+			if expr.Key == k8sconsts.OdigletEnterpriseInstalledLabel && expr.Operator == corev1.NodeSelectorOpIn {
 				if slices.Contains(expr.Values, k8sconsts.OdigletInstalledLabelValue) {
 					// return without adding a duplicate
 					return
@@ -43,7 +41,7 @@ func AddOdigletInstalledAffinity(pod *corev1.Pod) {
 	newTerm := corev1.NodeSelectorTerm{
 		MatchExpressions: []corev1.NodeSelectorRequirement{
 			{
-				Key:      odigletInstalledLabel,
+				Key:      k8sconsts.OdigletEnterpriseInstalledLabel,
 				Operator: corev1.NodeSelectorOpIn,
 				Values:   []string{k8sconsts.OdigletInstalledLabelValue},
 			},
