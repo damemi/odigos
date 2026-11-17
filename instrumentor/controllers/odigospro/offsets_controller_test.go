@@ -33,14 +33,6 @@ func configMap(ns, name string, cfg *common.OdigosConfiguration) *corev1.ConfigM
 	}
 }
 
-// onPremSecret makes getCurrentOdigosTier report an enterprise tier, which the cron job requires.
-func onPremSecret(ns string) *corev1.Secret {
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: k8sconsts.OdigosProSecretName},
-		Data:       map[string][]byte{k8sconsts.OdigosOnpremTokenSecretKey: []byte("token")},
-	}
-}
-
 func newReconciler(objs ...client.Object) *odigosproOffsetsController {
 	scheme := runtime.NewScheme()
 	if err := corev1.AddToScheme(scheme); err != nil {
@@ -90,7 +82,6 @@ func TestOffsetsControllerReadsEffectiveConfig(t *testing.T) {
 	r := newReconciler(
 		configMap(ns, consts.OdigosConfigurationName, helmConfig),
 		configMap(ns, consts.OdigosEffectiveConfigName, effectiveConfig),
-		onPremSecret(ns),
 	)
 
 	if _, err := r.Reconcile(context.Background(), ctrl.Request{}); err != nil {
@@ -129,7 +120,6 @@ func TestOffsetsControllerRemovesCronJobWhenDisabledInEffectiveConfig(t *testing
 	r := newReconciler(
 		configMap(ns, consts.OdigosConfigurationName, helmConfig),
 		configMap(ns, consts.OdigosEffectiveConfigName, effectiveConfig),
-		onPremSecret(ns),
 		existing,
 	)
 
@@ -157,7 +147,6 @@ func TestOffsetsControllerSetsImagePullSecrets(t *testing.T) {
 	r := newReconciler(
 		configMap(ns, consts.OdigosConfigurationName, config),
 		configMap(ns, consts.OdigosEffectiveConfigName, config),
-		onPremSecret(ns),
 	)
 
 	if _, err := r.Reconcile(context.Background(), ctrl.Request{}); err != nil {
@@ -190,7 +179,6 @@ func TestOffsetsControllerRequeuesWhenEffectiveConfigMissing(t *testing.T) {
 
 	r := newReconciler(
 		configMap(ns, consts.OdigosConfigurationName, &common.OdigosConfiguration{}),
-		onPremSecret(ns),
 	)
 
 	res, err := r.Reconcile(context.Background(), ctrl.Request{})

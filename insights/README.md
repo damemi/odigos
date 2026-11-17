@@ -351,7 +351,7 @@ Env vars the service reads:
 
 - `CLICKHOUSE_DSN` (required) - `clickhouse://user:pass@host:9000/db` URI.
 - `ODIGOS_LOG_LEVEL` (`error|warn|info|debug`, default `info`).
-- `ODIGOS_ONPREM_TOKEN` (or `ODIGOS_CLOUD_TOKEN`) - required to pass
+- `ODIGOS_ONPREM_TOKEN` - required to pass
   `odigosauth.AssertEnterpriseOdigosToken` at startup.
 
 ## Building the image

@@ -12,12 +12,10 @@ import (
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/cli/cmd/resources"
-	"github.com/odigos-io/odigos/cli/cmd/resources/odigospro"
 	cmdcontext "github.com/odigos-io/odigos/cli/pkg/cmd_context"
 	"github.com/odigos-io/odigos/cli/pkg/helm"
 	"github.com/odigos-io/odigos/cli/pkg/kube"
 	"github.com/odigos-io/odigos/cli/pkg/offsets"
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
 	"github.com/odigos-io/odigos/k8sutils/pkg/pro"
 
@@ -115,16 +113,6 @@ odigos pro update-offsets --from-file /path/to/local/offsets.json
 		ns, err := resources.GetOdigosNamespace(client, ctx)
 		if err != nil {
 			fmt.Println("Unable to get Odigos namespace")
-			os.Exit(1)
-		}
-
-		currentTier, err := odigospro.GetCurrentOdigosTier(ctx, client, ns)
-		if err != nil {
-			fmt.Println("Odigos pro update-offsets failed - unable to read the current Odigos tier.")
-			os.Exit(1)
-		}
-		if currentTier == common.CommunityOdigosTier {
-			fmt.Println("Custom Offsets support is only available in Odigos pro tier.")
 			os.Exit(1)
 		}
 
