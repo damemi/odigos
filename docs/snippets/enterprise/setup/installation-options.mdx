@@ -18,7 +18,7 @@ helm install odigos oci://registry.odigos.io/charts/odigos --set ignoreNamespace
 
 Any Source objects for the namespace and workloads in the namespace will still be honored.
 
-On GKE, Google may warn that a custom admission controller can affect `kube-system`. The Odigos **pod mutating webhook** is cluster-wide so it can inject agents into application namespaces. It uses `failurePolicy: Ignore`, so webhook errors do not block pod creates in `kube-system`. Ignored namespaces (including `kube-system` by default) are not shown for instrumentation and are not instrumented unless you create a Source for them.
+Odigos always excludes `kube-system` from the **pod mutating webhook**. This prevents warnings from platforms such as GKE about custom admission controllers that can affect `kube-system`. Pods created in `kube-system` are not sent to the webhook, so they can't be instrumented.
 
 ## Ignore Containers
 
