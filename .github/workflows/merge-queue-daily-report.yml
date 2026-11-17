@@ -1,0 +1,33 @@
+name: Merge Queue Daily Report
+
+on:
+  schedule:
+    # The odd minute avoids GitHub's busy on-the-hour cron slots.
+    - cron: "23 6 * * *"
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: Hours to report on, counting back from now
+        default: "24"
+
+permissions: {}
+
+jobs:
+  report:
+    runs-on: depot-ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Post report to Slack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.MERGE_QUEUE_SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          HOURS: ${{ inputs.hours || '24' }}
+        run: .github/merge-queue/daily-report.sh
