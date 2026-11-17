@@ -2,7 +2,7 @@
 
 ## What you need
 
-For **OBI**, Odigos clones the pinned upstream commit and runs OBI's own **bpf2go** codegen in that clone (see **`setup-obi`**), then adds a local-path **`go.mod`** replace so the freshly generated **`*_bpfel.go`** / **`.o`** are on disk before **`go build`** (the go module cache tarball does not ship them). For other eBPF deps in the module cache, **bpf2go** (via upstream **`make generate`**) can still add **`.go`** / **`.o`** files; those must be on disk before **`go build`**.
+For **OBI**, Odigos clones the pinned upstream commit and runs OBI's own **bpf2go** codegen in that clone (see **`materialize-obi`** in **`odiglet/obi.mk`**), then adds a local-path **`go.mod`** replace so the freshly generated **`*_bpfel.go`** / **`.o`** are on disk before **`go build`** (the go module cache tarball does not ship them). For other eBPF deps in the module cache, **bpf2go** (via upstream **`make generate`**) can still add **`.go`** / **`.o`** files; those must be on disk before **`go build`**.
 
 The Go command can use a **module file index** to avoid re-reading every source file on each invocation. **New `.go` files** added *after* the module was first indexed are not always reflected in that index, so `go build` can compile a package **without** the generated Go sources and fail with `undefined: Bpf…` (or similar) even though the files exist on disk.
 
@@ -10,14 +10,22 @@ The Go command can use a **module file index** to avoid re-reading every source 
 
 ## Docker / CI build (same **`Makefile`** as local)
 
-**`setup-obi`** dispatches to one of two methods via **`OBI_SETUP`** (`pin` | `release`, default `pin`):
+OBI lives in **`odiglet/obi.mk`**, which **`odiglet/enterprise/Makefile`** includes. **`materialize-obi`** dispatches to one of two methods via **`OBI_SETUP`** (`pin` | `release`, default `pin`). Neither touches **`go.mod`**:
 
-- **`setup-obi-pin`** (`OBI_SETUP=pin`): clones the pinned OBI commit (**`OBI_COMMIT`**) into **`.obi/`** and runs OBI's **bpf2go** codegen in the clone — **`generate/all`** in-tree when docker is unavailable (e.g. inside a docker build), or **`docker-generate`** on the host — then adds a transient local-path **`go.mod`** replace. Keep **`OBI_COMMIT`** in sync with the **`go.opentelemetry.io/obi`** pseudo-version in **`go.mod`** **`require`**.
-- **`setup-obi-release`** (`OBI_SETUP=release`): downloads and verifies OBI's published **`obi-<tag>-source-generated.tar.gz`** (**`OBI_VERSION`**), extracts it under **`.obi/`**, then adds a local-path **`go.mod`** replace. Keep **`OBI_VERSION`** in sync with the **`go.opentelemetry.io/obi`** release tag in **`go.mod`** **`require`**.
+- **`materialize-obi-pin`** (`OBI_SETUP=pin`): clones the pinned OBI commit (**`OBI_COMMIT`**) into **`.obi/`** and runs OBI's **bpf2go** codegen in the clone — **`generate/all`** in-tree when docker is unavailable (e.g. inside a docker build), or **`docker-generate`** on the host. Keep **`OBI_COMMIT`** in sync with the **`go.opentelemetry.io/obi`** pseudo-version in **`go.mod`** **`require`**.
+- **`materialize-obi-release`** (`OBI_SETUP=release`): downloads and verifies OBI's published **`obi-<tag>-source-generated.tar.gz`** (**`OBI_VERSION`**) and extracts it under **`.obi/`**. Keep **`OBI_VERSION`** in sync with the **`go.opentelemetry.io/obi`** release tag in **`go.mod`** **`require`**.
 
-There is **no** separate OBI stage in **`odiglet/Dockerfile`**: the **`builder`** stage runs **`make build-odiglet`** (**`setup-obi`**, then **`generate`** for non-OBI libs, then **`go build`**). The **CSI** image builds **`./cmd/csi-driver`** only and does not run **`setup-obi`**. The image build uses the Makefile default method; when switching methods, update both the Makefile default and the **`go.opentelemetry.io/obi`** version in **`go.mod`** to match.
+**`go-mod-replace`** adds the transient local-path **`go.mod`** replace; **`generate`** and **`ensure-generated`** run it (through **`go-mod`**) before downloading modules.
 
-Locally: **`make build-odiglet`** / **`make setup-obi`**, optional **`OBI_SETUP=release`** (with **`OBI_VERSION=v…`**) or **`OBI_COMMIT=<sha>`**.
+The **`builder`** stage of **`odiglet/enterprise/Dockerfile`** splits the build into cached layers:
+
+1. **OBI** — copies only **`odiglet/obi.mk`** and runs **`materialize-obi`**. Rebuilt only when **`obi.mk`** changes.
+2. **Generate** — copies only the **`go.mod`** / **`go.sum`** files of odiglet/enterprise and its local replaces, plus the Makefile, and runs **`generate`** (each library's upstream **`make generate`**, in parallel). Rebuilt only when module metadata or the Makefile changes.
+3. **Compile** — copies the full sources and runs **`ensure-generated`** (re-applies the OBI replace, which the source **`COPY`** overwrote, and regenerates any library whose **`*_bpfel.o`** is missing from the **`/go/pkg`** cache mount), then **`compile-odiglet`**.
+
+The image build uses the default method in **`obi.mk`**; when switching methods, update both that default and the **`go.opentelemetry.io/obi`** version in **`go.mod`** to match.
+
+Locally: **`make materialize-obi generate compile-odiglet`** from **`odiglet/enterprise`**, optional **`OBI_SETUP=release`** (with **`OBI_VERSION=v…`**) or **`OBI_COMMIT=<sha>`**.
 
 **Related ideas**
 

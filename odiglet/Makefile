@@ -1,4 +1,4 @@
-.PHONY: build-odiglet generate compile-odiglet debug-build-odiglet tools go-licenses licenses
+.PHONY: generate tools go-licenses licenses
 
 include obi.mk
 
