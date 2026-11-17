@@ -723,11 +723,11 @@
         },
         "autopilot": {
           "additionalProperties": false,
-          "description": "Autopilot (off by default): an insights feature that correlates traces\nand profiles in ClickHouse, analyzes per-transaction call tries with an\nLLM, and suggests function probes as InstrumentationRules. Enabling it\nalso enables insights, profiling, and the insights profile when those\nvalues are unset. Explicit insights.enabled=false, profiling.enabled=false,\nor a profiles list that omits \"insights\" fails the install. The loop runs\ninside the insights pods (only the replica holding the leader lease\nanalyzes), so it shares insights resources and scheduling. When enabled,\nthe gateway taps traces for autopilot and the chart deploys bundled\nLiteLLM (odigos-litellm) and the shared cache (cacheDb; default Burstable\n25m/128Mi requests, 100m/500Mi limits when cacheDb.resources is unset).\nConfigure a cloud provider under model, or set model.apiBase to point\nLiteLLM at a BYO inference endpoint.",
+          "description": "Autopilot (off by default): an insights feature that correlates traces\nand profiles in ClickHouse, analyzes per-transaction call tries with an\nLLM, and suggests function probes as InstrumentationRules. Requires\ninsights.enabled=true; the install fails otherwise. Enabling it also\nadds the insights profile when profiles is unset; profiling is not\nenabled automatically. A profiles list that omits \"insights\" fails the\ninstall. The loop runs inside the insights pods (only the replica\nholding the leader lease analyzes), so it shares insights resources and\nscheduling. When enabled, the gateway taps traces for autopilot and the\nchart deploys bundled LiteLLM (odigos-litellm) and the shared cache\n(cacheDb; default Burstable 25m/128Mi requests, 100m/500Mi limits when\ncacheDb.resources is unset). Configure a cloud provider under model, or\nset model.apiBase to point LiteLLM at a BYO inference endpoint.",
           "properties": {
             "enabled": {
               "default": "false",
-              "description": "When true, enables autopilot in the insights service and deploys\nodigos-litellm. Also enables insights, profiling, and the insights\nprofile when those values are unset. Explicit conflicting values fail\nthe install.",
+              "description": "When true, enables autopilot in the insights service and deploys\nodigos-litellm. Requires insights.enabled=true (the install fails\notherwise). Also adds the insights profile when profiles is unset\n(profiling is not enabled automatically). Explicit conflicting values\nfail the install.",
               "required": [],
               "title": "enabled"
             },
@@ -1095,7 +1095,7 @@
         },
         "enabled": {
           "default": "",
-          "description": "When true, deploys the insights service. Unset/empty is off, unless\ninsights.autopilot.enabled is true, which enables insights\nautomatically. Explicit false conflicts with autopilot and fails\nthe install.",
+          "description": "When true, deploys the insights service. Unset/empty is off.\nRequired by insights.autopilot.enabled; enabling autopilot without\ninsights.enabled=true fails the install.",
           "required": [],
           "title": "enabled"
         },
@@ -1794,7 +1794,7 @@
           "properties": {
             "appArmorProfile": {
               "additionalProperties": false,
-              "description": "AppArmor profile for data-collection when gke.enabled and the profiling\npipeline is on (profiling.enabled, including when autopilot implies it).\nGKE's default profile denies mkdir /sys/fs/bpf/otel, which the eBPF\nprofiler needs to pin traces_ctx_v1 for profile↔span links.\nIgnored when privileged, or when gke.enabled is false.",
+              "description": "AppArmor profile for data-collection when gke.enabled and the profiling\npipeline is on (profiling.enabled).\nGKE's default profile denies mkdir /sys/fs/bpf/otel, which the eBPF\nprofiler needs to pin traces_ctx_v1 for profile↔span links.\nIgnored when privileged, or when gke.enabled is false.",
               "properties": {
                 "type": {
                   "default": "Unconfined",
@@ -2363,7 +2363,7 @@
       "properties": {
         "enabled": {
           "default": "",
-          "description": "When true, enables profiling pipelines on the node collector and cluster\ngateway. Unset/empty is off, unless insights.autopilot.enabled is\ntrue, which enables profiling automatically. Explicit false conflicts\nwith autopilot and fails the install.",
+          "description": "When true, enables profiling pipelines on the node collector and cluster\ngateway. Unset/empty is off.",
           "required": [],
           "title": "enabled"
         },

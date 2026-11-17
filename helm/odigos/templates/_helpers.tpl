@@ -97,7 +97,7 @@ true
 
 {{/*
   Autopilot is enabled by insights.autopilot.enabled. That flag
-  implies insights, profiling, and the insights profile (see
+  requires insights.enabled=true and implies the insights profile (see
   odigos.validateAutopilotDeps).
 */}}
 {{- define "odigos.autopilotEnabled" -}}
@@ -107,11 +107,10 @@ true
 {{- end -}}
 
 {{/*
-  Insights is on when insights.enabled is true, or when autopilot
-  implies it (unset insights.enabled).
+  Insights is on when insights.enabled is true.
 */}}
 {{- define "odigos.insightsEnabled" -}}
-{{- if or .Values.insights.enabled (include "odigos.autopilotEnabled" .) -}}
+{{- if .Values.insights.enabled -}}
 true
 {{- end -}}
 {{- end -}}
@@ -124,11 +123,10 @@ true
 {{- end -}}
 
 {{/*
-  Profiling is on when profiling.enabled is true, or when autopilot
-  implies it (unset profiling.enabled).
+  Profiling is on when profiling.enabled is true.
 */}}
 {{- define "odigos.profilingEnabled" -}}
-{{- if or .Values.profiling.enabled (include "odigos.autopilotEnabled" .) -}}
+{{- if .Values.profiling.enabled -}}
 true
 {{- end -}}
 {{- end -}}
@@ -155,18 +153,14 @@ true
 {{- end -}}
 
 {{/*
-  Fail install/upgrade when autopilot is on and a dependency is
-  explicitly set to a conflicting value. Unset dependencies are enabled
-  automatically (see odigos.insightsEnabled, odigos.profilingEnabled,
-  odigos.profiles).
+  Fail install/upgrade when autopilot is on and insights is not enabled,
+  or when profiles explicitly omits "insights". Unset profiles get
+  "insights" automatically (see odigos.profiles).
 */}}
 {{- define "odigos.validateAutopilotDeps" -}}
 {{- if include "odigos.autopilotEnabled" . }}
-{{- if and (kindIs "bool" .Values.insights.enabled) (not .Values.insights.enabled) -}}
-{{- fail "insights.autopilot.enabled=true requires insights. insights.enabled is set to false, which conflicts. Omit insights.enabled (enabled automatically) or set insights.enabled=true." -}}
-{{- end -}}
-{{- if and (kindIs "bool" .Values.profiling.enabled) (not .Values.profiling.enabled) -}}
-{{- fail "insights.autopilot.enabled=true requires profiling. profiling.enabled is set to false, which conflicts. Omit profiling.enabled (enabled automatically) or set profiling.enabled=true." -}}
+{{- if not .Values.insights.enabled -}}
+{{- fail "insights.autopilot.enabled=true requires insights, but insights.enabled is not true. Set insights.enabled=true, or disable autopilot." -}}
 {{- end -}}
 {{- $profiles := .Values.profiles | default list -}}
 {{- if and $profiles (not (kindIs "slice" $profiles)) -}}

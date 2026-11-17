@@ -244,9 +244,7 @@ profiling:
   # @schema
   # description: |-
   #   When true, enables profiling pipelines on the node collector and cluster
-  #   gateway. Unset/empty is off, unless insights.autopilot.enabled is
-  #   true, which enables profiling automatically. Explicit false conflicts
-  #   with autopilot and fails the install.
+  #   gateway. Unset/empty is off.
   # @schema
   enabled:
   # @schema
@@ -1103,7 +1101,7 @@ odiglet:
     # @schema
     # description: |-
     #   AppArmor profile for data-collection when gke.enabled and the profiling
-    #   pipeline is on (profiling.enabled, including when autopilot implies it).
+    #   pipeline is on (profiling.enabled).
     #   GKE's default profile denies mkdir /sys/fs/bpf/otel, which the eBPF
     #   profiler needs to pin traces_ctx_v1 for profile↔span links.
     #   Ignored when privileged, or when gke.enabled is false.
@@ -1425,10 +1423,9 @@ insights:
 
   # @schema
   # description: |-
-  #   When true, deploys the insights service. Unset/empty is off, unless
-  #   insights.autopilot.enabled is true, which enables insights
-  #   automatically. Explicit false conflicts with autopilot and fails
-  #   the install.
+  #   When true, deploys the insights service. Unset/empty is off.
+  #   Required by insights.autopilot.enabled; enabling autopilot without
+  #   insights.enabled=true fails the install.
   # @schema
   enabled:
 
@@ -1503,25 +1500,26 @@ insights:
   # description: |-
   #   Autopilot (off by default): an insights feature that correlates traces
   #   and profiles in ClickHouse, analyzes per-transaction call tries with an
-  #   LLM, and suggests function probes as InstrumentationRules. Enabling it
-  #   also enables insights, profiling, and the insights profile when those
-  #   values are unset. Explicit insights.enabled=false, profiling.enabled=false,
-  #   or a profiles list that omits "insights" fails the install. The loop runs
-  #   inside the insights pods (only the replica holding the leader lease
-  #   analyzes), so it shares insights resources and scheduling. When enabled,
-  #   the gateway taps traces for autopilot and the chart deploys bundled
-  #   LiteLLM (odigos-litellm) and the shared cache (cacheDb; default Burstable
-  #   25m/128Mi requests, 100m/500Mi limits when cacheDb.resources is unset).
-  #   Configure a cloud provider under model, or set model.apiBase to point
-  #   LiteLLM at a BYO inference endpoint.
+  #   LLM, and suggests function probes as InstrumentationRules. Requires
+  #   insights.enabled=true; the install fails otherwise. Enabling it also
+  #   adds the insights profile when profiles is unset; profiling is not
+  #   enabled automatically. A profiles list that omits "insights" fails the
+  #   install. The loop runs inside the insights pods (only the replica
+  #   holding the leader lease analyzes), so it shares insights resources and
+  #   scheduling. When enabled, the gateway taps traces for autopilot and the
+  #   chart deploys bundled LiteLLM (odigos-litellm) and the shared cache
+  #   (cacheDb; default Burstable 25m/128Mi requests, 100m/500Mi limits when
+  #   cacheDb.resources is unset). Configure a cloud provider under model, or
+  #   set model.apiBase to point LiteLLM at a BYO inference endpoint.
   # @schema
   autopilot:
     # @schema
     # description: |-
     #   When true, enables autopilot in the insights service and deploys
-    #   odigos-litellm. Also enables insights, profiling, and the insights
-    #   profile when those values are unset. Explicit conflicting values fail
-    #   the install.
+    #   odigos-litellm. Requires insights.enabled=true (the install fails
+    #   otherwise). Also adds the insights profile when profiles is unset
+    #   (profiling is not enabled automatically). Explicit conflicting values
+    #   fail the install.
     # @schema
     enabled: false
 
