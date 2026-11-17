@@ -1,6 +1,6 @@
 {{- $imageTag := .Values.image.tag | default .Chart.AppVersion -}}
 {{- $extendedSuffix := "" -}}
-{{- if and .Values.odiglet.extended (include "odigos.secretExists" .) -}}
+{{- if .Values.odiglet.extended -}}
   {{- $extendedSuffix = "-extended" -}}
 {{- end -}}
 {{- $odigletImageTag := printf "%s%s" $imageTag $extendedSuffix -}}
@@ -88,11 +88,7 @@ spec:
       initContainers:
       {{- if (not (eq .Values.instrumentor.mountMethod "k8s-init-container")) }}
         - name: init
-          {{- if include "odigos.secretExists" . }}
           image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-odiglet" "Tag" $odigletImageTag) }}
-          {{- else }}
-          image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "odiglet" "Tag" $imageTag) }}
-          {{- end }}
           imagePullPolicy: IfNotPresent
           command:
             - /root/odiglet
@@ -149,11 +145,7 @@ spec:
         # This init container pre-pulls the odigos-agents image to the node
         # so it's available in the image cache when user pods need it.
         - name: odigos-agents-image-pull
-          {{- if include "odigos.secretExists" . }}
           image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-agents" "Tag" $odigletImageTag) }}
-          {{- else }}
-          image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "agents" "Tag" $imageTag) }}
-          {{- end }}
           imagePullPolicy: IfNotPresent
           # it does not run any actual code, just pulls the image
           # we add the resources here to make sure any policy that may validate resources exist
@@ -171,11 +163,7 @@ spec:
       {{- end }}
       containers:
         - name: odiglet
-          {{- if include "odigos.secretExists" . }}
           image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-odiglet" "Tag" $odigletImageTag) }}
-          {{- else }}
-          image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "odiglet" "Tag" $imageTag) }}
-          {{- end }}
           args:
             - --health-probe-bind-port={{ .Values.odiglet.odiglet.livenessProbe.httpGet.port }}
           {{- if .Values.odiglet.traceIdSuffix }}
@@ -194,14 +182,7 @@ spec:
             privileged: false
             capabilities:
               add:
-              {{- $caps := .Values.odiglet.odiglet.capabilities | default list }}
-              {{- if not (include "odigos.secretExists" .) }}
-              {{- /* the community go instrumentation checks that the target process is alive with
-                     kill(pid, 0), which needs CAP_KILL when the target runs as a different user.
-                     the enterprise distro stats /proc/<pid> instead and needs no capability. */}}
-              {{- if not (has "KILL" $caps) }}{{- $caps = append $caps "KILL" }}{{- end }}
-              {{- end }}
-              {{- toYaml $caps | nindent 14 }}
+              {{- toYaml (.Values.odiglet.odiglet.capabilities | default list) | nindent 14 }}
               drop:
                 - ALL
             # for Kubernetes >= 1.30 we can specify AppArmor profile in securityContext
@@ -243,7 +224,6 @@ spec:
               value: info
             - name: ODIGOS_LOG_LEVEL
               value: {{ .Values.odiglet.logLevel | default .Values.logLevel | default "info" | quote }}
-          {{- if include "odigos.secretExists" . }}
             - name: OTEL_GO_OFFSETS_FILE
               value: /offsets/go_offset_results.json
             - name: ODIGOS_ONPREM_TOKEN
@@ -251,7 +231,6 @@ spec:
                 secretKeyRef:
                   name: odigos-pro
                   key: odigos-onprem-token
-          {{- end }}
             - name: GOMEMLIMIT
               value: {{ include "odigos.odiglet.gomemlimit" . }}
           {{- if .Values.odiglet.noHostPid }}
@@ -305,11 +284,7 @@ spec:
             - name: exchange-dir
               mountPath: /var/exchange
         - name: data-collection
-          {{- if include "odigos.secretExists" . }}
           image: '{{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-collector" "Tag" $imageTag) }}'
-          {{- else }}
-          image: '{{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "collector" "Tag" $imageTag) }}'
-          {{- end }}
           imagePullPolicy: IfNotPresent
           command:
             - /odigosotelcol
@@ -370,14 +345,12 @@ spec:
                 resourceFieldRef:
                   containerName: data-collection
                   resource: limits.cpu
-          {{- if include "odigos.secretExists" . }}
             # Verified at startup by the enterprise collector's odigos_enterprise_auth extension.
             - name: ODIGOS_ONPREM_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: odigos-pro
                   key: odigos-onprem-token
-          {{- end }}
           livenessProbe:
             httpGet:
               path: /
@@ -458,11 +431,7 @@ spec:
 # and to have hostMounts allowed
 {{- if or (eq .Values.instrumentor.mountMethod "") (eq .Values.instrumentor.mountMethod "k8s-virtual-device") }}
         - name: deviceplugin
-          {{- if include "odigos.secretExists" . }}
           image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-odiglet" "Tag" $odigletImageTag) }}
-          {{- else }}
-          image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "odiglet" "Tag" $imageTag) }}
-          {{- end }}
           imagePullPolicy: IfNotPresent
           command:
             - /root/deviceplugin
@@ -509,11 +478,7 @@ spec:
 {{- end }}
 {{- if eq .Values.instrumentor.mountMethod "k8s-csi-driver" }}
         - name: csi-driver
-          {{- if include "odigos.secretExists" . }}
           image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-odiglet" "Tag" $imageTag) }}
-          {{- else }}
-          image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "odiglet" "Tag" $imageTag) }}
-          {{- end }}
           command:
             - /root/odigos-csi-driver
           imagePullPolicy: IfNotPresent

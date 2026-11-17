@@ -1,4 +1,4 @@
-{{- if and (include "odigos.insightsEnabled" .) (include "odigos.secretExists" .) }}
+{{- if include "odigos.insightsEnabled" . }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:

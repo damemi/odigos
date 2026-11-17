@@ -447,11 +447,6 @@ helm-install:
 		--set centralProxy.centralBackendURL=$(CENTRAL_BACKEND_URL) \
 		--set onPremToken=$(ONPREM_TOKEN)
 
-.PHONY: helm-install-community
-helm-install-community:
-	@echo "Installing odigos community using helm"
-	make helm-install ONPREM_TOKEN=
-
 .PHONY: helm-install-enterprise
 helm-install-enterprise:
 	@echo "Installing odigos enterprise using helm"

@@ -1,4 +1,4 @@
-{{- if and (include "odigos.insightsEnabled" .) (include "odigos.secretExists" .) }}
+{{- if include "odigos.insightsEnabled" . }}
 {{- /*
 Schema migrations run from this Job rather than from serving replicas, so
 multiple Insights replicas never race on DDL.

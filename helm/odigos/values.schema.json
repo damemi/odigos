@@ -52,7 +52,7 @@
     },
     "cacheDb": {
       "additionalProperties": false,
-      "description": "Shared cache DB used by Odigos features that need a cluster-local cache\n(for example cardinality-control URL templatization rule computation, or\ninterrogation). Deployed when a consuming feature is enabled (currently\ncardinalityControl.urlTemplatization.liveTrafficLearning.enabled or\ninsights.interrogation.enabled; both are enterprise-only and require an\non-prem token).\nBackend is an implementation detail (Redis, published as odigos-cache with the\nOdigos release tag); values stay backend-agnostic so the chart can switch to\nanother cache (e.g. Memcached) without renaming this section. Override the\nimage via images.cache or imagePrefix like other Odigos components.\nWhen resources are unset, feature-derived defaults apply (Burstable QoS).\nInterrogation: 25m/128Mi requests, 100m/500Mi limits. Live-traffic learning:\n50m/64Mi requests, 200m/256Mi limits. Both: sum of each feature's defaults.",
+      "description": "Shared cache DB used by Odigos features that need a cluster-local cache\n(for example cardinality-control URL templatization rule computation, or\ninterrogation). Deployed when a consuming feature is enabled (currently\ncardinalityControl.urlTemplatization.liveTrafficLearning.enabled or\ninsights.interrogation.enabled).\nBackend is an implementation detail (Redis, published as odigos-cache with the\nOdigos release tag); values stay backend-agnostic so the chart can switch to\nanother cache (e.g. Memcached) without renaming this section. Override the\nimage via images.cache or imagePrefix like other Odigos components.\nWhen resources are unset, feature-derived defaults apply (Burstable QoS).\nInterrogation: 25m/128Mi requests, 100m/500Mi limits. Live-traffic learning:\n50m/64Mi requests, 200m/256Mi limits. Both: sum of each feature's defaults.",
       "properties": {
         "maxmemory": {
           "default": "220mb",
@@ -81,7 +81,7 @@
           "properties": {
             "liveTrafficLearning": {
               "additionalProperties": false,
-              "description": "Learn URL templatization rules from live traffic based on path segment\noccurrence counts. Enterprise-only — requires an on-prem token\n(onPremToken / odigos-pro secret). Enabling this deploys the shared\ncache under cacheDb.",
+              "description": "Learn URL templatization rules from live traffic based on path segment\noccurrence counts. Enabling this deploys the shared cache under cacheDb.",
               "properties": {
                 "automaticRules": {
                   "additionalProperties": false,
@@ -583,7 +583,7 @@
     },
     "externalOnpremTokenSecret": {
       "default": "false",
-      "description": "Set to true if you are providing the odigos-pro secret externally (not managed by this chart).\nWhen true, the chart will not create the odigos-pro secret but will still enable Pro features if the secret exists.\nThis is useful for GitOps workflows where secrets are managed separately.",
+      "description": "Set to true if you are providing the odigos-pro secret externally (not managed by this chart).\nThis is useful for GitOps workflows where secrets are managed separately.",
       "required": [],
       "title": "externalOnpremTokenSecret"
     },
@@ -614,13 +614,13 @@
     },
     "goAutoOffsetsCron": {
       "default": "",
-      "description": "Enable automatic Go library offsets updates.\nSee https://docs.odigos.io/pipeline/golang/ebpf#go-auto-offsets for more details.\ncron schedule for automatic Go offsets updates (e.g. \"0 0 * * *\" for daily at midnight). Set to empty string to disable.\nCustom Offsets support is only available in Odigos pro tier.",
+      "description": "Enable automatic Go library offsets updates.\nSee https://docs.odigos.io/pipeline/golang/ebpf#go-auto-offsets for more details.\ncron schedule for automatic Go offsets updates (e.g. \"0 0 * * *\" for daily at midnight). Set to empty string to disable.",
       "required": [],
       "title": "goAutoOffsetsCron"
     },
     "goAutoOffsetsMode": {
       "default": "off",
-      "description": "mode for automatic Go offsets updates. Options include direct (pull from cloud server), image (pull from local image) and off (disabled).\nCustom Offsets support is only available in Odigos pro tier.",
+      "description": "mode for automatic Go offsets updates. Options include direct (pull from cloud server), image (pull from local image) and off (disabled).",
       "required": [],
       "title": "goAutoOffsetsMode"
     },
@@ -708,13 +708,13 @@
     },
     "images": {
       "additionalProperties": true,
-      "description": "Per-component image overrides. When set, these full image URLs take precedence over\nthe constructed image name (imagePrefix + component + tag).\nThis is primarily used by the OpenShift operator with RELATED_IMAGE_* env vars.\nExample:\n  images:\n    instrumentor: registry.connect.redhat.com/odigos/odigos-instrumentor-ubi9:v1.0.0\n    collector: registry.connect.redhat.com/odigos/odigos-collector-ubi9:v1.0.0\nSupported component names: collector, enterprise-collector, ui, enterprise-ui,\n  instrumentor, enterprise-instrumentor, odiglet, enterprise-odiglet, agents, enterprise-agents,\n  enterprise-insights, victoria-metrics, cache",
+      "description": "Per-component image overrides. When set, these full image URLs take precedence over\nthe constructed image name (imagePrefix + component + tag).\nThis is primarily used by the OpenShift operator with RELATED_IMAGE_* env vars.\nExample:\n  images:\n    enterprise-instrumentor: registry.connect.redhat.com/odigos/odigos-enterprise-instrumentor-ubi9:v1.0.0\n    enterprise-collector: registry.connect.redhat.com/odigos/odigos-enterprise-collector-ubi9:v1.0.0\nSupported component names: enterprise-collector, enterprise-ui, enterprise-instrumentor,\n  enterprise-odiglet, enterprise-agents, enterprise-insights, victoria-metrics, cache",
       "required": [],
       "title": "images"
     },
     "insights": {
       "additionalProperties": false,
-      "description": "Configuration for the Odigos Insights service (enterprise).\nWhen enabled, deploys a Go service that ingests OTLP traces, learns\nper-route baselines across multiple deviation classes (D1..D6), and\nserves anomaly queries to the UI. Requires an enterprise on-prem token\n(odigos-pro secret).",
+      "description": "Configuration for the Odigos Insights service.\nWhen enabled, deploys a Go service that ingests OTLP traces, learns\nper-route baselines across multiple deviation classes (D1..D6), and\nserves anomaly queries to the UI.",
       "properties": {
         "affinity": {
           "additionalProperties": true,
@@ -1184,7 +1184,7 @@
     },
     "instrumentationVersion": {
       "default": "v1",
-      "description": "The instrumentation version to use. Example (CLI): --set instrumentationVersion=v2\nv2 requires Odigos Enterprise.",
+      "description": "The instrumentation version to use. Example (CLI): --set instrumentationVersion=v2",
       "enum": [
         "v1",
         "v2"
@@ -2067,7 +2067,7 @@
               "title": "appArmorProfile"
             },
             "capabilities": {
-              "description": "capabilities to add to the odiglet container when running non-privileged - this will be ignored when running as privileged.\nSYS_ADMIN required when running in unprivileged mode if one of the following is true:\n 1. kernel version is older than 5.8 (In \u003e= 5.8 BPF and PERMON were added)\n 2. kernel.perf_event_paranoid sysctl is set to 2 or higher\nIPC_LOCK required for mmap of perf buffers\nKILL is added automatically on community installations, where the go instrumentation\nchecks that the target process is alive by signalling it.\nSYS_RESOURCE required only for kernels \u003c 5.11, used for setting rlimit for BPF maps",
+              "description": "capabilities to add to the odiglet container when running non-privileged - this will be ignored when running as privileged.\nSYS_ADMIN required when running in unprivileged mode if one of the following is true:\n 1. kernel version is older than 5.8 (In \u003e= 5.8 BPF and PERMON were added)\n 2. kernel.perf_event_paranoid sysctl is set to 2 or higher\nIPC_LOCK required for mmap of perf buffers\nSYS_RESOURCE required only for kernels \u003c 5.11, used for setting rlimit for BPF maps",
               "items": {
                 "anyOf": [
                   {
@@ -2280,7 +2280,7 @@
         },
         "traceIdSuffix": {
           "default": "AA",
-          "description": "traceIdSuffix is a unique, 1 byte hex constant identifier for timestamp based trace id generation.\nsupported only in odigos pro (not available in community tier)",
+          "description": "traceIdSuffix is a unique, 1 byte hex constant identifier for timestamp based trace id generation.",
           "required": [],
           "title": "traceIdSuffix"
         }
@@ -2290,7 +2290,7 @@
     },
     "onPremToken": {
       "default": "",
-      "description": "On-prem token for Odigos Pro/Enterprise features.\nWhen set, Odigos will create a secret with this token to enable Pro features.\nLeave empty for community edition.",
+      "description": "On-prem token, required to run Odigos.\nWhen set, the chart creates the odigos-pro secret with this token.\nLeave empty only when the odigos-pro secret is created in the release namespace by other means.",
       "required": [],
       "title": "onPremToken"
     },
@@ -2740,7 +2740,7 @@
         },
         "mcp": {
           "additionalProperties": false,
-          "description": "Mount the embedded MCP server at /mcp on the enterprise UI. Enterprise-only — the gate is rendered only when an onPremToken/odigos-pro secret is present (the same condition that selects the enterprise UI image); it has no effect on the community image. Served on the UI port; reachable in-cluster via the ui Service.",
+          "description": "Mount the embedded MCP server at /mcp on the UI. Served on the UI port; reachable in-cluster via the ui Service.",
           "properties": {
             "enabled": {
               "default": true,

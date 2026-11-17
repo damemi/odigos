@@ -1,4 +1,4 @@
-{{- if and (include "odigos.clickhouseEnabled" .) (include "odigos.secretExists" .) }}
+{{- if include "odigos.clickhouseEnabled" . }}
 apiVersion: v1
 kind: Service
 metadata:

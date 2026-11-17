@@ -59,15 +59,11 @@ spec:
           - /app
         {{ $imageTag := .Values.image.tag | default .Chart.AppVersion }}
         {{- $extendedSuffix := "" -}}
-        {{- if and .Values.odiglet.extended (include "odigos.secretExists" .) -}}
+        {{- if .Values.odiglet.extended -}}
           {{- $extendedSuffix = "-extended" -}}
         {{- end -}}
         {{- $agentsImageTag := printf "%s%s" $imageTag $extendedSuffix -}}
-        {{- if include "odigos.secretExists" . }}
         image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-instrumentor" "Tag" $imageTag) }}
-        {{- else }}
-        image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "instrumentor" "Tag" $imageTag) }}
-        {{- end }}
         ports:
           - containerPort: 9443
             name: webhook-server
@@ -95,25 +91,15 @@ spec:
               configMapKeyRef:
                 key: ODIGOS_VERSION
                 name: odigos-deployment
-          {{- if include "odigos.secretExists" . }}
           - name: ODIGOS_ONPREM_TOKEN
             valueFrom:
               secretKeyRef:
                 name: odigos-pro
                 key: odigos-onprem-token
-          {{- end }}
           - name: ODIGOS_COLLECTOR_IMAGE
-            {{- if include "odigos.secretExists" . }}
             value: '{{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-collector" "Tag" $imageTag) }}'
-            {{- else }}
-            value: '{{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "collector" "Tag" $imageTag) }}'
-            {{- end }}
           - name: ODIGOS_INIT_CONTAINER_IMAGE
-            {{- if include "odigos.secretExists" . }}
             value: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-agents" "Tag" $agentsImageTag) }}
-            {{- else }}
-            value: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "agents" "Tag" $imageTag) }}
-            {{- end }}
           {{- if dig "scheduleOnlyOnInstrumentedNodes" "enabled" false (.Values.odiglet | default dict) }}
           - name: ODIGOS_INSTRUMENTED_PODS_NODE_LABEL_RETENTION
             value: {{ dig "scheduleOnlyOnInstrumentedNodes" "nodeLabelRetention" "5m" (.Values.odiglet | default dict) | quote }}

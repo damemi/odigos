@@ -1,4 +1,4 @@
-{{- if and (include "odigos.insightsEnabled" .) (include "odigos.secretExists" .) }}
+{{- if include "odigos.insightsEnabled" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
