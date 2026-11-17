@@ -27,15 +27,6 @@
 odigos-enterprise-registry
 {{- end -}}
 
-{{- define "odigos.hasEnterpriseRegistryPullSecret" -}}
-{{- if not (include "odigos.usesOdigosRegistry" .) -}}
-{{- else if and (.Values.externalOnpremPullSecret | default false) (include "odigos.secretExists" .) -}}
-true
-{{- else if include "odigos.onPremToken" . -}}
-true
-{{- end -}}
-{{- end -}}
-
 {{- define "odigos.createEnterpriseRegistryPullSecret" -}}
 {{- if and (include "odigos.usesOdigosRegistry" .) (include "odigos.onPremToken" .) (not (.Values.externalOnpremPullSecret | default false)) -}}
 true
@@ -49,7 +40,7 @@ true
 {{- end -}}
 
 {{- define "odigos.enterpriseRegistryPullSecretToMount" -}}
-{{- if include "odigos.hasEnterpriseRegistryPullSecret" . -}}
+{{- if include "odigos.usesOdigosRegistry" . -}}
 {{- include "odigos.enterpriseRegistryPullSecretName" . -}}
 {{- end -}}
 {{- end -}}
@@ -232,7 +223,7 @@ true
 {{- end -}}
 {{- end }}
 
-{{/* Render imagePullSecrets, including the on-prem registry pull secret when onPremToken is set. */}}
+{{/* Render imagePullSecrets, including the on-prem registry pull secret when pulling from registry.odigos.io. */}}
 {{- define "odigos.renderPullSecrets" -}}
 {{- $enterpriseSecret := include "odigos.enterpriseRegistryPullSecretToMount" . -}}
 {{- if or .Values.imagePullSecrets $enterpriseSecret }}
@@ -246,23 +237,16 @@ imagePullSecrets:
 {{- end }}
 {{- end }}
 
-{{/* Returns true when enterprise URL templatization live traffic learning is enabled. */}}
+{{/* Returns true when URL templatization live traffic learning is enabled. */}}
 {{- define "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled" -}}
-{{- and .Values.cardinalityControl .Values.cardinalityControl.urlTemplatization .Values.cardinalityControl.urlTemplatization.liveTrafficLearning .Values.cardinalityControl.urlTemplatization.liveTrafficLearning.enabled (include "odigos.secretExists" .) -}}
+{{- and .Values.cardinalityControl .Values.cardinalityControl.urlTemplatization .Values.cardinalityControl.urlTemplatization.liveTrafficLearning .Values.cardinalityControl.urlTemplatization.liveTrafficLearning.enabled -}}
 {{- end }}
 
-{{/*
-  Fail install/upgrade when liveTrafficLearning.enabled is requested without an enterprise token,
-  or when automaticRules.enabled is set without liveTrafficLearning.enabled.
-  Mirrors odigos.secretExists (onPremToken, odigos-pro secret, or externalOnpremTokenSecret).
-*/}}
+{{/* Fail install/upgrade when automaticRules.enabled is set without liveTrafficLearning.enabled. */}}
 {{- define "cardinalityControl.urlTemplatization.liveTrafficLearning.validate" -}}
 {{- $ltl := dict -}}
 {{- if and .Values.cardinalityControl .Values.cardinalityControl.urlTemplatization .Values.cardinalityControl.urlTemplatization.liveTrafficLearning -}}
 {{- $ltl = .Values.cardinalityControl.urlTemplatization.liveTrafficLearning -}}
-{{- end -}}
-{{- if and (get $ltl "enabled") (not (include "odigos.secretExists" .)) -}}
-{{- fail "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled is an enterprise feature and requires an on-prem token. Set onPremToken, set externalOnpremTokenSecret to true when providing the odigos-pro secret externally, or ensure the odigos-pro secret exists in the release namespace before install/upgrade." -}}
 {{- end -}}
 {{- $automaticRules := get $ltl "automaticRules" | default dict -}}
 {{- if and (get $automaticRules "enabled") (not (get $ltl "enabled")) -}}

@@ -29,7 +29,8 @@ helm repo add odigos https://odigos-io.github.io/odigos
 
 ```sh
 helm repo update
-helm upgrade --install odigos odigos/odigos --namespace odigos-system --create-namespace
+helm upgrade --install odigos odigos/odigos --namespace odigos-system --create-namespace \
+  --set onPremToken=$ODIGOS_TOKEN
 ```
 
 - **Openshift Clusters** - Make sure to set `openshift.enabled=true` in the values file or pass it as a flag while installing the chart.
@@ -43,6 +44,7 @@ By default, images are pulled from `registry.odigos.io`. To use a custom Docker 
 helm upgrade --install odigos odigos/odigos \
   --namespace odigos-system \
   --create-namespace \
+  --set onPremToken=$ODIGOS_TOKEN \
   --set imagePrefix=$CUSTOM_DOCKER_REGISTRY
 ```
 Make sure to replace `$CUSTOM_DOCKER_REGISTRY` with the URL of your Docker registry.

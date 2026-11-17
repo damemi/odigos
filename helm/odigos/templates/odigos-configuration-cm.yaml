@@ -56,21 +56,10 @@ data:
       clientSecret: secretRef:odigos-oidc
       {{- end }}
     {{- end }}
-    {{- /*
-    Gated on odigos.secretExists exactly like every templates/insights/* resource:
-    odigos-insights runs the enterprise-insights image, so without an on-prem token
-    none of its workloads are rendered. Advertising the feature here anyway would make
-    the gateway force traces on cluster-wide, buffer them in groupbytrace and export to
-    a Service that does not exist.
-    */}}
-    {{- if and .Values.insights.enabled (include "odigos.secretExists" .) }}
+    {{- if .Values.insights.enabled }}
     insights:
       enabled: {{ .Values.insights.enabled }}
     {{- end }}
-    {{- /*
-    Enterprise-only. Gated on odigos.secretExists like insights: without a token the
-    gateway must not force traces on or install the unmatched-URL debug side-channel.
-    */}}
     {{- if include "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled" . | eq "true" }}
     {{- $ltl := .Values.cardinalityControl.urlTemplatization.liveTrafficLearning }}
     {{- $ruleComputation := $ltl.ruleComputation | default dict }}
@@ -364,12 +353,12 @@ data:
     {{- end }}
     odigosOwnTelemetryStore:
       metricsStoreDisabled: {{ .Values.ownTelemetry.metricsStore.disabled }}
-    {{- if or .Values.imagePullSecrets (include "odigos.hasEnterpriseRegistryPullSecret" .) }}
+    {{- if or .Values.imagePullSecrets (include "odigos.usesOdigosRegistry" .) }}
     imagePullSecrets:
       {{- range .Values.imagePullSecrets }}
       - {{ . | quote }}
       {{- end }}
-      {{- if include "odigos.hasEnterpriseRegistryPullSecret" . }}
+      {{- if include "odigos.usesOdigosRegistry" . }}
       - {{ include "odigos.enterpriseRegistryPullSecretName" . | quote }}
       {{- end }}
     {{- end }}

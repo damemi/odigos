@@ -44,9 +44,7 @@ spec:
       containers:
       - name: ui
         {{- $imageTag := .Values.image.tag | default .Chart.AppVersion }}
-        {{- $isEnterprise := not (empty (include "odigos.secretExists" .)) }}
-        {{- $uiComponent := ternary "enterprise-ui" "ui" $isEnterprise }}
-        image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" $uiComponent "Tag" $imageTag) }}
+        image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-ui" "Tag" $imageTag) }}
         args:
           - --namespace=$(CURRENT_NS)
           - --address=0.0.0.0
@@ -59,14 +57,11 @@ spec:
             value: {{ .Values.ui.logLevel | default .Values.logLevel | default "info" | quote }}
           - name: GOMEMLIMIT
             value: {{ include "odigos.gomemlimitFromResources" (dict "Resources" .Values.ui.resources) }}
-          {{- if $isEnterprise }}
-          # Consumed by the enterprise UI at startup; ignored by the community image.
           - name: ODIGOS_ONPREM_TOKEN
             valueFrom:
               secretKeyRef:
                 name: odigos-pro
                 key: odigos-onprem-token
-          {{- end }}
           {{- if include "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled" . | eq "true" }}
           - name: ODIGOS_URL_TEMPLATIZATION_LIVE_TRAFFIC_LEARNING
             value: "true"
