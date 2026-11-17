@@ -73,24 +73,20 @@ spec:
 
     - name: '[2 - Workload Instrumentation] Simple-demo instrumented after destination added'
       try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
         - assert:
             file: ../../common/assert/simple-demo-instrumented.yaml
         - assert:
             timeout: 1m30s
             file: 01-workloads.yaml
-        - script:
-            timeout: 1m10s
-            content: ../../common/wait_for_rollout.sh
 
     - name: '[2 - Workload Instrumentation] Shipping (C++) instrumented with OBI container override'
       try:
         - assert:
             timeout: 1m10s
             file: 01-shipping-instrumented.yaml
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
 
     # The first request through a freshly instrumented Java app can't propagate context: its HTTP client
     # instrumentations load on first use. /rate only reaches currency, so the warm-up does not affect the trace assertions.
@@ -120,14 +116,7 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh ../../common/queries/wait-for-trace-reported.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/wait-for-trace-reported.yaml
       catch:
         - script:
             content: |
@@ -143,22 +132,12 @@ spec:
       try:
         - script:
             timeout: 1m20s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh wait-for-shipping-trace.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 2
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait wait-for-shipping-trace.yaml
       catch:
         - script:
             content: |
               shipping_pod_name=$(kubectl get pods -n default -o jsonpath="{.items[*].metadata.name}" | tr ' ' '\n' | grep ^shipping)
               kubectl logs "$shipping_pod_name" -n default || true
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
 
     - name: '[2 - Workload Instrumentation] Verify Trace - Context Propagation'
       try:
@@ -166,10 +145,6 @@ spec:
             timeout: 1m10s
             content: |
               ../../common/simple_trace_db_query_runner.sh ../../common/queries/context-propagation-reported.yaml
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
 
     - name: "[2 - Workload Instrumentation] Verify Trace - Resource Attributes"
       try:
@@ -177,10 +152,6 @@ spec:
             timeout: 1m10s
             content: |
               ../../common/simple_trace_db_query_runner.sh ../../common/queries/resource-attributes.yaml
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
 
     - name: '[2 - Workload Instrumentation] Verify Trace - Span Attributes'
       try:
@@ -188,10 +159,6 @@ spec:
             timeout: 1m10s
             content: |
               ../../common/simple_trace_db_query_runner.sh ../../common/queries/span-attributes-reported.yaml
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
 
     - name: '[2 - Workload Instrumentation] Verify collector metrics are collected by the UI'
       try:

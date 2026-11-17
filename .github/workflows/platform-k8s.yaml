@@ -462,18 +462,27 @@ jobs:
           docker rm "$container"
           cli/odigos version --cli
 
-      # The cluster pulls the saved images from the Depot registry with a pull secret in the Odigos
-      # namespace, as in odigos-local-env. Odiglet pre-pulls the agents image on every node, so the
-      # instrumented test apps need no secret.
+      # Pull secret for the Depot images. From 1.35 the kubelet re-verifies credentials of cached images,
+      # so the agents init container also needs it in the apps namespace.
+      # https://kubernetes.io/docs/concepts/containers/images/#ensureimagepullcredentialverification
       - name: Create the Depot registry pull secret
+        env:
+          KUBERNETES_MINOR_VERSION: ${{ steps.node-image.outputs.minor-version }}
         run: |
           set -euo pipefail
           kubectl create namespace odigos-test
-          kubectl create secret docker-registry depot-registry \
-            --namespace odigos-test \
-            --docker-server=registry.depot.dev \
-            --docker-username=x-token \
-            --docker-password="$(depot pull-token --project "$DEPOT_PROJECT")"
+          namespaces=(odigos-test)
+          if [ "$KUBERNETES_MINOR_VERSION" -ge 35 ]; then
+            namespaces+=(default)
+          fi
+          token=$(depot pull-token --project "$DEPOT_PROJECT")
+          for ns in "${namespaces[@]}"; do
+            kubectl create secret docker-registry depot-registry \
+              --namespace "$ns" \
+              --docker-server=registry.depot.dev \
+              --docker-username=x-token \
+              --docker-password="$token"
+          done
 
       # Points each chart image component at its image saved by build-depot-images, in the values file
       # every test installs with. The scheduler and autoscaler Deployments run 0 replicas, so they need no override.

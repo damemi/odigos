@@ -105,14 +105,6 @@ spec:
               echo "🚀 Running resource verification script..."
               P="../../.."
               ./check-data-collection-resources.sh "$P"
-      catch:
-        - script:
-            content: |
-              echo "🔍 Listing all resources in namespace 'odigos-test'..."
-              kubectl get all -n odigos-test
-
-              echo "📝 Describing all resources in namespace 'odigos-test'..."
-              kubectl describe all -n odigos-test
 
     - name: Verify Node Odiglet label has been added
       try:
@@ -153,6 +145,12 @@ spec:
             timeout: 1m10s
             file: ../../common/assert/pipeline-ready.yaml
 
+    - name: Wait for instrumentation
+      try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
+
     - name: Simple-demo instrumented after destination added
       try:
         - assert:
@@ -187,14 +185,7 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh ../../common/queries/wait-for-trace.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/wait-for-trace.yaml
       catch:
         - script:
             content: |
@@ -210,38 +201,19 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh ../../common/queries/context-propagation.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/context-propagation.yaml
 
     - name: Verify Trace - Resource Attributes
       try:
         - script:
             content: |
               ../../common/simple_trace_db_query_runner.sh ../../common/queries/resource-attributes.yaml
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
 
     - name: Verify Trace - Span Attributes
       try:
         - script:
             content: |
               ../../common/simple_trace_db_query_runner.sh ../../common/queries/span-attributes.yaml
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
 
     - name: Verify collector metrics are collected by the UI
       try:
@@ -285,11 +257,3 @@ spec:
 
               echo "Failed to verify Odigos uninstallation after 12 attempts"
               exit 1
-      catch:
-        - script:
-            content: |
-              echo "🔍 Listing all resources in namespace 'odigos-test'..."
-              kubectl get all -n odigos-test
-
-              echo "📝 Describing all resources in namespace 'odigos-test'..."
-              kubectl describe all -n odigos-test

@@ -33,14 +33,6 @@ spec:
             timeout: 5m
             file: ../../common/assert/odigos-central-installed.yaml
 
-      catch:
-        - script:
-            content: |
-              echo "Listing all resources in namespace 'odigos-central'..."
-              kubectl get all -n odigos-central
-
-              echo "Describing deployments in namespace 'odigos-central'..."
-              kubectl describe deployments -n odigos-central
 
     - name: Test Central Backend Infrastructure
       try:

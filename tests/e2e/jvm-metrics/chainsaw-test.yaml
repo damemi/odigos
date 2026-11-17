@@ -31,10 +31,6 @@ spec:
         - assert:
             timeout: 4m
             file: ../../common/assert/odigos-installed.yaml
-      catch:
-        - script:
-            content: |
-              kubectl describe pods -n odigos-test
 
     - name: Verify node Odiglet installed label has been added
       try:
@@ -72,13 +68,15 @@ spec:
 
     - name: Frontend instrumented and metrics pipeline ready
       try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
         - assert:
             timeout: 3m
             file: ../../common/assert/java-frontend-instrumented-and-pipeline.yaml
       catch:
         - script:
             content: |
-              kubectl describe pods -n default
               kubectl get destination -n odigos-test -o yaml
               kubectl get collectorsgroup -n odigos-test -o yaml
 

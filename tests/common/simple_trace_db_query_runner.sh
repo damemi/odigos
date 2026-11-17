@@ -1,120 +1,107 @@
 #!/bin/bash
 
-# Runs a query from a test file against simple-trace-db and compares the number of results to the
-# expectation in the file.
+# Runs simple-trace-db query files and compares the number of results to the expectation in each file.
+# Prints a PASS/FAIL line per query and fails when any query fails.
 #
-# The test file may set an optional `endpoint` to query a signal other than traces, e.g.
-# `endpoint: /v1/logs`. It defaults to /v1/traces.
+# Usage: simple_trace_db_query_runner.sh [--wait] [-n namespace] [-s service] <query-file>...
+#   --wait  retry until all queries pass, until the chainsaw step times out.
+#           On timeout prints the raw responses of the failing queries.
+#   -n, -s  simple-trace-db namespace and service, default traces/simple-trace-db.
 #
-# Note what is being counted differs by endpoint: /v1/traces returns an object keyed by trace id so
-# the count is traces, while /v1/logs returns an array so the count is individual log records.
+# A query file may set `endpoint` to query a signal other than traces, e.g. `endpoint: /v1/logs`.
+# /v1/traces returns an object keyed by trace id, so the count is traces. /v1/logs returns an array,
+# so the count is log records.
 
-# Ensure the script fails if any command fails
-set -e
+set -uo pipefail
 
-# Function to verify the YAML schema
-function verify_yaml_schema() {
-  local file=$1
-  local query=$(yq e '.query' "$file")
-  local expected_count=$(yq e '.expected.count' "$file")
-  local minimum_count=$(yq e '.expected.minimum' "$file")
+wait=false
+namespace=traces
+service=simple-trace-db
+query_files=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --wait) wait=true ;;
+  -n) namespace="$2" && shift ;;
+  -s) service="$2" && shift ;;
+  -*) query_files=() && break ;;
+  *) query_files+=("$1") ;;
+  esac
+  shift
+done
+if [ ${#query_files[@]} -eq 0 ]; then
+  echo "Usage: $0 [--wait] [-n namespace] [-s service] <query-file>..."
+  exit 1
+fi
 
-  if [[ -z "$query" || ("$expected_count" == "null" && "$minimum_count" == "null") || (-z "$minimum_count" && -z "$expected_count") ]]; then
-    echo "Invalid YAML schema in file: $file"
-    exit 1
+print_responses=false
+
+# Prints "PASS <file>: ..." or "FAIL <file>: ...", fails on FAIL.
+run_query() {
+  local file="$1" query endpoint expected minimum response count
+  if ! query=$(yq e '.query' "$file" 2>&1); then
+    echo "FAIL $file: failed to read: $query"
+    return 1
   fi
+  endpoint=$(yq e '.endpoint // "/v1/traces"' "$file")
+  expected=$(yq e '.expected.count' "$file")
+  minimum=$(yq e '.expected.minimum' "$file")
+  if [ "$query" = "null" ] || { [ "$expected" = "null" ] && [ "$minimum" = "null" ]; }; then
+    echo "FAIL $file: invalid query file, it needs a query and expected.count or expected.minimum"
+    return 1
+  fi
+
+  if ! response=$(kubectl get --request-timeout=10s --raw "/api/v1/namespaces/$namespace/services/$service:4318/proxy$endpoint?jmespath=$(jq -rn --arg q "$query" '$q | @uri')" 2>&1); then
+    echo "FAIL $file: request failed: $response"
+    return 1
+  fi
+  if ! count=$(jq 'length' <<<"$response" 2>/dev/null); then
+    echo "FAIL $file: unexpected response: $response"
+    return 1
+  fi
+
+  if [ "$expected" != "null" ]; then
+    [ "$count" -eq "$expected" ] && echo "PASS $file: expected $expected got $count" && return 0
+    echo "FAIL $file: expected $expected got $count"
+  else
+    [ "$count" -ge "$minimum" ] && echo "PASS $file: expected at least $minimum got $count" && return 0
+    echo "FAIL $file: expected at least $minimum got $count"
+  fi
+  [ "$print_responses" = true ] && jq . <<<"$response"
+  return 1
 }
 
-function urlencode() (
-  local length="${#1}"
-  for ((i = 0; i < length; i++)); do
-    local c="${1:i:1}"
-    case $c in
-    [a-zA-Z0-9.~_-]) printf "$c" ;;
-    *) printf '%%%02X' "'$c" ;;
-    esac
+run_queries() {
+  local file failed=0
+  for file in "${query_files[@]}"; do
+    run_query "$file" || failed=1
   done
-)
-
-# Function to process a YAML file
-function process_yaml_file() {
-  # The syntax of "${1:-traces}" means that if the first argument is not provided, it will use the default value "traces"
-  local dest_namespace="${3:-traces}"
-  local dest_service="${4:-simple-trace-db}"
-  local dest_port="4318"
-  local verbose="${2}"
-
-  local file=$1
-  file_name=$(basename "$file")
-  echo "Running test $file_name"
-  echo "Dest namespace: $dest_namespace"
-  echo "Dest service: $dest_service"
-  echo "Dest port: $dest_port"
-
-  endpoint=$(yq e '.endpoint' "$file")
-  if [ "$endpoint" == "null" ] || [ -z "$endpoint" ]; then
-    endpoint="/v1/traces"
-  fi
-  echo "Endpoint: $endpoint"
-
-  query=$(yq '.query' "$file")
-  encoded_query=$(urlencode "$query")
-  expected_count=$(yq e '.expected.count' "$file")
-  minimum_count=$(yq e '.expected.minimum' "$file")
-
-  response=$(kubectl get --raw /api/v1/namespaces/$dest_namespace/services/$dest_service:$dest_port/proxy$endpoint\?jmespath=$encoded_query)
-
-  if [ "$verbose" == "true" ]; then
-    echo "============== Raw response from trace db ===================="
-    echo "$response" | jq .
-    echo "========================================================="
-  fi
-
-  num_of_results=$(echo "$response" | jq 'length')
-
-  if [ "$expected_count" != "null" ]; then
-    # if num_of_results not equal to expected_count
-    if [ "$num_of_results" -ne "$expected_count" ]; then
-      echo "Test FAILED: expected $expected_count got $num_of_results"
-      exit 1
-    else
-      echo "Test PASSED: expected $expected_count got $num_of_results"
-      exit 0
-    fi
-  fi
-
-  if [ "$minimum_count" != "null" ]; then
-    if [ "$num_of_results" -lt "$minimum_count" ]; then
-      echo "Test FAILED: expected at least $minimum_count got $num_of_results"
-      exit 1
-    else
-      echo "Test PASSED: expected at least $minimum_count got $num_of_results"
-      exit 0
-    fi
-  fi
+  return $failed
 }
 
-# Check if the first argument is provided
-if [ -z "$1" ]; then
-  echo "Usage: $0 <simple-trace-db-test-file> [--verbose]"
-  exit 1
+if [ "$wait" = false ]; then
+  run_queries
+  exit
 fi
 
-# Test file path
-TEST_FILE=$1
-VERBOSE=false
-if [ "$2" == "--verbose" ]; then
-  VERBOSE=true
-fi
+source "$(dirname "$0")/wait_until.sh"
 
-# Check if yq is installed
-if ! command -v yq &>/dev/null; then
-  echo "yq command not found. Please install yq."
-  exit 1
-fi
+last_results=""
+check_queries() {
+  local results
+  results=$(run_queries) && echo "$results" && return 0
+  # Print only changes, to keep the log readable.
+  if [ "$results" != "$last_results" ]; then
+    echo "[$(date +%T)] waiting for queries:"
+    echo "$results"
+    last_results="$results"
+  fi
+  return 1
+}
 
-DESTINATION_NAMESPACE=$3
-DESTINATION_SERVICE=$4
+print_failed_responses() {
+  echo "raw responses of the failing queries:"
+  print_responses=true
+  run_queries
+}
 
-verify_yaml_schema $TEST_FILE
-process_yaml_file $TEST_FILE $VERBOSE $DESTINATION_NAMESPACE $DESTINATION_SERVICE
+wait_until check_queries print_failed_responses

@@ -80,6 +80,12 @@ spec:
         - apply:
             file: 03-extract-attribute-action.yaml
 
+    - name: Wait for instrumentation
+      try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
+
     - name: Generate traffic
       try:
         - apply:
@@ -89,14 +95,7 @@ spec:
       try:
         - script:
             timeout: 3m
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh 04-extracted-attributes.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 2
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait 04-extracted-attributes.yaml
       catch:
         - script:
             content: |
@@ -108,6 +107,3 @@ spec:
               echo ""
               echo "=== Traffic Generator Job ==="
               kubectl get jobs -n default -l app=traffic-generator -o wide
-              echo ""
-              echo "=== Trace DB Raw Dump ==="
-              ../../common/simple_trace_db_query_runner.sh 04-extracted-attributes.yaml --verbose || true

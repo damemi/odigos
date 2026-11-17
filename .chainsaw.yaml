@@ -1,0 +1,28 @@
+# https://github.com/kyverno/chainsaw/blob/v0.2.13/website/docs/configuration/file.md
+# https://github.com/kyverno/chainsaw/blob/v0.2.13/website/docs/configuration/options/error.md
+apiVersion: chainsaw.kyverno.io/v1alpha2
+kind: Configuration
+metadata:
+  name: odigos
+spec:
+  error:
+    catch:
+      - script:
+          timeout: 30s
+          content: |
+            echo "=== Warning events in all namespaces ==="
+            kubectl get events -A --field-selector type=Warning --sort-by=.lastTimestamp
+            for ns in odigos-test odigos-central default; do
+              kubectl get namespace "$ns" >/dev/null 2>&1 || continue
+              echo "=== Namespace $ns ==="
+              kubectl describe namespace "$ns"
+              kubectl describe deployments,daemonsets,statefulsets,pods -n "$ns"
+            done
+      - podLogs:
+          selector: app.kubernetes.io/name=odiglet
+          namespace: odigos-test
+          tail: 200
+      - podLogs:
+          selector: app.kubernetes.io/name=odigos-instrumentor
+          namespace: odigos-test
+          tail: 200

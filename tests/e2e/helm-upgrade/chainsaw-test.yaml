@@ -139,6 +139,12 @@ spec:
             timeout: 1m
             file: ../../common/assert/instrumentor-webhook-ready.yaml
 
+    - name: Wait for instrumentation
+      try:
+        - script:
+            timeout: 3m
+            content: bash ../../common/wait_for_instrumentation.sh
+
     - name: Simple-demo instrumented after upgrade
       try:
         - assert:
@@ -173,14 +179,7 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh ../../common/queries/wait-for-trace.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/wait-for-trace.yaml
       catch:
         - script:
             content: |
@@ -191,35 +190,16 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: |
-              while true; do
-                ../../common/simple_trace_db_query_runner.sh ../../common/queries/context-propagation.yaml
-                if [ $? -eq 0 ]; then
-                  break
-                fi
-                sleep 1
-              done
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait ../../common/queries/context-propagation.yaml
 
     - name: Verify Trace - Resource Attributes
       try:
         - script:
             content: |
               ../../common/simple_trace_db_query_runner.sh ../../common/queries/resource-attributes.yaml
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
 
     - name: Verify Trace - Span Attributes
       try:
         - script:
             content: |
               ../../common/simple_trace_db_query_runner.sh ../../common/queries/span-attributes.yaml
-      catch:
-        - podLogs:
-            name: odiglet
-            namespace: odigos-test
