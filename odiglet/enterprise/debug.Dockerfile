@@ -124,8 +124,8 @@ COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.21@sha256:b9d
 COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
 # java-ebpf-instrumentations
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.62.0@sha256:bb8fe42359a144bce741187277041dbd94183dec6a69ab398315ca98501dfb3c /instrumentations/java-ebpf /instrumentations/java-ebpf
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.62.0@sha256:666a455f9408f03d10911ec33725a873782098a3c2fb3ac2bca4529eb9f1cd51 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.63.0@sha256:d5fd2bef8e2632ab14eab4fd3be932066c2428c17d779a519a9c537157e1ccee /instrumentations/java-ebpf /instrumentations/java-ebpf
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.63.0@sha256:ff1d4de09f5997c0f046adca4c76e655ca162fe6f0d0678ffcca558b3ddf1dd2 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
 
 # php-community
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.12.0@sha256:29b949cebd81bf9e8d5d715bfb72e6b45f9e2151f8e7fb8419c520faae2af16c /instrumentations/php /instrumentations/php
