@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +29,11 @@ const (
 	callTrieTable      = "tx_call_trie_structure"
 	transactionsTable  = "tx_transactions"
 	trieRootParent     = "root"
+
+	// The insights transaction inventory: each transaction's operation and kind, keyed by the
+	// same hashed id the trie stores as TransactionId (see insights/AGENTS.md).
+	insightsDatabase          = "odigos_insights"
+	insightsTransactionsTable = "transactions"
 
 	clickhouseDialTimeout = 5 * time.Second
 	clickhouseReadTimeout = 5 * time.Second
@@ -51,6 +58,10 @@ type Function struct {
 // Transaction is one transaction id with its aggregated function set.
 type Transaction struct {
 	ID string
+	// Operation and Kind name the transaction (e.g. "POST /buy [http.response.status_code=500]", "HTTP"),
+	// from the insights inventory. Empty when the inventory has no row for the id.
+	Operation string
+	Kind      string
 	// SeenCount is how many sample-root rows insights flushed for this transaction.
 	SeenCount int64
 	Functions []Function
@@ -116,6 +127,7 @@ type Client struct {
 	callTrieSQL    string
 	sampleTraceSQL string
 	sourcesSQL     string
+	namesSQL       string
 }
 
 // NewClient builds a ClickHouse client for the autopilot database.
@@ -150,6 +162,7 @@ func NewClientWithConn(db driver.Conn) *Client {
 func newClientWithConn(db driver.Conn) *Client {
 	fqn := fmt.Sprintf("%q.%q", clickhouseDatabase, callTrieTable)
 	txFqn := fmt.Sprintf("%q.%q", clickhouseDatabase, transactionsTable)
+	inventoryFqn := fmt.Sprintf("%q.%q", insightsDatabase, insightsTransactionsTable)
 	return &Client{
 		db:          db,
 		callTrieFQN: fqn,
@@ -191,6 +204,14 @@ WHERE Namespace = ?
 	AND TransactionId = ?
 LIMIT 1
 `, txFqn),
+		namesSQL: fmt.Sprintf(`
+SELECT
+	transaction_id,
+	operation,
+	kind
+FROM %s FINAL
+WHERE transaction_id IN ?
+`, inventoryFqn),
 	}
 }
 
@@ -310,7 +331,50 @@ func (c *Client) ListContainerTransactions(ctx context.Context, namespace, kind,
 	}
 
 	result.Transactions = assembleTransactions(edges)
+	// Names are display only: without them the UI falls back to the id, so a failed lookup must not fail the page.
+	if err := c.attachNames(ctx, result.Transactions); err != nil {
+		log.Printf("interrogation: naming transactions of %s/%s/%s: %v", namespace, kind, name, err)
+	}
 	return result, nil
+}
+
+// attachNames fills each transaction's Operation and Kind from the insights inventory, in one query.
+// Ids that aren't the inventory's int64 hashes (tries written before ids were hashed) are left unnamed.
+func (c *Client) attachNames(ctx context.Context, txs []Transaction) error {
+	byID := make(map[int64][]int, len(txs))
+	ids := make([]any, 0, len(txs))
+	for i, tx := range txs {
+		id, err := strconv.ParseInt(tx.ID, 10, 64)
+		if err != nil {
+			continue
+		}
+		if _, seen := byID[id]; !seen {
+			ids = append(ids, id)
+		}
+		byID[id] = append(byID[id], i)
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	rows, err := c.db.Query(ctx, c.namesSQL, clickhouse.GroupSet{Value: ids})
+	if err != nil {
+		return fmt.Errorf("query transaction names: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int64
+		var operation, txKind string
+		if err := rows.Scan(&id, &operation, &txKind); err != nil {
+			return fmt.Errorf("scan transaction names: %w", err)
+		}
+		for _, i := range byID[id] {
+			txs[i].Operation = operation
+			txs[i].Kind = txKind
+		}
+	}
+	return rows.Err()
 }
 
 // buildListEdgesQuery selects the aggregated call-trie edges of every

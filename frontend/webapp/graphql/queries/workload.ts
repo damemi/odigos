@@ -422,6 +422,8 @@ export const GET_INTERROGATION_TRANSACTIONS = gql`
         containerName
         interrogationTransactions {
           id
+          operation
+          kind
           seenCount
           functions {
             name

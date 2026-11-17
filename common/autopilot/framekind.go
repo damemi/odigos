@@ -21,12 +21,17 @@ const (
 var runtimePrefixes = []string{
 	"java.", "javax.", "jakarta.", "sun.", "jdk.", "kotlin.", "scala.", "com.sun.", "org.jcp.",
 	"net.bytebuddy.", "io.opentelemetry.",
+	// The Odigos Java agent: its own classes, and ByteBuddy shaded into it. It transforms classes inside
+	// requests, so without these its frames would pass for the application's.
+	"dev.keyval.ebpfJava.", "dev.keyval.net.bytebuddy.", "io.odigos.",
 }
 
 var libraryPrefixes = []string{
 	"reactor.", "io.netty.", "io.micrometer.",
 	"org.springframework.", "org.hibernate.", "org.apache.", "org.postgresql.", "org.h2.",
 	"org.slf4j.", "ch.qos.logback.", "com.zaxxer.",
+	// JSON (de)serialization; Spring MVC runs every request body through Jackson.
+	"com.fasterxml.",
 	// Common servers, clients and drivers.
 	"org.eclipse.jetty.", "io.undertow.", "com.mysql.", "org.mariadb.jdbc.", "oracle.jdbc.",
 	"com.microsoft.sqlserver.jdbc.", "redis.clients.jedis.", "io.lettuce.core.", "com.mongodb.",

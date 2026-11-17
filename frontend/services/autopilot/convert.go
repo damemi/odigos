@@ -42,11 +42,20 @@ func TransactionsToModel(txs []Transaction) []*model.AutopilotTransaction {
 		}
 		out = append(out, &model.AutopilotTransaction{
 			ID:        tx.ID,
+			Operation: optionalString(tx.Operation),
+			Kind:      optionalString(tx.Kind),
 			SeenCount: int(tx.SeenCount),
 			Functions: fns,
 		})
 	}
 	return out
+}
+
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
 }
 
 // SourcesToModel converts per-container transaction counts to GraphQL models.

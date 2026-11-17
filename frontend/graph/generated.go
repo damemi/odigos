@@ -183,6 +183,8 @@ type ComplexityRoot struct {
 		CallTrie    func(childComplexity int) int
 		Functions   func(childComplexity int) int
 		ID          func(childComplexity int) int
+		Kind        func(childComplexity int) int
+		Operation   func(childComplexity int) int
 		SampleTrace func(childComplexity int) int
 		SeenCount   func(childComplexity int) int
 	}
@@ -3399,6 +3401,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AutopilotTransaction.ID(childComplexity), true
+
+	case "AutopilotTransaction.kind":
+		if e.complexity.AutopilotTransaction.Kind == nil {
+			break
+		}
+
+		return e.complexity.AutopilotTransaction.Kind(childComplexity), true
+
+	case "AutopilotTransaction.operation":
+		if e.complexity.AutopilotTransaction.Operation == nil {
+			break
+		}
+
+		return e.complexity.AutopilotTransaction.Operation(childComplexity), true
 
 	case "AutopilotTransaction.sampleTrace":
 		if e.complexity.AutopilotTransaction.SampleTrace == nil {
@@ -23651,6 +23667,88 @@ func (ec *executionContext) _AutopilotTransaction_id(ctx context.Context, field 
 }
 
 func (ec *executionContext) fieldContext_AutopilotTransaction_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AutopilotTransaction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AutopilotTransaction_operation(ctx context.Context, field graphql.CollectedField, obj *model.AutopilotTransaction) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AutopilotTransaction_operation(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Operation, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AutopilotTransaction_operation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "AutopilotTransaction",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _AutopilotTransaction_kind(ctx context.Context, field graphql.CollectedField, obj *model.AutopilotTransaction) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_AutopilotTransaction_kind(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Kind, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_AutopilotTransaction_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "AutopilotTransaction",
 		Field:      field,
@@ -70347,6 +70445,10 @@ func (ec *executionContext) fieldContext_K8sWorkloadContainer_interrogationTrans
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_AutopilotTransaction_id(ctx, field)
+			case "operation":
+				return ec.fieldContext_AutopilotTransaction_operation(ctx, field)
+			case "kind":
+				return ec.fieldContext_AutopilotTransaction_kind(ctx, field)
 			case "seenCount":
 				return ec.fieldContext_AutopilotTransaction_seenCount(ctx, field)
 			case "functions":
@@ -104088,6 +104190,10 @@ func (ec *executionContext) _AutopilotTransaction(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "operation":
+			out.Values[i] = ec._AutopilotTransaction_operation(ctx, field, obj)
+		case "kind":
+			out.Values[i] = ec._AutopilotTransaction_kind(ctx, field, obj)
 		case "seenCount":
 			out.Values[i] = ec._AutopilotTransaction_seenCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {

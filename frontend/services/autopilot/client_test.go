@@ -2,6 +2,7 @@ package autopilot
 
 import (
 	"context"
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -119,13 +120,53 @@ type fakeConn struct {
 	query string
 	args  []any
 	rows  []callTrieEdgeRow
+	// The insights inventory lookup, kept apart from the call-trie query above.
+	namesQuery string
+	namesArgs  []any
+	names      []fakeName
+	namesErr   error
+}
+
+type fakeName struct {
+	id              int64
+	operation, kind string
 }
 
 func (c *fakeConn) Query(_ context.Context, query string, args ...any) (driver.Rows, error) {
+	if strings.Contains(query, insightsDatabase) {
+		c.namesQuery = query
+		c.namesArgs = args
+		if c.namesErr != nil {
+			return nil, c.namesErr
+		}
+		return &fakeNameRows{rows: c.names, next: -1}, nil
+	}
 	c.query = query
 	c.args = args
 	return &fakeRows{rows: c.rows, next: -1}, nil
 }
+
+type fakeNameRows struct {
+	driver.Rows
+	rows []fakeName
+	next int
+}
+
+func (r *fakeNameRows) Next() bool {
+	r.next++
+	return r.next < len(r.rows)
+}
+
+func (r *fakeNameRows) Scan(dest ...any) error {
+	row := r.rows[r.next]
+	*dest[0].(*int64) = row.id
+	*dest[1].(*string) = row.operation
+	*dest[2].(*string) = row.kind
+	return nil
+}
+
+func (r *fakeNameRows) Err() error   { return nil }
+func (r *fakeNameRows) Close() error { return nil }
 
 type fakeRows struct {
 	driver.Rows
@@ -168,6 +209,61 @@ func TestListContainerTransactionsNoFilter(t *testing.T) {
 	assert.NotContains(t, conn.query, "TransactionId IN")
 	assert.NotContains(t, conn.query, "positionCaseInsensitiveUTF8")
 	assert.NotContains(t, conn.query, "LIMIT")
+}
+
+func TestListContainerTransactionsNames(t *testing.T) {
+	conn := &fakeConn{
+		rows: []callTrieEdgeRow{
+			{TransactionID: "-42", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2},
+			{TransactionID: "7636099928166363546", NodeID: "n2", Parent: "root", FunctionName: "Buy", FrameType: "jvm", SampleType: "samples", Count: 1},
+			{TransactionID: "tx-legacy", NodeID: "n3", Parent: "root", FunctionName: "Old", FrameType: "jvm", SampleType: "samples", Count: 1},
+		},
+		names: []fakeName{
+			{id: -42, operation: "POST /pay", kind: "HTTP"},
+			{id: 7636099928166363546, operation: "POST /buy [http.response.status_code=500]", kind: "HTTP"},
+		},
+	}
+	c := NewClientWithConn(conn)
+
+	got, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{})
+	require.NoError(t, err)
+
+	byID := map[string]Transaction{}
+	for _, tx := range got.Transactions {
+		byID[tx.ID] = tx
+	}
+	assert.Equal(t, "POST /pay", byID["-42"].Operation)
+	assert.Equal(t, "HTTP", byID["-42"].Kind)
+	assert.Equal(t, "POST /buy [http.response.status_code=500]", byID["7636099928166363546"].Operation)
+	// Not an inventory hash: asked for nothing, left unnamed.
+	assert.Empty(t, byID["tx-legacy"].Operation)
+
+	assert.Contains(t, conn.namesQuery, `"odigos_insights"."transactions" FINAL`)
+	require.Len(t, conn.namesArgs, 1)
+	assert.ElementsMatch(t, []any{int64(-42), int64(7636099928166363546)}, conn.namesArgs[0].(clickhouse.GroupSet).Value)
+}
+
+func TestListContainerTransactionsNamesFailureKeepsTransactions(t *testing.T) {
+	conn := &fakeConn{
+		rows:     []callTrieEdgeRow{{TransactionID: "42", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2}},
+		namesErr: errors.New("no such table"),
+	}
+	c := NewClientWithConn(conn)
+
+	got, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{})
+	require.NoError(t, err)
+	require.Len(t, got.Transactions, 1)
+	assert.Empty(t, got.Transactions[0].Operation)
+}
+
+func TestTransactionsToModelNames(t *testing.T) {
+	got := TransactionsToModel([]Transaction{{ID: "42", Operation: "POST /pay", Kind: "HTTP"}, {ID: "43"}})
+	require.Len(t, got, 2)
+	require.NotNil(t, got[0].Operation)
+	assert.Equal(t, "POST /pay", *got[0].Operation)
+	assert.Equal(t, "HTTP", *got[0].Kind)
+	assert.Nil(t, got[1].Operation)
+	assert.Nil(t, got[1].Kind)
 }
 
 func TestListContainerTransactionsFilters(t *testing.T) {

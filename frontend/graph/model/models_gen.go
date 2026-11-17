@@ -173,6 +173,13 @@ type AutopilotSource struct {
 type AutopilotTransaction struct {
 	// Transaction id as stored in tx_call_trie_structure.TransactionId.
 	ID string `json:"id"`
+	// What the transaction is, from the insights inventory: its root span's operation
+	// (e.g. "POST /buy [http.response.status_code=500]"). Null when the inventory has
+	// no row for the id.
+	Operation *string `json:"operation,omitempty"`
+	// The transaction's kind from the insights inventory: HTTP, GRPC, CONSUMER,
+	// PRODUCER, CRON or INTERNAL. Null when the inventory has no row for the id.
+	Kind *string `json:"kind,omitempty"`
 	// Call-trie rows stored for this transaction's sample-type roots (relative heat,
 	// not a sample count).
 	SeenCount int                  `json:"seenCount"`
