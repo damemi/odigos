@@ -7,7 +7,6 @@ import (
 
 var InsightsProfile = profile.Profile{
 	ProfileName: common.ProfileName("insights"),
-	MinimumTier: common.OnPremOdigosTier,
 	ShortDescription: "Bundle profile that includes " +
 		"specific presets for odigos insights.",
 	Dependencies: []common.ProfileName{

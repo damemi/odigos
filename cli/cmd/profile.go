@@ -7,7 +7,6 @@ import (
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/cli/cmd/resources"
-	"github.com/odigos-io/odigos/cli/cmd/resources/odigospro"
 	cmdcontext "github.com/odigos-io/odigos/cli/pkg/cmd_context"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
@@ -34,12 +33,6 @@ var profileCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		currentTier, err := odigospro.GetCurrentOdigosTier(ctx, client, ns)
-		if err != nil {
-			fmt.Println("Error reading current odigos tier")
-			os.Exit(1)
-		}
-
 		availableFlag, err := cmd.Flags().GetBool("available")
 		if err != nil {
 			fmt.Println("\033[31mERROR\033[0m Unable to parse available flag:", err)
@@ -47,13 +40,8 @@ var profileCmd = &cobra.Command{
 		}
 
 		if availableFlag {
-			fmt.Println("Listing available profiles for", currentTier, "tier:")
-			profiles := profiles.GetAvailableProfilesForTier(currentTier)
-			if len(profiles) == 0 {
-				fmt.Println("No profiles are available for the current tier")
-				os.Exit(0)
-			}
-			for _, profile := range profiles {
+			fmt.Println("Listing available profiles:")
+			for _, profile := range profiles.AllProfiles {
 				fmt.Println("-", profile.ProfileName, " - ", profile.ShortDescription)
 			}
 			return

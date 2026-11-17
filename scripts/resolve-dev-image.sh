@@ -2,7 +2,7 @@
 # Resolve the container image repository (registry/name, no tag) for local
 # make deploy / load-to-kind workflows.
 #
-# Enterprise installs (odigos-pro secret or ODIGOS_TIER=onprem) use
+# Enterprise installs (odigos-pro secret) use
 # odigos-enterprise-* names where those differ from OSS.
 # When a matching workload already exists in the cluster with the expected image
 # name, its registry/prefix is preserved (custom imagePrefix, mirrors, etc.).
@@ -27,11 +27,7 @@ is_enterprise() {
 		false|0|no) return 1 ;;
 	esac
 	local kopts=(--request-timeout=3s)
-	if kubectl "${kopts[@]}" get secret odigos-pro -n "${ns}" >/dev/null 2>&1; then
-		return 0
-	fi
-	tier="$(kubectl "${kopts[@]}" get cm odigos-deployment -n "${ns}" -o jsonpath='{.data.ODIGOS_TIER}' 2>/dev/null || true)"
-	[ "${tier}" = "onprem" ]
+	kubectl "${kopts[@]}" get secret odigos-pro -n "${ns}" >/dev/null 2>&1
 }
 
 # Image repository names that gain an "enterprise-" infix on enterprise installs.

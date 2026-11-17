@@ -7,7 +7,6 @@ import (
 
 var GreatwallProfile = profile.Profile{
 	ProfileName: common.ProfileName("greatwall"),
-	MinimumTier: common.OnPremOdigosTier,
 	ShortDescription: "Bundle profile that includes " +
 		"specific preset for on-premises installations.",
 	Dependencies: []common.ProfileName{

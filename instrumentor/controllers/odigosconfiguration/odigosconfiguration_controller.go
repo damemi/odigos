@@ -38,7 +38,6 @@ import (
 type odigosConfigurationController struct {
 	client.Client
 	Scheme        *runtime.Scheme
-	Tier          common.OdigosTier
 	OdigosVersion string
 	DynamicClient *dynamic.DynamicClient
 }
@@ -81,9 +80,6 @@ func (r *odigosConfigurationController) Reconcile(ctx context.Context, _ ctrl.Re
 		logger.Debug("Merged local UI config into effective config")
 	}
 
-	// effective profiles are what is actually used in the cluster (minus non existing profiles and plus dependencies)
-	availableProfiles := profiles.GetAvailableProfilesForTier(r.Tier)
-
 	allProfiles := make([]common.ProfileName, 0)
 	allProfiles = append(allProfiles, odigosConfiguration.Profiles...)
 
@@ -95,7 +91,8 @@ func (r *odigosConfigurationController) Reconcile(ctx context.Context, _ ctrl.Re
 		}
 	}
 
-	effectiveProfiles := calculateEffectiveProfiles(allProfiles, availableProfiles)
+	// effective profiles are what is actually used in the cluster (minus non existing profiles and plus dependencies)
+	effectiveProfiles := calculateEffectiveProfiles(allProfiles, profiles.AllProfiles)
 
 	// apply the current profiles list to the cluster
 	err = r.applyProfileManifests(ctx, effectiveProfiles)

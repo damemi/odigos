@@ -11,17 +11,6 @@ import (
 	"github.com/odigos-io/odigos/instrumentor/controllers/pipeline"
 )
 
-// effectiveCardinalityControl returns the cardinality-control config the gateway
-// should be wired for. Live traffic learning of URL templatization rules is enterprise-only —
-// helm already gates the helm value on an on-prem token, and community tier must
-// not install the side-channel pipeline. Same reasoning as effectiveInsightsConfig.
-func effectiveCardinalityControl(cc *common.CardinalityControlConfiguration, tier common.OdigosTier) *common.CardinalityControlConfiguration {
-	if !tier.IsEnterprise() {
-		return nil
-	}
-	return cc
-}
-
 // addUrlTemplatizationUnmatchedExporter appends the enterprise
 // odigos_url_templatization exporter to the gateway root traces pipeline so
 // every span fans out after root processors (including odigosurltemplate when

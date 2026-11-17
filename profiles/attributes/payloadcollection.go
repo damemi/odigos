@@ -7,12 +7,10 @@ import (
 
 var FullPayloadCollectionProfile = profile.Profile{
 	ProfileName:      common.ProfileName("full-payload-collection"),
-	MinimumTier:      common.OnPremOdigosTier,
 	ShortDescription: "Collect any payload from the cluster where supported with default settings",
 }
 
 var DbPayloadCollectionProfile = profile.Profile{
 	ProfileName:      common.ProfileName("db-payload-collection"),
-	MinimumTier:      common.OnPremOdigosTier,
 	ShortDescription: "Collect db payload from the cluster where supported with default settings",
 }

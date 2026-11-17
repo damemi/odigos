@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/common/consts"
 
 	"k8s.io/client-go/util/homedir"
@@ -55,19 +54,4 @@ func GetSyncDaemonSetDelay() int {
 // It reads ODIGOS_COMPONENT_DEPLOYMENT_NAME from the environment; if unset, returns defaultName.
 func GetComponentDeploymentNameOrDefault(defaultName string) string {
 	return GetEnvVarOrDefault(consts.OdigosComponentDeploymentNameEnvVar, defaultName)
-}
-
-func GetOdigosTierFromEnv() common.OdigosTier {
-	odigosTierStr := os.Getenv(consts.OdigosTierEnvVarName)
-
-	switch odigosTierStr {
-	case string(common.CommunityOdigosTier):
-		return common.CommunityOdigosTier
-	case string(common.CloudOdigosTier):
-		return common.CloudOdigosTier
-	case string(common.OnPremOdigosTier):
-		return common.OnPremOdigosTier
-	default:
-		return common.CommunityOdigosTier
-	}
 }

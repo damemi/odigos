@@ -35,23 +35,11 @@ func GetConfig(ctx context.Context) model.Config {
 	if err != nil {
 		odigosDeployment = &corev1.ConfigMap{}
 		odigosDeployment.Data = map[string]string{
-			k8sconsts.OdigosDeploymentConfigMapTierKey:               string(common.CommunityOdigosTier),
 			k8sconsts.OdigosDeploymentConfigMapInstallationMethodKey: string(installationmethod.K8sInstallationMethodOdigosCli),
 		}
 	}
 
 	return buildConfigResponse(ctx, odigosDeployment.Data)
-}
-
-// GetTier returns just the Odigos tier from the deployment ConfigMap. This is a
-// cheaper alternative to GetConfig when only the tier is needed (e.g. for tier-gated
-// feature checks during workload resolution). Falls back to community on read errors.
-func GetTier(ctx context.Context) model.Tier {
-	cm, err := kube.DefaultClient.CoreV1().ConfigMaps(env.GetCurrentNamespace()).Get(ctx, k8sconsts.OdigosDeploymentConfigMapName, metav1.GetOptions{})
-	if err != nil {
-		return model.Tier(common.CommunityOdigosTier)
-	}
-	return model.Tier(cm.Data[k8sconsts.OdigosDeploymentConfigMapTierKey])
 }
 
 func buildConfigResponse(ctx context.Context, deploymentData map[string]string) model.Config {
@@ -62,7 +50,8 @@ func buildConfigResponse(ctx context.Context, deploymentData map[string]string) 
 	}
 	response.Readonly = config.UiMode == common.UiModeReadonly
 	response.PlatformType = model.ComputePlatformTypeK8s
-	response.Tier = model.Tier(deploymentData[k8sconsts.OdigosDeploymentConfigMapTierKey])
+	// Central and the UI still read the tier, which is always on-prem now.
+	response.Tier = model.TierOnprem
 	response.OdigosVersion = deploymentData[k8sconsts.OdigosDeploymentConfigMapVersionKey]
 	response.InstallationMethod = string(deploymentData[k8sconsts.OdigosDeploymentConfigMapInstallationMethodKey])
 	response.ClusterName = &config.ClusterName
@@ -71,7 +60,7 @@ func buildConfigResponse(ctx context.Context, deploymentData map[string]string) 
 	if err != nil {
 		log.Printf("Error checking if central proxy connected: %v\n", err)
 	}
-	configured := isConfiguredForCentralBackend(common.OdigosTier(response.Tier), &config.ClusterName, config)
+	configured := isConfiguredForCentralBackend(&config.ClusterName, config)
 	if configured && isConnected {
 		response.IsCentralProxyRunning = &isConnected
 	} else {
@@ -109,11 +98,7 @@ func IsReadonlyMode(ctx context.Context) bool {
 	return config.UiMode == common.UiModeReadonly
 }
 
-func isConfiguredForCentralBackend(tier common.OdigosTier, clusterName *string, config *common.OdigosConfiguration) bool {
-	if tier != common.OnPremOdigosTier {
-		return false
-	}
-
+func isConfiguredForCentralBackend(clusterName *string, config *common.OdigosConfiguration) bool {
 	if clusterName == nil || *clusterName == "" {
 		return false
 	}

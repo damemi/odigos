@@ -7,6 +7,5 @@ import (
 
 var LegacyRubyProfile = profile.Profile{
 	ProfileName:      common.ProfileName("legacy-ruby-instrumentation"),
-	MinimumTier:      common.OnPremOdigosTier,
 	ShortDescription: "Enable native instrumentation for Ruby 2.7 (requires odiglet.extended)",
 }

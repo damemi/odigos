@@ -441,10 +441,6 @@ func moduleVersionSet(mod *jsonModule) map[string]struct{} {
 // UpdateGoOffsets writes the provided offsets file content to the
 // odigos-go-offsets ConfigMap (same encoding as `odigos pro update-offsets`).
 func UpdateGoOffsets(ctx context.Context, content string) error {
-	if GetTier(ctx) == model.TierCommunity {
-		return fmt.Errorf("custom offsets support is only available in Odigos pro tier")
-	}
-
 	return writeGoOffsetsConfigMap(ctx, []byte(content))
 }
 

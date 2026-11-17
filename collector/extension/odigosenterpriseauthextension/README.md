@@ -41,9 +41,6 @@ service:
   extensions: [odigos_enterprise_auth, health_check, pprof]
 ```
 
-The OSS autoscaler emits this block only when `ODIGOS_TIER` is not `community`, so the OSS
-collector — which has no such extension compiled in — never sees it.
-
 ## Note on image pull authentication
 
 This extension covers **runtime** token verification. Authenticating the *image pull* against

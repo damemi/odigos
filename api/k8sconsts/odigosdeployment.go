@@ -7,7 +7,6 @@ import (
 const (
 	OdigosDeploymentConfigMapName                    = "odigos-deployment"
 	OdigosDeploymentConfigMapVersionKey              = consts.OdigosVersionEnvVarName
-	OdigosDeploymentConfigMapTierKey                 = consts.OdigosTierEnvVarName
 	OdigosDeploymentConfigMapInstallationMethodKey   = "installation-method"
 	OdigosDeploymentConfigMapKubernetesVersionKey    = "kubernetes-version"
 	OdigosDeploymentConfigMapOnPremTokenAudKey       = "onprem-token-audience"

@@ -26,11 +26,9 @@ const (
 
 type nodeCollectorBaseReconciler struct {
 	client.Client
-	scheme               *runtime.Scheme
+	scheme          *runtime.Scheme
 	ownerDeployment *appsv1.Deployment
-	odigosNamespace      string
-	// tier is read once from ODIGOS_TIER at autoscaler startup.
-	tier common.OdigosTier
+	odigosNamespace string
 }
 
 func (b *nodeCollectorBaseReconciler) reconcileNodeCollector(ctx context.Context) (ctrl.Result, error) {

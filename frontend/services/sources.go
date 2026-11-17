@@ -459,13 +459,6 @@ func validateSourceKind(ctx context.Context, workloadKind model.K8sResourceKind)
 		return errors.New("unsupported workload kind: " + string(workloadKind))
 	}
 
-	if workloadKind == WorkloadKindStaticPod {
-		config := GetConfig(ctx)
-		if config.Tier != model.TierOnprem {
-			return fmt.Errorf("StaticPod instrumentation is an enterprise (on-prem) feature")
-		}
-	}
-
 	return nil
 }
 

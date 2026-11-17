@@ -7,7 +7,6 @@ import (
 
 var KratosProfile = profile.Profile{
 	ProfileName: common.ProfileName("kratos"),
-	MinimumTier: common.OnPremOdigosTier,
 	ShortDescription: "Bundle profile that includes " +
 		"specific presets for on-premises installations.",
 	Dependencies: []common.ProfileName{

@@ -7,7 +7,6 @@ import (
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/instrumentor/controllers/pipeline"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 	k8slogger "github.com/odigos-io/odigos/k8sutils/pkg/logger"
@@ -23,7 +22,7 @@ var (
 	}
 )
 
-func reconcileClusterCollector(ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme, odigosVersion string, tier common.OdigosTier) (ctrl.Result, error) {
+func reconcileClusterCollector(ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme, odigosVersion string) (ctrl.Result, error) {
 	logger := k8slogger.FromContext(ctx)
 
 	odigosNs := env.GetCurrentNamespace()
@@ -58,7 +57,7 @@ func reconcileClusterCollector(ctx context.Context, k8sClient client.Client, sch
 	processors.Items = append(processors.Items, pipeline.GetGenericBatchProcessor())
 	processors.Items = append(processors.Items, configExtProcessors...)
 
-	err = syncGateway(&dests, &processors, &gatewayCollectorGroup, ctx, k8sClient, scheme, odigosVersion, tier)
+	err = syncGateway(&dests, &processors, &gatewayCollectorGroup, ctx, k8sClient, scheme, odigosVersion)
 	statusPatchString := pipeline.GetCollectorsGroupDeployedConditionsPatch(err, gatewayCollectorGroup.Spec.Role)
 	statusErr := k8sClient.Status().Patch(ctx, &gatewayCollectorGroup, client.RawPatch(types.MergePatchType, []byte(statusPatchString)))
 	if statusErr != nil {
@@ -70,7 +69,7 @@ func reconcileClusterCollector(ctx context.Context, k8sClient client.Client, sch
 
 func syncGateway(dests *odigosv1.DestinationList, processors *odigosv1.ProcessorList,
 	gateway *odigosv1.CollectorsGroup, ctx context.Context,
-	c client.Client, scheme *runtime.Scheme, odigosVersion string, tier common.OdigosTier) error {
+	c client.Client, scheme *runtime.Scheme, odigosVersion string) error {
 	logger := k8slogger.FromContext(ctx)
 	logger.Info("Syncing gateway")
 
@@ -88,7 +87,7 @@ func syncGateway(dests *odigosv1.DestinationList, processors *odigosv1.Processor
 		return strings.Compare(a.Name, b.Name)
 	})
 
-	signals, err := syncConfigMap(enabledDests, processors, gateway, ctx, c, scheme, tier)
+	signals, err := syncConfigMap(enabledDests, processors, gateway, ctx, c, scheme)
 	if err != nil {
 		logger.Error(err, "Failed to sync config map")
 		return err
@@ -106,7 +105,7 @@ func syncGateway(dests *odigosv1.DestinationList, processors *odigosv1.Processor
 		return err
 	}
 
-	_, err = syncDeployment(enabledDests, gateway, ctx, c, scheme, odigosVersion, tier)
+	_, err = syncDeployment(enabledDests, gateway, ctx, c, scheme, odigosVersion)
 	if err != nil {
 		logger.Error(err, "Failed to sync deployment")
 		return err

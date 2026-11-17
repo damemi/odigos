@@ -45,7 +45,7 @@ func GetDeploymentName(gatewayCg *odigosv1.CollectorsGroup) string {
 }
 
 func syncDeployment(enabledDests *odigosv1.DestinationList, gateway *odigosv1.CollectorsGroup,
-	ctx context.Context, c client.Client, scheme *runtime.Scheme, odigosVersion string, tier common.OdigosTier) (*appsv1.Deployment, error) {
+	ctx context.Context, c client.Client, scheme *runtime.Scheme, odigosVersion string) (*appsv1.Deployment, error) {
 	logger := k8slogger.FromContext(ctx)
 
 	instrumentorDeploymentName := env.GetComponentDeploymentNameOrDefault(k8sconsts.InstrumentorDeploymentName)
@@ -63,7 +63,7 @@ func syncDeployment(enabledDests *odigosv1.DestinationList, gateway *odigosv1.Co
 	// Use the hash of the secrets  to make sure the gateway will restart when the secrets (mounted as environment variables) changes
 	configDataHash := Sha256Hash(secretsVersionHash)
 	desiredDeployment, err := getDesiredDeployment(ctx, c, enabledDests, configDataHash, gateway,
-		scheme, odigosVersion, autoScalerTopologySpreadConstraints, tier)
+		scheme, odigosVersion, autoScalerTopologySpreadConstraints)
 	if err != nil {
 		return nil, errors.Join(err, errors.New("failed to get desired deployment"))
 	}
@@ -138,7 +138,7 @@ func patchDeployment(existing *appsv1.Deployment, desired *appsv1.Deployment, ct
 }
 
 func getDesiredDeployment(ctx context.Context, c client.Client, enabledDests *odigosv1.DestinationList, configDataHash string,
-	gateway *odigosv1.CollectorsGroup, scheme *runtime.Scheme, odigosVersion string, topologySpreadConstraints []corev1.TopologySpreadConstraint, tier common.OdigosTier) (*appsv1.Deployment, error) {
+	gateway *odigosv1.CollectorsGroup, scheme *runtime.Scheme, odigosVersion string, topologySpreadConstraints []corev1.TopologySpreadConstraint) (*appsv1.Deployment, error) {
 
 	nodeSelector := gateway.Spec.NodeSelector
 	if nodeSelector == nil {
@@ -158,11 +158,9 @@ func getDesiredDeployment(ctx context.Context, c client.Client, enabledDests *od
 		gatewayReplicas = int32(*gateway.Spec.ResourcesSettings.MinReplicas)
 	}
 
-	extraEnvVars := []corev1.EnvVar{}
-	// The odigos_enterprise_auth extension verifies this token at startup and refuses to run
-	// without it. Community tier has neither the extension nor the odigos-pro secret.
-	if tier.IsEnterprise() {
-		extraEnvVars = append(extraEnvVars, corev1.EnvVar{
+	extraEnvVars := []corev1.EnvVar{
+		// The odigos_enterprise_auth extension verifies this token at startup and refuses to run without it.
+		{
 			Name: k8sconsts.OdigosOnpremTokenEnvName,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
@@ -172,7 +170,7 @@ func getDesiredDeployment(ctx context.Context, c client.Client, enabledDests *od
 					Key: k8sconsts.OdigosOnpremTokenSecretKey,
 				},
 			},
-		})
+		},
 	}
 	if gateway.Spec.HttpsProxyAddress != nil {
 		odigosNs := env.GetCurrentNamespace()

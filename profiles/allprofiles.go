@@ -50,33 +50,9 @@ var AllProfiles = []profile.Profile{
 }
 
 var ProfilesByName = map[common.ProfileName]profile.Profile{}
-var CommunityProfiles = []profile.Profile{}
-var OnPremProfiles = []profile.Profile{}
 
 func init() {
 	for _, p := range AllProfiles {
 		ProfilesByName[p.ProfileName] = p
-	}
-	for _, p := range AllProfiles {
-		switch p.MinimumTier {
-		case common.CommunityOdigosTier:
-			// community profiles are also on-prem profiles
-			CommunityProfiles = append(CommunityProfiles, p)
-			OnPremProfiles = append(OnPremProfiles, p)
-		case common.OnPremOdigosTier:
-			OnPremProfiles = append(OnPremProfiles, p)
-		default:
-		}
-	}
-}
-
-func GetAvailableProfilesForTier(odigosTier common.OdigosTier) []profile.Profile {
-	switch odigosTier {
-	case common.CommunityOdigosTier:
-		return CommunityProfiles
-	case common.OnPremOdigosTier:
-		return OnPremProfiles
-	default:
-		return []profile.Profile{}
 	}
 }

@@ -7,7 +7,6 @@ import (
 
 var PodManifestEnvVarInjection = profile.Profile{
 	ProfileName:      common.ProfileName("pod-manifest-env-var-injection"),
-	MinimumTier:      common.CommunityOdigosTier,
 	ShortDescription: "Use the pod manifest to add odigos runtime specific environment variables",
 	ModifyConfigFunc: func(config *common.OdigosConfiguration) {
 		method := common.PodManifestEnvInjectionMethod
