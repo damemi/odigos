@@ -71,21 +71,21 @@ func TestMigrateIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestInterrogationMigrateIsIdempotent(t *testing.T) {
+func TestAutopilotMigrateIsIdempotent(t *testing.T) {
 	_ = testRepo(t)
 	dsn := os.Getenv("CLICKHOUSE_TEST_DSN")
 	if dsn == "" {
 		dsn = defaultTestDSN
 	}
-	interrogationDSN := os.Getenv("INTERROGATION_CLICKHOUSE_TEST_DSN")
-	if interrogationDSN == "" {
-		interrogationDSN = rewriteClickHouseDatabase(dsn, "interrogation")
+	autopilotDSN := os.Getenv("AUTOPILOT_CLICKHOUSE_TEST_DSN")
+	if autopilotDSN == "" {
+		autopilotDSN = rewriteClickHouseDatabase(dsn, "autopilot")
 	}
-	if err := migrate.Apply(dsn, interrogationDSN); err != nil {
-		t.Fatalf("interrogation migrate: %v", err)
+	if err := migrate.Apply(dsn, autopilotDSN); err != nil {
+		t.Fatalf("autopilot migrate: %v", err)
 	}
-	if err := migrate.Apply(dsn, interrogationDSN); err != nil {
-		t.Fatalf("second interrogation migrate should be a no-op: %v", err)
+	if err := migrate.Apply(dsn, autopilotDSN); err != nil {
+		t.Fatalf("second autopilot migrate should be a no-op: %v", err)
 	}
 }
 

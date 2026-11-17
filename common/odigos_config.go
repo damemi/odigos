@@ -628,7 +628,7 @@ type InsightsConfiguration struct {
 
 // +kubebuilder:object:generate=true
 // TransactionIdentityConfiguration is shared across features that key work by
-// transaction (interrogation now; insights later). Independent of whether the
+// transaction (autopilot now; insights later). Independent of whether the
 // insights service is deployed.
 type TransactionIdentityConfiguration struct {
 	// Dimensions is an ordered list of low-cardinality attribute keys (or
@@ -638,33 +638,33 @@ type TransactionIdentityConfiguration struct {
 }
 
 // +kubebuilder:validation:Enum=off;auto
-type InterrogationMode string
+type AutopilotMode string
 
 const (
-	InterrogationModeOff  InterrogationMode = "off"
-	InterrogationModeAuto InterrogationMode = "auto"
+	AutopilotModeOff  AutopilotMode = "off"
+	AutopilotModeAuto AutopilotMode = "auto"
 )
 
 // +kubebuilder:object:generate=true
-// InterrogationConfiguration toggles the interrogation loop that correlates
+// AutopilotConfiguration toggles the autopilot loop that correlates
 // traces and profiles via a bounding join. Disabled unless Enabled is set.
 // When on, the gateway installs groupbytrace and the traces-side exporter taps
 // the root traces pipeline (post-groupby), same level as insights and service
 // I/O correlations.
-type InterrogationConfiguration struct {
+type AutopilotConfiguration struct {
 	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	// Mode selects how the loop runs once Enabled is true.
 	// "off" does not analyze transactions. "auto" analyzes them.
-	// Empty means unset; Helm writes "auto" when interrogation is enabled.
-	Mode InterrogationMode `json:"mode,omitempty" yaml:"mode,omitempty"`
+	// Empty means unset; Helm writes "auto" when autopilot is enabled.
+	Mode AutopilotMode `json:"mode,omitempty" yaml:"mode,omitempty"`
 
 	// Model is the upstream LLM configured through Helm.
-	Model *InterrogationModelConfiguration `json:"model,omitempty" yaml:"model,omitempty"`
+	Model *AutopilotModelConfiguration `json:"model,omitempty" yaml:"model,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
-// InterrogationModelConfiguration is the upstream LLM that interrogation uses.
-type InterrogationModelConfiguration struct {
+// AutopilotModelConfiguration is the upstream LLM that autopilot uses.
+type AutopilotModelConfiguration struct {
 	// Provider is the LiteLLM provider, such as openai or gemini.
 	Provider string `json:"provider,omitempty" yaml:"provider,omitempty"`
 
@@ -835,10 +835,10 @@ type OdigosConfiguration struct {
 	Insights *InsightsConfiguration `json:"insights,omitempty" yaml:"insights,omitempty"`
 
 	// TransactionIdentity configures how entry-span attributes are folded into
-	// transaction identity. Shared by interrogation (and later insights).
+	// transaction identity. Shared by autopilot (and later insights).
 	TransactionIdentity *TransactionIdentityConfiguration `json:"transactionIdentity,omitempty" yaml:"transactionIdentity,omitempty"`
 
-	Interrogation *InterrogationConfiguration `json:"interrogation,omitempty" yaml:"interrogation,omitempty"`
+	Autopilot *AutopilotConfiguration `json:"autopilot,omitempty" yaml:"autopilot,omitempty"`
 
 	CardinalityControl *CardinalityControlConfiguration `json:"cardinalityControl,omitempty" yaml:"cardinalityControl,omitempty"`
 }
@@ -867,16 +867,16 @@ func (o *OdigosConfiguration) InsightsEnabled() bool {
 	return o != nil && InsightsPipelineActive(o.Insights)
 }
 
-// InterrogationActive reports whether the interrogation loop (trace–profile
+// AutopilotActive reports whether the autopilot loop (trace–profile
 // correlation) should run. Opt-in: Enabled must be explicitly true.
-func InterrogationActive(c *InterrogationConfiguration) bool {
+func AutopilotActive(c *AutopilotConfiguration) bool {
 	return c != nil && c.Enabled != nil && *c.Enabled
 }
 
-// InterrogationEnabled reports whether interrogation is explicitly enabled on
+// AutopilotEnabled reports whether autopilot is explicitly enabled on
 // this configuration.
-func (o *OdigosConfiguration) InterrogationEnabled() bool {
-	return o != nil && InterrogationActive(o.Interrogation)
+func (o *OdigosConfiguration) AutopilotEnabled() bool {
+	return o != nil && AutopilotActive(o.Autopilot)
 }
 
 // UrlTemplatizationLiveTrafficLearningActive reports whether traffic-based URL

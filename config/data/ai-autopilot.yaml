@@ -1,0 +1,44 @@
+apiVersion: internal.odigos.io/v1beta1
+kind: Configuration
+metadata:
+  name: ai-interrogation
+  displayName: AI Autopilot
+spec:
+  fields:
+    - displayName: Enabled
+      componentType: toggle
+      isHelmOnly: true
+      isEnterpriseOnly: true
+      description: Whether autopilot is installed. Set insights.autopilot.enabled in the Helm values; insights, profiling, and the insights profile are enabled automatically. Installing it deploys the autopilot pipeline and odigos-litellm.
+      helmValuePath: interrogation.enabled
+    - displayName: Mode
+      componentType: dropdown
+      isHelmOnly: false
+      isEnterpriseOnly: true
+      description: How the autopilot loop runs when autopilot is installed. off does not analyze transactions. auto analyzes them. This does not install or remove autopilot.
+      helmValuePath: interrogation.mode
+      componentProps:
+        options:
+          - off
+          - auto
+    - displayName: Provider
+      componentType: input
+      isHelmOnly: true
+      isEnterpriseOnly: true
+      description: LiteLLM provider prefix used to route requests to the model. Set with Helm `insights.autopilot.model.provider`.
+      helmValuePath: interrogation.model.provider
+      renderCondition: ["interrogation.enabled", "==", "true"]
+    - displayName: Model
+      componentType: input
+      isHelmOnly: true
+      isEnterpriseOnly: true
+      description: Provider model name, without the provider prefix. Set with Helm `insights.autopilot.model.name`.
+      helmValuePath: interrogation.model.name
+      renderCondition: ["interrogation.enabled", "==", "true"]
+    - displayName: API Base URL
+      componentType: input
+      isHelmOnly: true
+      isEnterpriseOnly: true
+      description: Optional OpenAI-compatible endpoint for the provider. Set with Helm `insights.autopilot.model.apiBase`. The API key is set with Helm `insights.autopilot.model.apiKey`.
+      helmValuePath: interrogation.model.apiBase
+      renderCondition: ["interrogation.enabled", "==", "true"]

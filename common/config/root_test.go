@@ -523,14 +523,14 @@ func TestInsightsEnablesTracesWithoutDestinations(t *testing.T) {
 	assert.Contains(t, tracesIn.Processors, consts.GroupByTraceProcessor)
 }
 
-// TestInterrogationEnablesGroupByTrace verifies that interrogation alone forces
+// TestAutopilotEnablesGroupByTrace verifies that autopilot alone forces
 // the traces root pipeline with groupbytrace, so the traces-side exporter can
 // see complete traces (same attachment level as insights / service I/O).
-func TestInterrogationEnablesGroupByTrace(t *testing.T) {
+func TestAutopilotEnablesGroupByTrace(t *testing.T) {
 	on := true
 	gatewayOptions := pipelinegen.GatewayConfigOptions{
 		OdigosNamespace: "odigos-system",
-		Interrogation:   &common.InterrogationConfiguration{Enabled: &on},
+		Autopilot:       &common.AutopilotConfiguration{Enabled: &on},
 	}
 	cfg, err, _, signals := pipelinegen.CalculateGatewayConfig(
 		nil,
@@ -541,20 +541,20 @@ func TestInterrogationEnablesGroupByTrace(t *testing.T) {
 	require.Contains(t, signals, common.TracesObservabilitySignal)
 
 	tracesIn, ok := cfg.Service.Pipelines["traces/in"]
-	require.True(t, ok, "interrogation must create the root traces pipeline with no destinations")
+	require.True(t, ok, "autopilot must create the root traces pipeline with no destinations")
 	assert.Contains(t, tracesIn.Processors, consts.GroupByTraceProcessor)
 
 	_, hasForward := cfg.Connectors[consts.TracesPostGroupByForwardConnectorName]
 	assert.False(t, hasForward, "post-groupby forward must be skipped when there is no traces destination")
 }
 
-func TestInterrogationWithDestinationSplitsAfterGroupBy(t *testing.T) {
+func TestAutopilotWithDestinationSplitsAfterGroupBy(t *testing.T) {
 	on := true
 	ext := "odigosconfigk8s"
 	gatewayOptions := pipelinegen.GatewayConfigOptions{
 		OdigosNamespace:           "odigos-system",
 		OdigosConfigExtensionName: &ext,
-		Interrogation:             &common.InterrogationConfiguration{Enabled: &on},
+		Autopilot:                 &common.AutopilotConfiguration{Enabled: &on},
 	}
 	cfg, err, _, _ := pipelinegen.CalculateGatewayConfig(
 		[]config.ExporterConfigurer{DummyTraceDestination{ID: "t1"}},

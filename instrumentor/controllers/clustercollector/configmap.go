@@ -192,11 +192,11 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 	collectorLogLevel := string(odigoscommon.LogLevelInfo)
 	var profilingCfg *odigoscommon.ProfilingConfiguration
 	var insightsCfg *odigoscommon.InsightsConfiguration
-	var interrogationCfg *odigoscommon.InterrogationConfiguration
+	var autopilotCfg *odigoscommon.AutopilotConfiguration
 	var cardinalityControlCfg *odigoscommon.CardinalityControlConfiguration
 	if odigosCfg, err := utils.GetCurrentOdigosConfiguration(ctx, c); err == nil {
 		profilingCfg = odigosCfg.Profiling
-		interrogationCfg = odigosCfg.Interrogation
+		autopilotCfg = odigosCfg.Autopilot
 		insightsCfg = effectiveInsightsConfig(odigosCfg.Insights, tier)
 		cardinalityControlCfg = effectiveCardinalityControl(odigosCfg.CardinalityControl, tier)
 		if odigosCfg.ComponentLogLevels != nil {
@@ -205,7 +205,7 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 	}
 	// When on, pipelinegen installs groupbytrace on traces/in so the exporter sees full traces.
 	gatewayOptions.Insights = insightsCfg
-	gatewayOptions.Interrogation = interrogationCfg
+	gatewayOptions.Autopilot = autopilotCfg
 	// Provide the insights OTLP endpoint so pipelinegen (in the common module, which
 	// cannot import api/k8sconsts) can add an OTLP exporter to metrics/servicegraph
 	// for the blast-radius topology. Target the headless Service via dns:/// so
@@ -231,7 +231,7 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 				if err := addProfilingGatewayPipeline(c, env.GetCurrentNamespace(), profilingCfg); err != nil {
 					return err
 				}
-				if err := addInterrogationExporters(c, env.GetCurrentNamespace(), interrogationCfg, interrogationGroupByTraceWait(gatewayOptions.TraceAggregation)); err != nil {
+				if err := addAutopilotExporters(c, env.GetCurrentNamespace(), autopilotCfg, autopilotGroupByTraceWait(gatewayOptions.TraceAggregation)); err != nil {
 					return err
 				}
 				addEnterpriseAuthExtension(c)

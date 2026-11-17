@@ -7,7 +7,7 @@ go 1.26.4
 require (
 	github.com/observiq/bindplane-otel-contrib/exporter/azureloganalyticsexporter v1.13.0
 	github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.159.0
-	github.com/odigos-io/odigos/collector/exporters/odigosinterrogationprofilesexporter v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/collector/exporters/odigosautopilotprofilesexporter v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/collector/exporters/odigosurltemplatizationexporter v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.159.0
 	github.com/odigos-io/odigos/collector/extension/odigosconfigconnectorextension v0.0.0-00010101000000-000000000000
@@ -839,7 +839,7 @@ replace github.com/odigos-io/odigos/collector/extension/odigosconfigconnectorext
 
 replace github.com/odigos-io/odigos/collector/exporters/odigosurltemplatizationexporter => ../exporters/odigosurltemplatizationexporter
 
-replace github.com/odigos-io/odigos/collector/exporters/odigosinterrogationprofilesexporter => ../exporters/odigosinterrogationprofilesexporter
+replace github.com/odigos-io/odigos/collector/exporters/odigosautopilotprofilesexporter => ../exporters/odigosautopilotprofilesexporter
 
 replace odigosk8scmprovider => ../providers/odigosk8scmprovider
 

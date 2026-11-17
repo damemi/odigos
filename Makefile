@@ -176,10 +176,10 @@ build-ui:
 
 .PHONY: build-insights
 build-insights:
-	$(MAKE) build-image/insights DOCKERFILE=insights/Dockerfile SUMMARY="Insights for Odigos" DESCRIPTION="Insights learns per-transaction baselines from traces, scores deviations, and runs the interrogation function-instrumentation loop." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) build-image/insights DOCKERFILE=insights/Dockerfile SUMMARY="Insights for Odigos" DESCRIPTION="Insights learns per-transaction baselines from traces, scores deviations, and runs the autopilot function-instrumentation loop." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
-.PHONY: generate-interrogation-schema
-generate-interrogation-schema:
+.PHONY: generate-autopilot-schema
+generate-autopilot-schema:
 	$(MAKE) -C insights schema-gen
 
 .PHONY: verify-nodejs-agent
@@ -247,7 +247,7 @@ push-agents:
 
 .PHONY: push-insights
 push-insights:
-	$(MAKE) push-image/insights DOCKERFILE=insights/Dockerfile SUMMARY="Insights for Odigos" DESCRIPTION="Insights learns per-transaction baselines from traces, scores deviations, and runs the interrogation function-instrumentation loop." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
+	$(MAKE) push-image/insights DOCKERFILE=insights/Dockerfile SUMMARY="Insights for Odigos" DESCRIPTION="Insights learns per-transaction baselines from traces, scores deviations, and runs the autopilot function-instrumentation loop." TAG=$(TAG) ORG=$(ORG) IMG_SUFFIX=$(IMG_SUFFIX)
 
 .PHONY: push-images
 push-images:

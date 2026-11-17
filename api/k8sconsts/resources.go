@@ -15,12 +15,12 @@ const (
 	OdigosProfilesHashLabel = "odigos.io/profiles-hash"
 
 	// OdigosProfilesManagedByLabel marks which Odigos surface manages a resource
-	// (e.g. profile reconciler, UI, interrogation loop). When reconciling profiles,
+	// (e.g. profile reconciler, UI, autopilot loop). When reconciling profiles,
 	// we use this label to know which resources need to be deleted.
 	OdigosProfilesManagedByLabel            = "odigos.io/managed-by"
 	OdigosProfilesManagedByValue            = "profile"
 	OdigosUIManagedByValue                  = "odigos-ui"
-	OdigosInterrogationLoopManagedByValue   = "interrogation-loop"
+	OdigosAutopilotLoopManagedByValue       = "autopilot-loop"
 	OdigosLiveTrafficLearningManagedByValue = "live-traffic-learning"
 
 	// for resources auto created by a profile, this annotation will record

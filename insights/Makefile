@@ -4,7 +4,7 @@
 # truth. `api-gen` regenerates the Go models and the TypeScript client from it;
 # `api-lint` validates the spec; `api-mock` runs a mock server for the frontend.
 
-include interrogation.mk
+include autopilot.mk
 
 OPENAPI := api/openapi.yaml
 OAPI_CONFIG := api/oapi-codegen.yaml

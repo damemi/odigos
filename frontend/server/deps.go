@@ -23,9 +23,9 @@ import (
 	"github.com/odigos-io/odigos/frontend/kube"
 	"github.com/odigos-io/odigos/frontend/kube/watchers"
 	"github.com/odigos-io/odigos/frontend/services"
+	"github.com/odigos-io/odigos/frontend/services/autopilot"
 	collectormetrics "github.com/odigos-io/odigos/frontend/services/collector_metrics"
 	"github.com/odigos-io/odigos/frontend/services/insights"
-	"github.com/odigos-io/odigos/frontend/services/interrogation"
 	"github.com/odigos-io/odigos/frontend/services/metrics"
 	"github.com/odigos-io/odigos/frontend/services/otlp"
 	"github.com/odigos-io/odigos/frontend/services/profiles"
@@ -47,12 +47,12 @@ type Deps struct {
 	PromAPI       v1.API
 	// InsightsClient is the client for the Odigos Insights service.
 	InsightsClient *insights.Client
-	// InterrogationClient reads transaction call tries from interrogation ClickHouse.
-	InterrogationClient *interrogation.Client
-	ProfileStore        *profiles.ProfileStore
-	ProfilingGate       *profiles.IngestGate
-	ProfilesConsumer    *profiles.OdigosProfilesConsumer
-	OtlpReceiver        *otlp.Receiver
+	// AutopilotClient reads transaction call tries from autopilot ClickHouse.
+	AutopilotClient  *autopilot.Client
+	ProfileStore     *profiles.ProfileStore
+	ProfilingGate    *profiles.IngestGate
+	ProfilesConsumer *profiles.OdigosProfilesConsumer
+	OtlpReceiver     *otlp.Receiver
 	// DistrosProvider resolves which otel distro each language gets, the same
 	// provider the instrumentor injects with.
 	DistrosProvider *distros.Provider
@@ -144,7 +144,7 @@ func Bootstrap(ctx context.Context, flags Flags, logger logr.Logger) (*Deps, err
 		return nil, fmt.Errorf("initializing insights client: %w", err)
 	}
 
-	interrogationClient := interrogation.NewClient(
+	autopilotClient := autopilot.NewClient(
 		k8sconsts.InsightsClickHouseEndpoint(flags.Namespace),
 		os.Getenv(k8sconsts.OdigosInsightsClickHousePasswordEnv),
 	)
@@ -155,19 +155,19 @@ func Bootstrap(ctx context.Context, flags Flags, logger logr.Logger) (*Deps, err
 	}
 
 	return &Deps{
-		Flags:               flags,
-		Logger:              logger,
-		K8sCacheClient:      k8sCacheClient,
-		K8sCache:            k8sCache,
-		OdigosMetrics:       odigosMetrics,
-		PromAPI:             promAPI,
-		InsightsClient:      insightsClient,
-		InterrogationClient: interrogationClient,
-		ProfileStore:        profileStore,
-		ProfilingGate:       profilingGate,
-		ProfilesConsumer:    profilesConsumer,
-		OtlpReceiver:        otlpReceiver,
-		DistrosProvider:     distrosProvider,
+		Flags:            flags,
+		Logger:           logger,
+		K8sCacheClient:   k8sCacheClient,
+		K8sCache:         k8sCache,
+		OdigosMetrics:    odigosMetrics,
+		PromAPI:          promAPI,
+		InsightsClient:   insightsClient,
+		AutopilotClient:  autopilotClient,
+		ProfileStore:     profileStore,
+		ProfilingGate:    profilingGate,
+		ProfilesConsumer: profilesConsumer,
+		OtlpReceiver:     otlpReceiver,
+		DistrosProvider:  distrosProvider,
 	}, nil
 }
 

@@ -18,7 +18,7 @@ func TestMigrationsHaveNoSemicolonInComments(t *testing.T) {
 		dir   string
 	}{
 		{migrationFiles, "migrations"},
-		{interrogationFiles, "interrogation"},
+		{autopilotFiles, "autopilot"},
 	} {
 		entries, err := fs.ReadDir(set.files, set.dir)
 		if err != nil {
@@ -51,27 +51,27 @@ func checkNoSemicolonInComments(t *testing.T, name string, data []byte) {
 	}
 }
 
-// interrogationTables is the ClickHouse schema the Redis trie flusher and
+// autopilotTables is the ClickHouse schema the Redis trie flusher and
 // LLM loop expect. The migrate Job must create every name here so serving
 // replicas never run CREATE TABLE.
-var interrogationTables = []string{"tx_runs", "tx_call_trie_structure", "tx_recommendations"}
+var autopilotTables = []string{"tx_runs", "tx_call_trie_structure", "tx_recommendations"}
 
-func TestInterrogationMigrationsCoverKnownTables(t *testing.T) {
+func TestAutopilotMigrationsCoverKnownTables(t *testing.T) {
 	found := map[string]bool{}
-	entries, err := fs.ReadDir(interrogationFiles, "interrogation")
+	entries, err := fs.ReadDir(autopilotFiles, "autopilot")
 	if err != nil {
-		t.Fatalf("read interrogation dir: %v", err)
+		t.Fatalf("read autopilot dir: %v", err)
 	}
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".up.sql") {
 			continue
 		}
-		data, err := fs.ReadFile(interrogationFiles, "interrogation/"+e.Name())
+		data, err := fs.ReadFile(autopilotFiles, "autopilot/"+e.Name())
 		if err != nil {
 			t.Fatalf("read %s: %v", e.Name(), err)
 		}
 		sql := string(data)
-		for _, table := range interrogationTables {
+		for _, table := range autopilotTables {
 			if strings.Contains(sql, "CREATE TABLE IF NOT EXISTS "+table+" ") ||
 				strings.Contains(sql, "CREATE TABLE IF NOT EXISTS "+table+"\n") ||
 				strings.Contains(sql, "CREATE TABLE IF NOT EXISTS "+table+"(") {
@@ -79,9 +79,9 @@ func TestInterrogationMigrationsCoverKnownTables(t *testing.T) {
 			}
 		}
 	}
-	for _, table := range interrogationTables {
+	for _, table := range autopilotTables {
 		if !found[table] {
-			t.Errorf("interrogation migrations missing CREATE TABLE IF NOT EXISTS %s", table)
+			t.Errorf("autopilot migrations missing CREATE TABLE IF NOT EXISTS %s", table)
 		}
 	}
 }

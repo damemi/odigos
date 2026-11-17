@@ -1,7 +1,7 @@
 // Command insights is the entrypoint for the odigos-enterprise-insights
 // service. It boots the HTTP API (consumed by the UI) and the OTLP gRPC
 // receiver (fed by the Odigos gateway), both backed by ClickHouse, and
-// optionally the interrogation feature (see internal/interrogation).
+// optionally the autopilot feature (see internal/autopilot).
 package main
 
 import (
@@ -25,11 +25,11 @@ import (
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
 	apihttp "github.com/odigos-io/odigos/insights/internal/api/http"
+	"github.com/odigos-io/odigos/insights/internal/autopilot"
 	"github.com/odigos-io/odigos/insights/internal/cache"
 	"github.com/odigos-io/odigos/insights/internal/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/db/clickhouse/migrate"
 	"github.com/odigos-io/odigos/insights/internal/engine"
-	"github.com/odigos-io/odigos/insights/internal/interrogation"
 	"github.com/odigos-io/odigos/insights/internal/leader"
 	"github.com/odigos-io/odigos/insights/internal/metrics"
 	"github.com/odigos-io/odigos/insights/internal/notify"
@@ -55,23 +55,23 @@ const (
 	// bundled ClickHouse Secret.
 	envClickHouseDSN = "CLICKHOUSE_DSN"
 
-	// envInterrogationRedisEndpoint is the cacheDb Redis address (host:port)
-	// used to fetch interrogation profile stacks (logical DB 1). Set by Helm
-	// only when interrogation.enabled; when unset, call-trie writes stay off.
-	envInterrogationRedisEndpoint = "INTERROGATION_REDIS_ENDPOINT"
+	// envAutopilotRedisEndpoint is the cacheDb Redis address (host:port)
+	// used to fetch autopilot profile stacks (logical DB 1). Set by Helm
+	// only when autopilot.enabled; when unset, call-trie writes stay off.
+	envAutopilotRedisEndpoint = "AUTOPILOT_REDIS_ENDPOINT"
 
 	// leaderLease elects the one replica that runs the singleton jobs: the
 	// findings notifier, recommendation sweeps, and, when enabled, the
-	// interrogation loop. The chart grants leases get/create/update.
+	// autopilot loop. The chart grants leases get/create/update.
 	leaderLease = "odigos-insights-leader"
 
-	// Interrogation feature. The Helm chart sets these only when
-	// insights.interrogation.enabled is true.
-	envInterrogationEnabled              = "INTERROGATION_ENABLED"
-	envInterrogationClickHouseDSN        = "INTERROGATION_CLICKHOUSE_DSN"
-	envInterrogationLiteLLMMasterKey     = "INTERROGATION_LITELLM_MASTER_KEY"
-	envInterrogationAutoApply            = "INTERROGATION_AUTO_APPLY"
-	envInterrogationMaxProbesPerWorkload = "INTERROGATION_MAX_PROBES_PER_WORKLOAD"
+	// Autopilot feature. The Helm chart sets these only when
+	// insights.autopilot.enabled is true.
+	envAutopilotEnabled              = "AUTOPILOT_ENABLED"
+	envAutopilotClickHouseDSN        = "AUTOPILOT_CLICKHOUSE_DSN"
+	envAutopilotLiteLLMMasterKey     = "AUTOPILOT_LITELLM_MASTER_KEY"
+	envAutopilotAutoApply            = "AUTOPILOT_AUTO_APPLY"
+	envAutopilotMaxProbesPerWorkload = "AUTOPILOT_MAX_PROBES_PER_WORKLOAD"
 )
 
 // getLogLevel reads ODIGOS_LOG_LEVEL, defaulting to "info" when unset.
@@ -179,16 +179,16 @@ func main() {
 	eng := engine.New(r, log, learningCfg, alertCfg)
 	go runAlertPolicyReloader(rootCtx, log, eng)
 
-	if redisEndpoint := os.Getenv(envInterrogationRedisEndpoint); redisEndpoint != "" {
-		ic, err := interrogation.Open(redisEndpoint, log)
+	if redisEndpoint := os.Getenv(envAutopilotRedisEndpoint); redisEndpoint != "" {
+		ic, err := autopilot.Open(redisEndpoint, log)
 		if err != nil {
-			log.Warn("interrogation call-trie writer unavailable; java-ebpf profile correlation disabled",
+			log.Warn("autopilot call-trie writer unavailable; java-ebpf profile correlation disabled",
 				"redis_endpoint", redisEndpoint, "error", err)
 		} else {
-			eng.SetInterrogation(ic)
+			eng.SetAutopilot(ic)
 			defer func() {
 				if err := ic.Close(); err != nil {
-					log.Warn("interrogation call-trie writer close failed", "error", err)
+					log.Warn("autopilot call-trie writer close failed", "error", err)
 				}
 			}()
 		}
@@ -238,7 +238,7 @@ func main() {
 	// notifier (delivering a finding twice is wrong), the recommendation
 	// miner (one miner serves the queued requests and the periodic sweeps;
 	// requests handled on a follower are picked up by the leader's next sweep),
-	// and the interrogation loop when that feature is enabled. One campaign
+	// and the autopilot loop when that feature is enabled. One campaign
 	// covers all of them. Shutdown waits on leaderDone so the elector releases
 	// the lease before the process exits.
 	leaderDone := make(chan struct{})
@@ -418,7 +418,7 @@ func runMigrate() int {
 	delay := dbRetryInitial
 	var lastLog time.Time
 	for attempt := 1; ; attempt++ {
-		err := migrate.Apply(dsn, os.Getenv(envInterrogationClickHouseDSN))
+		err := migrate.Apply(dsn, os.Getenv(envAutopilotClickHouseDSN))
 		if err == nil {
 			log.Info("schema migrations applied", "attempts", attempt)
 			return 0
@@ -532,28 +532,28 @@ func runSystemSettingsReloader(
 
 // runLeaderJobs runs the singleton jobs on the replica holding the leader
 // Lease, each in its own goroutine so a long mining sweep never delays a
-// notifier tick or the interrogation loop. Losing the lease cancels them
+// notifier tick or the autopilot loop. Losing the lease cancels them
 // all. Outside a cluster (no in-cluster credentials) they run
-// unconditionally, which is the local single-process case. Interrogation
-// joins the slice only when INTERROGATION_ENABLED is set. Tries and analysis
-// runs stay in the interrogation database; transaction inventory is read from
+// unconditionally, which is the local single-process case. Autopilot
+// joins the slice only when AUTOPILOT_ENABLED is set. Tries and analysis
+// runs stay in the autopilot database; transaction inventory is read from
 // insights.transactions via source_identity.
 func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, reg *notify.Registry, eng *engine.Engine) {
 	dispatcher := notify.NewDispatcher(r, reg, slog.New(commonlogger.NewSlogHandler("notifier")), leader.Identity(), notify.PollInterval, notify.DefaultOverlap)
 	jobs := []func(context.Context){dispatcher.Run, eng.RunRecommendationMiner}
-	if envTruthy(os.Getenv(envInterrogationEnabled)) {
-		opts := interrogation.Options{
+	if envTruthy(os.Getenv(envAutopilotEnabled)) {
+		opts := autopilot.Options{
 			Log:                  log,
-			ClickHouseDSN:        os.Getenv(envInterrogationClickHouseDSN),
+			ClickHouseDSN:        os.Getenv(envAutopilotClickHouseDSN),
 			InsightsDatabase:     clickHouseDatabase(os.Getenv(envClickHouseDSN)),
-			RedisEndpoint:        os.Getenv(envInterrogationRedisEndpoint),
-			LiteLLMMasterKey:     os.Getenv(envInterrogationLiteLLMMasterKey),
-			AutoApply:            envTruthy(os.Getenv(envInterrogationAutoApply)),
-			MaxProbesPerWorkload: envPositiveInt(os.Getenv(envInterrogationMaxProbesPerWorkload)),
+			RedisEndpoint:        os.Getenv(envAutopilotRedisEndpoint),
+			LiteLLMMasterKey:     os.Getenv(envAutopilotLiteLLMMasterKey),
+			AutoApply:            envTruthy(os.Getenv(envAutopilotAutoApply)),
+			MaxProbesPerWorkload: envPositiveInt(os.Getenv(envAutopilotMaxProbesPerWorkload)),
 		}
 		jobs = append(jobs, func(ctx context.Context) {
-			if err := interrogation.Run(ctx, opts); err != nil && ctx.Err() == nil {
-				log.Error("interrogation loop stopped", "error", err)
+			if err := autopilot.Run(ctx, opts); err != nil && ctx.Err() == nil {
+				log.Error("autopilot loop stopped", "error", err)
 			}
 		})
 	}
@@ -585,7 +585,7 @@ func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.R
 // clickHouseDatabase returns the database name from a ClickHouse DSN path.
 // clickhouse-go (v2.30) takes the database only from the path and ignores a
 // ?database= parameter, so the path is the database insights writes to. The
-// interrogation loop logs the name it resolved.
+// autopilot loop logs the name it resolved.
 func clickHouseDatabase(dsn string) string {
 	if dsn == "" {
 		return ""

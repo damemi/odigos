@@ -12,7 +12,7 @@ import (
 	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
-	"github.com/odigos-io/odigos/insights/internal/interrogation"
+	"github.com/odigos-io/odigos/insights/internal/autopilot"
 	"github.com/odigos-io/odigos/insights/internal/metrics"
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
@@ -68,9 +68,9 @@ type Engine struct {
 	// the inventory (max_transactions_per_service). See transaction_admission.go.
 	admission *transactionAdmission
 
-	// interrogation optionally correlates java-ebpf traces with Redis profile
-	// stacks and writes call-trie edges to ClickHouse (when interrogation is enabled).
-	interrogation *interrogation.Client
+	// autopilot optionally correlates java-ebpf traces with Redis profile
+	// stacks and writes call-trie edges to ClickHouse (when autopilot is enabled).
+	autopilot *autopilot.Client
 
 	warnMu       sync.Mutex
 	warnThrottle map[string]*warnState
@@ -172,12 +172,12 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 	// each firing down the trace and keeps it to a single finding on the
 	// outermost transaction that flagged it. See anomaly_claims.go.
 	claims := newAnomalyClaims(t)
-	rawTraceID := e.interrogationTraceID(t)
+	rawTraceID := e.autopilotTraceID(t)
 	for _, sub := range subs {
 		// Only identities processOne resolved and the per-service cap admitted
-		// get a call trie; see enqueueInterrogation.
+		// get a call trie; see enqueueAutopilot.
 		if tx, ok := e.processOne(ctx, sub, t, claims); ok {
-			e.enqueueInterrogation(rawTraceID, sub, tx)
+			e.enqueueAutopilot(rawTraceID, sub, tx)
 		}
 	}
 }

@@ -7,25 +7,25 @@ import (
 	"github.com/odigos-io/odigos/frontend/graph/model"
 )
 
-func TestApplyInterrogationInput_ModeAndReset(t *testing.T) {
+func TestApplyAutopilotInput_ModeAndReset(t *testing.T) {
 	enabled := true
 	cfg := &common.OdigosConfiguration{
-		Interrogation: &common.InterrogationConfiguration{Enabled: &enabled, Mode: common.InterrogationModeAuto},
+		Autopilot: &common.AutopilotConfiguration{Enabled: &enabled, Mode: common.AutopilotModeAuto},
 	}
-	off := model.InterrogationModeOff
-	applyInterrogationInput(cfg, &model.LocalUIConfigInterrogationInput{Mode: &off})
-	if cfg.Interrogation.Mode != common.InterrogationModeOff {
-		t.Fatalf("mode = %q, want off", cfg.Interrogation.Mode)
+	off := model.AutopilotModeOff
+	applyAutopilotInput(cfg, &model.LocalUIConfigAutopilotInput{Mode: &off})
+	if cfg.Autopilot.Mode != common.AutopilotModeOff {
+		t.Fatalf("mode = %q, want off", cfg.Autopilot.Mode)
 	}
-	if cfg.Interrogation.Enabled == nil || !*cfg.Interrogation.Enabled {
+	if cfg.Autopilot.Enabled == nil || !*cfg.Autopilot.Enabled {
 		t.Fatal("enabled was cleared")
 	}
 
-	applyInterrogationInput(cfg, &model.LocalUIConfigInterrogationInput{ResetPaths: []string{"interrogation.mode"}})
-	if cfg.Interrogation.Mode != "" {
-		t.Fatalf("mode = %q, want empty after reset", cfg.Interrogation.Mode)
+	applyAutopilotInput(cfg, &model.LocalUIConfigAutopilotInput{ResetPaths: []string{"interrogation.mode"}})
+	if cfg.Autopilot.Mode != "" {
+		t.Fatalf("mode = %q, want empty after reset", cfg.Autopilot.Mode)
 	}
-	if cfg.Interrogation.Enabled == nil || !*cfg.Interrogation.Enabled {
+	if cfg.Autopilot.Enabled == nil || !*cfg.Autopilot.Enabled {
 		t.Fatal("reset cleared enabled")
 	}
 }

@@ -67,14 +67,14 @@ data:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     {{- end }}
-    {{- if include "odigos.interrogationEnabled" . }}
-    {{- $apiBase := include "odigos.interrogationApiBase" . }}
-    interrogation:
+    {{- if include "odigos.autopilotEnabled" . }}
+    {{- $apiBase := include "odigos.autopilotApiBase" . }}
+    autopilot:
       enabled: true
-      mode: {{ .Values.insights.interrogation.mode | default "auto" | quote }}
+      mode: {{ .Values.insights.autopilot.mode | default "auto" | quote }}
       model:
-        provider: {{ include "odigos.interrogationModelProvider" . | quote }}
-        name: {{ include "odigos.interrogationModelName" . | quote }}
+        provider: {{ include "odigos.autopilotModelProvider" . | quote }}
+        name: {{ include "odigos.autopilotModelName" . | quote }}
         {{- if $apiBase }}
         apiBase: {{ $apiBase | quote }}
         {{- end }}

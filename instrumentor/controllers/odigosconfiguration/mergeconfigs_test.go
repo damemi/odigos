@@ -204,49 +204,49 @@ func TestMergeConfigs_NoCardinalityControlOverlayLeavesBaseUntouched(t *testing.
 	}
 }
 
-func TestMergeConfigs_InterrogationMode(t *testing.T) {
+func TestMergeConfigs_AutopilotMode(t *testing.T) {
 	enabled := true
 	base := &common.OdigosConfiguration{
-		Interrogation: &common.InterrogationConfiguration{
+		Autopilot: &common.AutopilotConfiguration{
 			Enabled: &enabled,
-			Mode:    common.InterrogationModeAuto,
+			Mode:    common.AutopilotModeAuto,
 		},
 	}
 	overlay := &common.OdigosConfiguration{
-		Interrogation: &common.InterrogationConfiguration{
-			Mode: common.InterrogationModeOff,
+		Autopilot: &common.AutopilotConfiguration{
+			Mode: common.AutopilotModeOff,
 		},
 	}
 
 	mergeConfigs(base, overlay)
 
-	if base.Interrogation == nil || base.Interrogation.Enabled == nil || !*base.Interrogation.Enabled {
-		t.Fatalf("helm enabled was dropped: %+v", base.Interrogation)
+	if base.Autopilot == nil || base.Autopilot.Enabled == nil || !*base.Autopilot.Enabled {
+		t.Fatalf("helm enabled was dropped: %+v", base.Autopilot)
 	}
-	if base.Interrogation.Mode != common.InterrogationModeOff {
-		t.Errorf("Mode = %q, want %q", base.Interrogation.Mode, common.InterrogationModeOff)
+	if base.Autopilot.Mode != common.AutopilotModeOff {
+		t.Errorf("Mode = %q, want %q", base.Autopilot.Mode, common.AutopilotModeOff)
 	}
 }
 
-func TestMergeConfigs_InterrogationEnabledIsHelmOnly(t *testing.T) {
+func TestMergeConfigs_AutopilotEnabledIsHelmOnly(t *testing.T) {
 	enabled := true
 	base := &common.OdigosConfiguration{}
 	overlay := &common.OdigosConfiguration{
-		Interrogation: &common.InterrogationConfiguration{
+		Autopilot: &common.AutopilotConfiguration{
 			Enabled: &enabled,
-			Mode:    common.InterrogationModeOff,
+			Mode:    common.AutopilotModeOff,
 		},
 	}
 
 	mergeConfigs(base, overlay)
 
-	if base.Interrogation == nil {
+	if base.Autopilot == nil {
 		t.Fatal("overlay mode was dropped")
 	}
-	if base.Interrogation.Enabled != nil {
-		t.Errorf("Enabled = %v, want nil: an overlay must not turn interrogation on", *base.Interrogation.Enabled)
+	if base.Autopilot.Enabled != nil {
+		t.Errorf("Enabled = %v, want nil: an overlay must not turn autopilot on", *base.Autopilot.Enabled)
 	}
-	if base.Interrogation.Mode != common.InterrogationModeOff {
-		t.Errorf("Mode = %q, want %q", base.Interrogation.Mode, common.InterrogationModeOff)
+	if base.Autopilot.Mode != common.AutopilotModeOff {
+		t.Errorf("Mode = %q, want %q", base.Autopilot.Mode, common.AutopilotModeOff)
 	}
 }

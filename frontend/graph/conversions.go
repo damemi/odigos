@@ -516,20 +516,20 @@ func setEffectiveConfigNestedStructs(result *model.EffectiveConfig, config *comm
 		}
 	}
 
-	if config.Interrogation != nil {
-		result.Interrogation = &model.InterrogationConfig{
-			Enabled: config.Interrogation.Enabled,
+	if config.Autopilot != nil {
+		result.Interrogation = &model.AutopilotConfig{
+			Enabled: config.Autopilot.Enabled,
 		}
-		if config.Interrogation.Enabled != nil {
+		if config.Autopilot.Enabled != nil {
 			pc.record("interrogation.enabled")
 		}
-		if mode := model.InterrogationMode(config.Interrogation.Mode); mode.IsValid() {
+		if mode := model.AutopilotMode(config.Autopilot.Mode); mode.IsValid() {
 			result.Interrogation.Mode = &mode
 			pc.record("interrogation.mode")
 		}
-		if config.Interrogation.Model != nil {
-			m := config.Interrogation.Model
-			result.Interrogation.Model = &model.InterrogationModelConfig{}
+		if config.Autopilot.Model != nil {
+			m := config.Autopilot.Model
+			result.Interrogation.Model = &model.AutopilotModelConfig{}
 			if m.Provider != "" {
 				result.Interrogation.Model.Provider = ptrStr(m.Provider)
 				pc.record("interrogation.model.provider")

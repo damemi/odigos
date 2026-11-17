@@ -387,9 +387,9 @@ type K8sWorkloadContainer {
   urlTemplatization: K8sWorkloadContainerUrlTemplatization
 
   """
-  Trace interrogation: transactions and detected stack functions for this
-  container, read from interrogation ClickHouse (tx_call_trie_structure). Empty when
-  interrogation is disabled or nothing has been stored yet.
+  Autopilot: transactions and detected stack functions for this
+  container, read from autopilot ClickHouse (tx_call_trie_structure). Empty when
+  autopilot is disabled or nothing has been stored yet.
   Ordered by seenCount desc, then id. Select callTrie only with a narrow page
   (ids or limit): it costs one ClickHouse query per returned transaction.
   """
@@ -410,13 +410,13 @@ type K8sWorkloadContainer {
     Number of matching transactions to skip (in result order), for paging.
     """
     offset: Int
-  ): [InterrogationTransaction!]!
+  ): [AutopilotTransaction!]!
 }
 
 """
 What a call-map frame belongs to. Classified when read, from the JVM frame name.
 """
-enum InterrogationFrameKind {
+enum AutopilotFrameKind {
   """
   Customer code: probe candidates and AI evidence.
   """
@@ -434,13 +434,13 @@ enum InterrogationFrameKind {
 """
 One detected function from a profile sample linked to a transaction.
 """
-type InterrogationFunction {
+type AutopilotFunction {
   name: String!
   """
   profile.frame.type (e.g. jvm, hotspot).
   """
   frameType: String!
-  frameKind: InterrogationFrameKind!
+  frameKind: AutopilotFrameKind!
   """
   Profile sample type: events (probe) or samples (periodic CPU).
   """
@@ -455,7 +455,7 @@ type InterrogationFunction {
 """
 One node in a transaction's call-path trie (flat list; assemble tree via parentId).
 """
-type InterrogationCallTrieNode {
+type AutopilotCallTrieNode {
   """
   Stable node id for this call-path frame (sha1 of parent + frame identity).
   """
@@ -466,7 +466,7 @@ type InterrogationCallTrieNode {
   parentId: String
   name: String!
   frameType: String!
-  frameKind: InterrogationFrameKind!
+  frameKind: AutopilotFrameKind!
   sampleType: String!
   """
   Call-trie rows stored for this node (relative heat, not a sample count).
@@ -477,7 +477,7 @@ type InterrogationCallTrieNode {
 """
 One transaction observed for a workload container, with ClickHouse-stored functions.
 """
-type InterrogationTransaction {
+type AutopilotTransaction {
   """
   Transaction id as stored in tx_call_trie_structure.TransactionId.
   """
@@ -487,19 +487,19 @@ type InterrogationTransaction {
   not a sample count).
   """
   seenCount: Int!
-  functions: [InterrogationFunction!]!
+  functions: [AutopilotFunction!]!
   """
   OTLP JSON traces sample for this transaction (service-invocation spans only),
-  if stored in interrogation.tx_transactions. Null when missing or interrogation is off.
+  if stored in autopilot.tx_transactions. Null when missing or autopilot is off.
   """
   sampleTrace: String
   """
   Flat call-path trie nodes for this transaction. Resolved on demand from
-  ClickHouse tx_call_trie when selected; null when missing or interrogation is
+  ClickHouse tx_call_trie when selected; null when missing or autopilot is
   off. Empty when the query returns no nodes. Build the tree in the client via
   id/parentId.
   """
-  callTrie: [InterrogationCallTrieNode!]
+  callTrie: [AutopilotCallTrieNode!]
 }
 
 # describes a single attribute of a process.
@@ -778,9 +778,9 @@ type K8sNamespace {
 }
 
 """
-A workload container that has stored interrogation transactions.
+A workload container that has stored autopilot transactions.
 """
-type InterrogationSource {
+type AutopilotSource {
   id: K8sWorkloadId!
   containerName: String!
   """
@@ -794,8 +794,8 @@ extend type Query {
   workloadsByIds(ids: [K8sWorkloadIdInput!]!): [K8sWorkload!]!
   namespaces: [K8sNamespace!]!
   """
-  Workload containers with stored interrogation transactions, read with a single
-  ClickHouse query. Empty when interrogation is disabled.
+  Workload containers with stored autopilot transactions, read with a single
+  ClickHouse query. Empty when autopilot is disabled.
   """
-  interrogationSources: [InterrogationSource!]!
+  interrogationSources: [AutopilotSource!]!
 }

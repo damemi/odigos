@@ -69,9 +69,9 @@ type GatewayConfigOptions struct {
 	// round_robin so traffic fans out across insights replicas.
 	InsightsOtlpEndpoint string
 
-	// Interrogation bounding join; when active, groupbytrace is installed so the
+	// Autopilot bounding join; when active, groupbytrace is installed so the
 	// traces-side exporter sees fully assembled traces (same level as insights).
-	Interrogation *common.InterrogationConfiguration
+	Autopilot *common.AutopilotConfiguration
 }
 
 func GetGatewayConfig(
@@ -205,10 +205,10 @@ func CalculateGatewayConfig(
 		status.Destination[dest.GetID()] = nil // mark this destination as success
 	}
 
-	// Insights / interrogation tap the root traces pipeline; force traces on even
+	// Insights / autopilot tap the root traces pipeline; force traces on even
 	// with no destinations so the gateway receives spans and ReceiverSignals
 	// advertises traces to agents.
-	if common.InsightsPipelineActive(gatewayOptions.Insights) || common.InterrogationActive(gatewayOptions.Interrogation) {
+	if common.InsightsPipelineActive(gatewayOptions.Insights) || common.AutopilotActive(gatewayOptions.Autopilot) {
 		tracesEnabled = true
 	}
 
@@ -308,9 +308,9 @@ func insertRootPipelinesToConfig(currentConfig *config.Config,
 // applySplitTracesRootPipelines forks traces after enrichment processors so complete trace batches
 // are templated before tail sampling. traces/in aggregates and forwards; traces/exporting tail-samples,
 // batches, and routes to destinations.
-// When there is no traces destination (e.g. insights/interrogation-only), skip the
+// When there is no traces destination (e.g. insights/autopilot-only), skip the
 // forward/exporting/router split and keep a single traces/in pipeline — downstream
-// taps (insights, interrogation, servicegraph) attach there.
+// taps (insights, autopilot, servicegraph) attach there.
 func applySplitTracesRootPipelines(
 	currentConfig *config.Config,
 	tracesProcessors, tracesPostForwardProcessors []string,
@@ -660,7 +660,7 @@ func traceAggregationNeeded(gatewayOptions *GatewayConfigOptions) bool {
 		return true
 	}
 
-	if common.InterrogationActive(gatewayOptions.Interrogation) {
+	if common.AutopilotActive(gatewayOptions.Autopilot) {
 		return true
 	}
 

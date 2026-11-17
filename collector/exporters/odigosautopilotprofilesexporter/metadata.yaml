@@ -1,0 +1,10 @@
+type: odigos_autopilot_profiles
+github_project: odigos-io/odigos-enterprise
+
+status:
+  class: exporter
+  stability:
+    development: [profiles]
+  distributions: [odigos]
+  codeowners:
+    active: [blumamir]

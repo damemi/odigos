@@ -10,7 +10,7 @@ export const ROUTES = {
   PROFILING: '/profiling',
   URL_TEMPLATIZATION: '/url-templatization',
   INSTRUMENTATION_AGENTS: '/instrumentation-agents',
-  INTERROGATIONS: '/interrogations',
+  AUTOPILOT: '/autopilot',
 
   // legacy routes
   CHOOSE_STREAM: '/choose-stream',

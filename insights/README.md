@@ -84,8 +84,8 @@ attribute-correlation transaction guardrail.
 Schema changes are versioned SQL migrations applied by
 [golang-migrate](https://github.com/golang-migrate/migrate). The `.up.sql` /
 `.down.sql` files live in `internal/db/clickhouse/migrate/migrations/` (insights)
-and `internal/db/clickhouse/migrate/interrogation/` (interrogation, when
-`INTERROGATION_CLICKHOUSE_DSN` is set). They are embedded into the binary
+and `internal/db/clickhouse/migrate/autopilot/` (autopilot, when
+`AUTOPILOT_CLICKHOUSE_DSN` is set). They are embedded into the binary
 (`go:embed`), so the same image both serves traffic and applies the schema.
 `migrate.Apply` runs them, tracking applied versions in a `schema_migrations`
 table in each database so each runs exactly once. Serving replicas and the
@@ -103,8 +103,8 @@ finished. Locally, run it yourself before starting the service:
 
 ```sh
 go run ./cmd migrate   # apply migrations
-# Interrogation tables are applied when INTERROGATION_CLICKHOUSE_DSN is set
-# (same env the Helm migrate Job sets when interrogation is enabled).
+# Autopilot tables are applied when AUTOPILOT_CLICKHOUSE_DSN is set
+# (same env the Helm migrate Job sets when autopilot is enabled).
 go run ./cmd           # start the service
 ```
 

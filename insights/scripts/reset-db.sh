@@ -2,9 +2,9 @@
 #
 # Reset the Odigos Insights service and its ClickHouse database from scratch.
 #
-# It drops every table in the insights database (and interrogation, when that
+# It drops every table in the insights database (and autopilot, when that
 # schema is present), re-applies the schema migrations straight from source
-# (internal/db/clickhouse/migrate/migrations and .../interrogation),
+# (internal/db/clickhouse/migrate/migrations and .../autopilot),
 # records the applied version so the Helm migrate Job stays a no-op, and rolls
 # the service. Nothing survives: baselines, observations, anomalies,
 # transactions and the seeded policies are all recreated fresh.
@@ -21,18 +21,18 @@
 #   INSIGHTS_DEPLOY  insights deployment name     (default: odigos-insights)
 #   CH_DEPLOY        clickhouse deployment name   (default: odigos-insights-clickhouse)
 #   DB               clickhouse database/user     (default: odigos_insights)
-#   INTERROGATION_DB interrogation database       (default: interrogation)
+#   AUTOPILOT_DB autopilot database       (default: autopilot)
 set -euo pipefail
 
 NS="${NS:-odigos-system}"
 INSIGHTS_DEPLOY="${INSIGHTS_DEPLOY:-odigos-insights}"
 CH_DEPLOY="${CH_DEPLOY:-odigos-insights-clickhouse}"
 DB="${DB:-odigos_insights}"
-INTERROGATION_DB="${INTERROGATION_DB:-interrogation}"
+AUTOPILOT_DB="${AUTOPILOT_DB:-autopilot}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATIONS_DIR="$SCRIPT_DIR/../internal/db/clickhouse/migrate/migrations"
-INTERROGATION_MIGRATIONS_DIR="$SCRIPT_DIR/../internal/db/clickhouse/migrate/interrogation"
+AUTOPILOT_MIGRATIONS_DIR="$SCRIPT_DIR/../internal/db/clickhouse/migrate/autopilot"
 
 # Run whatever SQL arrives on stdin inside the ClickHouse pod. The password is
 # read from the pod's own env so it never lands in shell history or argv.
@@ -78,14 +78,14 @@ kubectl rollout status deploy/"$INSIGHTS_DEPLOY" -n "$NS" --timeout=90s >/dev/nu
 echo ">> [2/4] Resetting '$DB'"
 reset_database "$DB" "$MIGRATIONS_DIR"
 
-echo ">> [3/4] Resetting '$INTERROGATION_DB'"
-reset_database "$INTERROGATION_DB" "$INTERROGATION_MIGRATIONS_DIR"
+echo ">> [3/4] Resetting '$AUTOPILOT_DB'"
+reset_database "$AUTOPILOT_DB" "$AUTOPILOT_MIGRATIONS_DIR"
 
 echo ">> [4/4] Restoring $INSIGHTS_DEPLOY to $was replica(s)"
 kubectl scale deploy "$INSIGHTS_DEPLOY" -n "$NS" --replicas="$was" >/dev/null
 kubectl rollout status deploy/"$INSIGHTS_DEPLOY" -n "$NS" --timeout=120s
 
 echo ">> Fresh table row counts:"
-printf "SELECT database, name, total_rows FROM system.tables WHERE database IN ('%s', '%s') ORDER BY database, name" "$DB" "$INTERROGATION_DB" | ch "$DB"
+printf "SELECT database, name, total_rows FROM system.tables WHERE database IN ('%s', '%s') ORDER BY database, name" "$DB" "$AUTOPILOT_DB" | ch "$DB"
 
-echo ">> Done. Insights + interrogation databases reset from scratch."
+echo ">> Done. Insights + autopilot databases reset from scratch."

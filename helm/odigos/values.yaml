@@ -190,15 +190,15 @@ cardinalityControl:
 # description: |-
 #   Shared cache DB used by Odigos features that need a cluster-local cache
 #   (for example cardinality-control URL templatization rule computation, or
-#   interrogation). Deployed when a consuming feature is enabled (currently
+#   autopilot). Deployed when a consuming feature is enabled (currently
 #   cardinalityControl.urlTemplatization.liveTrafficLearning.enabled or
-#   insights.interrogation.enabled).
+#   insights.autopilot.enabled).
 #   Backend is an implementation detail (Redis, published as odigos-cache with the
 #   Odigos release tag); values stay backend-agnostic so the chart can switch to
 #   another cache (e.g. Memcached) without renaming this section. Override the
 #   image via images.cache or imagePrefix like other Odigos components.
 #   When resources are unset, feature-derived defaults apply (Burstable QoS).
-#   Interrogation: 25m/128Mi requests, 100m/500Mi limits. Live-traffic learning:
+#   Autopilot: 25m/128Mi requests, 100m/500Mi limits. Live-traffic learning:
 #   50m/64Mi requests, 200m/256Mi limits. Both: sum of each feature's defaults.
 # @schema
 cacheDb:
@@ -244,9 +244,9 @@ profiling:
   # @schema
   # description: |-
   #   When true, enables profiling pipelines on the node collector and cluster
-  #   gateway. Unset/empty is off, unless insights.interrogation.enabled is
+  #   gateway. Unset/empty is off, unless insights.autopilot.enabled is
   #   true, which enables profiling automatically. Explicit false conflicts
-  #   with interrogation and fails the install.
+  #   with autopilot and fails the install.
   # @schema
   enabled:
   # @schema
@@ -1103,7 +1103,7 @@ odiglet:
     # @schema
     # description: |-
     #   AppArmor profile for data-collection when gke.enabled and the profiling
-    #   pipeline is on (profiling.enabled, including when interrogation implies it).
+    #   pipeline is on (profiling.enabled, including when autopilot implies it).
     #   GKE's default profile denies mkdir /sys/fs/bpf/otel, which the eBPF
     #   profiler needs to pin traces_ctx_v1 for profile↔span links.
     #   Ignored when privileged, or when gke.enabled is false.
@@ -1426,8 +1426,8 @@ insights:
   # @schema
   # description: |-
   #   When true, deploys the insights service. Unset/empty is off, unless
-  #   insights.interrogation.enabled is true, which enables insights
-  #   automatically. Explicit false conflicts with interrogation and fails
+  #   insights.autopilot.enabled is true, which enables insights
+  #   automatically. Explicit false conflicts with autopilot and fails
   #   the install.
   # @schema
   enabled:
@@ -1501,7 +1501,7 @@ insights:
 
   # @schema
   # description: |-
-  #   Interrogation (off by default): an insights feature that correlates traces
+  #   Autopilot (off by default): an insights feature that correlates traces
   #   and profiles in ClickHouse, analyzes per-transaction call tries with an
   #   LLM, and suggests function probes as InstrumentationRules. Enabling it
   #   also enables insights, profiling, and the insights profile when those
@@ -1509,16 +1509,16 @@ insights:
   #   or a profiles list that omits "insights" fails the install. The loop runs
   #   inside the insights pods (only the replica holding the leader lease
   #   analyzes), so it shares insights resources and scheduling. When enabled,
-  #   the gateway taps traces for interrogation and the chart deploys bundled
+  #   the gateway taps traces for autopilot and the chart deploys bundled
   #   LiteLLM (odigos-litellm) and the shared cache (cacheDb; default Burstable
   #   25m/128Mi requests, 100m/500Mi limits when cacheDb.resources is unset).
   #   Configure a cloud provider under model, or set model.apiBase to point
   #   LiteLLM at a BYO inference endpoint.
   # @schema
-  interrogation:
+  autopilot:
     # @schema
     # description: |-
-    #   When true, enables interrogation in the insights service and deploys
+    #   When true, enables autopilot in the insights service and deploys
     #   odigos-litellm. Also enables insights, profiling, and the insights
     #   profile when those values are unset. Explicit conflicting values fail
     #   the install.
@@ -1528,9 +1528,9 @@ insights:
     # @schema
     # enum: [off, auto]
     # description: |-
-    #   Interrogation loop mode. Applies only when enabled is true, and can also
+    #   Autopilot loop mode. Applies only when enabled is true, and can also
     #   be changed from the UI. off does not analyze transactions. auto analyzes
-    #   them. This does not install or remove interrogation.
+    #   them. This does not install or remove autopilot.
     # @schema
     mode: auto
 
@@ -1538,7 +1538,7 @@ insights:
     # description: |-
     #   User-facing LLM config (provider credentials and upstream model id for LiteLLM).
     #   The worker always calls in-cluster odigos-litellm with the fixed alias
-    #   "interrogation" (see enterprise interrogation model client).
+    #   "autopilot" (see enterprise autopilot model client).
     # @schema
     model:
       # @schema
@@ -1571,7 +1571,7 @@ insights:
     # description: |-
     #   Maximum number of custom function probes that may apply to a single
     #   workload (across all InstrumentationRules that affect it). The
-    #   interrogation loop will not add probes past this cap. Per-request
+    #   autopilot loop will not add probes past this cap. Per-request
     #   recommendations are still capped at 5 per category.
     # @schema
     maxProbesPerWorkload: 20
@@ -1599,7 +1599,7 @@ insights:
 
   # @schema
   # description: |-
-  #   Bundled ClickHouse for insights (including interrogation). Deployed when
+  #   Bundled ClickHouse for insights (including autopilot). Deployed when
   #   insights.enabled is true. Single replica, no
   #   replication, no backups. Data is on a PVC by default
   #   (insights.clickhouse.storage.persistence); set that to false for
@@ -1849,7 +1849,7 @@ resourceDetectors:
 # @schema
 # description: |-
 #   List of profile names (array). Example (YAML): profiles: [PROFILE_NAME] |
-#   (CLI): --set profiles={PROFILE_NAME}. When insights.interrogation.enabled
+#   (CLI): --set profiles={PROFILE_NAME}. When insights.autopilot.enabled
 #   is true and this is empty, the chart adds "insights". A non-empty list
 #   that omits "insights" fails the install.
 # @schema

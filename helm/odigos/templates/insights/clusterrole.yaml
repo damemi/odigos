@@ -1,4 +1,4 @@
-{{- if include "odigos.interrogationEnabled" . }}
+{{- if include "odigos.autopilotEnabled" . }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

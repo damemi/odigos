@@ -122,6 +122,71 @@ type AutoRollbackConfig struct {
 	StabilityWindowTime *string `json:"stabilityWindowTime,omitempty"`
 }
 
+// One node in a transaction's call-path trie (flat list; assemble tree via parentId).
+type AutopilotCallTrieNode struct {
+	// Stable node id for this call-path frame (sha1 of parent + frame identity).
+	ID string `json:"id"`
+	// Parent node id, or null for roots (children of the ClickHouse Parent "root").
+	ParentID   *string            `json:"parentId,omitempty"`
+	Name       string             `json:"name"`
+	FrameType  string             `json:"frameType"`
+	FrameKind  AutopilotFrameKind `json:"frameKind"`
+	SampleType string             `json:"sampleType"`
+	// Call-trie rows stored for this node (relative heat, not a sample count).
+	SeenCount int `json:"seenCount"`
+}
+
+type AutopilotConfig struct {
+	Enabled *bool                 `json:"enabled,omitempty"`
+	Mode    *AutopilotMode        `json:"mode,omitempty"`
+	Model   *AutopilotModelConfig `json:"model,omitempty"`
+}
+
+// One detected function from a profile sample linked to a transaction.
+type AutopilotFunction struct {
+	Name string `json:"name"`
+	// profile.frame.type (e.g. jvm, hotspot).
+	FrameType string             `json:"frameType"`
+	FrameKind AutopilotFrameKind `json:"frameKind"`
+	// Profile sample type: events (probe) or samples (periodic CPU).
+	SampleType string `json:"sampleType"`
+	// Call-trie rows stored for this function in the transaction (relative heat, not
+	// a sample count).
+	SeenCount int `json:"seenCount"`
+}
+
+type AutopilotModelConfig struct {
+	Provider *string `json:"provider,omitempty"`
+	Name     *string `json:"name,omitempty"`
+	APIBase  *string `json:"apiBase,omitempty"`
+}
+
+// A workload container that has stored autopilot transactions.
+type AutopilotSource struct {
+	ID            *K8sWorkloadID `json:"id"`
+	ContainerName string         `json:"containerName"`
+	// Distinct transactions stored for this container.
+	TransactionCount int `json:"transactionCount"`
+}
+
+// One transaction observed for a workload container, with ClickHouse-stored functions.
+type AutopilotTransaction struct {
+	// Transaction id as stored in tx_call_trie_structure.TransactionId.
+	ID string `json:"id"`
+	// Call-trie rows stored for this transaction's sample-type roots (relative heat,
+	// not a sample count).
+	SeenCount int                  `json:"seenCount"`
+	Functions []*AutopilotFunction `json:"functions"`
+	// OTLP JSON traces sample for this transaction (service-invocation spans only),
+	// if stored in autopilot.tx_transactions. Null when missing or autopilot is off.
+	SampleTrace *string `json:"sampleTrace,omitempty"`
+	// Flat call-path trie nodes for this transaction. Resolved on demand from
+	// ClickHouse tx_call_trie when selected; null when missing or autopilot is
+	// off. Empty when the query returns no nodes. Build the tree in the client via
+	// id/parentId.
+	CallTrie []*AutopilotCallTrieNode `json:"callTrie,omitempty"`
+}
+
 type CardinalityControlConfig struct {
 	URLTemplatization *URLTemplatizationCardinalityControlConfig `json:"urlTemplatization,omitempty"`
 }
@@ -556,7 +621,7 @@ type EffectiveConfig struct {
 	Sampling                         *SamplingConfig                     `json:"sampling,omitempty"`
 	Profiling                        *ProfilingConfig                    `json:"profiling,omitempty"`
 	CardinalityControl               *CardinalityControlConfig           `json:"cardinalityControl,omitempty"`
-	Interrogation                    *InterrogationConfig                `json:"interrogation,omitempty"`
+	Interrogation                    *AutopilotConfig                    `json:"interrogation,omitempty"`
 	Provenance                       []*ProvenanceEntry                  `json:"provenance,omitempty"`
 	ManifestYaml                     *string                             `json:"manifestYAML,omitempty"`
 }
@@ -2084,71 +2149,6 @@ type InstrumentorConfig struct {
 	CheckDeviceHealthBeforeInjection *bool   `json:"checkDeviceHealthBeforeInjection,omitempty"`
 }
 
-// One node in a transaction's call-path trie (flat list; assemble tree via parentId).
-type InterrogationCallTrieNode struct {
-	// Stable node id for this call-path frame (sha1 of parent + frame identity).
-	ID string `json:"id"`
-	// Parent node id, or null for roots (children of the ClickHouse Parent "root").
-	ParentID   *string                `json:"parentId,omitempty"`
-	Name       string                 `json:"name"`
-	FrameType  string                 `json:"frameType"`
-	FrameKind  InterrogationFrameKind `json:"frameKind"`
-	SampleType string                 `json:"sampleType"`
-	// Call-trie rows stored for this node (relative heat, not a sample count).
-	SeenCount int `json:"seenCount"`
-}
-
-type InterrogationConfig struct {
-	Enabled *bool                     `json:"enabled,omitempty"`
-	Mode    *InterrogationMode        `json:"mode,omitempty"`
-	Model   *InterrogationModelConfig `json:"model,omitempty"`
-}
-
-// One detected function from a profile sample linked to a transaction.
-type InterrogationFunction struct {
-	Name string `json:"name"`
-	// profile.frame.type (e.g. jvm, hotspot).
-	FrameType string                 `json:"frameType"`
-	FrameKind InterrogationFrameKind `json:"frameKind"`
-	// Profile sample type: events (probe) or samples (periodic CPU).
-	SampleType string `json:"sampleType"`
-	// Call-trie rows stored for this function in the transaction (relative heat, not
-	// a sample count).
-	SeenCount int `json:"seenCount"`
-}
-
-type InterrogationModelConfig struct {
-	Provider *string `json:"provider,omitempty"`
-	Name     *string `json:"name,omitempty"`
-	APIBase  *string `json:"apiBase,omitempty"`
-}
-
-// A workload container that has stored interrogation transactions.
-type InterrogationSource struct {
-	ID            *K8sWorkloadID `json:"id"`
-	ContainerName string         `json:"containerName"`
-	// Distinct transactions stored for this container.
-	TransactionCount int `json:"transactionCount"`
-}
-
-// One transaction observed for a workload container, with ClickHouse-stored functions.
-type InterrogationTransaction struct {
-	// Transaction id as stored in tx_call_trie_structure.TransactionId.
-	ID string `json:"id"`
-	// Call-trie rows stored for this transaction's sample-type roots (relative heat,
-	// not a sample count).
-	SeenCount int                      `json:"seenCount"`
-	Functions []*InterrogationFunction `json:"functions"`
-	// OTLP JSON traces sample for this transaction (service-invocation spans only),
-	// if stored in interrogation.tx_transactions. Null when missing or interrogation is off.
-	SampleTrace *string `json:"sampleTrace,omitempty"`
-	// Flat call-path trie nodes for this transaction. Resolved on demand from
-	// ClickHouse tx_call_trie when selected; null when missing or interrogation is
-	// off. Empty when the query returns no nodes. Build the tree in the client via
-	// id/parentId.
-	CallTrie []*InterrogationCallTrieNode `json:"callTrie,omitempty"`
-}
-
 type JavaCustomProbe struct {
 	ClassName  *string              `json:"className,omitempty"`
 	MethodName *string              `json:"methodName,omitempty"`
@@ -2330,12 +2330,12 @@ type K8sWorkloadContainer struct {
 	CollectorConfig   *K8sWorkloadContainerCollectorConfig             `json:"collectorConfig,omitempty"`
 	Instrumentations  []*K8sWorkloadPodContainerProcessInstrumentation `json:"instrumentations,omitempty"`
 	URLTemplatization *K8sWorkloadContainerURLTemplatization           `json:"urlTemplatization,omitempty"`
-	// Trace interrogation: transactions and detected stack functions for this
-	// container, read from interrogation ClickHouse (tx_call_trie_structure). Empty when
-	// interrogation is disabled or nothing has been stored yet.
+	// Autopilot: transactions and detected stack functions for this
+	// container, read from autopilot ClickHouse (tx_call_trie_structure). Empty when
+	// autopilot is disabled or nothing has been stored yet.
 	// Ordered by seenCount desc, then id. Select callTrie only with a narrow page
 	// (ids or limit): it costs one ClickHouse query per returned transaction.
-	InterrogationTransactions []*InterrogationTransaction `json:"interrogationTransactions"`
+	InterrogationTransactions []*AutopilotTransaction `json:"interrogationTransactions"`
 }
 
 type K8sWorkloadContainerAgentConfig struct {
@@ -2636,6 +2636,11 @@ type LocalUIConfigAutoRollbackInput struct {
 	StabilityWindowTime *string `json:"stabilityWindowTime,omitempty"`
 }
 
+type LocalUIConfigAutopilotInput struct {
+	Mode       *AutopilotMode `json:"mode,omitempty"`
+	ResetPaths []string       `json:"resetPaths,omitempty"`
+}
+
 type LocalUIConfigCardinalityControlInput struct {
 	URLTemplatization *LocalUIConfigURLTemplatizationCardinalityControlInput `json:"urlTemplatization,omitempty"`
 }
@@ -2666,17 +2671,12 @@ type LocalUIConfigInput struct {
 	Sampling              *LocalUIConfigSamplingInput              `json:"sampling,omitempty"`
 	ComponentLogLevels    *LocalUIConfigComponentLogLevelsInput    `json:"componentLogLevels,omitempty"`
 	CardinalityControl    *LocalUIConfigCardinalityControlInput    `json:"cardinalityControl,omitempty"`
-	Interrogation         *LocalUIConfigInterrogationInput         `json:"interrogation,omitempty"`
+	Interrogation         *LocalUIConfigAutopilotInput             `json:"interrogation,omitempty"`
 }
 
 type LocalUIConfigInstrumentorInput struct {
 	AgentEnvVarsInjectionMethod      *EnvInjectionMethod `json:"agentEnvVarsInjectionMethod,omitempty"`
 	CheckDeviceHealthBeforeInjection *bool               `json:"checkDeviceHealthBeforeInjection,omitempty"`
-}
-
-type LocalUIConfigInterrogationInput struct {
-	Mode       *InterrogationMode `json:"mode,omitempty"`
-	ResetPaths []string           `json:"resetPaths,omitempty"`
 }
 
 type LocalUIConfigLiveTrafficLearningAutomaticRulesInput struct {
@@ -3445,6 +3445,94 @@ func (e *ActionType) UnmarshalGQL(v any) error {
 }
 
 func (e ActionType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// What a call-map frame belongs to. Classified when read, from the JVM frame name.
+type AutopilotFrameKind string
+
+const (
+	// Customer code: probe candidates and AI evidence.
+	AutopilotFrameKindApp AutopilotFrameKind = "APP"
+	// Third-party framework or library code, kept so the map shows app → library → app flows.
+	AutopilotFrameKindLibrary AutopilotFrameKind = "LIBRARY"
+	// JDK, VM and agent plumbing (normally dropped at ingest).
+	AutopilotFrameKindRuntime AutopilotFrameKind = "RUNTIME"
+)
+
+var AllAutopilotFrameKind = []AutopilotFrameKind{
+	AutopilotFrameKindApp,
+	AutopilotFrameKindLibrary,
+	AutopilotFrameKindRuntime,
+}
+
+func (e AutopilotFrameKind) IsValid() bool {
+	switch e {
+	case AutopilotFrameKindApp, AutopilotFrameKindLibrary, AutopilotFrameKindRuntime:
+		return true
+	}
+	return false
+}
+
+func (e AutopilotFrameKind) String() string {
+	return string(e)
+}
+
+func (e *AutopilotFrameKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AutopilotFrameKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AutopilotFrameKind", str)
+	}
+	return nil
+}
+
+func (e AutopilotFrameKind) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+type AutopilotMode string
+
+const (
+	AutopilotModeOff  AutopilotMode = "off"
+	AutopilotModeAuto AutopilotMode = "auto"
+)
+
+var AllAutopilotMode = []AutopilotMode{
+	AutopilotModeOff,
+	AutopilotModeAuto,
+}
+
+func (e AutopilotMode) IsValid() bool {
+	switch e {
+	case AutopilotModeOff, AutopilotModeAuto:
+		return true
+	}
+	return false
+}
+
+func (e AutopilotMode) String() string {
+	return string(e)
+}
+
+func (e *AutopilotMode) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AutopilotMode(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AutopilotMode", str)
+	}
+	return nil
+}
+
+func (e AutopilotMode) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
@@ -5102,94 +5190,6 @@ func (e *InstrumentationRuleType) UnmarshalGQL(v any) error {
 }
 
 func (e InstrumentationRuleType) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-// What a call-map frame belongs to. Classified when read, from the JVM frame name.
-type InterrogationFrameKind string
-
-const (
-	// Customer code: probe candidates and AI evidence.
-	InterrogationFrameKindApp InterrogationFrameKind = "APP"
-	// Third-party framework or library code, kept so the map shows app → library → app flows.
-	InterrogationFrameKindLibrary InterrogationFrameKind = "LIBRARY"
-	// JDK, VM and agent plumbing (normally dropped at ingest).
-	InterrogationFrameKindRuntime InterrogationFrameKind = "RUNTIME"
-)
-
-var AllInterrogationFrameKind = []InterrogationFrameKind{
-	InterrogationFrameKindApp,
-	InterrogationFrameKindLibrary,
-	InterrogationFrameKindRuntime,
-}
-
-func (e InterrogationFrameKind) IsValid() bool {
-	switch e {
-	case InterrogationFrameKindApp, InterrogationFrameKindLibrary, InterrogationFrameKindRuntime:
-		return true
-	}
-	return false
-}
-
-func (e InterrogationFrameKind) String() string {
-	return string(e)
-}
-
-func (e *InterrogationFrameKind) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = InterrogationFrameKind(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid InterrogationFrameKind", str)
-	}
-	return nil
-}
-
-func (e InterrogationFrameKind) MarshalGQL(w io.Writer) {
-	fmt.Fprint(w, strconv.Quote(e.String()))
-}
-
-type InterrogationMode string
-
-const (
-	InterrogationModeOff  InterrogationMode = "off"
-	InterrogationModeAuto InterrogationMode = "auto"
-)
-
-var AllInterrogationMode = []InterrogationMode{
-	InterrogationModeOff,
-	InterrogationModeAuto,
-}
-
-func (e InterrogationMode) IsValid() bool {
-	switch e {
-	case InterrogationModeOff, InterrogationModeAuto:
-		return true
-	}
-	return false
-}
-
-func (e InterrogationMode) String() string {
-	return string(e)
-}
-
-func (e *InterrogationMode) UnmarshalGQL(v any) error {
-	str, ok := v.(string)
-	if !ok {
-		return fmt.Errorf("enums must be strings")
-	}
-
-	*e = InterrogationMode(str)
-	if !e.IsValid() {
-		return fmt.Errorf("%s is not a valid InterrogationMode", str)
-	}
-	return nil
-}
-
-func (e InterrogationMode) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

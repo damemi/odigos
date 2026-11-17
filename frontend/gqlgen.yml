@@ -114,7 +114,7 @@ models:
     fields:
       urlTemplatization:
         resolver: true
-      interrogationTransactions:
+      autopilotTransactions:
         resolver: true
 
   K8sWorkloadContainerUrlTemplatization:
@@ -137,7 +137,7 @@ models:
       processes:
         resolver: true
 
-  InterrogationTransaction:
+  AutopilotTransaction:
     fields:
       sampleTrace:
         resolver: true

@@ -14,7 +14,7 @@ const (
 	// instead of pinning to a single pod behind the regular ClusterIP VIP.
 	OdigosInsightsHeadlessServiceName = "odigos-insights-headless"
 
-	// Bundled insights ClickHouse (shared with interrogation profile storage).
+	// Bundled insights ClickHouse (shared with autopilot profile storage).
 	OdigosInsightsClickHouseServiceName = "odigos-insights-clickhouse"
 	OdigosInsightsClickHouseNativePort  = 9000
 	OdigosInsightsClickHouseUser        = "odigos_insights"

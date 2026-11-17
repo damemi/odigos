@@ -425,14 +425,14 @@ func mergeConfigs(baseConfig *common.OdigosConfiguration, addtionalConfig *commo
 		}
 	}
 
-	// interrogation.enabled is Helm-only: turning it on deploys odigos-litellm and
+	// autopilot.enabled is Helm-only: turning it on deploys odigos-litellm and
 	// the gateway exporters, which an overlay cannot create. Mode is a runtime
 	// switch and may be set from the UI.
-	if addtionalConfig.Interrogation != nil && addtionalConfig.Interrogation.Mode != "" {
-		if baseConfig.Interrogation == nil {
-			baseConfig.Interrogation = &common.InterrogationConfiguration{}
+	if addtionalConfig.Autopilot != nil && addtionalConfig.Autopilot.Mode != "" {
+		if baseConfig.Autopilot == nil {
+			baseConfig.Autopilot = &common.AutopilotConfiguration{}
 		}
-		baseConfig.Interrogation.Mode = addtionalConfig.Interrogation.Mode
+		baseConfig.Autopilot.Mode = addtionalConfig.Autopilot.Mode
 	}
 
 	// Future fields can be added here following the same pattern:

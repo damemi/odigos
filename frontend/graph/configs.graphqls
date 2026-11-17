@@ -157,7 +157,7 @@ type ProfilingConfig {
   enabled: Boolean
 }
 
-enum InterrogationMode {
+enum AutopilotMode {
   off
   auto
 }
@@ -188,16 +188,16 @@ type CardinalityControlConfig {
   urlTemplatization: UrlTemplatizationCardinalityControlConfig
 }
 
-type InterrogationModelConfig {
+type AutopilotModelConfig {
   provider: String
   name: String
   apiBase: String
 }
 
-type InterrogationConfig {
+type AutopilotConfig {
   enabled: Boolean
-  mode: InterrogationMode
-  model: InterrogationModelConfig
+  mode: AutopilotMode
+  model: AutopilotModelConfig
 }
 
 type KarpenterConfig {
@@ -327,7 +327,7 @@ type EffectiveConfig {
   sampling: SamplingConfig
   profiling: ProfilingConfig
   cardinalityControl: CardinalityControlConfig
-  interrogation: InterrogationConfig
+  interrogation: AutopilotConfig
   provenance: [ProvenanceEntry!]
   manifestYAML: String
 }
@@ -422,9 +422,9 @@ input LocalUiConfigCardinalityControlInput {
   urlTemplatization: LocalUiConfigUrlTemplatizationCardinalityControlInput
 }
 
-input LocalUiConfigInterrogationInput {
+input LocalUiConfigAutopilotInput {
   # enabled is Helm-only (deploys odigos-litellm and the gateway exporters).
-  mode: InterrogationMode
+  mode: AutopilotMode
   # Clears a UI override so the Helm value applies again. Paths match helmValuePath
   # (for example "interrogation.mode").
   resetPaths: [String!]
@@ -445,7 +445,7 @@ input LocalUiConfigInput {
   sampling: LocalUiConfigSamplingInput
   componentLogLevels: LocalUiConfigComponentLogLevelsInput
   cardinalityControl: LocalUiConfigCardinalityControlInput
-  interrogation: LocalUiConfigInterrogationInput
+  interrogation: LocalUiConfigAutopilotInput
 }
 
 type ConfigYamlField {

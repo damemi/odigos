@@ -25,17 +25,17 @@ import (
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-// interrogationFiles is the schema for the interrogation database. It is a
+// autopilotFiles is the schema for the autopilot database. It is a
 // separate migration history because that database is not odigos_insights.
 // Serving replicas and the Redis trie flusher do not run DDL.
 //
-//go:embed interrogation/*.sql
-var interrogationFiles embed.FS
+//go:embed autopilot/*.sql
+var autopilotFiles embed.FS
 
 // Apply runs pending schema migrations, then returns. insightsDSN is the
-// odigos_insights database and is required. interrogationDSN is the
-// interrogation database; an empty value skips that schema, which is how
-// installs with interrogation disabled behave.
+// odigos_insights database and is required. autopilotDSN is the
+// autopilot database; an empty value skips that schema, which is how
+// installs with autopilot disabled behave.
 //
 // The two databases keep separate migration directories. Both start at version
 // 000001, and golang-migrate records only the version number in
@@ -45,18 +45,18 @@ var interrogationFiles embed.FS
 // This is meant to run exactly ONCE per rollout - from the Helm migration Job -
 // not from every app replica, so replicas can scale without racing on DDL.
 // golang-migrate skips versions it has already applied, so re-running is a no-op.
-func Apply(insightsDSN, interrogationDSN string) error {
+func Apply(insightsDSN, autopilotDSN string) error {
 	if err := applyEmbedded(insightsDSN, migrationFiles, "migrations"); err != nil {
 		return err
 	}
-	if interrogationDSN == "" {
+	if autopilotDSN == "" {
 		return nil
 	}
-	if err := ensureDatabase(interrogationDSN); err != nil {
-		return fmt.Errorf("interrogation: %w", err)
+	if err := ensureDatabase(autopilotDSN); err != nil {
+		return fmt.Errorf("autopilot: %w", err)
 	}
-	if err := applyEmbedded(interrogationDSN, interrogationFiles, "interrogation"); err != nil {
-		return fmt.Errorf("interrogation: %w", err)
+	if err := applyEmbedded(autopilotDSN, autopilotFiles, "autopilot"); err != nil {
+		return fmt.Errorf("autopilot: %w", err)
 	}
 	return nil
 }
@@ -70,7 +70,7 @@ func ensureDatabase(dsn string) error {
 	}
 	name := opts.Auth.Database
 	if name == "" || name == "default" {
-		return fmt.Errorf("interrogation dsn must name its database")
+		return fmt.Errorf("autopilot dsn must name its database")
 	}
 	opts.Auth.Database = "default"
 	db := clickhouse.OpenDB(opts)

@@ -96,54 +96,54 @@ true
 {{- end -}}
 
 {{/*
-  Interrogation is enabled by insights.interrogation.enabled. That flag
+  Autopilot is enabled by insights.autopilot.enabled. That flag
   implies insights, profiling, and the insights profile (see
-  odigos.validateInterrogationDeps).
+  odigos.validateAutopilotDeps).
 */}}
-{{- define "odigos.interrogationEnabled" -}}
-{{- if .Values.insights.interrogation.enabled -}}
+{{- define "odigos.autopilotEnabled" -}}
+{{- if .Values.insights.autopilot.enabled -}}
 true
 {{- end -}}
 {{- end -}}
 
 {{/*
-  Insights is on when insights.enabled is true, or when interrogation
+  Insights is on when insights.enabled is true, or when autopilot
   implies it (unset insights.enabled).
 */}}
 {{- define "odigos.insightsEnabled" -}}
-{{- if or .Values.insights.enabled (include "odigos.interrogationEnabled" .) -}}
+{{- if or .Values.insights.enabled (include "odigos.autopilotEnabled" .) -}}
 true
 {{- end -}}
 {{- end -}}
 
 {{/*
-  Bundled ClickHouse backs insights (including interrogation).
+  Bundled ClickHouse backs insights (including autopilot).
 */}}
 {{- define "odigos.clickhouseEnabled" -}}
 {{- include "odigos.insightsEnabled" . -}}
 {{- end -}}
 
 {{/*
-  Profiling is on when profiling.enabled is true, or when interrogation
+  Profiling is on when profiling.enabled is true, or when autopilot
   implies it (unset profiling.enabled).
 */}}
 {{- define "odigos.profilingEnabled" -}}
-{{- if or .Values.profiling.enabled (include "odigos.interrogationEnabled" .) -}}
+{{- if or .Values.profiling.enabled (include "odigos.autopilotEnabled" .) -}}
 true
 {{- end -}}
 {{- end -}}
 
 {{/*
-  Effective profiles list. Interrogation adds "insights" when profiles is
+  Effective profiles list. Autopilot adds "insights" when profiles is
   empty; a non-empty list that omits "insights" is rejected by
-  odigos.validateInterrogationDeps.
+  odigos.validateAutopilotDeps.
 */}}
 {{- define "odigos.profiles" -}}
 {{- $profiles := .Values.profiles | default list -}}
 {{- if and $profiles (not (kindIs "slice" $profiles)) -}}
 {{- fail "Invalid 'profiles' value: must be a list. Example (YAML): profiles: [PROFILE_NAME]  |  CLI: --set profiles={PROFILE_NAME}" -}}
 {{- end -}}
-{{- if and (include "odigos.interrogationEnabled" .) (not (has "insights" $profiles)) -}}
+{{- if and (include "odigos.autopilotEnabled" .) (not (has "insights" $profiles)) -}}
 {{- $profiles = prepend $profiles "insights" -}}
 {{- end -}}
 {{- if and (eq (toString .Values.instrumentationVersion) "v2") (not (has "instrumentation-v2" $profiles)) -}}
@@ -155,63 +155,63 @@ true
 {{- end -}}
 
 {{/*
-  Fail install/upgrade when interrogation is on and a dependency is
+  Fail install/upgrade when autopilot is on and a dependency is
   explicitly set to a conflicting value. Unset dependencies are enabled
   automatically (see odigos.insightsEnabled, odigos.profilingEnabled,
   odigos.profiles).
 */}}
-{{- define "odigos.validateInterrogationDeps" -}}
-{{- if include "odigos.interrogationEnabled" . }}
+{{- define "odigos.validateAutopilotDeps" -}}
+{{- if include "odigos.autopilotEnabled" . }}
 {{- if and (kindIs "bool" .Values.insights.enabled) (not .Values.insights.enabled) -}}
-{{- fail "insights.interrogation.enabled=true requires insights. insights.enabled is set to false, which conflicts. Omit insights.enabled (enabled automatically) or set insights.enabled=true." -}}
+{{- fail "insights.autopilot.enabled=true requires insights. insights.enabled is set to false, which conflicts. Omit insights.enabled (enabled automatically) or set insights.enabled=true." -}}
 {{- end -}}
 {{- if and (kindIs "bool" .Values.profiling.enabled) (not .Values.profiling.enabled) -}}
-{{- fail "insights.interrogation.enabled=true requires profiling. profiling.enabled is set to false, which conflicts. Omit profiling.enabled (enabled automatically) or set profiling.enabled=true." -}}
+{{- fail "insights.autopilot.enabled=true requires profiling. profiling.enabled is set to false, which conflicts. Omit profiling.enabled (enabled automatically) or set profiling.enabled=true." -}}
 {{- end -}}
 {{- $profiles := .Values.profiles | default list -}}
 {{- if and $profiles (not (kindIs "slice" $profiles)) -}}
 {{- fail "Invalid 'profiles' value: must be a list. Example (YAML): profiles: [PROFILE_NAME]  |  CLI: --set profiles={PROFILE_NAME}" -}}
 {{- end -}}
 {{- if and $profiles (not (has "insights" $profiles)) -}}
-{{- fail (printf "insights.interrogation.enabled=true requires the insights profile. profiles is set to %v, which does not include \"insights\". Omit profiles (defaults to [insights]) or add \"insights\" to the list." $profiles) -}}
+{{- fail (printf "insights.autopilot.enabled=true requires the insights profile. profiles is set to %v, which does not include \"insights\". Omit profiles (defaults to [insights]) or add \"insights\" to the list." $profiles) -}}
 {{- end -}}
 {{- end -}}
 {{- end -}}
 
 {{/*
-  Bundled LiteLLM ships with interrogation (in-cluster only; worker URL is fixed).
+  Bundled LiteLLM ships with autopilot (in-cluster only; worker URL is fixed).
 */}}
 {{- define "odigos.litellmEnabled" -}}
-{{- include "odigos.interrogationEnabled" . -}}
+{{- include "odigos.autopilotEnabled" . -}}
 {{- end -}}
 
 {{/*
   LiteLLM upstream model provider (e.g. openai, gemini).
 */}}
-{{- define "odigos.interrogationModelProvider" -}}
-{{- .Values.insights.interrogation.model.provider | default "openai" -}}
+{{- define "odigos.autopilotModelProvider" -}}
+{{- .Values.insights.autopilot.model.provider | default "openai" -}}
 {{- end -}}
 
 {{/*
   LiteLLM upstream model name (e.g. gpt-4o-mini).
 */}}
-{{- define "odigos.interrogationModelName" -}}
-{{- .Values.insights.interrogation.model.name | default "gpt-4o-mini" -}}
+{{- define "odigos.autopilotModelName" -}}
+{{- .Values.insights.autopilot.model.name | default "gpt-4o-mini" -}}
 {{- end -}}
 
 {{/*
   LiteLLM upstream model id: <provider>/<name> (e.g. openai/gpt-4o-mini).
 */}}
-{{- define "odigos.interrogationUpstreamModel" -}}
-{{- printf "%s/%s" (include "odigos.interrogationModelProvider" .) (include "odigos.interrogationModelName" .) -}}
+{{- define "odigos.autopilotUpstreamModel" -}}
+{{- printf "%s/%s" (include "odigos.autopilotModelProvider" .) (include "odigos.autopilotModelName" .) -}}
 {{- end -}}
 
 {{/*
   Optional LiteLLM api_base for BYO inference (model.apiBase).
 */}}
-{{- define "odigos.interrogationApiBase" -}}
-{{- if .Values.insights.interrogation.model.apiBase -}}
-{{- .Values.insights.interrogation.model.apiBase | trimSuffix "/" -}}
+{{- define "odigos.autopilotApiBase" -}}
+{{- if .Values.insights.autopilot.model.apiBase -}}
+{{- .Values.insights.autopilot.model.apiBase | trimSuffix "/" -}}
 {{- end -}}
 {{- end -}}
 
@@ -377,8 +377,8 @@ imagePullSecrets:
 {{/* Returns true when the shared cache DB should be deployed (any consuming feature enabled). */}}
 {{- define "cacheDb.enabled" -}}
 {{- $ltl := eq (include "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled" .) "true" -}}
-{{- $interrogation := include "odigos.interrogationEnabled" . -}}
-{{- if or $ltl $interrogation -}}
+{{- $autopilot := include "odigos.autopilotEnabled" . -}}
+{{- if or $ltl $autopilot -}}
 true
 {{- end -}}
 {{- end }}
@@ -387,20 +387,20 @@ true
   Feature-derived default resources for the shared cache when cacheDb.resources is unset.
   Used only by cacheDb.resolvedResources; user-configured resources always win.
   When multiple consuming features are enabled, sum each feature's defaults.
-  Both features use Burstable QoS (requests below limits). Interrogation limits
+  Both features use Burstable QoS (requests below limits). Autopilot limits
   are 100m CPU / 500Mi memory.
 */}}
 {{- define "cacheDb.featureDefaultResources" -}}
 {{- $ltl := eq (include "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled" .) "true" -}}
-{{- $interrogation := include "odigos.interrogationEnabled" . -}}
-{{- if and $ltl $interrogation -}}
+{{- $autopilot := include "odigos.autopilotEnabled" . -}}
+{{- if and $ltl $autopilot -}}
 requests:
   cpu: 75m
   memory: 192Mi
 limits:
   cpu: 300m
   memory: 756Mi
-{{- else if $interrogation -}}
+{{- else if $autopilot -}}
 requests:
   cpu: 25m
   memory: 128Mi

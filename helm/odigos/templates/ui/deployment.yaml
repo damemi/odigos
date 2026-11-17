@@ -58,7 +58,7 @@ spec:
           - name: GOMEMLIMIT
             value: {{ include "odigos.gomemlimitFromResources" (dict "Resources" .Values.ui.resources) }}
           {{- if include "odigos.clickhouseEnabled" . }}
-          # Interrogation (and insights) read from the bundled ClickHouse.
+          # Autopilot (and insights) read from the bundled ClickHouse.
           - name: ODIGOS_INSIGHTS_CLICKHOUSE_PASSWORD
             valueFrom:
               secretKeyRef:

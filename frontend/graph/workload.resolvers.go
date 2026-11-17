@@ -18,30 +18,30 @@ import (
 	"github.com/odigos-io/odigos/frontend/graph/model"
 	"github.com/odigos-io/odigos/frontend/graph/status"
 	"github.com/odigos-io/odigos/frontend/services"
+	"github.com/odigos-io/odigos/frontend/services/autopilot"
 	frontendcommon "github.com/odigos-io/odigos/frontend/services/common"
-	"github.com/odigos-io/odigos/frontend/services/interrogation"
 	sourceutils "github.com/odigos-io/odigos/k8sutils/pkg/source"
 )
 
 // SampleTrace is the resolver for the sampleTrace field.
-func (r *interrogationTransactionResolver) SampleTrace(ctx context.Context, obj *model.InterrogationTransaction) (*string, error) {
+func (r *autopilotTransactionResolver) SampleTrace(ctx context.Context, obj *model.AutopilotTransaction) (*string, error) {
 	if obj == nil || obj.ID == "" {
 		return nil, nil
 	}
-	enabled, err := interrogation.IsEnabled(ctx, r.K8sCacheClient)
+	enabled, err := autopilot.IsEnabled(ctx, r.K8sCacheClient)
 	if err != nil {
-		return nil, fmt.Errorf("reading effective config for interrogation: %w", err)
+		return nil, fmt.Errorf("reading effective config for autopilot: %w", err)
 	}
-	if !enabled || r.InterrogationClient == nil {
+	if !enabled || r.AutopilotClient == nil {
 		return nil, nil
 	}
 
-	workloadID, containerName, err := interrogationTransactionParents(ctx)
+	workloadID, containerName, err := autopilotTransactionParents(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	raw, err := r.InterrogationClient.GetTransactionSampleTrace(
+	raw, err := r.AutopilotClient.GetTransactionSampleTrace(
 		ctx,
 		workloadID.Namespace,
 		string(workloadID.Kind),
@@ -59,24 +59,24 @@ func (r *interrogationTransactionResolver) SampleTrace(ctx context.Context, obj 
 }
 
 // CallTrie is the resolver for the callTrie field.
-func (r *interrogationTransactionResolver) CallTrie(ctx context.Context, obj *model.InterrogationTransaction) ([]*model.InterrogationCallTrieNode, error) {
+func (r *autopilotTransactionResolver) CallTrie(ctx context.Context, obj *model.AutopilotTransaction) ([]*model.AutopilotCallTrieNode, error) {
 	if obj == nil || obj.ID == "" {
 		return nil, nil
 	}
-	enabled, err := interrogation.IsEnabled(ctx, r.K8sCacheClient)
+	enabled, err := autopilot.IsEnabled(ctx, r.K8sCacheClient)
 	if err != nil {
-		return nil, fmt.Errorf("reading effective config for interrogation: %w", err)
+		return nil, fmt.Errorf("reading effective config for autopilot: %w", err)
 	}
-	if !enabled || r.InterrogationClient == nil {
+	if !enabled || r.AutopilotClient == nil {
 		return nil, nil
 	}
 
-	workloadID, containerName, err := interrogationTransactionParents(ctx)
+	workloadID, containerName, err := autopilotTransactionParents(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	nodes, ok, err := r.InterrogationClient.GetTransactionCallTrie(
+	nodes, ok, err := r.AutopilotClient.GetTransactionCallTrie(
 		ctx,
 		workloadID.Namespace,
 		string(workloadID.Kind),
@@ -90,7 +90,7 @@ func (r *interrogationTransactionResolver) CallTrie(ctx context.Context, obj *mo
 	if !ok {
 		return nil, nil
 	}
-	return interrogation.CallTrieToModel(nodes), nil
+	return autopilot.CallTrieToModel(nodes), nil
 }
 
 // MarkedForInstrumentation is the resolver for the markedForInstrumentation field.
@@ -877,56 +877,6 @@ func (r *k8sWorkloadContainerResolver) URLTemplatization(ctx context.Context, ob
 	}, nil
 }
 
-// InterrogationTransactions is the resolver for the interrogationTransactions field.
-func (r *k8sWorkloadContainerResolver) InterrogationTransactions(ctx context.Context, obj *model.K8sWorkloadContainer, ids []string, search *string, limit *int, offset *int) ([]*model.InterrogationTransaction, error) {
-	if obj == nil || obj.ContainerName == "" {
-		return []*model.InterrogationTransaction{}, nil
-	}
-
-	enabled, err := interrogation.IsEnabled(ctx, r.K8sCacheClient)
-	if err != nil {
-		return nil, fmt.Errorf("reading effective config for interrogation: %w", err)
-	}
-	if !enabled {
-		return []*model.InterrogationTransaction{}, nil
-	}
-	if r.InterrogationClient == nil {
-		return []*model.InterrogationTransaction{}, nil
-	}
-
-	workloadID, err := parentWorkloadID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	filter := interrogation.TransactionsFilter{IDs: ids}
-	if search != nil {
-		filter.Search = *search
-	}
-	if limit != nil {
-		if *limit < 1 {
-			return nil, fmt.Errorf("limit must be positive")
-		}
-		filter.Limit = *limit
-	}
-	if offset != nil {
-		filter.Offset = *offset
-	}
-
-	got, err := r.InterrogationClient.ListContainerTransactions(
-		ctx,
-		workloadID.Namespace,
-		string(workloadID.Kind),
-		workloadID.Name,
-		obj.ContainerName,
-		filter,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return interrogation.TransactionsToModel(got.Transactions), nil
-}
-
 // Processes is the resolver for the processes field.
 func (r *k8sWorkloadPodContainerResolver) Processes(ctx context.Context, obj *model.K8sWorkloadPodContainer) ([]*model.K8sWorkloadPodContainerProcess, error) {
 	l := loaders.For(ctx)
@@ -1143,25 +1093,13 @@ func (r *queryResolver) Namespaces(ctx context.Context) ([]*model.K8sNamespace, 
 }
 
 // InterrogationSources is the resolver for the interrogationSources field.
-func (r *queryResolver) InterrogationSources(ctx context.Context) ([]*model.InterrogationSource, error) {
-	enabled, err := interrogation.IsEnabled(ctx, r.K8sCacheClient)
-	if err != nil {
-		return nil, fmt.Errorf("reading effective config for interrogation: %w", err)
-	}
-	if !enabled || r.InterrogationClient == nil {
-		return []*model.InterrogationSource{}, nil
-	}
-
-	sources, err := r.InterrogationClient.ListSources(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return interrogation.SourcesToModel(sources), nil
+func (r *queryResolver) InterrogationSources(ctx context.Context) ([]*model.AutopilotSource, error) {
+	panic(fmt.Errorf("not implemented: InterrogationSources - interrogationSources"))
 }
 
-// InterrogationTransaction returns InterrogationTransactionResolver implementation.
-func (r *Resolver) InterrogationTransaction() InterrogationTransactionResolver {
-	return &interrogationTransactionResolver{r}
+// AutopilotTransaction returns AutopilotTransactionResolver implementation.
+func (r *Resolver) AutopilotTransaction() AutopilotTransactionResolver {
+	return &autopilotTransactionResolver{r}
 }
 
 // K8sNamespace returns K8sNamespaceResolver implementation.
@@ -1190,7 +1128,7 @@ func (r *Resolver) K8sWorkloadTelemetryMetrics() K8sWorkloadTelemetryMetricsReso
 	return &k8sWorkloadTelemetryMetricsResolver{r}
 }
 
-type interrogationTransactionResolver struct{ *Resolver }
+type autopilotTransactionResolver struct{ *Resolver }
 type k8sNamespaceResolver struct{ *Resolver }
 type k8sWorkloadResolver struct{ *Resolver }
 type k8sWorkloadContainerResolver struct{ *Resolver }

@@ -147,12 +147,12 @@ spec:
                   key: password
             - name: CLICKHOUSE_DSN
               value: "clickhouse://odigos_insights:$(CLICKHOUSE_PASSWORD)@odigos-insights-clickhouse:9000/odigos_insights"
-            {{- if include "odigos.interrogationEnabled" . }}
-            # Interrogation tables (tx_runs, tx_transactions,
-            # tx_call_trie_structure) live in the interrogation database, so
+            {{- if include "odigos.autopilotEnabled" . }}
+            # Autopilot tables (tx_runs, tx_transactions,
+            # tx_call_trie_structure) live in the autopilot database, so
             # the same Job applies that migration set after the insights schema.
-            - name: INTERROGATION_CLICKHOUSE_DSN
-              value: "clickhouse://odigos_insights:$(CLICKHOUSE_PASSWORD)@odigos-insights-clickhouse:9000/interrogation"
+            - name: AUTOPILOT_CLICKHOUSE_DSN
+              value: "clickhouse://odigos_insights:$(CLICKHOUSE_PASSWORD)@odigos-insights-clickhouse:9000/autopilot"
             {{- end }}
           resources:
             requests:

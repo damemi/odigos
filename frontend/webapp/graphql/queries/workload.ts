@@ -409,7 +409,7 @@ export const GET_NAMESPACES_WITH_WORKLOADS = gql`
   }
 `;
 
-// Interrogation transactions with their call tries, for the Interrogations page.
+// Autopilot transactions with their call tries, for the Autopilot page.
 export const GET_INTERROGATION_TRANSACTIONS = gql`
   query GetInterrogationTransactions($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
@@ -445,7 +445,7 @@ export const GET_INTERROGATION_TRANSACTIONS = gql`
   }
 `;
 
-// Workload containers that have interrogation transactions, so the page can skip sources without any.
+// Workload containers that have autopilot transactions, so the page can skip sources without any.
 export const GET_INTERROGATION_SOURCES = gql`
   query GetInterrogationSources {
     interrogationSources {

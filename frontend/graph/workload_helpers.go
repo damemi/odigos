@@ -15,7 +15,7 @@ import (
 )
 
 // parentWorkloadID walks GraphQL field context to the parent K8sWorkload id.
-// Field path for list items: interrogationTransactions -> container ->
+// Field path for list items: autopilotTransactions -> container ->
 // containers -> workload.
 func parentWorkloadID(ctx context.Context) (model.K8sWorkloadID, error) {
 	fc := graphql.GetFieldContext(ctx)
@@ -29,18 +29,18 @@ func parentWorkloadID(ctx context.Context) (model.K8sWorkloadID, error) {
 	return *(*w).ID, nil
 }
 
-// interrogationTransactionParents walks from an InterrogationTransaction field
+// autopilotTransactionParents walks from an AutopilotTransaction field
 // (e.g. sampleTrace) up to the owning container and workload.
 //
 // gqlgen inserts an index FieldContext for each list element, so the path is:
 //
-//	sampleTrace → tx-index → interrogationTransactions → container-index →
+//	sampleTrace → tx-index → autopilotTransactions → container-index →
 //	containers → workload
-func interrogationTransactionParents(ctx context.Context) (workloadID model.K8sWorkloadID, containerName string, err error) {
+func autopilotTransactionParents(ctx context.Context) (workloadID model.K8sWorkloadID, containerName string, err error) {
 	fc := graphql.GetFieldContext(ctx)
 	if fc == nil || fc.Parent == nil || fc.Parent.Parent == nil || fc.Parent.Parent.Parent == nil ||
 		fc.Parent.Parent.Parent.Parent == nil || fc.Parent.Parent.Parent.Parent.Parent == nil {
-		return model.K8sWorkloadID{}, "", fmt.Errorf("missing parent resolver context for interrogation transaction")
+		return model.K8sWorkloadID{}, "", fmt.Errorf("missing parent resolver context for autopilot transaction")
 	}
 
 	container, ok := k8sWorkloadContainerFromResult(fc.Parent.Parent.Parent.Result)

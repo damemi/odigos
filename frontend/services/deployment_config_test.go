@@ -70,7 +70,7 @@ func TestBuildConfigResponseInsightsEnabled(t *testing.T) {
 	}
 }
 
-func TestBuildConfigResponseInterrogationEnabled(t *testing.T) {
+func TestBuildConfigResponseAutopilotEnabled(t *testing.T) {
 	tests := []struct {
 		name       string
 		configYAML string
@@ -78,12 +78,12 @@ func TestBuildConfigResponseInterrogationEnabled(t *testing.T) {
 	}{
 		{
 			name:       "enabled",
-			configYAML: "interrogation:\n  enabled: true\n",
+			configYAML: "autopilot:\n  enabled: true\n",
 			want:       true,
 		},
 		{
 			name:       "disabled",
-			configYAML: "interrogation:\n  enabled: false\n",
+			configYAML: "autopilot:\n  enabled: false\n",
 			want:       false,
 		},
 		{

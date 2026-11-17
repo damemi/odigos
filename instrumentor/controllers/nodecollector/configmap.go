@@ -412,11 +412,11 @@ func isTracingLoadBalancingNeeded(ctx context.Context, c client.Client, clusterC
 		return true, nil
 	}
 
-	// Insights and interrogation enable groupbytrace via OdigosConfiguration and are not
+	// Insights and autopilot enable groupbytrace via OdigosConfiguration and are not
 	// mirrored onto CollectorsGroupSpec; check the live config when a client is available.
 	if c != nil {
 		if cfg, err := utils.GetCurrentOdigosConfiguration(ctx, c); err == nil {
-			if odigoscommon.InsightsPipelineActive(cfg.Insights) || odigoscommon.InterrogationActive(cfg.Interrogation) {
+			if odigoscommon.InsightsPipelineActive(cfg.Insights) || odigoscommon.AutopilotActive(cfg.Autopilot) {
 				return true, nil
 			}
 		}

@@ -15,7 +15,7 @@ const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targe
   };
 };
 
-export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, isEnterprise: boolean, interrogationEnabled?: boolean) => {
+export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, isEnterprise: boolean, autopilotEnabled?: boolean) => {
   const navIcons: NavbarProps['icons'] = [];
   const add = (path: string, label: string, icon: SVG, place: { group?: string; bottom?: boolean; gatedFeature?: GatedFeature } = {}) =>
     navIcons.push({ ...getPayloadForIcon(router, currentPath, path, label, icon), ...place });
@@ -31,9 +31,9 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, i
     add(ROUTES.INSIGHTS, 'Insights', InsightsIcon, { group: 'Observe', gatedFeature: GatedFeature.Insights });
     add(ROUTES.PROFILING, 'Profiling', ProfilingIcon, { group: 'Observe', gatedFeature: GatedFeature.Profiling });
   }
-  // Interrogation has no gated-feature entry yet, so it stays hidden until enabled.
-  if (interrogationEnabled) {
-    add(ROUTES.INTERROGATIONS, 'Interrogations', SparkleIcon, { group: 'Observe' });
+  // Autopilot has no gated-feature entry yet, so it stays hidden until enabled.
+  if (autopilotEnabled) {
+    add(ROUTES.AUTOPILOT, 'Autopilot', SparkleIcon, { group: 'Observe' });
   }
 
   add(ROUTES.COLLECTORS, 'Collectors', PipelineCollectorIcon, { group: 'Pipeline' });

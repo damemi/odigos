@@ -181,7 +181,7 @@ func applyLocalUiConfigInput(cfg *common.OdigosConfiguration, input model.LocalU
 		applyCardinalityControlInput(cfg, input.CardinalityControl)
 	}
 	if input.Interrogation != nil {
-		applyInterrogationInput(cfg, input.Interrogation)
+		applyAutopilotInput(cfg, input.Interrogation)
 	}
 }
 
@@ -243,26 +243,26 @@ func applyCardinalityControlInput(cfg *common.OdigosConfiguration, input *model.
 	}
 }
 
-func applyInterrogationInput(cfg *common.OdigosConfiguration, input *model.LocalUIConfigInterrogationInput) {
+func applyAutopilotInput(cfg *common.OdigosConfiguration, input *model.LocalUIConfigAutopilotInput) {
 	if input == nil {
 		return
 	}
 	// enabled is Helm-only. resetPaths drops a UI override so the Helm value applies again.
 	for _, path := range input.ResetPaths {
-		if path == "interrogation.mode" && cfg.Interrogation != nil {
-			cfg.Interrogation.Mode = ""
+		if path == "interrogation.mode" && cfg.Autopilot != nil {
+			cfg.Autopilot.Mode = ""
 		}
 	}
-	if cfg.Interrogation != nil && cfg.Interrogation.Enabled == nil && cfg.Interrogation.Mode == "" {
-		cfg.Interrogation = nil
+	if cfg.Autopilot != nil && cfg.Autopilot.Enabled == nil && cfg.Autopilot.Mode == "" {
+		cfg.Autopilot = nil
 	}
 	if input.Mode == nil || !input.Mode.IsValid() {
 		return
 	}
-	if cfg.Interrogation == nil {
-		cfg.Interrogation = &common.InterrogationConfiguration{}
+	if cfg.Autopilot == nil {
+		cfg.Autopilot = &common.AutopilotConfiguration{}
 	}
-	cfg.Interrogation.Mode = common.InterrogationMode(*input.Mode)
+	cfg.Autopilot.Mode = common.AutopilotMode(*input.Mode)
 }
 
 func applySamplingInput(cfg *common.SamplingConfiguration, input *model.LocalUIConfigSamplingInput) {
