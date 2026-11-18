@@ -69,41 +69,44 @@ FROM public.ecr.aws/odigos/agents/ruby-community-legacy:v0.0.3@sha256:2922c58f2f
 FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS agents-builder
 WORKDIR /instrumentations
 
+# Ordered from least to most likely to change, so a version bump re-copies as few layers as possible.
+
+# Rarely changing agents.
+
+# loader
+ARG TARGETARCH
+ARG ODIGOS_LOADER_VERSION=v0.0.8
+RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so
+
 # java-community
 ARG JAVA_OTEL_VERSION=v2.32.0
 ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/$JAVA_OTEL_VERSION/opentelemetry-javaagent.jar /instrumentations/java/javaagent.jar
 RUN chmod 644 /instrumentations/java/javaagent.jar
 
-# python-community/python-community3.8
-COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.73-py3.8@sha256:661308cb08d293f4ff3e1823cc7ebc0537ba53dd1fff72f61b411637d62ec3d4 /instrumentations/python3.8 /instrumentations/python3.8
-COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.91@sha256:ae8761929dc588b90c95178451fe90c8e57239ee8b8b3ba2c5919328b0874fda /instrumentations/python /instrumentations/python
+# dotnet-community
+COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
 
-# python-enterprise
-COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.14@sha256:168a709d9e586f209d2a92581bacc9786099b5ce3613bdf9e3ec8b1d6a0a317b /instrumentations/python-ebpf /instrumentations/python-ebpf
-
-# nodejs-enterprise
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
-COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/nodejs-community /instrumentations/nodejs-community
 # nodejs-enterprise-14
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.21@sha256:b9d5a9c17c66a3b2a68b169af0482871a5d499e402617b256c686dc4edcfbd13 /instrumentations/opentelemetry-node-14 /instrumentations/opentelemetry-node-14
 COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise-14:v0.0.21@sha256:b9d5a9c17c66a3b2a68b169af0482871a5d499e402617b256c686dc4edcfbd13 /instrumentations/nodejs-ebpf-14 /instrumentations/nodejs-ebpf-14
 
-# dotnet-community
-COPY --from=dotnet-builder /dotnet-instrumentation /instrumentations/dotnet
+# python-community3.8
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.73-py3.8@sha256:661308cb08d293f4ff3e1823cc7ebc0537ba53dd1fff72f61b411637d62ec3d4 /instrumentations/python3.8 /instrumentations/python3.8
+
+# Extended-only agents.
+ARG EXTENDED=false
 
 # dotnet-legacy - Legacy .NET (only included in extended builds)
-ARG EXTENDED=false
 RUN --mount=type=bind,from=dotnet-builder,source=/legacy-dotnet-instrumentation,target=/legacy-dotnet-instrumentation \
     if [ "$EXTENDED" = "true" ]; then \
         cp -r /legacy-dotnet-instrumentation /instrumentations/legacy-dotnet; \
     fi
 
-# java-ebpf-instrumentations
-COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.63.0@sha256:d5fd2bef8e2632ab14eab4fd3be932066c2428c17d779a519a9c537157e1ccee /instrumentations/java-ebpf /instrumentations/java-ebpf
-
-# java-enterprise
-COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.63.0@sha256:ff1d4de09f5997c0f046adca4c76e655ca162fe6f0d0678ffcca558b3ddf1dd2 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+# ruby-community-legacy (only included in extended builds)
+RUN --mount=type=bind,from=ruby-legacy-src,source=/instrumentations/ruby-legacy,target=/ruby-legacy \
+    if [ "$EXTENDED" = "true" ]; then \
+        cp -r /ruby-legacy /instrumentations/ruby-legacy; \
+    fi
 
 # php-community
 COPY --from=public.ecr.aws/odigos/agents/php-community:v0.12.0@sha256:29b949cebd81bf9e8d5d715bfb72e6b45f9e2151f8e7fb8419c520faae2af16c /instrumentations/php /instrumentations/php
@@ -111,20 +114,28 @@ COPY --from=public.ecr.aws/odigos/agents/php-community:v0.12.0@sha256:29b949cebd
 # ruby-community
 COPY --from=public.ecr.aws/odigos/agents/ruby-community:v0.0.11@sha256:1cb067fa84fdd24316b0c9e0fbfc057bb7055263d92fe1f31a898a8e55edcf67 /instrumentations/ruby /instrumentations/ruby
 
-# ruby-community-legacy (only included in extended builds)
-ARG EXTENDED=false
-RUN --mount=type=bind,from=ruby-legacy-src,source=/instrumentations/ruby-legacy,target=/ruby-legacy \
-    if [ "$EXTENDED" = "true" ]; then \
-        cp -r /ruby-legacy /instrumentations/ruby-legacy; \
-    fi
+# Frequently changing agents.
 
-# loader
-ARG TARGETARCH
-ARG ODIGOS_LOADER_VERSION=v0.0.8
-RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/$ODIGOS_LOADER_VERSION/$TARGETARCH/loader.so
+# python-enterprise
+COPY --from=public.ecr.aws/odigos/agents/python-ebpf:v0.0.14@sha256:168a709d9e586f209d2a92581bacc9786099b5ce3613bdf9e3ec8b1d6a0a317b /instrumentations/python-ebpf /instrumentations/python-ebpf
 
-######### Odiglet builder #########
-FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
+# python-community
+COPY --from=public.ecr.aws/odigos/agents/python-community:v1.0.91@sha256:ae8761929dc588b90c95178451fe90c8e57239ee8b8b3ba2c5919328b0874fda /instrumentations/python /instrumentations/python
+
+# nodejs-enterprise
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/opentelemetry-node /instrumentations/opentelemetry-node
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/nodejs-ebpf /instrumentations/nodejs-ebpf
+COPY --from=public.ecr.aws/odigos/agents/nodejs-enterprise:v0.21.0@sha256:20ffcdbfa68789b0edc9f8543c9556011087ad9a496040ee78724f3f346e55f2 /instrumentations/nodejs-community /instrumentations/nodejs-community
+
+# java-ebpf-instrumentations
+COPY --from=public.ecr.aws/odigos/agents/java-ebpf-instrumentations:v2.63.0@sha256:d5fd2bef8e2632ab14eab4fd3be932066c2428c17d779a519a9c537157e1ccee /instrumentations/java-ebpf /instrumentations/java-ebpf
+
+# java-enterprise
+COPY --from=public.ecr.aws/odigos/agents/java-enterprise:v2.63.0@sha256:ff1d4de09f5997c0f046adca4c76e655ca162fe6f0d0678ffcca558b3ddf1dd2 /instrumentations/java-ext-ebpf /instrumentations/java-ext-ebpf
+
+######### Go modules #########
+# Module setup shared by the odiglet, CSI driver and deviceplugin builders.
+FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS go-modules
 ENV GOINSECURE=go.opentelemetry.io*
 ENV GOPRIVATE=github.com/odigos-io/odigos-device-plugin
 
@@ -134,7 +145,7 @@ WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
 COPY odiglet/obi.mk /go/src/github.com/odigos-io/odigos/odiglet/
 RUN make -f ../obi.mk materialize-obi
 
-# 2) Generate - go.mod/sum of odiglet/enterprise and its local replaces only (not full sources).
+# 2) go.mod/sum of odiglet/enterprise and its local replaces only (not full sources).
 # Cached until module metadata or the Makefile changes.
 WORKDIR /go/src/github.com/odigos-io/odigos
 COPY api/go.mod api/go.sum ./api/
@@ -150,6 +161,11 @@ COPY odiglet/go.mod odiglet/go.sum ./odiglet/
 COPY odiglet/pkg/ebpf/sdks/obi/go.mod odiglet/pkg/ebpf/sdks/obi/go.sum ./odiglet/pkg/ebpf/sdks/obi/
 COPY odiglet/enterprise/go.mod odiglet/enterprise/go.sum odiglet/enterprise/Makefile ./odiglet/enterprise/
 WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
+
+######### Odiglet builder #########
+FROM go-modules AS builder
+
+# 3) Generate - cached until module metadata or the Makefile changes.
 # The instrumentation and device plugin modules are private, so the github_token BuildKit secret is required
 # (the Makefile and the bake file pass it from GITHUB_TOKEN). required=true only catches a missing secret; a
 # secret declared from an unset variable arrives empty, hence the test. git gets the token only as
@@ -164,7 +180,7 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     GIT_CONFIG_VALUE_0="https://github.com/" \
     make generate
 
-# 3) Compile - full sources. COPY overwrites go.mod, so re-apply the OBI replace (ensure-generated runs
+# 4) Compile - full sources. COPY overwrites go.mod, so re-apply the OBI replace (ensure-generated runs
 # go-mod), regenerate any eBPF objects missing from the /go/pkg cache mount, then build.
 # .dockerignore excludes **/.obi/, so COPY odiglet/ keeps the materialized OBI tree.
 WORKDIR /go/src/github.com/odigos-io/odigos
@@ -197,7 +213,15 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
 # if the environment does not require all of them. A sub-set can be configured with helm values.
 RUN setcap cap_bpf,cap_perfmon,cap_sys_admin,cap_sys_ptrace,cap_dac_read_search,cap_ipc_lock,cap_sys_resource,cap_setuid,cap_setgid=p ./odiglet
 
-# Build CSI driver binary (same binary as community odiglet; required when mountMethod is k8s-csi-driver)
+######### CSI driver builder #########
+# CSI driver binary (same binary as community odiglet; required when mountMethod is k8s-csi-driver).
+# Copies only the sources of the local modules it imports; add a module here if it starts importing another.
+FROM go-modules AS csi-driver-builder
+COPY api/ ../../api/
+COPY common/ ../../common/
+COPY odiglet/ ../
+ARG TARGETARCH
+ARG LD_FLAGS
 RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
@@ -207,7 +231,14 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     GIT_CONFIG_VALUE_0="https://github.com/" \
     GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o odigos-csi-driver github.com/odigos-io/odigos/odiglet/cmd/csi-driver
 
-# Build OSS deviceplugin binary (same binary as community odiglet)
+######### deviceplugin builder #########
+# OSS deviceplugin binary (same binary as community odiglet).
+# Copies only the sources of the local modules it imports; add a module here if it starts importing another.
+FROM go-modules AS deviceplugin-builder
+COPY common/ ../../common/
+COPY deviceplugin/ ../../deviceplugin/
+ARG TARGETARCH
+ARG LD_FLAGS
 RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg \
@@ -215,9 +246,12 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     GIT_CONFIG_COUNT=1 \
     GIT_CONFIG_KEY_0="url.https://x-access-token:${GITHUB_TOKEN}@github.com/.insteadOf" \
     GIT_CONFIG_VALUE_0="https://github.com/" \
-    GOOS=linux GOARCH=$TARGETARCH go build -o deviceplugin github.com/odigos-io/odigos/deviceplugin/cmd
+    GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o deviceplugin github.com/odigos-io/odigos/deviceplugin/cmd
 
+######### grpc_health_probe #########
 # Download grpc_health_probe this is used by the deviceplugin container to check if the deviceplugin is healthy
+FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS grpc-health-probe
+ARG TARGETARCH
 ARG GRPC_HEALTH_PROBE_VERSION=v0.4.59
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         GRPC_ARCH="arm64"; \
@@ -280,15 +314,15 @@ LABEL "version"=$VERSION
 LABEL "release"=$RELEASE
 LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/licenses /licenses
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/deviceplugin /root/deviceplugin
-COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
+# Ordered from least to most likely to change, so a change rebuilds as few layers as possible.
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
-WORKDIR /instrumentations/
-COPY --from=agents-builder /instrumentations/ .
+COPY --from=grpc-health-probe /tmp/grpc_health_probe /root/grpc_health_probe
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/licenses /licenses
+COPY --from=deviceplugin-builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/deviceplugin /root/deviceplugin
+COPY --from=csi-driver-builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=agents-builder /instrumentations/ /instrumentations/
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
 
 USER 65532:65532
 
@@ -299,14 +333,14 @@ CMD ["/root/odiglet"]
 # are static (odiglet-base builds rsync without OpenSSL); odigos-csi-driver and deviceplugin need only libc.
 # Pinned by digest; an earlier base-debian12 digest once broke rsync.
 FROM gcr.io/distroless/base-nossl-debian12@sha256:e35893f8ca1cabfbd60394af94899c20930c4615355adf97c5da660a51b61bca
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/deviceplugin /root/deviceplugin
-COPY --from=builder /tmp/grpc_health_probe /root/grpc_health_probe
+# Ordered from least to most likely to change, so a change rebuilds as few layers as possible.
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
-WORKDIR /instrumentations/
-COPY --from=agents-builder /instrumentations/ .
+COPY --from=grpc-health-probe /tmp/grpc_health_probe /root/grpc_health_probe
+COPY --from=deviceplugin-builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/deviceplugin /root/deviceplugin
+COPY --from=csi-driver-builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=agents-builder /instrumentations/ /instrumentations/
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
 
 USER 65532:65532
 
