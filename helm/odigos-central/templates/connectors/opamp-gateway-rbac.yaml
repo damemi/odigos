@@ -1,11 +1,14 @@
 {{- if (include "connectors.managedCollectorsEnabled" .) }}
+{{- if include "odigos.createServiceAccount" (dict "values" .Values.cloudConnectors.opampGateway) }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: connector-opamp-gateway
+  name: {{ include "odigos.serviceAccountName" (dict "values" .Values.cloudConnectors.opampGateway "default" "connector-opamp-gateway") }}
   namespace: {{ .Release.Namespace }}
   labels:
     odigos.io/system-object: "true"
+{{- end }}
+{{- if include "odigos.rbacEnabled" (dict "root" $ "values" .Values.cloudConnectors.opampGateway) }}
 ---
 # A Role, not a ClusterRole: the gateway is given ODIGOS_NAMESPACE below, which scopes its caches to
 # this namespace. Read-only throughout — the gateway routes sessions, it never writes to the cluster.
@@ -36,10 +39,11 @@ metadata:
     odigos.io/system-object: "true"
 subjects:
   - kind: ServiceAccount
-    name: connector-opamp-gateway
+    name: {{ include "odigos.serviceAccountName" (dict "values" .Values.cloudConnectors.opampGateway "default" "connector-opamp-gateway") }}
     namespace: {{ .Release.Namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: connector-opamp-gateway
+{{- end }}
 {{- end }}

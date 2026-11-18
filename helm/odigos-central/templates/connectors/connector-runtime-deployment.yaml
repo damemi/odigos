@@ -21,7 +21,7 @@ spec:
       labels:
         app: connector-runtime
     spec:
-      serviceAccountName: connector-runtime
+      serviceAccountName: {{ include "odigos.serviceAccountName" (dict "values" .Values.cloudConnectors.connectorRuntime "default" "connector-runtime") }}
       {{ include "odigos.renderPullSecrets" . | nindent 6 }}
       {{- with .Values.cloudConnectors.connectorRuntime.nodeSelector }}
       nodeSelector:
