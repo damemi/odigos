@@ -751,9 +751,9 @@
           "required": [],
           "title": "autoscaling"
         },
-        "clickhouse": {
+        "database": {
           "additionalProperties": false,
-          "description": "Bundled ClickHouse for the insights service. Single replica, no\nreplication, no backups. Data is on a PVC by default\n(insights.clickhouse.storage.persistence); set that to false for\nemptyDir. Scale insights pods for HA of ingestion; keep ClickHouse at\none replica. User and database name stay hardcoded (odigos_insights);\nimage, resources, scheduling, and storage are tunable.",
+          "description": "Postgres database for the insights service.",
           "properties": {
             "affinity": {
               "additionalProperties": true,
@@ -762,48 +762,53 @@
             },
             "config": {
               "additionalProperties": false,
-              "description": "Curated ClickHouse server settings mounted into config.d / users.d.\nDefaults follow common Kubernetes guidance: leave headroom under the\npod memory limit, bound concurrent queries, and cap single-query memory.",
+              "description": "Server settings for the bundled Postgres, passed as -c flags.",
               "properties": {
-                "extraConfig": {
-                  "default": "",
-                  "description": "Optional raw XML merged as config.d/odigos-extra.xml. Escape hatch\nfor advanced tuning; prefer the curated knobs above when possible.\nExample:\n  extraConfig: |\n    \u003cclickhouse\u003e\n      \u003ctimezone\u003eUTC\u003c/timezone\u003e\n    \u003c/clickhouse\u003e",
+                "maxConnections": {
+                  "default": "200",
+                  "description": "max_connections. Each insights replica opens a pool of up to\nmax(4, CPUs) connections, so the default leaves room for the HPA\nmaximum plus the migration Job and debugging sessions.",
                   "required": [],
-                  "title": "extraConfig"
+                  "title": "maxConnections"
                 },
-                "logLevel": {
-                  "default": "information",
-                  "description": "ClickHouse logger level (trace, debug, information, warning, error).",
+                "sharedBuffers": {
+                  "default": "512MB",
+                  "description": "shared_buffers, the Postgres page cache. Keep it at roughly a quarter\nof the memory limit.",
                   "required": [],
-                  "title": "logLevel"
-                },
-                "maxConcurrentQueries": {
-                  "default": "100",
-                  "description": "Max queries executing at once (server-wide). Caps concurrent load\nfrom Insights flushes and UI reads.",
-                  "minimum": 1,
-                  "required": [],
-                  "title": "maxConcurrentQueries"
-                },
-                "maxMemoryUsagePerQuery": {
-                  "default": "1Gi",
-                  "description": "Per-query memory cap (users.xml). Examples: \"1Gi\"\nEmpty string keeps ClickHouse's default.",
-                  "required": [],
-                  "title": "maxMemoryUsagePerQuery"
-                },
-                "maxServerMemoryUsageToRamRatio": {
-                  "default": "0.85",
-                  "description": "Fraction of detected RAM (pod limit) ClickHouse may use.\nLeave headroom for the OS page cache and background merges so the\nkubelet does not OOM-kill the pod.",
-                  "maximum": 1,
-                  "minimum": 0.1,
-                  "required": [],
-                  "title": "maxServerMemoryUsageToRamRatio"
+                  "title": "sharedBuffers"
                 }
               },
               "required": [],
               "title": "config"
             },
+            "external": {
+              "additionalProperties": false,
+              "description": "Used when provider=external. The database must exist and the user must\nbe able to create tables in it; the migration Job creates the schema.",
+              "properties": {
+                "dsn": {
+                  "default": "",
+                  "description": "Connection URI, e.g. postgres://user:pass@host:5432/insights?sslmode=require.\nStored in a chart-managed Secret. Prefer existingSecret for production.",
+                  "required": [],
+                  "title": "dsn"
+                },
+                "existingSecret": {
+                  "default": "",
+                  "description": "Name of an existing Secret in the release namespace that holds the connection URI.",
+                  "required": [],
+                  "title": "existingSecret"
+                },
+                "existingSecretKey": {
+                  "default": "dsn",
+                  "description": "Key in existingSecret that holds the connection URI.",
+                  "required": [],
+                  "title": "existingSecretKey"
+                }
+              },
+              "required": [],
+              "title": "external"
+            },
             "image": {
               "additionalProperties": false,
-              "description": "ClickHouse server image. Third-party image (not built by Odigos);\noverride repository/tag for private mirrors or version pins.",
+              "description": "Bundled Postgres server image. Third-party image (not built by Odigos);\noverride repository/tag for private mirrors or version pins.",
               "properties": {
                 "pullPolicy": {
                   "default": "IfNotPresent",
@@ -812,13 +817,13 @@
                   "title": "pullPolicy"
                 },
                 "repository": {
-                  "default": "clickhouse/clickhouse-server",
+                  "default": "postgres",
                   "description": "Container image repository.",
                   "required": [],
                   "title": "repository"
                 },
                 "tag": {
-                  "default": "24.8-alpine",
+                  "default": "17-alpine",
                   "description": "Container image tag.",
                   "required": [],
                   "title": "tag"
@@ -829,15 +834,25 @@
             },
             "nodeSelector": {
               "default": "",
-              "description": "Override the global nodeSelector for ClickHouse. Use this to pin the\nDB to nodes with suitable disk (e.g. SSD / stateful pool). Falls back\nto values.nodeSelector when unset. Independent of insights.nodeSelector\nso the stateful DB can be scheduled separately from the app pods.",
+              "description": "Override the global nodeSelector for the bundled Postgres. Use this to\npin the DB to nodes with suitable disk (e.g. SSD / stateful pool). Falls\nback to values.nodeSelector when unset. Independent of\ninsights.nodeSelector so the stateful DB can be scheduled separately\nfrom the app pods.",
               "required": [],
               "title": "nodeSelector"
             },
             "priorityClassName": {
               "default": "",
-              "description": "Priority class name for ClickHouse. Prefer a higher priority than\ngeneral workloads so the single-replica DB is not evicted under pressure.",
+              "description": "Priority class name for the bundled Postgres. Prefer a higher priority\nthan general workloads so the single-replica DB is not evicted under\npressure.",
               "required": [],
               "title": "priorityClassName"
+            },
+            "provider": {
+              "default": "bundled",
+              "description": "Where the Insights Postgres lives.\n  bundled  - the chart runs a single-replica Postgres (no replication,\n             no backups) on a PVC (insights.database.storage). For\n             development and light use.\n  external - bring your own Postgres (e.g. RDS / Cloud SQL / an\n             operator-managed cluster) via insights.database.external;\n             the bundled database is not deployed. The production path.\nA future \"cnpg\" value will render an operator-managed HA Postgres\n(CloudNativePG: replication, PITR backups, TLS) in-cluster.",
+              "enum": [
+                "bundled",
+                "external"
+              ],
+              "required": [],
+              "title": "provider"
             },
             "resources": {
               "additionalProperties": false,
@@ -870,6 +885,7 @@
                     },
                     "memory": {
                       "default": "512Mi",
+                      "description": "At least shared_buffers so the pod is scheduled where its page cache fits.",
                       "title": "memory",
                       "type": "string"
                     }
@@ -888,19 +904,19 @@
               "properties": {
                 "persistence": {
                   "default": "true",
-                  "description": "When true (default), ClickHouse keeps Insights data on a persistent\nvolume so it survives pod restarts. Set to false only for\ndevelopment or testing: ClickHouse then uses emptyDir, and all\nInsights data is lost when the pod is recreated or rescheduled.",
+                  "description": "When true (default), the bundled Postgres keeps Insights data on a\npersistent volume so it survives pod restarts. Set to false only for\ndevelopment or testing: Postgres then uses emptyDir, and all\nInsights data is lost when the pod is recreated or rescheduled.",
                   "required": [],
                   "title": "persistence"
                 },
                 "size": {
                   "default": "8Gi",
-                  "description": "PVC size for the ClickHouse data volume. Growth is driven mainly by\ntransaction cardinality and trace_observations retention (TTL).\nExpand only if the StorageClass supports volume expansion.",
+                  "description": "PVC size for the bundled Postgres data volume. Growth is driven\nmainly by transaction cardinality and stored sample traces\n(observation retention). Expand only if the StorageClass supports\nvolume expansion.",
                   "required": [],
                   "title": "size"
                 },
                 "storageClassName": {
                   "default": "",
-                  "description": "StorageClass for the ClickHouse PVC. Empty string uses the cluster\ndefault. Prefer a class backed by fast local/SSD block storage;\navoid slow shared NFS for MergeTree. The class is fixed at PVC\ncreation — changing this value after install does not migrate an\nexisting volume. The PVC is kept across helm uninstall\n(helm.sh/resource-policy: keep).",
+                  "description": "StorageClass for the bundled Postgres PVC. Empty string uses the\ncluster default. Prefer a class backed by SSD block storage. The class\nis fixed at PVC creation - changing this value after install does not\nmigrate an existing volume. The PVC is kept across helm uninstall\n(helm.sh/resource-policy: keep).",
                   "required": [],
                   "title": "storageClassName"
                 }
@@ -934,7 +950,7 @@
             }
           },
           "required": [],
-          "title": "clickhouse"
+          "title": "database"
         },
         "enabled": {
           "default": "false",

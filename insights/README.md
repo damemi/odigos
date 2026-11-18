@@ -19,7 +19,7 @@ insights/
   cmd/main.go                              # entrypoint: config, logger, DB, schema init, gRPC + HTTP servers
   internal/
     repo/                                  # Repository interface + domain types (the DB-swap seam)
-    db/clickhouse/                         # ClickHouse implementation (clickhouse-go/v2) + startup DDL
+    db/postgres/                           # Postgres implementation (pgx) + migrations (db/postgres/migrate)
     api/http/                              # Gin HTTP server: /api/v1/* + /healthz + /readyz
     otlp/                                  # OTLP gRPC receiver - thin shell; hands traces to engine
     engine/                                # scoring core: decode, identify transaction, score, fire-or-merge
@@ -27,30 +27,32 @@ insights/
 
 ## Data model
 
-The store is **ClickHouse**. It's designed around a **deviation class** model
-where each class learns and scores independently and a configurable policy
-decides when a combination of deviations fires an alert.
+The store is **Postgres** (bundled single replica by default, or an external
+database via `insights.database.external`). It's designed around a **deviation
+class** model where each class learns and scores independently and a
+configurable policy decides when a combination of deviations fires an alert.
 
 The engine keeps DB load off the per-trace hot path (in-memory baseline store,
 identity/policy caches, and a write-behind flusher all sit above the
-`repo.Repository` seam), and the baseline tables lean on ClickHouse's background
-merges to do the cross-replica merge instead of locking and rewriting rows:
+`repo.Repository` seam). Replicas flush deltas, and the upserts merge them in
+SQL so concurrent replicas never overwrite each other; each flush runs in one
+transaction. See [SCHEMA.md](internal/db/postgres/SCHEMA.md) for every table.
 
-| table | engine | role |
-|---|---|---|
-| `transactions` | ReplacingMergeTree | identity of one (service, namespace, operation, kind) we baseline against. `transaction_id` is a deterministic hash of the identity (namespace included, so two same-named services in different namespaces stay distinct), so no auto-increment/upsert round-trip is needed. `kind` is `HTTP`, `GRPC`, `CONSUMER`, `PRODUCER`, `CRON`, `INTERNAL`, or anything new. |
-| `transaction_activity` | AggregatingMergeTree | per-transaction volume (`sum`) + `last_seen` (`max`), written by the write-behind flusher in batches (never per trace). Keeps counting after promotion, so the UI can order transactions "most frequent first" and roll volume up per service. |
-| `baseline_set_members` | ReplacingMergeTree | one row per member of a **set** baseline (D1 edges, D2 peers, D5 libs, D6 accesses/shapes). The union across flushes and replicas is free, and duplicate inserts collapse (idempotent, no dedup key). |
-| `baseline_counters` | SummingMergeTree | one row per bucket of an **additive** baseline (the D7 payload-size histogram). Each flush appends a delta and ClickHouse sums. |
-| `baseline_meta` | AggregatingMergeTree | per-class scalars: `observation_count` (summed), `promoted` and `saturated` (OR'd via max), `learning_started_at` (anchored via min), `data_schema_version` (max). |
-| `trace_observations` | ReplacingMergeTree | sampled traces kept as UI examples per transaction. Stores the original OTLP protobuf bytes for just this trace's spans (`raw_otlp String`), so the UI gets Jaeger-grade fidelity (events, links, status, typed attributes) without an external trace backend. **NOT every trace is stored**; the engine keeps a bounded set (`example`) plus the trace that fired each anomaly (`anomaly_evidence`). A 120-day `TTL` matches the findings lookback ceiling. |
-| `alert_policies` | ReplacingMergeTree(updated_at) | rules: which combinations of deviated classes fire. One policy per scope (`scope_type`/`scope_key`: global, service, or transaction); most-specific scope wins and fully replaces the broader one. Seeded with the global `default-any-1-of-8`. |
-| `anomalies` | ReplacingMergeTree(version) | one row per fired alert, with per-class evidence so the UI explains itself. Acknowledgement re-inserts the row with a higher `version`. |
-| `learning_policies` | ReplacingMergeTree(updated_at) | per-class learning-phase configuration: a `conditions` list combined by `match_mode` (`all`/`any`/`k_of` with `min_matches`), scoped by `scope_type`/`scope_key` (global, service, or transaction). Seeded at startup. See [Learning-phase configuration](#learning-phase-configuration). |
+| table | role |
+|---|---|
+| `transactions` | identity of one (service, namespace, operation, kind) we baseline against. `transaction_id` is a deterministic hash of the identity (namespace included, so two same-named services in different namespaces stay distinct), so no auto-increment round-trip is needed. `kind` is `HTTP`, `GRPC`, `CONSUMER`, `PRODUCER`, `CRON`, `INTERNAL`, or anything new. |
+| `transaction_activity` | per-transaction volume (summed) + `last_seen` (max), written by the write-behind flusher in batches (never per trace). Keeps counting after promotion, so the UI can order transactions "most frequent first" and roll volume up per service. |
+| `baseline_set_members` | one row per member of a **set** baseline (D1 edges, D2 peers, D5 libs, D6 accesses/shapes). Re-inserting a member is a no-op, so the union across flushes and replicas is idempotent. |
+| `baseline_counters` | one row per bucket of an **additive** baseline (the D7 payload-size histogram). Each flush adds its delta to the stored count. |
+| `baseline_meta` | per-class scalars: `observation_count` (summed), `promoted` and `saturated` (OR'd), `learning_started_at` (min), `data_schema_version` (max). |
+| `trace_observations` | sampled traces kept as UI examples and finding evidence per transaction, with the original OTLP protobuf bytes for just this trace's spans (`raw_otlp`), so the UI gets Jaeger-grade fidelity without an external trace backend. **NOT every trace is stored**; the engine keeps bounded sets per reason. The hourly retention job deletes relation samples after 14 days and the rest after `observation_retention_days` (default 120). |
+| `alert_policies` | rules: when deviations fire an anomaly. One policy per scope (global, service, or transaction); most-specific scope wins and fully replaces the broader one. Seeded with the global default. |
+| `anomaly_issues` | one row per (transaction, signature): occurrence count, max score, first/last seen and the operator decision (open / accepted / dismissed). |
+| `learning_policies` | per-class learning-phase configuration: a `conditions` list combined by `match_mode` (`all`/`any`/`k_of` with `min_matches`), scoped like alert policies. Seeded by the initial migration. See [Learning-phase configuration](#learning-phase-configuration). |
 
 The engine owns the per-class JSON shapes; a `repo.BaselineCodec`
 (`engine.NewBaselineCodec`) splits each class value into set members / additive
-counters on write and rebuilds it on read, so the ClickHouse layer never has to
+counters on write and rebuilds it on read, so the database layer never has to
 understand what a single class's bytes mean.
 
 A transaction is whatever started the trace - HTTP request, gRPC method,
@@ -83,7 +85,7 @@ attribute-correlation transaction guardrail.
 
 Schema changes are versioned SQL migrations applied by
 [golang-migrate](https://github.com/golang-migrate/migrate). The `.up.sql` /
-`.down.sql` files live in `internal/db/clickhouse/migrate/migrations/` and are
+`.down.sql` files live in `internal/db/postgres/migrate/migrations/` and are
 embedded into the binary (`go:embed`), so the same image both serves traffic and
 applies the schema. `migrate.Apply` runs them, tracking applied versions in a
 `schema_migrations` table so each runs exactly once.
@@ -105,25 +107,17 @@ go run ./cmd           # start the service
 
 To evolve the schema after release, **add a new numbered migration** (e.g.
 `000002_add_team.up.sql` + `.down.sql`) - never edit an already-released one, or
-clusters that ran the old version will diverge. Two ClickHouse gotchas:
-- No transactional DDL: if a multi-statement file fails partway, golang-migrate
-  marks the version *dirty* and refuses to proceed until it's forced. Keep
-  statements retry-safe (`IF [NOT] EXISTS`) and simple.
-- The multi-statement splitter splits on `;` literally - **never put a `;`
-  inside a comment**, only inside real statements.
+clusters that ran the old version will diverge. Each file runs in one
+transaction and the runner holds an advisory lock, so a failed file leaves no
+partial schema and concurrent runs serialize.
 
 **Adding a column.** New migration with
-`ALTER TABLE x ADD COLUMN IF NOT EXISTS ...` (cheap, metadata-only). Then add the
-matching field to the domain type in `internal/repo/repo.go` and read/write it
-in `internal/db/clickhouse/clickhouse.go`.
+`ALTER TABLE x ADD COLUMN IF NOT EXISTS ...`. Then add the matching field to the
+domain type in `internal/repo/` and read/write it in `internal/db/postgres/`.
 
 **Adding a new table.** New migration with its `CREATE TABLE IF NOT EXISTS`, add
 methods to the `Repository` interface in `repo.go`, and implement them in
-`clickhouse.go`.
-
-**Changing a key/engine.** ClickHouse can't alter `ORDER BY` or the engine in
-place; write a migration that creates a new table, copies data
-(`INSERT INTO new SELECT FROM old`), then swaps via `RENAME`.
+`internal/db/postgres/`.
 
 **Changing a deviation class's JSON shape.** Nothing schema-side: the value is
 opaque to the store. Bump `DataSchemaVersion` in the engine when you write the
@@ -320,21 +314,22 @@ one trace with a brand-new child span name to fire a D1 deviation.
 
 - All callers depend on `internal/repo.Repository`, never on a specific DB.
 - Schema changes are versioned SQL migrations in
-  `internal/db/clickhouse/migrations/`, applied by `clickhouse.Migrate`
+  `internal/db/postgres/migrate/migrations/`, applied by `migrate.Apply`
   (golang-migrate) - run once per rollout, not per replica.
 
 ## Running locally
 
-The service needs a reachable ClickHouse and an enterprise token. Spin up a
-local server, then point the service at it:
+The service needs a reachable Postgres and an enterprise token. Spin up a
+local server, then point the service at it (the same container backs the
+`internal/db/postgres` integration tests):
 
 ```sh
-docker run -d --name ch -p 9000:9000 -p 8123:8123 \
-  -e CLICKHOUSE_DB=insights -e CLICKHOUSE_USER=insights \
-  -e CLICKHOUSE_PASSWORD=insightspass \
-  clickhouse/clickhouse-server:24.8-alpine
+docker run -d --name insights-pg -p 15432:5432 \
+  -e POSTGRES_DB=insights -e POSTGRES_USER=insights \
+  -e POSTGRES_PASSWORD=insightspass \
+  postgres:17-alpine -c shared_preload_libraries=pg_stat_statements
 
-export CLICKHOUSE_DSN="clickhouse://insights:insightspass@localhost:9000/insights"
+export POSTGRES_DSN="postgres://insights:insightspass@localhost:15432/insights?sslmode=disable"
 
 # Apply schema migrations once (the service no longer does this itself).
 go run ./cmd migrate
@@ -349,7 +344,9 @@ hardcoded constants in `cmd/main.go` on purpose, configure it will be added in t
 
 Env vars the service reads:
 
-- `CLICKHOUSE_DSN` (required) - `clickhouse://user:pass@host:9000/db` URI.
+- `POSTGRES_DSN` (required) - `postgres://user:pass@host:5432/db` URI.
+- `POSTGRES_VOLUME_SIZE` (optional) - size of the database volume (e.g. `8Gi`),
+  so the Storage page can report how full it is.
 - `ODIGOS_LOG_LEVEL` (`error|warn|info|debug`, default `info`).
 - `ODIGOS_ONPREM_TOKEN` - required to pass
   `odigosauth.AssertEnterpriseOdigosToken` at startup.

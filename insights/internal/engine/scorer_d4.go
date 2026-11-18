@@ -656,7 +656,7 @@ func isD4Path(v string) bool {
 
 // ---------- baseline codec (union-safe members) ----------
 //
-// The ClickHouse backend merges set-class baselines by UNION of member strings
+// The database backend merges set-class baselines by UNION of member strings
 // (see Repo.ApplyBaselineDeltas), so D4 cannot store an aggregating profile as
 // one opaque blob per position: two writers with different profiles for the
 // same position would union to two conflicting members. Instead each atomic

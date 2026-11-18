@@ -1,0 +1,15 @@
+{{- if and .Values.insights.enabled (include "insights.database.bundled" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: odigos-insights-db
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: odigos-insights-db
+    odigos.io/system-object: "true"
+data:
+  # Runs once, when the data directory is first initialized. Enables the
+  # top-statements section of the Insights Storage page.
+  01-extensions.sql: |
+    CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+{{- end }}

@@ -223,7 +223,7 @@ func TestD4_SeenEmptyBaselineNeverDeviates(t *testing.T) {
 }
 
 func TestD4_SeenEmptyCodecRoundTrip(t *testing.T) {
-	// The Seen marker must survive the ClickHouse member round-trip (and the
+	// The Seen marker must survive the database member round-trip (and the
 	// cross-replica union) so the zero-value promotion isn't lost on reload.
 	empty := mkTrace(withRoot("GET /users", "users-svc", tracepb.Span_SPAN_KIND_SERVER, nil))
 	baseline := learnD4(t, empty)

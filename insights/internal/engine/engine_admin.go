@@ -79,7 +79,7 @@ func (e *Engine) PromoteBaselineClass(ctx context.Context, transactionID int64, 
 	for _, row := range rows {
 		promoted[row.Class] = row.Settled()
 	}
-	// The class we just wrote may not be visible in ClickHouse yet.
+	// Count the class we just promoted even if the read above predates it.
 	promoted[class] = true
 	for _, sc := range ScoredClasses() {
 		if !promoted[sc] {

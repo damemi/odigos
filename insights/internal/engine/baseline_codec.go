@@ -15,7 +15,7 @@ var _ repo.BaselineCodec = baselineCodec{}
 
 // NewBaselineCodec returns the engine's implementation of repo.BaselineCodec.
 // It is the bridge between the scorers' per-class JSON shapes and the flat
-// (member / counter) rows the ClickHouse backend stores and merges. Keeping it
+// (member / counter) rows the database backend stores and merges. Keeping it
 // here means the backend never needs to understand a single class's JSON.
 func NewBaselineCodec() repo.BaselineCodec { return baselineCodec{} }
 

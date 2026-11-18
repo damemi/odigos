@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 #
-# Reset the Odigos Insights service and its ClickHouse database from scratch.
+# Reset the Odigos Insights service and its bundled Postgres database from scratch.
 #
 # It drops every table in the insights database, re-applies the schema
-# migrations straight from source (internal/db/clickhouse/migrate/migrations),
+# migrations straight from source (internal/db/postgres/migrate/migrations),
 # records the applied version so the Helm migrate Job stays a no-op, and rolls
 # the service. Nothing survives: baselines, observations, anomalies,
 # transactions and the seeded policies are all recreated fresh.
-#
-# Migrations are applied with clickhouse-client (a real SQL parser), so this
-# works even against an image whose embedded golang-migrate runner is broken
-# (that runner splits on ';' naively and chokes on some comments).
 #
 # Usage:
 #   insights/scripts/reset-db.sh
@@ -18,23 +14,23 @@
 # Overridable via env:
 #   NS               k8s namespace                (default: odigos-system)
 #   INSIGHTS_DEPLOY  insights deployment name     (default: odigos-insights)
-#   CH_DEPLOY        clickhouse deployment name   (default: odigos-insights-clickhouse)
-#   DB               clickhouse database/user     (default: odigos_insights)
+#   PG_DEPLOY        postgres deployment name     (default: odigos-insights-db)
+#   DB               postgres database/user       (default: odigos_insights)
 set -euo pipefail
 
 NS="${NS:-odigos-system}"
 INSIGHTS_DEPLOY="${INSIGHTS_DEPLOY:-odigos-insights}"
-CH_DEPLOY="${CH_DEPLOY:-odigos-insights-clickhouse}"
+PG_DEPLOY="${PG_DEPLOY:-odigos-insights-db}"
 DB="${DB:-odigos_insights}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MIGRATIONS_DIR="$SCRIPT_DIR/../internal/db/clickhouse/migrate/migrations"
+MIGRATIONS_DIR="$SCRIPT_DIR/../internal/db/postgres/migrate/migrations"
 
-# Run whatever SQL arrives on stdin inside the ClickHouse pod. The password is
-# read from the pod's own env so it never lands in shell history or argv.
-ch() {
-	kubectl exec -i -n "$NS" "deploy/$CH_DEPLOY" -- sh -c \
-		"clickhouse-client --user '$DB' --password \"\$CLICKHOUSE_PASSWORD\" --database '$DB' --multiquery"
+# Run whatever SQL arrives on stdin inside the Postgres pod as the database
+# owner. psql connects over the local socket, so no password is needed.
+pg() {
+	kubectl exec -i -n "$NS" "deploy/$PG_DEPLOY" -- \
+		psql -v ON_ERROR_STOP=1 -q -U "$DB" -d "$DB" "$@"
 }
 
 echo ">> [1/5] Scaling $INSIGHTS_DEPLOY to 0 so nothing writes during the reset"
@@ -44,32 +40,37 @@ kubectl scale deploy "$INSIGHTS_DEPLOY" -n "$NS" --replicas=0 >/dev/null
 kubectl rollout status deploy/"$INSIGHTS_DEPLOY" -n "$NS" --timeout=90s >/dev/null
 
 echo ">> [2/5] Dropping every table in '$DB'"
-tables="$(printf 'SELECT name FROM system.tables WHERE database = currentDatabase()' | ch || true)"
-for t in $tables; do
-	echo "   - drop $t"
-	printf 'DROP TABLE IF EXISTS `%s`' "$t" | ch
-done
+pg <<'SQL'
+DO $$
+DECLARE t text;
+BEGIN
+	FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = current_schema() LOOP
+		RAISE NOTICE 'drop %', t;
+		EXECUTE format('DROP TABLE IF EXISTS %I CASCADE', t);
+	END LOOP;
+END $$;
+SQL
 
 echo ">> [3/5] Applying migrations from source"
 for f in "$MIGRATIONS_DIR"/*.up.sql; do
 	echo "   - apply $(basename "$f")"
-	ch <"$f"
+	pg -1 <"$f"
 done
 
 echo ">> [4/5] Recording applied version so the Helm migrate Job stays a no-op"
 latest="$(for f in "$MIGRATIONS_DIR"/*.up.sql; do basename "$f"; done | sed -E 's/^0*([0-9]+)_.*/\1/' | sort -n | tail -1)"
-seq="$(( $(date +%s) * 1000000000 ))" # portable ns-ish monotonic value (macOS date lacks %N)
-printf 'CREATE TABLE IF NOT EXISTS schema_migrations (version Int64, dirty UInt8, sequence UInt64) ENGINE = TinyLog;
-TRUNCATE TABLE schema_migrations;
-INSERT INTO schema_migrations (version, dirty, sequence) VALUES (%s, 0, %s);
-' "$latest" "$seq" | ch
-echo "   - marked version $latest, dirty 0"
+pg <<SQL
+CREATE TABLE IF NOT EXISTS schema_migrations (version bigint NOT NULL PRIMARY KEY, dirty boolean NOT NULL);
+TRUNCATE schema_migrations;
+INSERT INTO schema_migrations (version, dirty) VALUES ($latest, false);
+SQL
+echo "   - marked version $latest, dirty false"
 
 echo ">> [5/5] Restoring $INSIGHTS_DEPLOY to $was replica(s)"
 kubectl scale deploy "$INSIGHTS_DEPLOY" -n "$NS" --replicas="$was" >/dev/null
 kubectl rollout status deploy/"$INSIGHTS_DEPLOY" -n "$NS" --timeout=120s
 
 echo ">> Fresh table row counts:"
-printf "SELECT name, total_rows FROM system.tables WHERE database = currentDatabase() ORDER BY name" | ch
+pg -c "SELECT relname AS table, n_live_tup AS rows FROM pg_stat_user_tables ORDER BY relname"
 
 echo ">> Done. Insights + database reset from scratch."

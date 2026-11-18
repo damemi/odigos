@@ -181,7 +181,7 @@ var (
 	// samplesDropped counts sample traces (examples / evidence) the background
 	// writer could not keep because its queue was full. Samples are best-effort
 	// context for a finding, so ingestion is never stalled to store one; a
-	// non-zero rate means ClickHouse writes are lagging the sample rate.
+	// non-zero rate means database writes are lagging the sample rate.
 	samplesDropped = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: namespace,
 		Subsystem: "engine",

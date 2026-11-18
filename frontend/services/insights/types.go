@@ -628,51 +628,88 @@ type StorageConnection struct {
 	Version       string  `json:"version"`
 	Database      string  `json:"database"`
 	Error         *string `json:"error,omitempty"`
+	UptimeSeconds float64 `json:"uptime_seconds"`
 }
 
 type StorageDisk struct {
-	InsightsBytes  int64             `json:"insights_bytes"`
-	TotalBytes     int64             `json:"total_bytes"`
-	UsedBytes      int64             `json:"used_bytes"`
-	AvailableBytes int64             `json:"available_bytes"`
-	UsedPercent    float64           `json:"used_percent"`
-	Status         StorageDiskStatus `json:"status"`
+	DatabaseBytes int64             `json:"database_bytes"`
+	VolumeBytes   int64             `json:"volume_bytes"`
+	UsedPercent   float64           `json:"used_percent"`
+	Status        StorageDiskStatus `json:"status"`
 }
 
-type StorageMemory struct {
-	ProcessRSSBytes  int64   `json:"process_rss_bytes"`
-	CgroupUsedBytes  int64   `json:"cgroup_used_bytes"`
-	CgroupTotalBytes int64   `json:"cgroup_total_bytes"`
-	UptimeSeconds    float64 `json:"uptime_seconds"`
+type StorageConnections struct {
+	Active            int     `json:"active"`
+	Idle              int     `json:"idle"`
+	IdleInTransaction int     `json:"idle_in_transaction"`
+	Total             int     `json:"total"`
+	Max               int     `json:"max"`
+	PoolAcquired      int     `json:"pool_acquired"`
+	PoolIdle          int     `json:"pool_idle"`
+	PoolTotal         int     `json:"pool_total"`
+	PoolMax           int     `json:"pool_max"`
+	PoolWaitCount     int64   `json:"pool_wait_count"`
+	PoolWaitSeconds   float64 `json:"pool_wait_seconds"`
+}
+
+type StorageDatabaseStats struct {
+	CacheHitPercent float64 `json:"cache_hit_percent"`
+	Commits         int64   `json:"commits"`
+	Rollbacks       int64   `json:"rollbacks"`
+	Deadlocks       int64   `json:"deadlocks"`
+	TempBytes       int64   `json:"temp_bytes"`
+	StatsSince      string  `json:"stats_since,omitempty"`
 }
 
 type StorageQuery struct {
 	ElapsedSeconds float64 `json:"elapsed_seconds"`
 	User           string  `json:"user"`
-	MemoryBytes    int64   `json:"memory_bytes"`
+	State          string  `json:"state"`
+	WaitEvent      string  `json:"wait_event"`
 	Query          string  `json:"query"`
-	FinishedAt     *string `json:"finished_at,omitempty"`
+}
+
+type StorageStatement struct {
+	Query        string  `json:"query"`
+	Calls        int64   `json:"calls"`
+	TotalSeconds float64 `json:"total_seconds"`
+	MeanMs       float64 `json:"mean_ms"`
+	Rows         int64   `json:"rows"`
 }
 
 type StorageQueries struct {
-	Active          int            `json:"active"`
-	LongestSeconds  float64        `json:"longest_seconds"`
-	PeakMemoryBytes int64          `json:"peak_memory_bytes"`
-	Items           []StorageQuery `json:"items"`
-	RecentHeaviest  []StorageQuery `json:"recent_heaviest"`
-	RecentLatest    []StorageQuery `json:"recent_latest"`
+	Active              int                `json:"active"`
+	LongestSeconds      float64            `json:"longest_seconds"`
+	Running             []StorageQuery     `json:"running"`
+	TopStatements       []StorageStatement `json:"top_statements"`
+	StatementsAvailable bool               `json:"statements_available"`
 }
 
 type StorageTable struct {
-	Name        string `json:"name"`
-	Rows        int64  `json:"rows"`
-	BytesOnDisk int64  `json:"bytes_on_disk"`
-	ActiveParts int64  `json:"active_parts"`
+	Name         string `json:"name"`
+	Rows         int64  `json:"rows"`
+	DeadRows     int64  `json:"dead_rows"`
+	BytesOnDisk  int64  `json:"bytes_on_disk"`
+	LastVacuumAt string `json:"last_vacuum_at,omitempty"`
 }
 
-type StorageWritePressure struct {
-	UnfinishedMutations int64 `json:"unfinished_mutations"`
-	ActiveParts         int64 `json:"active_parts"`
+type StorageMaintenance struct {
+	DeadRows                 int64   `json:"dead_rows"`
+	VacuumsRunning           int     `json:"vacuums_running"`
+	WaitingLocks             int     `json:"waiting_locks"`
+	OldestTransactionSeconds float64 `json:"oldest_transaction_seconds"`
+}
+
+type StorageRetention struct {
+	ObservationRetentionDays int     `json:"observation_retention_days"`
+	RelationRetentionDays    int     `json:"relation_retention_days"`
+	AttemptRetentionDays     int     `json:"attempt_retention_days"`
+	EverRan                  bool    `json:"ever_ran"`
+	LastRunAt                string  `json:"last_run_at,omitempty"`
+	LastRunOK                bool    `json:"last_run_ok"`
+	LastError                *string `json:"last_error,omitempty"`
+	ObservationsDeleted      int64   `json:"observations_deleted"`
+	AttemptsDeleted          int64   `json:"attempts_deleted"`
 }
 
 type StorageWriteback struct {
@@ -684,15 +721,17 @@ type StorageWriteback struct {
 }
 
 type StorageHealth struct {
-	CheckedAt     string               `json:"checked_at"`
-	Status        StorageHealthStatus  `json:"status"`
-	Connection    StorageConnection    `json:"connection"`
-	Disk          StorageDisk          `json:"disk"`
-	Memory        StorageMemory        `json:"memory"`
-	Queries       StorageQueries       `json:"queries"`
-	Tables        []StorageTable       `json:"tables"`
-	WritePressure StorageWritePressure `json:"write_pressure"`
-	Writeback     StorageWriteback     `json:"writeback"`
+	CheckedAt   string               `json:"checked_at"`
+	Status      StorageHealthStatus  `json:"status"`
+	Connection  StorageConnection    `json:"connection"`
+	Disk        StorageDisk          `json:"disk"`
+	Connections StorageConnections   `json:"connections"`
+	Database    StorageDatabaseStats `json:"database"`
+	Queries     StorageQueries       `json:"queries"`
+	Tables      []StorageTable       `json:"tables"`
+	Maintenance StorageMaintenance   `json:"maintenance"`
+	Retention   StorageRetention     `json:"retention"`
+	Writeback   StorageWriteback     `json:"writeback"`
 }
 
 // Guardrail recommendations (GET/POST /api/v1/recommendations*).

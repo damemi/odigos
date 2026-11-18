@@ -1864,27 +1864,54 @@ type SortOrder string
 
 // StorageConnection defines model for StorageConnection.
 type StorageConnection struct {
-	Database      string `json:"database"`
-	Error         string `json:"error,omitempty"`
-	PingLatencyMs int64  `json:"ping_latency_ms"`
-	Reachable     bool   `json:"reachable"`
-	Version       string `json:"version"`
+	Database      string  `json:"database"`
+	Error         string  `json:"error,omitempty"`
+	PingLatencyMs int64   `json:"ping_latency_ms"`
+	Reachable     bool    `json:"reachable"`
+	UptimeSeconds float64 `json:"uptime_seconds"`
+	Version       string  `json:"version"`
+}
+
+// StorageConnections Server-side connections to the Insights database by state, and this replica's client pool.
+type StorageConnections struct {
+	Active            int `json:"active"`
+	Idle              int `json:"idle"`
+	IdleInTransaction int `json:"idle_in_transaction"`
+
+	// Max The server's max_connections.
+	Max          int `json:"max"`
+	PoolAcquired int `json:"pool_acquired"`
+	PoolIdle     int `json:"pool_idle"`
+	PoolMax      int `json:"pool_max"`
+	PoolTotal    int `json:"pool_total"`
+
+	// PoolWaitCount Acquires that had to wait for a free connection.
+	PoolWaitCount   int64   `json:"pool_wait_count"`
+	PoolWaitSeconds float64 `json:"pool_wait_seconds"`
+	Total           int     `json:"total"`
+}
+
+// StorageDatabaseStats Cumulative counters from pg_stat_database since stats_since.
+type StorageDatabaseStats struct {
+	CacheHitPercent float64 `json:"cache_hit_percent"`
+	Commits         int64   `json:"commits"`
+	Deadlocks       int64   `json:"deadlocks"`
+	Rollbacks       int64   `json:"rollbacks"`
+
+	// StatsSince Omitted when the counters were never reset.
+	StatsSince time.Time `json:"stats_since,omitempty"`
+	TempBytes  int64     `json:"temp_bytes"`
 }
 
 // StorageDisk defines model for StorageDisk.
 type StorageDisk struct {
-	AvailableBytes int64 `json:"available_bytes"`
-
-	// InsightsBytes Bytes used by Insights tables (sum of active parts). Prefer this over filesystem used_bytes when judging Insights storage size - on shared volumes (e.g. kind) filesystem used can include unrelated data.
-	InsightsBytes int64             `json:"insights_bytes"`
+	// DatabaseBytes Size of the Insights database on disk.
+	DatabaseBytes int64             `json:"database_bytes"`
 	Status        StorageDiskStatus `json:"status"`
+	UsedPercent   float64           `json:"used_percent"`
 
-	// TotalBytes Filesystem total for the ClickHouse data volume.
-	TotalBytes int64 `json:"total_bytes"`
-
-	// UsedBytes Filesystem used on the ClickHouse data volume.
-	UsedBytes   int64   `json:"used_bytes"`
-	UsedPercent float64 `json:"used_percent"`
+	// VolumeBytes Size of the volume backing the bundled database. 0 when unknown (external Postgres), in which case used_percent is 0.
+	VolumeBytes int64 `json:"volume_bytes"`
 }
 
 // StorageDiskStatus defines model for StorageDiskStatus.
@@ -1892,68 +1919,95 @@ type StorageDiskStatus string
 
 // StorageHealth defines model for StorageHealth.
 type StorageHealth struct {
-	CheckedAt     time.Time            `json:"checked_at"`
-	Connection    StorageConnection    `json:"connection"`
-	Disk          StorageDisk          `json:"disk"`
-	Memory        StorageMemory        `json:"memory"`
-	Queries       StorageQueries       `json:"queries"`
-	Status        StorageHealthStatus  `json:"status"`
-	Tables        []StorageTable       `json:"tables"`
-	WritePressure StorageWritePressure `json:"write_pressure"`
-	Writeback     StorageWriteback     `json:"writeback"`
+	CheckedAt  time.Time         `json:"checked_at"`
+	Connection StorageConnection `json:"connection"`
+
+	// Connections Server-side connections to the Insights database by state, and this replica's client pool.
+	Connections StorageConnections `json:"connections"`
+
+	// Database Cumulative counters from pg_stat_database since stats_since.
+	Database    StorageDatabaseStats `json:"database"`
+	Disk        StorageDisk          `json:"disk"`
+	Maintenance StorageMaintenance   `json:"maintenance"`
+	Queries     StorageQueries       `json:"queries"`
+
+	// Retention Retention policy and the last run of the job that deletes expired sample traces and delivery attempts (runs hourly on the leader).
+	Retention StorageRetention    `json:"retention"`
+	Status    StorageHealthStatus `json:"status"`
+	Tables    []StorageTable      `json:"tables"`
+	Writeback StorageWriteback    `json:"writeback"`
 }
 
 // StorageHealthStatus defines model for StorageHealthStatus.
 type StorageHealthStatus string
 
-// StorageMemory defines model for StorageMemory.
-type StorageMemory struct {
-	// CgroupTotalBytes 0 means no cgroup memory limit.
-	CgroupTotalBytes int64   `json:"cgroup_total_bytes"`
-	CgroupUsedBytes  int64   `json:"cgroup_used_bytes"`
-	ProcessRssBytes  int64   `json:"process_rss_bytes"`
-	UptimeSeconds    float64 `json:"uptime_seconds"`
+// StorageMaintenance defines model for StorageMaintenance.
+type StorageMaintenance struct {
+	DeadRows                 int64   `json:"dead_rows"`
+	OldestTransactionSeconds float64 `json:"oldest_transaction_seconds"`
+	VacuumsRunning           int     `json:"vacuums_running"`
+
+	// WaitingLocks Sessions blocked on a lock right now.
+	WaitingLocks int `json:"waiting_locks"`
 }
 
 // StorageQueries defines model for StorageQueries.
 type StorageQueries struct {
-	Active int `json:"active"`
+	Active         int     `json:"active"`
+	LongestSeconds float64 `json:"longest_seconds"`
 
-	// Items Currently running queries (system.processes).
-	Items           []StorageQuery `json:"items"`
-	LongestSeconds  float64        `json:"longest_seconds"`
-	PeakMemoryBytes int64          `json:"peak_memory_bytes"`
+	// Running Queries executing now, longest first. Capped at 20.
+	Running             []StorageQuery `json:"running"`
+	StatementsAvailable bool           `json:"statements_available"`
 
-	// RecentHeaviest Top finished queries from system.query_log in the last 5 minutes, ordered by duration then memory (slowest / heaviest first). Capped at 10. Prefer this when diagnosing storage pressure while idle.
-	RecentHeaviest []StorageQuery `json:"recent_heaviest"`
-
-	// RecentLatest Most recently finished queries from system.query_log in the last 5 minutes, ordered by finish time descending. Capped at 10.
-	RecentLatest []StorageQuery `json:"recent_latest"`
+	// TopStatements Statements with the most total execution time, from pg_stat_statements. Capped at 10. Empty when the extension is not installed (see statements_available).
+	TopStatements []StorageStatement `json:"top_statements"`
 }
 
 // StorageQuery defines model for StorageQuery.
 type StorageQuery struct {
 	ElapsedSeconds float64 `json:"elapsed_seconds"`
+	Query          string  `json:"query"`
+	State          string  `json:"state"`
+	User           string  `json:"user"`
 
-	// FinishedAt Finish time from system.query_log. Omitted for currently running queries (items).
-	FinishedAt  time.Time `json:"finished_at,omitempty"`
-	MemoryBytes int64     `json:"memory_bytes"`
-	Query       string    `json:"query"`
-	User        string    `json:"user"`
+	// WaitEvent <type>:<event> the query is waiting on, empty when running.
+	WaitEvent string `json:"wait_event"`
+}
+
+// StorageRetention Retention policy and the last run of the job that deletes expired sample traces and delivery attempts (runs hourly on the leader).
+type StorageRetention struct {
+	AttemptRetentionDays int    `json:"attempt_retention_days"`
+	AttemptsDeleted      int64  `json:"attempts_deleted"`
+	EverRan              bool   `json:"ever_ran"`
+	LastError            string `json:"last_error,omitempty"`
+
+	// LastRunAt Omitted when the job has not run yet.
+	LastRunAt                time.Time `json:"last_run_at,omitempty"`
+	LastRunOk                bool      `json:"last_run_ok"`
+	ObservationRetentionDays int       `json:"observation_retention_days"`
+	ObservationsDeleted      int64     `json:"observations_deleted"`
+	RelationRetentionDays    int       `json:"relation_retention_days"`
+}
+
+// StorageStatement defines model for StorageStatement.
+type StorageStatement struct {
+	Calls        int64   `json:"calls"`
+	MeanMs       float64 `json:"mean_ms"`
+	Query        string  `json:"query"`
+	Rows         int64   `json:"rows"`
+	TotalSeconds float64 `json:"total_seconds"`
 }
 
 // StorageTable defines model for StorageTable.
 type StorageTable struct {
-	ActiveParts int64  `json:"active_parts"`
-	BytesOnDisk int64  `json:"bytes_on_disk"`
-	Name        string `json:"name"`
-	Rows        int64  `json:"rows"`
-}
+	BytesOnDisk int64 `json:"bytes_on_disk"`
+	DeadRows    int64 `json:"dead_rows"`
 
-// StorageWritePressure defines model for StorageWritePressure.
-type StorageWritePressure struct {
-	ActiveParts         int64 `json:"active_parts"`
-	UnfinishedMutations int64 `json:"unfinished_mutations"`
+	// LastVacuumAt Newest manual or auto vacuum. Omitted when never vacuumed.
+	LastVacuumAt time.Time `json:"last_vacuum_at,omitempty"`
+	Name         string    `json:"name"`
+	Rows         int64     `json:"rows"`
 }
 
 // StorageWriteback defines model for StorageWriteback.
@@ -1998,7 +2052,7 @@ type SystemIdentitySettings struct {
 
 // SystemRetentionSettings defines model for SystemRetentionSettings.
 type SystemRetentionSettings struct {
-	// ObservationRetentionDays Days to keep sample traces (default 120); applied as ClickHouse TTL on save. Matches the 120-day findings lookback ceiling.
+	// ObservationRetentionDays Days to keep sample traces (default 120); enforced by the hourly retention job and applied right away on save. Matches the 120-day findings lookback ceiling.
 	ObservationRetentionDays int `json:"observation_retention_days"`
 }
 
@@ -2032,7 +2086,7 @@ type SystemSettings struct {
 	// Sampling Learning-phase example sampling only: collect up to N examples per transaction (throttled by interval), then stop. Anomaly and guardrail evidence each keep a single write-once sample; occurrences are counted separately.
 	Sampling SystemSamplingSettings `json:"sampling"`
 
-	// Writeback How often the engine writes pending baseline learning and occurrence counters to ClickHouse. Raise to reduce DB load; lower for fresher UI counts.
+	// Writeback How often the engine writes pending baseline learning and occurrence counters to the database. Raise to reduce DB load; lower for fresher UI counts.
 	Writeback SystemWritebackSettings `json:"writeback"`
 }
 
@@ -2045,7 +2099,7 @@ type SystemTransactionIdentityDimension struct {
 	Key string `json:"key"`
 }
 
-// SystemWritebackSettings How often the engine writes pending baseline learning and occurrence counters to ClickHouse. Raise to reduce DB load; lower for fresher UI counts.
+// SystemWritebackSettings How often the engine writes pending baseline learning and occurrence counters to the database. Raise to reduce DB load; lower for fresher UI counts.
 type SystemWritebackSettings struct {
 	// FlushIntervalSeconds Seconds between write-behind flushes (default 15). Applies live - no pod restart. Also covers anomaly and guardrail occurrence drains. Time-based promotion is re-evaluated after each flush.
 	FlushIntervalSeconds int `json:"flush_interval_seconds"`

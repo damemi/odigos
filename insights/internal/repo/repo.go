@@ -1,7 +1,7 @@
 // Package repo defines the database-agnostic interface used to persist
 // baselines, observations, anomalies, and policies. It is the swap seam: the
 // engine and HTTP handlers depend only on this interface, while
-// backends (ClickHouse today) implement it under internal/db/<backend>/.
+// backends (Postgres today) implement it under internal/db/<backend>/.
 //
 // Domain types are split by area across the package (transaction.go,
 // baseline.go, learning.go, policy.go, anomaly.go, guardrail.go,
@@ -14,7 +14,7 @@ import (
 )
 
 // Repository is the single backend-facing dependency callers hold, implemented
-// by the ClickHouse backend and consumed by the engine and HTTP
+// by the Postgres backend and consumed by the engine and HTTP
 // handlers. Implementations MUST be safe for concurrent use, since handlers,
 // the OTLP receiver, and background workers touch it at once.
 type Repository interface {
@@ -97,9 +97,8 @@ type Repository interface {
 	// the freshest stored value via merge (so replicas' set/count contributions
 	// are additive, not last-writer-wins), observation_count grows by
 	// CountDelta, and promoted is monotonic. Missing rows are seeded from the
-	// delta's seeding fields. The ClickHouse backend appends to aggregate tables
-	// and reconciles via merge-at-read; a row that failed to apply may be
-	// omitted from the result.
+	// delta's seeding fields. The Postgres backend merges every delta in one
+	// transaction with upserts.
 	ApplyBaselineDeltas(ctx context.Context, deltas []BaselineDelta, merge BaselineMerger) ([]BaselineClass, error)
 
 	// PromoteBaselineClass flips Promoted=true. Called by the engine's promotion
@@ -134,7 +133,7 @@ type Repository interface {
 
 	// InsertObservations stores traces as UI examples, all in one insert.
 	// Callers pre-decide the sample_reason; the repo does not sample. Called by
-	// the engine's background sample writer, which batches so ClickHouse sees a
+	// the engine's background sample writer, which batches so the database sees a
 	// few large inserts instead of one per sampled trace.
 	InsertObservations(ctx context.Context, obs []Observation) error
 
@@ -372,8 +371,9 @@ type Repository interface {
 
 	// ---------- storage health ----------
 
-	// GetStorageHealth returns a point-in-time ClickHouse health snapshot for
-	// the debug Storage page (connection, disk, memory, running queries, tables).
+	// GetStorageHealth returns a point-in-time Postgres health snapshot for the
+	// Storage page (connection, disk, connections, queries, tables, maintenance,
+	// retention).
 	GetStorageHealth(ctx context.Context) (StorageHealth, error)
 
 	// ---------- plumbing ----------

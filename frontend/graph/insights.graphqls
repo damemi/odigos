@@ -1381,7 +1381,7 @@ input InsightsSystemSettingsInput {
   resetTransactions: Boolean
 }
 
-# Storage health (ClickHouse + writeback snapshot, for the settings/health page)
+# Storage health (Postgres + writeback snapshot, for the settings/health page)
 
 type InsightsStorageConnection {
   reachable: Boolean!
@@ -1389,57 +1389,105 @@ type InsightsStorageConnection {
   version: String!
   database: String!
   error: String
+  uptimeSeconds: Float!
 }
 
 type InsightsStorageDisk {
-  insightsBytes: Int!
-  totalBytes: Int!
-  usedBytes: Int!
-  availableBytes: Int!
+  databaseBytes: Int!
+  """
+  Size of the bundled database volume. 0 when unknown (external Postgres).
+  """
+  volumeBytes: Int!
   usedPercent: Float!
   status: InsightsStorageDiskStatus!
 }
 
-type InsightsStorageMemory {
-  processRssBytes: Int!
-  cgroupUsedBytes: Int!
-  """
-  0 means no limit.
-  """
-  cgroupTotalBytes: Int!
-  uptimeSeconds: Float!
+"""
+Server-side connections to the Insights database by state, and the client
+pool of the replica that served the request.
+"""
+type InsightsStorageConnections {
+  active: Int!
+  idle: Int!
+  idleInTransaction: Int!
+  total: Int!
+  max: Int!
+  poolAcquired: Int!
+  poolIdle: Int!
+  poolTotal: Int!
+  poolMax: Int!
+  poolWaitCount: Int!
+  poolWaitSeconds: Float!
+}
+
+"""
+Cumulative database counters since statsSince.
+"""
+type InsightsStorageDatabaseStats {
+  cacheHitPercent: Float!
+  commits: Int!
+  rollbacks: Int!
+  deadlocks: Int!
+  tempBytes: Int!
+  statsSince: String
 }
 
 type InsightsStorageQuery {
   elapsedSeconds: Float!
   user: String!
-  memoryBytes: Int!
+  state: String!
+  """
+  <type>:<event> the query is waiting on, empty when running.
+  """
+  waitEvent: String!
   query: String!
-  """
-  Omitted for still-running queries.
-  """
-  finishedAt: String
+}
+
+type InsightsStorageStatement {
+  query: String!
+  calls: Int!
+  totalSeconds: Float!
+  meanMs: Float!
+  rows: Int!
 }
 
 type InsightsStorageQueries {
   active: Int!
   longestSeconds: Float!
-  peakMemoryBytes: Int!
-  items: [InsightsStorageQuery!]!
-  recentHeaviest: [InsightsStorageQuery!]!
-  recentLatest: [InsightsStorageQuery!]!
+  running: [InsightsStorageQuery!]!
+  """
+  Statements with the most total execution time. Empty when
+  statementsAvailable is false (pg_stat_statements not installed).
+  """
+  topStatements: [InsightsStorageStatement!]!
+  statementsAvailable: Boolean!
 }
 
 type InsightsStorageTable {
   name: String!
   rows: Int!
+  deadRows: Int!
   bytesOnDisk: Int!
-  activeParts: Int!
+  lastVacuumAt: String
 }
 
-type InsightsStorageWritePressure {
-  unfinishedMutations: Int!
-  activeParts: Int!
+type InsightsStorageMaintenance {
+  deadRows: Int!
+  vacuumsRunning: Int!
+  waitingLocks: Int!
+  oldestTransactionSeconds: Float!
+}
+
+type InsightsStorageRetention {
+  observationRetentionDays: Int!
+  relationRetentionDays: Int!
+  attemptRetentionDays: Int!
+  everRan: Boolean!
+  lastRunAt: String
+  lastRunOk: Boolean!
+  lastError: String
+  observationsDeleted: Int!
+  attemptsDeleted: Int!
 }
 
 type InsightsStorageWriteback {
@@ -1455,10 +1503,12 @@ type InsightsStorageHealth {
   status: InsightsStorageHealthStatus!
   connection: InsightsStorageConnection!
   disk: InsightsStorageDisk!
-  memory: InsightsStorageMemory!
+  connections: InsightsStorageConnections!
+  database: InsightsStorageDatabaseStats!
   queries: InsightsStorageQueries!
   tables: [InsightsStorageTable!]!
-  writePressure: InsightsStorageWritePressure!
+  maintenance: InsightsStorageMaintenance!
+  retention: InsightsStorageRetention!
   writeback: InsightsStorageWriteback!
 }
 

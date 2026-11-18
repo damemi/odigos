@@ -1,6 +1,6 @@
 # AGENTS.md - Odigos Insights
 
-- Every feature must account for **HA**: insights runs as **multiple replicas** sharing one ClickHouse. Per-pod state (baselines, policy snapshots, buffers) can lag; durable state in ClickHouse is the source of truth.
+- Every feature must account for **HA**: insights runs as **multiple replicas** sharing one Postgres. Per-pod state (baselines, policy snapshots, buffers) can lag; durable state in Postgres is the source of truth.
 - **No database reads or writes on the trace hot path** (`Engine.Process` / `processOne`). Persistence goes through in-memory stores and write-behind flush.
 - **Never rely on reload timing for correctness.** A snapshot can be up to a reload interval stale on any replica. If stale state would produce a wrong result (a false finding, an overwritten value), make the state **self-describing** so the holder can reject it locally.
 - **Fingerprint stamping** is the pattern for that: store, next to the data, a hash of the config it was derived under (`repo.IdentityDimensionsFingerprint` → `ServiceGuardrail.RuleFingerprints`). A replica compares the stamp to the config it is actually using and skips the rule on mismatch - no coordination, no lag.

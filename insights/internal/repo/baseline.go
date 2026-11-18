@@ -107,7 +107,7 @@ type BaselineMerger interface {
 }
 
 // Counter is one additive (bucket, count) pair of a baseline class, e.g. a D7
-// payload-size histogram bucket. The ClickHouse backend sums Count across
+// payload-size histogram bucket. The database backend sums Count across
 // contributions for the same (transaction, class, Bucket).
 type Counter struct {
 	Bucket string
@@ -115,7 +115,7 @@ type Counter struct {
 }
 
 // BaselineCodec translates a class's opaque JSON value to and from the two
-// atomic shapes an append-only aggregating store (ClickHouse) can merge itself:
+// atomic shapes the database backend merges itself:
 // set members (kept as a union, idempotent) and counters (summed, additive). A
 // class uses one shape or the other; classes with no persisted data return
 // nothing. The engine owns the JSON shapes and supplies the implementation (see

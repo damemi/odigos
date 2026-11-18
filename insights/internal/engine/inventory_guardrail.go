@@ -199,7 +199,7 @@ func (e *Engine) ForcePromoteService(ctx context.Context, namespace, service str
 		e.recommendations.requestMine(tx.ID)
 	}
 	// Treat these txns as promoted even if ListTransactionStats still lags
-	// behind the ClickHouse promote inserts (same race as natural promote).
+	// behind the promote writes (same race as natural promote).
 	err = e.maybeAutoEnableTransactionGuardrail(ctx, namespace, service, ids...)
 	e.recommendations.requestMineService(namespace, service)
 	return err

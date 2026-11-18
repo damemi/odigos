@@ -1117,18 +1117,29 @@ func StorageQueryToModel(query StorageQuery) *model.InsightsStorageQuery {
 	return &model.InsightsStorageQuery{
 		ElapsedSeconds: query.ElapsedSeconds,
 		User:           query.User,
-		MemoryBytes:    int64ToInt(query.MemoryBytes),
+		State:          query.State,
+		WaitEvent:      query.WaitEvent,
 		Query:          query.Query,
-		FinishedAt:     query.FinishedAt,
+	}
+}
+
+func StorageStatementToModel(statement StorageStatement) *model.InsightsStorageStatement {
+	return &model.InsightsStorageStatement{
+		Query:        statement.Query,
+		Calls:        int64ToInt(statement.Calls),
+		TotalSeconds: statement.TotalSeconds,
+		MeanMs:       statement.MeanMs,
+		Rows:         int64ToInt(statement.Rows),
 	}
 }
 
 func StorageTableToModel(table StorageTable) *model.InsightsStorageTable {
 	return &model.InsightsStorageTable{
-		Name:        table.Name,
-		Rows:        int64ToInt(table.Rows),
-		BytesOnDisk: int64ToInt(table.BytesOnDisk),
-		ActiveParts: int64ToInt(table.ActiveParts),
+		Name:         table.Name,
+		Rows:         int64ToInt(table.Rows),
+		DeadRows:     int64ToInt(table.DeadRows),
+		BytesOnDisk:  int64ToInt(table.BytesOnDisk),
+		LastVacuumAt: optionalTimestamp(table.LastVacuumAt),
 	}
 }
 
@@ -1142,33 +1153,59 @@ func StorageHealthToModel(health StorageHealth) *model.InsightsStorageHealth {
 			Version:       health.Connection.Version,
 			Database:      health.Connection.Database,
 			Error:         health.Connection.Error,
+			UptimeSeconds: health.Connection.UptimeSeconds,
 		},
 		Disk: &model.InsightsStorageDisk{
-			InsightsBytes:  int64ToInt(health.Disk.InsightsBytes),
-			TotalBytes:     int64ToInt(health.Disk.TotalBytes),
-			UsedBytes:      int64ToInt(health.Disk.UsedBytes),
-			AvailableBytes: int64ToInt(health.Disk.AvailableBytes),
-			UsedPercent:    health.Disk.UsedPercent,
-			Status:         StorageDiskStatusToModel(health.Disk.Status),
+			DatabaseBytes: int64ToInt(health.Disk.DatabaseBytes),
+			VolumeBytes:   int64ToInt(health.Disk.VolumeBytes),
+			UsedPercent:   health.Disk.UsedPercent,
+			Status:        StorageDiskStatusToModel(health.Disk.Status),
 		},
-		Memory: &model.InsightsStorageMemory{
-			ProcessRssBytes:  int64ToInt(health.Memory.ProcessRSSBytes),
-			CgroupUsedBytes:  int64ToInt(health.Memory.CgroupUsedBytes),
-			CgroupTotalBytes: int64ToInt(health.Memory.CgroupTotalBytes),
-			UptimeSeconds:    health.Memory.UptimeSeconds,
+		Connections: &model.InsightsStorageConnections{
+			Active:            health.Connections.Active,
+			Idle:              health.Connections.Idle,
+			IdleInTransaction: health.Connections.IdleInTransaction,
+			Total:             health.Connections.Total,
+			Max:               health.Connections.Max,
+			PoolAcquired:      health.Connections.PoolAcquired,
+			PoolIdle:          health.Connections.PoolIdle,
+			PoolTotal:         health.Connections.PoolTotal,
+			PoolMax:           health.Connections.PoolMax,
+			PoolWaitCount:     int64ToInt(health.Connections.PoolWaitCount),
+			PoolWaitSeconds:   health.Connections.PoolWaitSeconds,
+		},
+		Database: &model.InsightsStorageDatabaseStats{
+			CacheHitPercent: health.Database.CacheHitPercent,
+			Commits:         int64ToInt(health.Database.Commits),
+			Rollbacks:       int64ToInt(health.Database.Rollbacks),
+			Deadlocks:       int64ToInt(health.Database.Deadlocks),
+			TempBytes:       int64ToInt(health.Database.TempBytes),
+			StatsSince:      optionalTimestamp(health.Database.StatsSince),
 		},
 		Queries: &model.InsightsStorageQueries{
-			Active:          health.Queries.Active,
-			LongestSeconds:  health.Queries.LongestSeconds,
-			PeakMemoryBytes: int64ToInt(health.Queries.PeakMemoryBytes),
-			Items:           mapSlice(health.Queries.Items, StorageQueryToModel),
-			RecentHeaviest:  mapSlice(health.Queries.RecentHeaviest, StorageQueryToModel),
-			RecentLatest:    mapSlice(health.Queries.RecentLatest, StorageQueryToModel),
+			Active:              health.Queries.Active,
+			LongestSeconds:      health.Queries.LongestSeconds,
+			Running:             mapSlice(health.Queries.Running, StorageQueryToModel),
+			TopStatements:       mapSlice(health.Queries.TopStatements, StorageStatementToModel),
+			StatementsAvailable: health.Queries.StatementsAvailable,
 		},
 		Tables: mapSlice(health.Tables, StorageTableToModel),
-		WritePressure: &model.InsightsStorageWritePressure{
-			UnfinishedMutations: int64ToInt(health.WritePressure.UnfinishedMutations),
-			ActiveParts:         int64ToInt(health.WritePressure.ActiveParts),
+		Maintenance: &model.InsightsStorageMaintenance{
+			DeadRows:                 int64ToInt(health.Maintenance.DeadRows),
+			VacuumsRunning:           health.Maintenance.VacuumsRunning,
+			WaitingLocks:             health.Maintenance.WaitingLocks,
+			OldestTransactionSeconds: health.Maintenance.OldestTransactionSeconds,
+		},
+		Retention: &model.InsightsStorageRetention{
+			ObservationRetentionDays: health.Retention.ObservationRetentionDays,
+			RelationRetentionDays:    health.Retention.RelationRetentionDays,
+			AttemptRetentionDays:     health.Retention.AttemptRetentionDays,
+			EverRan:                  health.Retention.EverRan,
+			LastRunAt:                optionalTimestamp(health.Retention.LastRunAt),
+			LastRunOk:                health.Retention.LastRunOK,
+			LastError:                health.Retention.LastError,
+			ObservationsDeleted:      int64ToInt(health.Retention.ObservationsDeleted),
+			AttemptsDeleted:          int64ToInt(health.Retention.AttemptsDeleted),
 		},
 		Writeback: &model.InsightsStorageWriteback{
 			FlushIntervalSeconds: health.Writeback.FlushIntervalSeconds,

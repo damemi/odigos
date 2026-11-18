@@ -1366,7 +1366,7 @@ func (f *fakeRepo) ListTransactionStats(_ context.Context, params repo.Transacti
 	return out, nil
 }
 
-// DeleteTransaction mirrors the ClickHouse repo: findings and stored traces go
+// DeleteTransaction mirrors the Postgres repo: findings and stored traces go
 // with the transaction, not just its identity and baselines.
 func (f *fakeRepo) DeleteTransaction(ctx context.Context, transactionID int64) error {
 	if err := f.DeleteAnomalyIssues(ctx, transactionID); err != nil {
@@ -1863,7 +1863,7 @@ func (f *fakeRepo) RecordAnomalyOccurrences(_ context.Context, occs []repo.Anoma
 }
 
 // aggregateIssues folds recorded occurrences into per-(txn, signature) issues,
-// mirroring the AggregatingMergeTree the ClickHouse repo relies on.
+// mirroring the upsert merge the Postgres repo does.
 func (f *fakeRepo) aggregateIssues() map[string]*repo.AnomalyIssue {
 	txByID := map[int64]repo.Transaction{}
 	for _, tx := range f.transactions {

@@ -11,7 +11,7 @@ spec:
   # No replicas field: the HPA (templates/insights/hpa.yaml) always owns the
   # replica count, so setting it here would make helm and the HPA fight over it
   # on every reconcile. Replicas scale freely anyway — schema migrations run once
-  # via a separate Job and baseline writes are idempotent in ClickHouse.
+  # via a separate Job and baseline writes merge in Postgres upserts.
   selector:
     matchLabels:
       app.kubernetes.io/name: odigos-insights
@@ -60,20 +60,16 @@ spec:
                   key: odigos-onprem-token
             - name: GOMEMLIMIT
               value: {{ include "odigos.gomemlimitFromResources" (dict "Resources" .Values.insights.resources) }}
-            # ClickHouse password comes from the bundled secret; user and
-            # database name are hardcoded ("odigos_insights") in the
-            # ClickHouse Deployment too, so we just bake them into the DSN.
-            # randAlphaNum (used to mint the password) only produces
-            # URL-safe chars, so no encoding gymnastics are needed here.
-            # Port 9000 is ClickHouse's native protocol (what clickhouse-go
-            # speaks); 8123 is HTTP and is not used by the service.
-            - name: CLICKHOUSE_PASSWORD
+            - name: POSTGRES_DSN
               valueFrom:
                 secretKeyRef:
-                  name: odigos-insights-clickhouse
-                  key: password
-            - name: CLICKHOUSE_DSN
-              value: "clickhouse://odigos_insights:$(CLICKHOUSE_PASSWORD)@odigos-insights-clickhouse:9000/odigos_insights"
+                  name: {{ include "insights.database.dsnSecretName" . }}
+                  key: {{ include "insights.database.dsnSecretKey" . }}
+            {{- if and (include "insights.database.bundled" .) (ne .Values.insights.database.storage.persistence false) }}
+            # Lets the Storage page report how full the bundled volume is.
+            - name: POSTGRES_VOLUME_SIZE
+              value: {{ .Values.insights.database.storage.size | quote }}
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

@@ -2,7 +2,7 @@ package engine
 
 // Learning-phase configuration: the per-class promotion policies.
 //
-// Defaults are seeded by the schema migrations (see the clickhouse/migrate
+// Defaults are seeded by the schema migrations (see the postgres/migrate
 // package). The engine keeps the learning_policies table in an in-memory
 // snapshot and consults it on the per-trace path with a plain map lookup - no
 // DB round-trip per request. The snapshot is swapped atomically, so a

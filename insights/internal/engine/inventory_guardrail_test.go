@@ -494,7 +494,7 @@ func TestForcePromoteServiceAutoEnablesDespiteStalePromotedFlag(t *testing.T) {
 		}
 	}
 
-	// Simulate ClickHouse lag: promote writes succeeded but ListTransactionStats
+	// Simulate a stale read: promote writes succeeded but ListTransactionStats
 	// still reports Promoted=false. treatAsPromoted must still enable the rule.
 	if err := eng.maybeAutoEnableTransactionGuardrail(context.Background(), "default", "geolocation"); err != nil {
 		t.Fatal(err)

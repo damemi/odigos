@@ -318,3 +318,49 @@ limits:
 {{- printf "%dmb" (div (mul $num 85) 100) -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+Insights database provider: bundled (default) or external. A future "cnpg"
+value will render an operator-managed HA Postgres.
+*/}}
+{{- define "insights.database.provider" -}}
+{{- .Values.insights.database.provider | default "bundled" -}}
+{{- end -}}
+
+{{/*
+True when the chart runs the bundled single-replica Postgres.
+*/}}
+{{- define "insights.database.bundled" -}}
+{{- if eq (include "insights.database.provider" .) "bundled" -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+True when an external Postgres is referenced through an existing Secret (the
+chart then renders no DSN Secret of its own).
+*/}}
+{{- define "insights.database.usesExistingSecret" -}}
+{{- if and (eq (include "insights.database.provider" .) "external") .Values.insights.database.external.existingSecret -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+Secret name and key holding the Insights Postgres connection URI.
+*/}}
+{{- define "insights.database.dsnSecretName" -}}
+{{- if include "insights.database.usesExistingSecret" . -}}
+{{- .Values.insights.database.external.existingSecret -}}
+{{- else -}}
+odigos-insights-db
+{{- end -}}
+{{- end -}}
+
+{{- define "insights.database.dsnSecretKey" -}}
+{{- if include "insights.database.usesExistingSecret" . -}}
+{{- .Values.insights.database.external.existingSecretKey | default "dsn" -}}
+{{- else -}}
+dsn
+{{- end -}}
+{{- end -}}

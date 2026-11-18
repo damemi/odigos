@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Odigos Insights Service API
-  version: 10.0.0
+  version: 11.0.0
   description: >
     HTTP API for the Odigos Insights (security) service. This spec is the source
     of truth for the contract: the Go server wire types (internal/api/http/apitypes)
@@ -1252,8 +1252,8 @@ paths:
       summary: Replace system settings
       description: >
         Full-document upsert of system settings. Applies immediately via an
-        engine reload; changing observation retention also updates the
-        ClickHouse TTL (capped at 120 days). When identity dimensions change,
+        engine reload; changing observation retention also deletes samples
+        older than the new value right away (capped at 120 days). When identity dimensions change,
         set reset_transactions=true to wipe existing transactions and relearn;
         omit or false to keep stale identities until deleted manually.
       operationId: putSystemSettings
@@ -1274,9 +1274,10 @@ paths:
       tags: [system]
       summary: Get storage health
       description: >
-        Point-in-time ClickHouse health for this Insights deployment
-        (connection, disk, memory, running queries, table sizes, write
-        pressure) plus Insights writeback flush status. Intended as the first
+        Point-in-time Postgres health for this Insights deployment
+        (connection, disk, connections, database counters, running queries,
+        top statements, table sizes, maintenance, retention) plus Insights
+        writeback flush status. Intended as the first
         debug surface for service ↔ database integration.
       operationId: getStorageHealth
       responses:
@@ -3553,8 +3554,9 @@ components:
           minimum: 1
           maximum: 120
           description: >
-            Days to keep sample traces (default 120); applied as ClickHouse TTL
-            on save. Matches the 120-day findings lookback ceiling.
+            Days to keep sample traces (default 120); enforced by the hourly
+            retention job and applied right away on save. Matches the 120-day
+            findings lookback ceiling.
       required: [observation_retention_days]
 
     SystemCapacitySettings:
@@ -3598,7 +3600,7 @@ components:
       type: object
       description: >
         How often the engine writes pending baseline learning and occurrence
-        counters to ClickHouse. Raise to reduce DB load; lower for fresher UI counts.
+        counters to the database. Raise to reduce DB load; lower for fresher UI counts.
       properties:
         flush_interval_seconds:
           type: integer
@@ -3709,102 +3711,151 @@ components:
         version: { type: string }
         database: { type: string }
         error: { type: string }
-      required: [reachable, ping_latency_ms, version, database]
+        uptime_seconds: { type: number, format: double }
+      required: [reachable, ping_latency_ms, version, database, uptime_seconds]
 
     StorageDisk:
       type: object
       properties:
-        insights_bytes:
+        database_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Size of the Insights database on disk.
+        volume_bytes:
           type: integer
           format: int64
           minimum: 0
           description: >
-            Bytes used by Insights tables (sum of active parts). Prefer this over
-            filesystem used_bytes when judging Insights storage size - on shared
-            volumes (e.g. kind) filesystem used can include unrelated data.
-        total_bytes:
-          type: integer
-          format: int64
-          minimum: 0
-          description: Filesystem total for the ClickHouse data volume.
-        used_bytes:
-          type: integer
-          format: int64
-          minimum: 0
-          description: Filesystem used on the ClickHouse data volume.
-        available_bytes: { type: integer, format: int64, minimum: 0 }
+            Size of the volume backing the bundled database. 0 when unknown
+            (external Postgres), in which case used_percent is 0.
         used_percent: { type: number, format: double }
         status: { $ref: "#/components/schemas/StorageDiskStatus" }
-      required: [insights_bytes, total_bytes, used_bytes, available_bytes, used_percent, status]
+      required: [database_bytes, volume_bytes, used_percent, status]
 
-    StorageMemory:
+    StorageConnections:
       type: object
+      description: >
+        Server-side connections to the Insights database by state, and this
+        replica's client pool.
       properties:
-        process_rss_bytes: { type: integer, format: int64, minimum: 0 }
-        cgroup_used_bytes: { type: integer, format: int64, minimum: 0 }
-        cgroup_total_bytes:
+        active: { type: integer, minimum: 0 }
+        idle: { type: integer, minimum: 0 }
+        idle_in_transaction: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 0 }
+        max: { type: integer, minimum: 0, description: The server's max_connections. }
+        pool_acquired: { type: integer, minimum: 0 }
+        pool_idle: { type: integer, minimum: 0 }
+        pool_total: { type: integer, minimum: 0 }
+        pool_max: { type: integer, minimum: 0 }
+        pool_wait_count:
           type: integer
           format: int64
           minimum: 0
-          description: 0 means no cgroup memory limit.
-        uptime_seconds: { type: number, format: double }
-      required: [process_rss_bytes, cgroup_used_bytes, cgroup_total_bytes, uptime_seconds]
+          description: Acquires that had to wait for a free connection.
+        pool_wait_seconds: { type: number, format: double }
+      required: [active, idle, idle_in_transaction, total, max, pool_acquired, pool_idle, pool_total, pool_max, pool_wait_count, pool_wait_seconds]
+
+    StorageDatabaseStats:
+      type: object
+      description: Cumulative counters from pg_stat_database since stats_since.
+      properties:
+        cache_hit_percent: { type: number, format: double }
+        commits: { type: integer, format: int64, minimum: 0 }
+        rollbacks: { type: integer, format: int64, minimum: 0 }
+        deadlocks: { type: integer, format: int64, minimum: 0 }
+        temp_bytes: { type: integer, format: int64, minimum: 0 }
+        stats_since:
+          type: string
+          format: date-time
+          description: Omitted when the counters were never reset.
+      required: [cache_hit_percent, commits, rollbacks, deadlocks, temp_bytes]
 
     StorageQuery:
       type: object
       properties:
         elapsed_seconds: { type: number, format: double }
         user: { type: string }
-        memory_bytes: { type: integer, format: int64, minimum: 0 }
-        query: { type: string }
-        finished_at:
+        state: { type: string }
+        wait_event:
           type: string
-          format: date-time
-          description: >
-            Finish time from system.query_log. Omitted for currently running
-            queries (items).
-      required: [elapsed_seconds, user, memory_bytes, query]
+          description: "<type>:<event> the query is waiting on, empty when running."
+        query: { type: string }
+      required: [elapsed_seconds, user, state, wait_event, query]
+
+    StorageStatement:
+      type: object
+      properties:
+        query: { type: string }
+        calls: { type: integer, format: int64, minimum: 0 }
+        total_seconds: { type: number, format: double }
+        mean_ms: { type: number, format: double }
+        rows: { type: integer, format: int64, minimum: 0 }
+      required: [query, calls, total_seconds, mean_ms, rows]
 
     StorageQueries:
       type: object
       properties:
         active: { type: integer, minimum: 0 }
         longest_seconds: { type: number, format: double }
-        peak_memory_bytes: { type: integer, format: int64, minimum: 0 }
-        items:
+        running:
           type: array
-          description: Currently running queries (system.processes).
+          description: Queries executing now, longest first. Capped at 20.
           items: { $ref: "#/components/schemas/StorageQuery" }
-        recent_heaviest:
-          type: array
-          description: >
-            Top finished queries from system.query_log in the last 5 minutes,
-            ordered by duration then memory (slowest / heaviest first). Capped
-            at 10. Prefer this when diagnosing storage pressure while idle.
-          items: { $ref: "#/components/schemas/StorageQuery" }
-        recent_latest:
+        top_statements:
           type: array
           description: >
-            Most recently finished queries from system.query_log in the last
-            5 minutes, ordered by finish time descending. Capped at 10.
-          items: { $ref: "#/components/schemas/StorageQuery" }
-      required: [active, longest_seconds, peak_memory_bytes, items, recent_heaviest, recent_latest]
+            Statements with the most total execution time, from
+            pg_stat_statements. Capped at 10. Empty when the extension is not
+            installed (see statements_available).
+          items: { $ref: "#/components/schemas/StorageStatement" }
+        statements_available: { type: boolean }
+      required: [active, longest_seconds, running, top_statements, statements_available]
 
     StorageTable:
       type: object
       properties:
         name: { type: string }
         rows: { type: integer, format: int64, minimum: 0 }
+        dead_rows: { type: integer, format: int64, minimum: 0 }
         bytes_on_disk: { type: integer, format: int64, minimum: 0 }
-        active_parts: { type: integer, format: int64, minimum: 0 }
-      required: [name, rows, bytes_on_disk, active_parts]
+        last_vacuum_at:
+          type: string
+          format: date-time
+          description: Newest manual or auto vacuum. Omitted when never vacuumed.
+      required: [name, rows, dead_rows, bytes_on_disk]
 
-    StorageWritePressure:
+    StorageMaintenance:
       type: object
       properties:
-        unfinished_mutations: { type: integer, format: int64, minimum: 0 }
-        active_parts: { type: integer, format: int64, minimum: 0 }
-      required: [unfinished_mutations, active_parts]
+        dead_rows: { type: integer, format: int64, minimum: 0 }
+        vacuums_running: { type: integer, minimum: 0 }
+        waiting_locks:
+          type: integer
+          minimum: 0
+          description: Sessions blocked on a lock right now.
+        oldest_transaction_seconds: { type: number, format: double }
+      required: [dead_rows, vacuums_running, waiting_locks, oldest_transaction_seconds]
+
+    StorageRetention:
+      type: object
+      description: >
+        Retention policy and the last run of the job that deletes expired
+        sample traces and delivery attempts (runs hourly on the leader).
+      properties:
+        observation_retention_days: { type: integer, minimum: 0 }
+        relation_retention_days: { type: integer, minimum: 0 }
+        attempt_retention_days: { type: integer, minimum: 0 }
+        ever_ran: { type: boolean }
+        last_run_at:
+          type: string
+          format: date-time
+          description: Omitted when the job has not run yet.
+        last_run_ok: { type: boolean }
+        last_error: { type: string }
+        observations_deleted: { type: integer, format: int64, minimum: 0 }
+        attempts_deleted: { type: integer, format: int64, minimum: 0 }
+      required: [observation_retention_days, relation_retention_days, attempt_retention_days, ever_ran, last_run_ok, observations_deleted, attempts_deleted]
 
     StorageWriteback:
       type: object
@@ -3826,22 +3877,26 @@ components:
         status: { $ref: "#/components/schemas/StorageHealthStatus" }
         connection: { $ref: "#/components/schemas/StorageConnection" }
         disk: { $ref: "#/components/schemas/StorageDisk" }
-        memory: { $ref: "#/components/schemas/StorageMemory" }
+        connections: { $ref: "#/components/schemas/StorageConnections" }
+        database: { $ref: "#/components/schemas/StorageDatabaseStats" }
         queries: { $ref: "#/components/schemas/StorageQueries" }
         tables:
           type: array
           items: { $ref: "#/components/schemas/StorageTable" }
-        write_pressure: { $ref: "#/components/schemas/StorageWritePressure" }
+        maintenance: { $ref: "#/components/schemas/StorageMaintenance" }
+        retention: { $ref: "#/components/schemas/StorageRetention" }
         writeback: { $ref: "#/components/schemas/StorageWriteback" }
       required:
         - checked_at
         - status
         - connection
         - disk
-        - memory
+        - connections
+        - database
         - queries
         - tables
-        - write_pressure
+        - maintenance
+        - retention
         - writeback
 
     IntegrationFieldType:

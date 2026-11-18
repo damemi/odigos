@@ -1,7 +1,7 @@
 // Package notify delivers findings (anomaly issues and guardrail violations)
 // to operator-configured backends such as Alertmanager, Slack, or a webhook.
 //
-// It is a background poller over ClickHouse, deliberately off the ingest hot
+// It is a background poller over the database, deliberately off the ingest hot
 // path: the Dispatcher wakes every PollInterval, diffs recent findings against
 // the notification_dispatch ledger, and hands the resulting Events to the
 // Sink of each routed Integration. Exactly one replica runs the Dispatcher

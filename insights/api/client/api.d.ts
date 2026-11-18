@@ -863,7 +863,7 @@ export interface paths {
         get: operations["getSystemSettings"];
         /**
          * Replace system settings
-         * @description Full-document upsert of system settings. Applies immediately via an engine reload; changing observation retention also updates the ClickHouse TTL (capped at 120 days). When identity dimensions change, set reset_transactions=true to wipe existing transactions and relearn; omit or false to keep stale identities until deleted manually.
+         * @description Full-document upsert of system settings. Applies immediately via an engine reload; changing observation retention also deletes samples older than the new value right away (capped at 120 days). When identity dimensions change, set reset_transactions=true to wipe existing transactions and relearn; omit or false to keep stale identities until deleted manually.
          */
         put: operations["putSystemSettings"];
         post?: never;
@@ -882,7 +882,7 @@ export interface paths {
         };
         /**
          * Get storage health
-         * @description Point-in-time ClickHouse health for this Insights deployment (connection, disk, memory, running queries, table sizes, write pressure) plus Insights writeback flush status. Intended as the first debug surface for service ↔ database integration.
+         * @description Point-in-time Postgres health for this Insights deployment (connection, disk, connections, database counters, running queries, top statements, table sizes, maintenance, retention) plus Insights writeback flush status. Intended as the first debug surface for service ↔ database integration.
          */
         get: operations["getStorageHealth"];
         put?: never;
@@ -2521,7 +2521,7 @@ export interface components {
             relation_sample_interval_seconds?: number;
         };
         SystemRetentionSettings: {
-            /** @description Days to keep sample traces (default 120); applied as ClickHouse TTL on save. Matches the 120-day findings lookback ceiling. */
+            /** @description Days to keep sample traces (default 120); enforced by the hourly retention job and applied right away on save. Matches the 120-day findings lookback ceiling. */
             observation_retention_days: number;
         };
         /** @description In-memory limits for learned baselines. Higher values use more RAM; lower values may evict cold transactions or truncate large sets. */
@@ -2539,7 +2539,7 @@ export interface components {
              */
             max_transactions_per_service: number;
         };
-        /** @description How often the engine writes pending baseline learning and occurrence counters to ClickHouse. Raise to reduce DB load; lower for fresher UI counts. */
+        /** @description How often the engine writes pending baseline learning and occurrence counters to the database. Raise to reduce DB load; lower for fresher UI counts. */
         SystemWritebackSettings: {
             /** @description Seconds between write-behind flushes (default 15). Applies live - no pod restart. Also covers anomaly and guardrail occurrence drains. Time-based promotion is re-evaluated after each flush. */
             flush_interval_seconds: number;
@@ -2585,82 +2585,132 @@ export interface components {
             version: string;
             database: string;
             error?: string;
+            /** Format: double */
+            uptime_seconds: number;
         };
         StorageDisk: {
             /**
              * Format: int64
-             * @description Bytes used by Insights tables (sum of active parts). Prefer this over filesystem used_bytes when judging Insights storage size - on shared volumes (e.g. kind) filesystem used can include unrelated data.
+             * @description Size of the Insights database on disk.
              */
-            insights_bytes: number;
+            database_bytes: number;
             /**
              * Format: int64
-             * @description Filesystem total for the ClickHouse data volume.
+             * @description Size of the volume backing the bundled database. 0 when unknown (external Postgres), in which case used_percent is 0.
              */
-            total_bytes: number;
-            /**
-             * Format: int64
-             * @description Filesystem used on the ClickHouse data volume.
-             */
-            used_bytes: number;
-            /** Format: int64 */
-            available_bytes: number;
+            volume_bytes: number;
             /** Format: double */
             used_percent: number;
             status: components["schemas"]["StorageDiskStatus"];
         };
-        StorageMemory: {
-            /** Format: int64 */
-            process_rss_bytes: number;
-            /** Format: int64 */
-            cgroup_used_bytes: number;
+        /** @description Server-side connections to the Insights database by state, and this replica's client pool. */
+        StorageConnections: {
+            active: number;
+            idle: number;
+            idle_in_transaction: number;
+            total: number;
+            /** @description The server's max_connections. */
+            max: number;
+            pool_acquired: number;
+            pool_idle: number;
+            pool_total: number;
+            pool_max: number;
             /**
              * Format: int64
-             * @description 0 means no cgroup memory limit.
+             * @description Acquires that had to wait for a free connection.
              */
-            cgroup_total_bytes: number;
+            pool_wait_count: number;
             /** Format: double */
-            uptime_seconds: number;
+            pool_wait_seconds: number;
+        };
+        /** @description Cumulative counters from pg_stat_database since stats_since. */
+        StorageDatabaseStats: {
+            /** Format: double */
+            cache_hit_percent: number;
+            /** Format: int64 */
+            commits: number;
+            /** Format: int64 */
+            rollbacks: number;
+            /** Format: int64 */
+            deadlocks: number;
+            /** Format: int64 */
+            temp_bytes: number;
+            /**
+             * Format: date-time
+             * @description Omitted when the counters were never reset.
+             */
+            stats_since?: string;
         };
         StorageQuery: {
             /** Format: double */
             elapsed_seconds: number;
             user: string;
-            /** Format: int64 */
-            memory_bytes: number;
+            state: string;
+            /** @description <type>:<event> the query is waiting on, empty when running. */
+            wait_event: string;
             query: string;
-            /**
-             * Format: date-time
-             * @description Finish time from system.query_log. Omitted for currently running queries (items).
-             */
-            finished_at?: string;
+        };
+        StorageStatement: {
+            query: string;
+            /** Format: int64 */
+            calls: number;
+            /** Format: double */
+            total_seconds: number;
+            /** Format: double */
+            mean_ms: number;
+            /** Format: int64 */
+            rows: number;
         };
         StorageQueries: {
             active: number;
             /** Format: double */
             longest_seconds: number;
-            /** Format: int64 */
-            peak_memory_bytes: number;
-            /** @description Currently running queries (system.processes). */
-            items: components["schemas"]["StorageQuery"][];
-            /** @description Top finished queries from system.query_log in the last 5 minutes, ordered by duration then memory (slowest / heaviest first). Capped at 10. Prefer this when diagnosing storage pressure while idle. */
-            recent_heaviest: components["schemas"]["StorageQuery"][];
-            /** @description Most recently finished queries from system.query_log in the last 5 minutes, ordered by finish time descending. Capped at 10. */
-            recent_latest: components["schemas"]["StorageQuery"][];
+            /** @description Queries executing now, longest first. Capped at 20. */
+            running: components["schemas"]["StorageQuery"][];
+            /** @description Statements with the most total execution time, from pg_stat_statements. Capped at 10. Empty when the extension is not installed (see statements_available). */
+            top_statements: components["schemas"]["StorageStatement"][];
+            statements_available: boolean;
         };
         StorageTable: {
             name: string;
             /** Format: int64 */
             rows: number;
             /** Format: int64 */
+            dead_rows: number;
+            /** Format: int64 */
             bytes_on_disk: number;
-            /** Format: int64 */
-            active_parts: number;
+            /**
+             * Format: date-time
+             * @description Newest manual or auto vacuum. Omitted when never vacuumed.
+             */
+            last_vacuum_at?: string;
         };
-        StorageWritePressure: {
+        StorageMaintenance: {
             /** Format: int64 */
-            unfinished_mutations: number;
+            dead_rows: number;
+            vacuums_running: number;
+            /** @description Sessions blocked on a lock right now. */
+            waiting_locks: number;
+            /** Format: double */
+            oldest_transaction_seconds: number;
+        };
+        /** @description Retention policy and the last run of the job that deletes expired sample traces and delivery attempts (runs hourly on the leader). */
+        StorageRetention: {
+            observation_retention_days: number;
+            relation_retention_days: number;
+            attempt_retention_days: number;
+            ever_ran: boolean;
+            /**
+             * Format: date-time
+             * @description Omitted when the job has not run yet.
+             */
+            last_run_at?: string;
+            last_run_ok: boolean;
+            last_error?: string;
             /** Format: int64 */
-            active_parts: number;
+            observations_deleted: number;
+            /** Format: int64 */
+            attempts_deleted: number;
         };
         StorageWriteback: {
             flush_interval_seconds: number;
@@ -2679,10 +2729,12 @@ export interface components {
             status: components["schemas"]["StorageHealthStatus"];
             connection: components["schemas"]["StorageConnection"];
             disk: components["schemas"]["StorageDisk"];
-            memory: components["schemas"]["StorageMemory"];
+            connections: components["schemas"]["StorageConnections"];
+            database: components["schemas"]["StorageDatabaseStats"];
             queries: components["schemas"]["StorageQueries"];
             tables: components["schemas"]["StorageTable"][];
-            write_pressure: components["schemas"]["StorageWritePressure"];
+            maintenance: components["schemas"]["StorageMaintenance"];
+            retention: components["schemas"]["StorageRetention"];
             writeback: components["schemas"]["StorageWriteback"];
         };
         /**

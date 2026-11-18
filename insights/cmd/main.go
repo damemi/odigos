@@ -1,6 +1,6 @@
 // Command insights is the entrypoint for the odigos-enterprise-insights
 // service. It boots the HTTP API (consumed by the UI) and the OTLP gRPC
-// receiver (fed by the Odigos gateway), both backed by ClickHouse.
+// receiver (fed by the Odigos gateway), both backed by Postgres.
 package main
 
 import (
@@ -22,8 +22,8 @@ import (
 
 	apihttp "github.com/odigos-io/odigos/insights/internal/api/http"
 	"github.com/odigos-io/odigos/insights/internal/cache"
-	"github.com/odigos-io/odigos/insights/internal/db/clickhouse"
-	"github.com/odigos-io/odigos/insights/internal/db/clickhouse/migrate"
+	"github.com/odigos-io/odigos/insights/internal/db/postgres"
+	"github.com/odigos-io/odigos/insights/internal/db/postgres/migrate"
 	"github.com/odigos-io/odigos/insights/internal/engine"
 	"github.com/odigos-io/odigos/insights/internal/leader"
 	"github.com/odigos-io/odigos/insights/internal/metrics"
@@ -32,6 +32,7 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/otlp"
 	"github.com/odigos-io/odigos/insights/internal/repo"
 	"github.com/odigos-io/odigos/odigosauth"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -45,13 +46,17 @@ const (
 	// the other Odigos services.
 	pprofPort = 6060
 
-	// envClickHouseDSN names the env var holding the ClickHouse connection URI
-	// (clickhouse://user:pass@host:9000/db). The Helm chart builds it from the
-	// bundled ClickHouse Secret.
-	envClickHouseDSN = "CLICKHOUSE_DSN"
+	// envPostgresDSN names the env var holding the Postgres connection URI
+	// (postgres://user:pass@host:5432/db). The Helm chart takes it from the
+	// bundled Postgres Secret or from the external database settings.
+	envPostgresDSN = "POSTGRES_DSN"
+
+	// envPostgresVolumeSize is the bundled database's volume size (a k8s
+	// quantity such as 8Gi), so the Storage page can report how full it is.
+	envPostgresVolumeSize = "POSTGRES_VOLUME_SIZE"
 
 	// leaderLease elects the one replica that runs the singleton jobs (findings
-	// notifier, recommendation sweeps). The chart grants leases get/create/update.
+	// notifier, recommendation sweeps, retention). The chart grants leases get/create/update.
 	leaderLease = "odigos-insights-leader"
 )
 
@@ -79,9 +84,9 @@ func main() {
 	// Hard-fail at startup if the enterprise token is missing or invalid.
 	odigosauth.AssertEnterpriseOdigosToken(log)
 
-	dsn := os.Getenv(envClickHouseDSN)
+	dsn := os.Getenv(envPostgresDSN)
 	if dsn == "" {
-		log.Error("missing required env var", "var", envClickHouseDSN)
+		log.Error("missing required env var", "var", envPostgresDSN)
 		os.Exit(1)
 	}
 
@@ -99,7 +104,7 @@ func main() {
 
 	// Open the repository. The pool connects lazily, so we can build the router
 	// and serve health checks immediately, then wait for the DB without crashing.
-	r, schemaReady, closeRepo, err := openRepo(dsn, log)
+	r, pg, closeRepo, err := openRepo(dsn, log)
 	if err != nil {
 		log.Error("failed to open repository", "error", err)
 		os.Exit(1)
@@ -135,7 +140,7 @@ func main() {
 	// Wait for the DB and the migration Job's schema (retrying). Liveness is
 	// already served, so a slow DB or not-yet-run migration keeps /readyz at 503
 	// without killing the pod. Returns an error only on a shutdown signal mid-wait.
-	if err := waitForSchemaReady(rootCtx, log, r, schemaReady); err != nil {
+	if err := waitForSchemaReady(rootCtx, log, r, pg.SchemaReady); err != nil {
 		log.Info("shutting down before database became ready", "reason", err)
 		shutdownHTTP(httpSrv, log)
 		return
@@ -201,10 +206,11 @@ func main() {
 		close(sampleWriterDone)
 	}()
 	// Singleton jobs run only on the replica holding the Lease: the findings
-	// notifier (delivering a finding twice is wrong) and the recommendation
-	// miner (one miner serves the queued requests and the periodic sweeps;
-	// requests handled on a follower are picked up by the leader's next sweep).
-	go runLeaderJobs(rootCtx, log, r, integrationRegistry, eng)
+	// notifier (delivering a finding twice is wrong), the recommendation miner
+	// (one miner serves the queued requests and the periodic sweeps; requests
+	// handled on a follower are picked up by the leader's next sweep), and the
+	// retention job that expires old samples and delivery attempts.
+	go runLeaderJobs(rootCtx, log, r, pg, integrationRegistry, eng)
 
 	otlpSrv := otlp.NewServer(otlpAddr, eng, log)
 	otlpErrCh, err := otlpSrv.Start()
@@ -257,36 +263,37 @@ const (
 	dbRetryLogEvery = 60 * time.Second
 )
 
-// openRepo constructs the ClickHouse-backed repository without requiring the DB
-// to be up (the connection is lazy). It returns the repo, a schemaReady func
-// that gates serving on the migration Job having run, and a close func.
-func openRepo(dsn string, log *commonlogger.OdigosLogger) (repo.Repository, func(context.Context) error, func(), error) {
-	r, err := clickhouse.Open(dsn, engine.NewBaselineCodec())
+// openRepo constructs the Postgres-backed repository without requiring the DB
+// to be up (the pool connects lazily). It returns the wrapped repo for queries,
+// the concrete repo for its schema check and retention job, and a close func.
+func openRepo(dsn string, log *commonlogger.OdigosLogger) (repo.Repository, *postgres.Repo, func(), error) {
+	var opts []postgres.Option
+	if size := os.Getenv(envPostgresVolumeSize); size != "" {
+		if q, err := resource.ParseQuantity(size); err == nil && q.Value() > 0 {
+			opts = append(opts, postgres.WithVolumeBytes(uint64(q.Value())))
+		} else {
+			log.Warn("ignoring invalid volume size", "var", envPostgresVolumeSize, "value", size)
+		}
+	}
+	r, err := postgres.Open(dsn, engine.NewBaselineCodec(), opts...)
 	if err != nil {
 		return nil, nil, func() {}, err
 	}
-	// schemaReady and closeRepo capture the concrete *clickhouse.Repo, while
-	// callers use the instrumented+cached wrapper for queries. The service does
-	// not create the schema (that's the migration Job's job, see migrate.Apply);
-	// schemaReady keeps the app not-ready until that Job has run.
-	schemaReady := func(ctx context.Context) error {
-		return r.SchemaReady(ctx)
-	}
 	closeRepo := func() {
 		if err := r.Close(); err != nil {
-			log.Warn("failed to close clickhouse", "error", err)
+			log.Warn("failed to close postgres", "error", err)
 		}
 	}
 	// Order matters: the policy cache wraps the metrics layer, which wraps the
 	// real DB repo, so a cache hit returns before the metrics layer and the
 	// DB-call metric counts only true misses. Transaction identity is resolved
 	// in-memory by the engine and write-behind flushed - no per-trace txn cache.
-	return cache.WrapPolicies(metrics.WrapRepo(r)), schemaReady, closeRepo, nil
+	return cache.WrapPolicies(metrics.WrapRepo(r)), r, closeRepo, nil
 }
 
 // waitForSchemaReady blocks until the DB is reachable AND the migration Job has
 // applied the schema (both retried with backoff). Ping alone isn't enough: the
-// bundled ClickHouse can be up while the migration Job is still running. Returns
+// bundled Postgres can be up while the migration Job is still running. Returns
 // the context error only when ctx is cancelled mid-wait.
 func waitForSchemaReady(
 	ctx context.Context,
@@ -329,16 +336,16 @@ func waitForSchemaReady(
 
 // runMigrate applies pending schema migrations and returns a process exit code.
 // It backs the `insights migrate` entrypoint, run once per rollout by the Helm
-// migration Job. ClickHouse may still be starting, so it retries with the
+// migration Job. Postgres may still be starting, so it retries with the
 // service's backoff until migrations succeed or the process is signalled; the
 // Job's activeDeadlineSeconds bounds a genuinely stuck run.
 func runMigrate() int {
 	commonlogger.Init(getLogLevel(), componentName)
 	log := commonlogger.LoggerCompat()
 
-	dsn := os.Getenv(envClickHouseDSN)
+	dsn := os.Getenv(envPostgresDSN)
 	if dsn == "" {
-		log.Error("missing required env var", "var", envClickHouseDSN)
+		log.Error("missing required env var", "var", envPostgresDSN)
 		return 1
 	}
 
@@ -354,7 +361,7 @@ func runMigrate() int {
 		} else {
 			now := time.Now()
 			if lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {
-				log.Warn("migration failed, retrying (clickhouse may be starting)", "attempt", attempt, "retry_in", delay.String(), "error", err)
+				log.Warn("migration failed, retrying (postgres may be starting)", "attempt", attempt, "retry_in", delay.String(), "error", err)
 				lastLog = now
 			}
 		}
@@ -465,9 +472,11 @@ func runSystemSettingsReloader(
 // notifier tick. Losing the lease cancels them all. Outside a cluster (no
 // in-cluster credentials) they run unconditionally, which is the local
 // single-process case.
-func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, reg *notify.Registry, eng *engine.Engine) {
+func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, pg *postgres.Repo, reg *notify.Registry, eng *engine.Engine) {
 	dispatcher := notify.NewDispatcher(r, reg, slog.New(commonlogger.NewSlogHandler("notifier")), leader.Identity(), notify.PollInterval, notify.DefaultOverlap)
-	jobs := []func(context.Context){dispatcher.Run, eng.RunRecommendationMiner}
+	retentionLog := slog.New(commonlogger.NewSlogHandler("retention"))
+	retention := func(ctx context.Context) { pg.RunRetention(ctx, retentionLog) }
+	jobs := []func(context.Context){dispatcher.Run, eng.RunRecommendationMiner, retention}
 	run := func(ctx context.Context) {
 		var wg sync.WaitGroup
 		for _, job := range jobs {

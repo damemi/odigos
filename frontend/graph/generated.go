@@ -1288,64 +1288,103 @@ type ComplexityRoot struct {
 		Error         func(childComplexity int) int
 		PingLatencyMs func(childComplexity int) int
 		Reachable     func(childComplexity int) int
+		UptimeSeconds func(childComplexity int) int
 		Version       func(childComplexity int) int
 	}
 
+	InsightsStorageConnections struct {
+		Active            func(childComplexity int) int
+		Idle              func(childComplexity int) int
+		IdleInTransaction func(childComplexity int) int
+		Max               func(childComplexity int) int
+		PoolAcquired      func(childComplexity int) int
+		PoolIdle          func(childComplexity int) int
+		PoolMax           func(childComplexity int) int
+		PoolTotal         func(childComplexity int) int
+		PoolWaitCount     func(childComplexity int) int
+		PoolWaitSeconds   func(childComplexity int) int
+		Total             func(childComplexity int) int
+	}
+
+	InsightsStorageDatabaseStats struct {
+		CacheHitPercent func(childComplexity int) int
+		Commits         func(childComplexity int) int
+		Deadlocks       func(childComplexity int) int
+		Rollbacks       func(childComplexity int) int
+		StatsSince      func(childComplexity int) int
+		TempBytes       func(childComplexity int) int
+	}
+
 	InsightsStorageDisk struct {
-		AvailableBytes func(childComplexity int) int
-		InsightsBytes  func(childComplexity int) int
-		Status         func(childComplexity int) int
-		TotalBytes     func(childComplexity int) int
-		UsedBytes      func(childComplexity int) int
-		UsedPercent    func(childComplexity int) int
+		DatabaseBytes func(childComplexity int) int
+		Status        func(childComplexity int) int
+		UsedPercent   func(childComplexity int) int
+		VolumeBytes   func(childComplexity int) int
 	}
 
 	InsightsStorageHealth struct {
-		CheckedAt     func(childComplexity int) int
-		Connection    func(childComplexity int) int
-		Disk          func(childComplexity int) int
-		Memory        func(childComplexity int) int
-		Queries       func(childComplexity int) int
-		Status        func(childComplexity int) int
-		Tables        func(childComplexity int) int
-		WritePressure func(childComplexity int) int
-		Writeback     func(childComplexity int) int
+		CheckedAt   func(childComplexity int) int
+		Connection  func(childComplexity int) int
+		Connections func(childComplexity int) int
+		Database    func(childComplexity int) int
+		Disk        func(childComplexity int) int
+		Maintenance func(childComplexity int) int
+		Queries     func(childComplexity int) int
+		Retention   func(childComplexity int) int
+		Status      func(childComplexity int) int
+		Tables      func(childComplexity int) int
+		Writeback   func(childComplexity int) int
 	}
 
-	InsightsStorageMemory struct {
-		CgroupTotalBytes func(childComplexity int) int
-		CgroupUsedBytes  func(childComplexity int) int
-		ProcessRssBytes  func(childComplexity int) int
-		UptimeSeconds    func(childComplexity int) int
+	InsightsStorageMaintenance struct {
+		DeadRows                 func(childComplexity int) int
+		OldestTransactionSeconds func(childComplexity int) int
+		VacuumsRunning           func(childComplexity int) int
+		WaitingLocks             func(childComplexity int) int
 	}
 
 	InsightsStorageQueries struct {
-		Active          func(childComplexity int) int
-		Items           func(childComplexity int) int
-		LongestSeconds  func(childComplexity int) int
-		PeakMemoryBytes func(childComplexity int) int
-		RecentHeaviest  func(childComplexity int) int
-		RecentLatest    func(childComplexity int) int
+		Active              func(childComplexity int) int
+		LongestSeconds      func(childComplexity int) int
+		Running             func(childComplexity int) int
+		StatementsAvailable func(childComplexity int) int
+		TopStatements       func(childComplexity int) int
 	}
 
 	InsightsStorageQuery struct {
 		ElapsedSeconds func(childComplexity int) int
-		FinishedAt     func(childComplexity int) int
-		MemoryBytes    func(childComplexity int) int
 		Query          func(childComplexity int) int
+		State          func(childComplexity int) int
 		User           func(childComplexity int) int
+		WaitEvent      func(childComplexity int) int
+	}
+
+	InsightsStorageRetention struct {
+		AttemptRetentionDays     func(childComplexity int) int
+		AttemptsDeleted          func(childComplexity int) int
+		EverRan                  func(childComplexity int) int
+		LastError                func(childComplexity int) int
+		LastRunAt                func(childComplexity int) int
+		LastRunOk                func(childComplexity int) int
+		ObservationRetentionDays func(childComplexity int) int
+		ObservationsDeleted      func(childComplexity int) int
+		RelationRetentionDays    func(childComplexity int) int
+	}
+
+	InsightsStorageStatement struct {
+		Calls        func(childComplexity int) int
+		MeanMs       func(childComplexity int) int
+		Query        func(childComplexity int) int
+		Rows         func(childComplexity int) int
+		TotalSeconds func(childComplexity int) int
 	}
 
 	InsightsStorageTable struct {
-		ActiveParts func(childComplexity int) int
-		BytesOnDisk func(childComplexity int) int
-		Name        func(childComplexity int) int
-		Rows        func(childComplexity int) int
-	}
-
-	InsightsStorageWritePressure struct {
-		ActiveParts         func(childComplexity int) int
-		UnfinishedMutations func(childComplexity int) int
+		BytesOnDisk  func(childComplexity int) int
+		DeadRows     func(childComplexity int) int
+		LastVacuumAt func(childComplexity int) int
+		Name         func(childComplexity int) int
+		Rows         func(childComplexity int) int
 	}
 
 	InsightsStorageWriteback struct {
@@ -8710,6 +8749,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageConnection.Reachable(childComplexity), true
 
+	case "InsightsStorageConnection.uptimeSeconds":
+		if e.complexity.InsightsStorageConnection.UptimeSeconds == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnection.UptimeSeconds(childComplexity), true
+
 	case "InsightsStorageConnection.version":
 		if e.complexity.InsightsStorageConnection.Version == nil {
 			break
@@ -8717,19 +8763,131 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageConnection.Version(childComplexity), true
 
-	case "InsightsStorageDisk.availableBytes":
-		if e.complexity.InsightsStorageDisk.AvailableBytes == nil {
+	case "InsightsStorageConnections.active":
+		if e.complexity.InsightsStorageConnections.Active == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageDisk.AvailableBytes(childComplexity), true
+		return e.complexity.InsightsStorageConnections.Active(childComplexity), true
 
-	case "InsightsStorageDisk.insightsBytes":
-		if e.complexity.InsightsStorageDisk.InsightsBytes == nil {
+	case "InsightsStorageConnections.idle":
+		if e.complexity.InsightsStorageConnections.Idle == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageDisk.InsightsBytes(childComplexity), true
+		return e.complexity.InsightsStorageConnections.Idle(childComplexity), true
+
+	case "InsightsStorageConnections.idleInTransaction":
+		if e.complexity.InsightsStorageConnections.IdleInTransaction == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.IdleInTransaction(childComplexity), true
+
+	case "InsightsStorageConnections.max":
+		if e.complexity.InsightsStorageConnections.Max == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.Max(childComplexity), true
+
+	case "InsightsStorageConnections.poolAcquired":
+		if e.complexity.InsightsStorageConnections.PoolAcquired == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.PoolAcquired(childComplexity), true
+
+	case "InsightsStorageConnections.poolIdle":
+		if e.complexity.InsightsStorageConnections.PoolIdle == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.PoolIdle(childComplexity), true
+
+	case "InsightsStorageConnections.poolMax":
+		if e.complexity.InsightsStorageConnections.PoolMax == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.PoolMax(childComplexity), true
+
+	case "InsightsStorageConnections.poolTotal":
+		if e.complexity.InsightsStorageConnections.PoolTotal == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.PoolTotal(childComplexity), true
+
+	case "InsightsStorageConnections.poolWaitCount":
+		if e.complexity.InsightsStorageConnections.PoolWaitCount == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.PoolWaitCount(childComplexity), true
+
+	case "InsightsStorageConnections.poolWaitSeconds":
+		if e.complexity.InsightsStorageConnections.PoolWaitSeconds == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.PoolWaitSeconds(childComplexity), true
+
+	case "InsightsStorageConnections.total":
+		if e.complexity.InsightsStorageConnections.Total == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageConnections.Total(childComplexity), true
+
+	case "InsightsStorageDatabaseStats.cacheHitPercent":
+		if e.complexity.InsightsStorageDatabaseStats.CacheHitPercent == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageDatabaseStats.CacheHitPercent(childComplexity), true
+
+	case "InsightsStorageDatabaseStats.commits":
+		if e.complexity.InsightsStorageDatabaseStats.Commits == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageDatabaseStats.Commits(childComplexity), true
+
+	case "InsightsStorageDatabaseStats.deadlocks":
+		if e.complexity.InsightsStorageDatabaseStats.Deadlocks == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageDatabaseStats.Deadlocks(childComplexity), true
+
+	case "InsightsStorageDatabaseStats.rollbacks":
+		if e.complexity.InsightsStorageDatabaseStats.Rollbacks == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageDatabaseStats.Rollbacks(childComplexity), true
+
+	case "InsightsStorageDatabaseStats.statsSince":
+		if e.complexity.InsightsStorageDatabaseStats.StatsSince == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageDatabaseStats.StatsSince(childComplexity), true
+
+	case "InsightsStorageDatabaseStats.tempBytes":
+		if e.complexity.InsightsStorageDatabaseStats.TempBytes == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageDatabaseStats.TempBytes(childComplexity), true
+
+	case "InsightsStorageDisk.databaseBytes":
+		if e.complexity.InsightsStorageDisk.DatabaseBytes == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageDisk.DatabaseBytes(childComplexity), true
 
 	case "InsightsStorageDisk.status":
 		if e.complexity.InsightsStorageDisk.Status == nil {
@@ -8738,26 +8896,19 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageDisk.Status(childComplexity), true
 
-	case "InsightsStorageDisk.totalBytes":
-		if e.complexity.InsightsStorageDisk.TotalBytes == nil {
-			break
-		}
-
-		return e.complexity.InsightsStorageDisk.TotalBytes(childComplexity), true
-
-	case "InsightsStorageDisk.usedBytes":
-		if e.complexity.InsightsStorageDisk.UsedBytes == nil {
-			break
-		}
-
-		return e.complexity.InsightsStorageDisk.UsedBytes(childComplexity), true
-
 	case "InsightsStorageDisk.usedPercent":
 		if e.complexity.InsightsStorageDisk.UsedPercent == nil {
 			break
 		}
 
 		return e.complexity.InsightsStorageDisk.UsedPercent(childComplexity), true
+
+	case "InsightsStorageDisk.volumeBytes":
+		if e.complexity.InsightsStorageDisk.VolumeBytes == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageDisk.VolumeBytes(childComplexity), true
 
 	case "InsightsStorageHealth.checkedAt":
 		if e.complexity.InsightsStorageHealth.CheckedAt == nil {
@@ -8773,6 +8924,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageHealth.Connection(childComplexity), true
 
+	case "InsightsStorageHealth.connections":
+		if e.complexity.InsightsStorageHealth.Connections == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageHealth.Connections(childComplexity), true
+
+	case "InsightsStorageHealth.database":
+		if e.complexity.InsightsStorageHealth.Database == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageHealth.Database(childComplexity), true
+
 	case "InsightsStorageHealth.disk":
 		if e.complexity.InsightsStorageHealth.Disk == nil {
 			break
@@ -8780,12 +8945,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageHealth.Disk(childComplexity), true
 
-	case "InsightsStorageHealth.memory":
-		if e.complexity.InsightsStorageHealth.Memory == nil {
+	case "InsightsStorageHealth.maintenance":
+		if e.complexity.InsightsStorageHealth.Maintenance == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageHealth.Memory(childComplexity), true
+		return e.complexity.InsightsStorageHealth.Maintenance(childComplexity), true
 
 	case "InsightsStorageHealth.queries":
 		if e.complexity.InsightsStorageHealth.Queries == nil {
@@ -8793,6 +8958,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.InsightsStorageHealth.Queries(childComplexity), true
+
+	case "InsightsStorageHealth.retention":
+		if e.complexity.InsightsStorageHealth.Retention == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageHealth.Retention(childComplexity), true
 
 	case "InsightsStorageHealth.status":
 		if e.complexity.InsightsStorageHealth.Status == nil {
@@ -8808,13 +8980,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageHealth.Tables(childComplexity), true
 
-	case "InsightsStorageHealth.writePressure":
-		if e.complexity.InsightsStorageHealth.WritePressure == nil {
-			break
-		}
-
-		return e.complexity.InsightsStorageHealth.WritePressure(childComplexity), true
-
 	case "InsightsStorageHealth.writeback":
 		if e.complexity.InsightsStorageHealth.Writeback == nil {
 			break
@@ -8822,33 +8987,33 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageHealth.Writeback(childComplexity), true
 
-	case "InsightsStorageMemory.cgroupTotalBytes":
-		if e.complexity.InsightsStorageMemory.CgroupTotalBytes == nil {
+	case "InsightsStorageMaintenance.deadRows":
+		if e.complexity.InsightsStorageMaintenance.DeadRows == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageMemory.CgroupTotalBytes(childComplexity), true
+		return e.complexity.InsightsStorageMaintenance.DeadRows(childComplexity), true
 
-	case "InsightsStorageMemory.cgroupUsedBytes":
-		if e.complexity.InsightsStorageMemory.CgroupUsedBytes == nil {
+	case "InsightsStorageMaintenance.oldestTransactionSeconds":
+		if e.complexity.InsightsStorageMaintenance.OldestTransactionSeconds == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageMemory.CgroupUsedBytes(childComplexity), true
+		return e.complexity.InsightsStorageMaintenance.OldestTransactionSeconds(childComplexity), true
 
-	case "InsightsStorageMemory.processRssBytes":
-		if e.complexity.InsightsStorageMemory.ProcessRssBytes == nil {
+	case "InsightsStorageMaintenance.vacuumsRunning":
+		if e.complexity.InsightsStorageMaintenance.VacuumsRunning == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageMemory.ProcessRssBytes(childComplexity), true
+		return e.complexity.InsightsStorageMaintenance.VacuumsRunning(childComplexity), true
 
-	case "InsightsStorageMemory.uptimeSeconds":
-		if e.complexity.InsightsStorageMemory.UptimeSeconds == nil {
+	case "InsightsStorageMaintenance.waitingLocks":
+		if e.complexity.InsightsStorageMaintenance.WaitingLocks == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageMemory.UptimeSeconds(childComplexity), true
+		return e.complexity.InsightsStorageMaintenance.WaitingLocks(childComplexity), true
 
 	case "InsightsStorageQueries.active":
 		if e.complexity.InsightsStorageQueries.Active == nil {
@@ -8857,13 +9022,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageQueries.Active(childComplexity), true
 
-	case "InsightsStorageQueries.items":
-		if e.complexity.InsightsStorageQueries.Items == nil {
-			break
-		}
-
-		return e.complexity.InsightsStorageQueries.Items(childComplexity), true
-
 	case "InsightsStorageQueries.longestSeconds":
 		if e.complexity.InsightsStorageQueries.LongestSeconds == nil {
 			break
@@ -8871,26 +9029,26 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageQueries.LongestSeconds(childComplexity), true
 
-	case "InsightsStorageQueries.peakMemoryBytes":
-		if e.complexity.InsightsStorageQueries.PeakMemoryBytes == nil {
+	case "InsightsStorageQueries.running":
+		if e.complexity.InsightsStorageQueries.Running == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageQueries.PeakMemoryBytes(childComplexity), true
+		return e.complexity.InsightsStorageQueries.Running(childComplexity), true
 
-	case "InsightsStorageQueries.recentHeaviest":
-		if e.complexity.InsightsStorageQueries.RecentHeaviest == nil {
+	case "InsightsStorageQueries.statementsAvailable":
+		if e.complexity.InsightsStorageQueries.StatementsAvailable == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageQueries.RecentHeaviest(childComplexity), true
+		return e.complexity.InsightsStorageQueries.StatementsAvailable(childComplexity), true
 
-	case "InsightsStorageQueries.recentLatest":
-		if e.complexity.InsightsStorageQueries.RecentLatest == nil {
+	case "InsightsStorageQueries.topStatements":
+		if e.complexity.InsightsStorageQueries.TopStatements == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageQueries.RecentLatest(childComplexity), true
+		return e.complexity.InsightsStorageQueries.TopStatements(childComplexity), true
 
 	case "InsightsStorageQuery.elapsedSeconds":
 		if e.complexity.InsightsStorageQuery.ElapsedSeconds == nil {
@@ -8899,26 +9057,19 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageQuery.ElapsedSeconds(childComplexity), true
 
-	case "InsightsStorageQuery.finishedAt":
-		if e.complexity.InsightsStorageQuery.FinishedAt == nil {
-			break
-		}
-
-		return e.complexity.InsightsStorageQuery.FinishedAt(childComplexity), true
-
-	case "InsightsStorageQuery.memoryBytes":
-		if e.complexity.InsightsStorageQuery.MemoryBytes == nil {
-			break
-		}
-
-		return e.complexity.InsightsStorageQuery.MemoryBytes(childComplexity), true
-
 	case "InsightsStorageQuery.query":
 		if e.complexity.InsightsStorageQuery.Query == nil {
 			break
 		}
 
 		return e.complexity.InsightsStorageQuery.Query(childComplexity), true
+
+	case "InsightsStorageQuery.state":
+		if e.complexity.InsightsStorageQuery.State == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageQuery.State(childComplexity), true
 
 	case "InsightsStorageQuery.user":
 		if e.complexity.InsightsStorageQuery.User == nil {
@@ -8927,12 +9078,110 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.InsightsStorageQuery.User(childComplexity), true
 
-	case "InsightsStorageTable.activeParts":
-		if e.complexity.InsightsStorageTable.ActiveParts == nil {
+	case "InsightsStorageQuery.waitEvent":
+		if e.complexity.InsightsStorageQuery.WaitEvent == nil {
 			break
 		}
 
-		return e.complexity.InsightsStorageTable.ActiveParts(childComplexity), true
+		return e.complexity.InsightsStorageQuery.WaitEvent(childComplexity), true
+
+	case "InsightsStorageRetention.attemptRetentionDays":
+		if e.complexity.InsightsStorageRetention.AttemptRetentionDays == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.AttemptRetentionDays(childComplexity), true
+
+	case "InsightsStorageRetention.attemptsDeleted":
+		if e.complexity.InsightsStorageRetention.AttemptsDeleted == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.AttemptsDeleted(childComplexity), true
+
+	case "InsightsStorageRetention.everRan":
+		if e.complexity.InsightsStorageRetention.EverRan == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.EverRan(childComplexity), true
+
+	case "InsightsStorageRetention.lastError":
+		if e.complexity.InsightsStorageRetention.LastError == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.LastError(childComplexity), true
+
+	case "InsightsStorageRetention.lastRunAt":
+		if e.complexity.InsightsStorageRetention.LastRunAt == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.LastRunAt(childComplexity), true
+
+	case "InsightsStorageRetention.lastRunOk":
+		if e.complexity.InsightsStorageRetention.LastRunOk == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.LastRunOk(childComplexity), true
+
+	case "InsightsStorageRetention.observationRetentionDays":
+		if e.complexity.InsightsStorageRetention.ObservationRetentionDays == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.ObservationRetentionDays(childComplexity), true
+
+	case "InsightsStorageRetention.observationsDeleted":
+		if e.complexity.InsightsStorageRetention.ObservationsDeleted == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.ObservationsDeleted(childComplexity), true
+
+	case "InsightsStorageRetention.relationRetentionDays":
+		if e.complexity.InsightsStorageRetention.RelationRetentionDays == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageRetention.RelationRetentionDays(childComplexity), true
+
+	case "InsightsStorageStatement.calls":
+		if e.complexity.InsightsStorageStatement.Calls == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageStatement.Calls(childComplexity), true
+
+	case "InsightsStorageStatement.meanMs":
+		if e.complexity.InsightsStorageStatement.MeanMs == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageStatement.MeanMs(childComplexity), true
+
+	case "InsightsStorageStatement.query":
+		if e.complexity.InsightsStorageStatement.Query == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageStatement.Query(childComplexity), true
+
+	case "InsightsStorageStatement.rows":
+		if e.complexity.InsightsStorageStatement.Rows == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageStatement.Rows(childComplexity), true
+
+	case "InsightsStorageStatement.totalSeconds":
+		if e.complexity.InsightsStorageStatement.TotalSeconds == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageStatement.TotalSeconds(childComplexity), true
 
 	case "InsightsStorageTable.bytesOnDisk":
 		if e.complexity.InsightsStorageTable.BytesOnDisk == nil {
@@ -8940,6 +9189,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.InsightsStorageTable.BytesOnDisk(childComplexity), true
+
+	case "InsightsStorageTable.deadRows":
+		if e.complexity.InsightsStorageTable.DeadRows == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageTable.DeadRows(childComplexity), true
+
+	case "InsightsStorageTable.lastVacuumAt":
+		if e.complexity.InsightsStorageTable.LastVacuumAt == nil {
+			break
+		}
+
+		return e.complexity.InsightsStorageTable.LastVacuumAt(childComplexity), true
 
 	case "InsightsStorageTable.name":
 		if e.complexity.InsightsStorageTable.Name == nil {
@@ -8954,20 +9217,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.InsightsStorageTable.Rows(childComplexity), true
-
-	case "InsightsStorageWritePressure.activeParts":
-		if e.complexity.InsightsStorageWritePressure.ActiveParts == nil {
-			break
-		}
-
-		return e.complexity.InsightsStorageWritePressure.ActiveParts(childComplexity), true
-
-	case "InsightsStorageWritePressure.unfinishedMutations":
-		if e.complexity.InsightsStorageWritePressure.UnfinishedMutations == nil {
-			break
-		}
-
-		return e.complexity.InsightsStorageWritePressure.UnfinishedMutations(childComplexity), true
 
 	case "InsightsStorageWriteback.everFlushed":
 		if e.complexity.InsightsStorageWriteback.EverFlushed == nil {
@@ -39764,14 +40013,18 @@ func (ec *executionContext) fieldContext_Insights_storageHealth(_ context.Contex
 				return ec.fieldContext_InsightsStorageHealth_connection(ctx, field)
 			case "disk":
 				return ec.fieldContext_InsightsStorageHealth_disk(ctx, field)
-			case "memory":
-				return ec.fieldContext_InsightsStorageHealth_memory(ctx, field)
+			case "connections":
+				return ec.fieldContext_InsightsStorageHealth_connections(ctx, field)
+			case "database":
+				return ec.fieldContext_InsightsStorageHealth_database(ctx, field)
 			case "queries":
 				return ec.fieldContext_InsightsStorageHealth_queries(ctx, field)
 			case "tables":
 				return ec.fieldContext_InsightsStorageHealth_tables(ctx, field)
-			case "writePressure":
-				return ec.fieldContext_InsightsStorageHealth_writePressure(ctx, field)
+			case "maintenance":
+				return ec.fieldContext_InsightsStorageHealth_maintenance(ctx, field)
+			case "retention":
+				return ec.fieldContext_InsightsStorageHealth_retention(ctx, field)
 			case "writeback":
 				return ec.fieldContext_InsightsStorageHealth_writeback(ctx, field)
 			}
@@ -58040,8 +58293,8 @@ func (ec *executionContext) fieldContext_InsightsStorageConnection_error(_ conte
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageDisk_insightsBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDisk) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageDisk_insightsBytes(ctx, field)
+func (ec *executionContext) _InsightsStorageConnection_uptimeSeconds(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnection) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnection_uptimeSeconds(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -58054,7 +58307,51 @@ func (ec *executionContext) _InsightsStorageDisk_insightsBytes(ctx context.Conte
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.InsightsBytes, nil
+		return obj.UptimeSeconds, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnection_uptimeSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnection",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_active(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_active(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Active, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -58071,7 +58368,752 @@ func (ec *executionContext) _InsightsStorageDisk_insightsBytes(ctx context.Conte
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageDisk_insightsBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageConnections_active(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_idle(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_idle(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Idle, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_idle(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_idleInTransaction(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_idleInTransaction(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IdleInTransaction, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_idleInTransaction(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_total(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_total(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Total, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_max(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_max(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Max, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_max(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_poolAcquired(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_poolAcquired(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.PoolAcquired, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_poolAcquired(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_poolIdle(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_poolIdle(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.PoolIdle, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_poolIdle(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_poolTotal(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_poolTotal(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.PoolTotal, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_poolTotal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_poolMax(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_poolMax(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.PoolMax, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_poolMax(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_poolWaitCount(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_poolWaitCount(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.PoolWaitCount, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_poolWaitCount(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageConnections_poolWaitSeconds(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageConnections) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageConnections_poolWaitSeconds(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.PoolWaitSeconds, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageConnections_poolWaitSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageConnections",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageDatabaseStats_cacheHitPercent(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDatabaseStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageDatabaseStats_cacheHitPercent(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CacheHitPercent, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageDatabaseStats_cacheHitPercent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageDatabaseStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageDatabaseStats_commits(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDatabaseStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageDatabaseStats_commits(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Commits, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageDatabaseStats_commits(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageDatabaseStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageDatabaseStats_rollbacks(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDatabaseStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageDatabaseStats_rollbacks(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Rollbacks, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageDatabaseStats_rollbacks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageDatabaseStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageDatabaseStats_deadlocks(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDatabaseStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageDatabaseStats_deadlocks(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Deadlocks, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageDatabaseStats_deadlocks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageDatabaseStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageDatabaseStats_tempBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDatabaseStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageDatabaseStats_tempBytes(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TempBytes, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageDatabaseStats_tempBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageDatabaseStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageDatabaseStats_statsSince(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDatabaseStats) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageDatabaseStats_statsSince(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.StatsSince, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageDatabaseStats_statsSince(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageDatabaseStats",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageDisk_databaseBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDisk) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageDisk_databaseBytes(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DatabaseBytes, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageDisk_databaseBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageDisk",
 		Field:      field,
@@ -58084,8 +59126,8 @@ func (ec *executionContext) fieldContext_InsightsStorageDisk_insightsBytes(_ con
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageDisk_totalBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDisk) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageDisk_totalBytes(ctx, field)
+func (ec *executionContext) _InsightsStorageDisk_volumeBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDisk) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageDisk_volumeBytes(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -58098,7 +59140,7 @@ func (ec *executionContext) _InsightsStorageDisk_totalBytes(ctx context.Context,
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.TotalBytes, nil
+		return obj.VolumeBytes, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -58115,95 +59157,7 @@ func (ec *executionContext) _InsightsStorageDisk_totalBytes(ctx context.Context,
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageDisk_totalBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageDisk",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _InsightsStorageDisk_usedBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDisk) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageDisk_usedBytes(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.UsedBytes, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_InsightsStorageDisk_usedBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageDisk",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _InsightsStorageDisk_availableBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageDisk) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageDisk_availableBytes(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.AvailableBytes, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_InsightsStorageDisk_availableBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageDisk_volumeBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageDisk",
 		Field:      field,
@@ -58441,6 +59395,8 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_connection(_ cont
 				return ec.fieldContext_InsightsStorageConnection_database(ctx, field)
 			case "error":
 				return ec.fieldContext_InsightsStorageConnection_error(ctx, field)
+			case "uptimeSeconds":
+				return ec.fieldContext_InsightsStorageConnection_uptimeSeconds(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageConnection", field.Name)
 		},
@@ -58487,14 +59443,10 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_disk(_ context.Co
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "insightsBytes":
-				return ec.fieldContext_InsightsStorageDisk_insightsBytes(ctx, field)
-			case "totalBytes":
-				return ec.fieldContext_InsightsStorageDisk_totalBytes(ctx, field)
-			case "usedBytes":
-				return ec.fieldContext_InsightsStorageDisk_usedBytes(ctx, field)
-			case "availableBytes":
-				return ec.fieldContext_InsightsStorageDisk_availableBytes(ctx, field)
+			case "databaseBytes":
+				return ec.fieldContext_InsightsStorageDisk_databaseBytes(ctx, field)
+			case "volumeBytes":
+				return ec.fieldContext_InsightsStorageDisk_volumeBytes(ctx, field)
 			case "usedPercent":
 				return ec.fieldContext_InsightsStorageDisk_usedPercent(ctx, field)
 			case "status":
@@ -58506,8 +59458,8 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_disk(_ context.Co
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageHealth_memory(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageHealth) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageHealth_memory(ctx, field)
+func (ec *executionContext) _InsightsStorageHealth_connections(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageHealth) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageHealth_connections(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -58520,7 +59472,7 @@ func (ec *executionContext) _InsightsStorageHealth_memory(ctx context.Context, f
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Memory, nil
+		return obj.Connections, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -58532,12 +59484,12 @@ func (ec *executionContext) _InsightsStorageHealth_memory(ctx context.Context, f
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.InsightsStorageMemory)
+	res := resTmp.(*model.InsightsStorageConnections)
 	fc.Result = res
-	return ec.marshalNInsightsStorageMemory2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageMemory(ctx, field.Selections, res)
+	return ec.marshalNInsightsStorageConnections2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageConnections(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageHealth_memory(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageHealth_connections(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageHealth",
 		Field:      field,
@@ -58545,16 +59497,88 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_memory(_ context.
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "processRssBytes":
-				return ec.fieldContext_InsightsStorageMemory_processRssBytes(ctx, field)
-			case "cgroupUsedBytes":
-				return ec.fieldContext_InsightsStorageMemory_cgroupUsedBytes(ctx, field)
-			case "cgroupTotalBytes":
-				return ec.fieldContext_InsightsStorageMemory_cgroupTotalBytes(ctx, field)
-			case "uptimeSeconds":
-				return ec.fieldContext_InsightsStorageMemory_uptimeSeconds(ctx, field)
+			case "active":
+				return ec.fieldContext_InsightsStorageConnections_active(ctx, field)
+			case "idle":
+				return ec.fieldContext_InsightsStorageConnections_idle(ctx, field)
+			case "idleInTransaction":
+				return ec.fieldContext_InsightsStorageConnections_idleInTransaction(ctx, field)
+			case "total":
+				return ec.fieldContext_InsightsStorageConnections_total(ctx, field)
+			case "max":
+				return ec.fieldContext_InsightsStorageConnections_max(ctx, field)
+			case "poolAcquired":
+				return ec.fieldContext_InsightsStorageConnections_poolAcquired(ctx, field)
+			case "poolIdle":
+				return ec.fieldContext_InsightsStorageConnections_poolIdle(ctx, field)
+			case "poolTotal":
+				return ec.fieldContext_InsightsStorageConnections_poolTotal(ctx, field)
+			case "poolMax":
+				return ec.fieldContext_InsightsStorageConnections_poolMax(ctx, field)
+			case "poolWaitCount":
+				return ec.fieldContext_InsightsStorageConnections_poolWaitCount(ctx, field)
+			case "poolWaitSeconds":
+				return ec.fieldContext_InsightsStorageConnections_poolWaitSeconds(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageMemory", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageConnections", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageHealth_database(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageHealth) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageHealth_database(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Database, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.InsightsStorageDatabaseStats)
+	fc.Result = res
+	return ec.marshalNInsightsStorageDatabaseStats2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageDatabaseStats(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageHealth_database(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageHealth",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "cacheHitPercent":
+				return ec.fieldContext_InsightsStorageDatabaseStats_cacheHitPercent(ctx, field)
+			case "commits":
+				return ec.fieldContext_InsightsStorageDatabaseStats_commits(ctx, field)
+			case "rollbacks":
+				return ec.fieldContext_InsightsStorageDatabaseStats_rollbacks(ctx, field)
+			case "deadlocks":
+				return ec.fieldContext_InsightsStorageDatabaseStats_deadlocks(ctx, field)
+			case "tempBytes":
+				return ec.fieldContext_InsightsStorageDatabaseStats_tempBytes(ctx, field)
+			case "statsSince":
+				return ec.fieldContext_InsightsStorageDatabaseStats_statsSince(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageDatabaseStats", field.Name)
 		},
 	}
 	return fc, nil
@@ -58603,14 +59627,12 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_queries(_ context
 				return ec.fieldContext_InsightsStorageQueries_active(ctx, field)
 			case "longestSeconds":
 				return ec.fieldContext_InsightsStorageQueries_longestSeconds(ctx, field)
-			case "peakMemoryBytes":
-				return ec.fieldContext_InsightsStorageQueries_peakMemoryBytes(ctx, field)
-			case "items":
-				return ec.fieldContext_InsightsStorageQueries_items(ctx, field)
-			case "recentHeaviest":
-				return ec.fieldContext_InsightsStorageQueries_recentHeaviest(ctx, field)
-			case "recentLatest":
-				return ec.fieldContext_InsightsStorageQueries_recentLatest(ctx, field)
+			case "running":
+				return ec.fieldContext_InsightsStorageQueries_running(ctx, field)
+			case "topStatements":
+				return ec.fieldContext_InsightsStorageQueries_topStatements(ctx, field)
+			case "statementsAvailable":
+				return ec.fieldContext_InsightsStorageQueries_statementsAvailable(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageQueries", field.Name)
 		},
@@ -58661,10 +59683,12 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_tables(_ context.
 				return ec.fieldContext_InsightsStorageTable_name(ctx, field)
 			case "rows":
 				return ec.fieldContext_InsightsStorageTable_rows(ctx, field)
+			case "deadRows":
+				return ec.fieldContext_InsightsStorageTable_deadRows(ctx, field)
 			case "bytesOnDisk":
 				return ec.fieldContext_InsightsStorageTable_bytesOnDisk(ctx, field)
-			case "activeParts":
-				return ec.fieldContext_InsightsStorageTable_activeParts(ctx, field)
+			case "lastVacuumAt":
+				return ec.fieldContext_InsightsStorageTable_lastVacuumAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageTable", field.Name)
 		},
@@ -58672,8 +59696,8 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_tables(_ context.
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageHealth_writePressure(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageHealth) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageHealth_writePressure(ctx, field)
+func (ec *executionContext) _InsightsStorageHealth_maintenance(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageHealth) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageHealth_maintenance(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -58686,7 +59710,7 @@ func (ec *executionContext) _InsightsStorageHealth_writePressure(ctx context.Con
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.WritePressure, nil
+		return obj.Maintenance, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -58698,12 +59722,12 @@ func (ec *executionContext) _InsightsStorageHealth_writePressure(ctx context.Con
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.InsightsStorageWritePressure)
+	res := resTmp.(*model.InsightsStorageMaintenance)
 	fc.Result = res
-	return ec.marshalNInsightsStorageWritePressure2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageWritePressure(ctx, field.Selections, res)
+	return ec.marshalNInsightsStorageMaintenance2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageMaintenance(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageHealth_writePressure(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageHealth_maintenance(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageHealth",
 		Field:      field,
@@ -58711,12 +59735,80 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_writePressure(_ c
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "unfinishedMutations":
-				return ec.fieldContext_InsightsStorageWritePressure_unfinishedMutations(ctx, field)
-			case "activeParts":
-				return ec.fieldContext_InsightsStorageWritePressure_activeParts(ctx, field)
+			case "deadRows":
+				return ec.fieldContext_InsightsStorageMaintenance_deadRows(ctx, field)
+			case "vacuumsRunning":
+				return ec.fieldContext_InsightsStorageMaintenance_vacuumsRunning(ctx, field)
+			case "waitingLocks":
+				return ec.fieldContext_InsightsStorageMaintenance_waitingLocks(ctx, field)
+			case "oldestTransactionSeconds":
+				return ec.fieldContext_InsightsStorageMaintenance_oldestTransactionSeconds(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageWritePressure", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageMaintenance", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageHealth_retention(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageHealth) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageHealth_retention(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Retention, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.InsightsStorageRetention)
+	fc.Result = res
+	return ec.marshalNInsightsStorageRetention2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageRetention(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageHealth_retention(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageHealth",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "observationRetentionDays":
+				return ec.fieldContext_InsightsStorageRetention_observationRetentionDays(ctx, field)
+			case "relationRetentionDays":
+				return ec.fieldContext_InsightsStorageRetention_relationRetentionDays(ctx, field)
+			case "attemptRetentionDays":
+				return ec.fieldContext_InsightsStorageRetention_attemptRetentionDays(ctx, field)
+			case "everRan":
+				return ec.fieldContext_InsightsStorageRetention_everRan(ctx, field)
+			case "lastRunAt":
+				return ec.fieldContext_InsightsStorageRetention_lastRunAt(ctx, field)
+			case "lastRunOk":
+				return ec.fieldContext_InsightsStorageRetention_lastRunOk(ctx, field)
+			case "lastError":
+				return ec.fieldContext_InsightsStorageRetention_lastError(ctx, field)
+			case "observationsDeleted":
+				return ec.fieldContext_InsightsStorageRetention_observationsDeleted(ctx, field)
+			case "attemptsDeleted":
+				return ec.fieldContext_InsightsStorageRetention_attemptsDeleted(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageRetention", field.Name)
 		},
 	}
 	return fc, nil
@@ -58778,8 +59870,8 @@ func (ec *executionContext) fieldContext_InsightsStorageHealth_writeback(_ conte
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageMemory_processRssBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageMemory) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageMemory_processRssBytes(ctx, field)
+func (ec *executionContext) _InsightsStorageMaintenance_deadRows(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageMaintenance) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageMaintenance_deadRows(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -58792,7 +59884,7 @@ func (ec *executionContext) _InsightsStorageMemory_processRssBytes(ctx context.C
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.ProcessRssBytes, nil
+		return obj.DeadRows, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -58809,9 +59901,9 @@ func (ec *executionContext) _InsightsStorageMemory_processRssBytes(ctx context.C
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageMemory_processRssBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageMaintenance_deadRows(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageMemory",
+		Object:     "InsightsStorageMaintenance",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -58822,8 +59914,8 @@ func (ec *executionContext) fieldContext_InsightsStorageMemory_processRssBytes(_
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageMemory_cgroupUsedBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageMemory) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageMemory_cgroupUsedBytes(ctx, field)
+func (ec *executionContext) _InsightsStorageMaintenance_vacuumsRunning(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageMaintenance) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageMaintenance_vacuumsRunning(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -58836,7 +59928,7 @@ func (ec *executionContext) _InsightsStorageMemory_cgroupUsedBytes(ctx context.C
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.CgroupUsedBytes, nil
+		return obj.VacuumsRunning, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -58853,9 +59945,9 @@ func (ec *executionContext) _InsightsStorageMemory_cgroupUsedBytes(ctx context.C
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageMemory_cgroupUsedBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageMaintenance_vacuumsRunning(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageMemory",
+		Object:     "InsightsStorageMaintenance",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -58866,8 +59958,8 @@ func (ec *executionContext) fieldContext_InsightsStorageMemory_cgroupUsedBytes(_
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageMemory_cgroupTotalBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageMemory) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageMemory_cgroupTotalBytes(ctx, field)
+func (ec *executionContext) _InsightsStorageMaintenance_waitingLocks(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageMaintenance) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageMaintenance_waitingLocks(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -58880,7 +59972,7 @@ func (ec *executionContext) _InsightsStorageMemory_cgroupTotalBytes(ctx context.
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.CgroupTotalBytes, nil
+		return obj.WaitingLocks, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -58897,9 +59989,9 @@ func (ec *executionContext) _InsightsStorageMemory_cgroupTotalBytes(ctx context.
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageMemory_cgroupTotalBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageMaintenance_waitingLocks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageMemory",
+		Object:     "InsightsStorageMaintenance",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -58910,8 +60002,8 @@ func (ec *executionContext) fieldContext_InsightsStorageMemory_cgroupTotalBytes(
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageMemory_uptimeSeconds(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageMemory) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageMemory_uptimeSeconds(ctx, field)
+func (ec *executionContext) _InsightsStorageMaintenance_oldestTransactionSeconds(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageMaintenance) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageMaintenance_oldestTransactionSeconds(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -58924,7 +60016,7 @@ func (ec *executionContext) _InsightsStorageMemory_uptimeSeconds(ctx context.Con
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.UptimeSeconds, nil
+		return obj.OldestTransactionSeconds, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -58941,9 +60033,9 @@ func (ec *executionContext) _InsightsStorageMemory_uptimeSeconds(ctx context.Con
 	return ec.marshalNFloat2float64(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageMemory_uptimeSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageMaintenance_oldestTransactionSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageMemory",
+		Object:     "InsightsStorageMaintenance",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
@@ -59042,8 +60134,8 @@ func (ec *executionContext) fieldContext_InsightsStorageQueries_longestSeconds(_
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageQueries_peakMemoryBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQueries) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageQueries_peakMemoryBytes(ctx, field)
+func (ec *executionContext) _InsightsStorageQueries_running(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQueries) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageQueries_running(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -59056,51 +60148,7 @@ func (ec *executionContext) _InsightsStorageQueries_peakMemoryBytes(ctx context.
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.PeakMemoryBytes, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_InsightsStorageQueries_peakMemoryBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageQueries",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _InsightsStorageQueries_items(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQueries) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageQueries_items(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.Items, nil
+		return obj.Running, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -59117,7 +60165,7 @@ func (ec *executionContext) _InsightsStorageQueries_items(ctx context.Context, f
 	return ec.marshalNInsightsStorageQuery2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageQueryᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageQueries_items(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageQueries_running(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageQueries",
 		Field:      field,
@@ -59129,12 +60177,12 @@ func (ec *executionContext) fieldContext_InsightsStorageQueries_items(_ context.
 				return ec.fieldContext_InsightsStorageQuery_elapsedSeconds(ctx, field)
 			case "user":
 				return ec.fieldContext_InsightsStorageQuery_user(ctx, field)
-			case "memoryBytes":
-				return ec.fieldContext_InsightsStorageQuery_memoryBytes(ctx, field)
+			case "state":
+				return ec.fieldContext_InsightsStorageQuery_state(ctx, field)
+			case "waitEvent":
+				return ec.fieldContext_InsightsStorageQuery_waitEvent(ctx, field)
 			case "query":
 				return ec.fieldContext_InsightsStorageQuery_query(ctx, field)
-			case "finishedAt":
-				return ec.fieldContext_InsightsStorageQuery_finishedAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageQuery", field.Name)
 		},
@@ -59142,8 +60190,8 @@ func (ec *executionContext) fieldContext_InsightsStorageQueries_items(_ context.
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageQueries_recentHeaviest(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQueries) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageQueries_recentHeaviest(ctx, field)
+func (ec *executionContext) _InsightsStorageQueries_topStatements(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQueries) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageQueries_topStatements(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -59156,7 +60204,7 @@ func (ec *executionContext) _InsightsStorageQueries_recentHeaviest(ctx context.C
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.RecentHeaviest, nil
+		return obj.TopStatements, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -59168,12 +60216,12 @@ func (ec *executionContext) _InsightsStorageQueries_recentHeaviest(ctx context.C
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.InsightsStorageQuery)
+	res := resTmp.([]*model.InsightsStorageStatement)
 	fc.Result = res
-	return ec.marshalNInsightsStorageQuery2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageQueryᚄ(ctx, field.Selections, res)
+	return ec.marshalNInsightsStorageStatement2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageStatementᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageQueries_recentHeaviest(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageQueries_topStatements(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageQueries",
 		Field:      field,
@@ -59181,25 +60229,25 @@ func (ec *executionContext) fieldContext_InsightsStorageQueries_recentHeaviest(_
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "elapsedSeconds":
-				return ec.fieldContext_InsightsStorageQuery_elapsedSeconds(ctx, field)
-			case "user":
-				return ec.fieldContext_InsightsStorageQuery_user(ctx, field)
-			case "memoryBytes":
-				return ec.fieldContext_InsightsStorageQuery_memoryBytes(ctx, field)
 			case "query":
-				return ec.fieldContext_InsightsStorageQuery_query(ctx, field)
-			case "finishedAt":
-				return ec.fieldContext_InsightsStorageQuery_finishedAt(ctx, field)
+				return ec.fieldContext_InsightsStorageStatement_query(ctx, field)
+			case "calls":
+				return ec.fieldContext_InsightsStorageStatement_calls(ctx, field)
+			case "totalSeconds":
+				return ec.fieldContext_InsightsStorageStatement_totalSeconds(ctx, field)
+			case "meanMs":
+				return ec.fieldContext_InsightsStorageStatement_meanMs(ctx, field)
+			case "rows":
+				return ec.fieldContext_InsightsStorageStatement_rows(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageQuery", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageStatement", field.Name)
 		},
 	}
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageQueries_recentLatest(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQueries) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageQueries_recentLatest(ctx, field)
+func (ec *executionContext) _InsightsStorageQueries_statementsAvailable(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQueries) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageQueries_statementsAvailable(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -59212,7 +60260,7 @@ func (ec *executionContext) _InsightsStorageQueries_recentLatest(ctx context.Con
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.RecentLatest, nil
+		return obj.StatementsAvailable, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -59224,31 +60272,19 @@ func (ec *executionContext) _InsightsStorageQueries_recentLatest(ctx context.Con
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.InsightsStorageQuery)
+	res := resTmp.(bool)
 	fc.Result = res
-	return ec.marshalNInsightsStorageQuery2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageQueryᚄ(ctx, field.Selections, res)
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageQueries_recentLatest(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageQueries_statementsAvailable(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageQueries",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			switch field.Name {
-			case "elapsedSeconds":
-				return ec.fieldContext_InsightsStorageQuery_elapsedSeconds(ctx, field)
-			case "user":
-				return ec.fieldContext_InsightsStorageQuery_user(ctx, field)
-			case "memoryBytes":
-				return ec.fieldContext_InsightsStorageQuery_memoryBytes(ctx, field)
-			case "query":
-				return ec.fieldContext_InsightsStorageQuery_query(ctx, field)
-			case "finishedAt":
-				return ec.fieldContext_InsightsStorageQuery_finishedAt(ctx, field)
-			}
-			return nil, fmt.Errorf("no field named %q was found under type InsightsStorageQuery", field.Name)
+			return nil, errors.New("field of type Boolean does not have child fields")
 		},
 	}
 	return fc, nil
@@ -59342,8 +60378,8 @@ func (ec *executionContext) fieldContext_InsightsStorageQuery_user(_ context.Con
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageQuery_memoryBytes(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQuery) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageQuery_memoryBytes(ctx, field)
+func (ec *executionContext) _InsightsStorageQuery_state(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQuery) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageQuery_state(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -59356,7 +60392,7 @@ func (ec *executionContext) _InsightsStorageQuery_memoryBytes(ctx context.Contex
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.MemoryBytes, nil
+		return obj.State, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -59368,19 +60404,63 @@ func (ec *executionContext) _InsightsStorageQuery_memoryBytes(ctx context.Contex
 		}
 		return graphql.Null
 	}
-	res := resTmp.(int)
+	res := resTmp.(string)
 	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageQuery_memoryBytes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageQuery_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageQuery",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageQuery_waitEvent(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQuery) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageQuery_waitEvent(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.WaitEvent, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageQuery_waitEvent(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageQuery",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -59430,8 +60510,8 @@ func (ec *executionContext) fieldContext_InsightsStorageQuery_query(_ context.Co
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageQuery_finishedAt(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageQuery) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageQuery_finishedAt(ctx, field)
+func (ec *executionContext) _InsightsStorageRetention_observationRetentionDays(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_observationRetentionDays(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -59444,7 +60524,183 @@ func (ec *executionContext) _InsightsStorageQuery_finishedAt(ctx context.Context
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.FinishedAt, nil
+		return obj.ObservationRetentionDays, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageRetention_observationRetentionDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageRetention",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageRetention_relationRetentionDays(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_relationRetentionDays(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.RelationRetentionDays, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageRetention_relationRetentionDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageRetention",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageRetention_attemptRetentionDays(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_attemptRetentionDays(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AttemptRetentionDays, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageRetention_attemptRetentionDays(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageRetention",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageRetention_everRan(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_everRan(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.EverRan, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageRetention_everRan(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageRetention",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageRetention_lastRunAt(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_lastRunAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastRunAt, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -59458,14 +60714,407 @@ func (ec *executionContext) _InsightsStorageQuery_finishedAt(ctx context.Context
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageQuery_finishedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageRetention_lastRunAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageQuery",
+		Object:     "InsightsStorageRetention",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageRetention_lastRunOk(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_lastRunOk(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastRunOk, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageRetention_lastRunOk(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageRetention",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageRetention_lastError(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_lastError(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastError, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageRetention_lastError(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageRetention",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageRetention_observationsDeleted(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_observationsDeleted(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ObservationsDeleted, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageRetention_observationsDeleted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageRetention",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageRetention_attemptsDeleted(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageRetention) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageRetention_attemptsDeleted(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AttemptsDeleted, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageRetention_attemptsDeleted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageRetention",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageStatement_query(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageStatement) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageStatement_query(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Query, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageStatement_query(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageStatement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageStatement_calls(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageStatement) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageStatement_calls(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Calls, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageStatement_calls(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageStatement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageStatement_totalSeconds(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageStatement) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageStatement_totalSeconds(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalSeconds, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageStatement_totalSeconds(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageStatement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageStatement_meanMs(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageStatement) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageStatement_meanMs(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.MeanMs, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageStatement_meanMs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageStatement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _InsightsStorageStatement_rows(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageStatement) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageStatement_rows(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Rows, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageStatement_rows(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageStatement",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
 		},
 	}
 	return fc, nil
@@ -59559,6 +61208,50 @@ func (ec *executionContext) fieldContext_InsightsStorageTable_rows(_ context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _InsightsStorageTable_deadRows(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageTable) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageTable_deadRows(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.DeadRows, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_InsightsStorageTable_deadRows(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "InsightsStorageTable",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Int does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _InsightsStorageTable_bytesOnDisk(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageTable) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_InsightsStorageTable_bytesOnDisk(ctx, field)
 	if err != nil {
@@ -59603,8 +61296,8 @@ func (ec *executionContext) fieldContext_InsightsStorageTable_bytesOnDisk(_ cont
 	return fc, nil
 }
 
-func (ec *executionContext) _InsightsStorageTable_activeParts(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageTable) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageTable_activeParts(ctx, field)
+func (ec *executionContext) _InsightsStorageTable_lastVacuumAt(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageTable) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_InsightsStorageTable_lastVacuumAt(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -59617,119 +61310,28 @@ func (ec *executionContext) _InsightsStorageTable_activeParts(ctx context.Contex
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.ActiveParts, nil
+		return obj.LastVacuumAt, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
 		return graphql.Null
 	}
 	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
 		return graphql.Null
 	}
-	res := resTmp.(int)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_InsightsStorageTable_activeParts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_InsightsStorageTable_lastVacuumAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "InsightsStorageTable",
 		Field:      field,
 		IsMethod:   false,
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _InsightsStorageWritePressure_unfinishedMutations(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageWritePressure) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageWritePressure_unfinishedMutations(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.UnfinishedMutations, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_InsightsStorageWritePressure_unfinishedMutations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageWritePressure",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _InsightsStorageWritePressure_activeParts(ctx context.Context, field graphql.CollectedField, obj *model.InsightsStorageWritePressure) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_InsightsStorageWritePressure_activeParts(ctx, field)
-	if err != nil {
-		return graphql.Null
-	}
-	ctx = graphql.WithFieldContext(ctx, fc)
-	defer func() {
-		if r := recover(); r != nil {
-			ec.Error(ctx, ec.Recover(ctx, r))
-			ret = graphql.Null
-		}
-	}()
-	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
-		ctx = rctx // use context from middleware stack in children
-		return obj.ActiveParts, nil
-	})
-	if err != nil {
-		ec.Error(ctx, err)
-		return graphql.Null
-	}
-	if resTmp == nil {
-		if !graphql.HasFieldError(ctx, fc) {
-			ec.Errorf(ctx, "must not be null")
-		}
-		return graphql.Null
-	}
-	res := resTmp.(int)
-	fc.Result = res
-	return ec.marshalNInt2int(ctx, field.Selections, res)
-}
-
-func (ec *executionContext) fieldContext_InsightsStorageWritePressure_activeParts(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "InsightsStorageWritePressure",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type Int does not have child fields")
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -110462,6 +112064,161 @@ func (ec *executionContext) _InsightsStorageConnection(ctx context.Context, sel 
 			}
 		case "error":
 			out.Values[i] = ec._InsightsStorageConnection_error(ctx, field, obj)
+		case "uptimeSeconds":
+			out.Values[i] = ec._InsightsStorageConnection_uptimeSeconds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var insightsStorageConnectionsImplementors = []string{"InsightsStorageConnections"}
+
+func (ec *executionContext) _InsightsStorageConnections(ctx context.Context, sel ast.SelectionSet, obj *model.InsightsStorageConnections) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, insightsStorageConnectionsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InsightsStorageConnections")
+		case "active":
+			out.Values[i] = ec._InsightsStorageConnections_active(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "idle":
+			out.Values[i] = ec._InsightsStorageConnections_idle(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "idleInTransaction":
+			out.Values[i] = ec._InsightsStorageConnections_idleInTransaction(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._InsightsStorageConnections_total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "max":
+			out.Values[i] = ec._InsightsStorageConnections_max(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "poolAcquired":
+			out.Values[i] = ec._InsightsStorageConnections_poolAcquired(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "poolIdle":
+			out.Values[i] = ec._InsightsStorageConnections_poolIdle(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "poolTotal":
+			out.Values[i] = ec._InsightsStorageConnections_poolTotal(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "poolMax":
+			out.Values[i] = ec._InsightsStorageConnections_poolMax(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "poolWaitCount":
+			out.Values[i] = ec._InsightsStorageConnections_poolWaitCount(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "poolWaitSeconds":
+			out.Values[i] = ec._InsightsStorageConnections_poolWaitSeconds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var insightsStorageDatabaseStatsImplementors = []string{"InsightsStorageDatabaseStats"}
+
+func (ec *executionContext) _InsightsStorageDatabaseStats(ctx context.Context, sel ast.SelectionSet, obj *model.InsightsStorageDatabaseStats) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, insightsStorageDatabaseStatsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InsightsStorageDatabaseStats")
+		case "cacheHitPercent":
+			out.Values[i] = ec._InsightsStorageDatabaseStats_cacheHitPercent(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commits":
+			out.Values[i] = ec._InsightsStorageDatabaseStats_commits(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rollbacks":
+			out.Values[i] = ec._InsightsStorageDatabaseStats_rollbacks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deadlocks":
+			out.Values[i] = ec._InsightsStorageDatabaseStats_deadlocks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tempBytes":
+			out.Values[i] = ec._InsightsStorageDatabaseStats_tempBytes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "statsSince":
+			out.Values[i] = ec._InsightsStorageDatabaseStats_statsSince(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -110496,23 +112253,13 @@ func (ec *executionContext) _InsightsStorageDisk(ctx context.Context, sel ast.Se
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("InsightsStorageDisk")
-		case "insightsBytes":
-			out.Values[i] = ec._InsightsStorageDisk_insightsBytes(ctx, field, obj)
+		case "databaseBytes":
+			out.Values[i] = ec._InsightsStorageDisk_databaseBytes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "totalBytes":
-			out.Values[i] = ec._InsightsStorageDisk_totalBytes(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "usedBytes":
-			out.Values[i] = ec._InsightsStorageDisk_usedBytes(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "availableBytes":
-			out.Values[i] = ec._InsightsStorageDisk_availableBytes(ctx, field, obj)
+		case "volumeBytes":
+			out.Values[i] = ec._InsightsStorageDisk_volumeBytes(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -110580,8 +112327,13 @@ func (ec *executionContext) _InsightsStorageHealth(ctx context.Context, sel ast.
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "memory":
-			out.Values[i] = ec._InsightsStorageHealth_memory(ctx, field, obj)
+		case "connections":
+			out.Values[i] = ec._InsightsStorageHealth_connections(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "database":
+			out.Values[i] = ec._InsightsStorageHealth_database(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -110595,8 +112347,13 @@ func (ec *executionContext) _InsightsStorageHealth(ctx context.Context, sel ast.
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "writePressure":
-			out.Values[i] = ec._InsightsStorageHealth_writePressure(ctx, field, obj)
+		case "maintenance":
+			out.Values[i] = ec._InsightsStorageHealth_maintenance(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "retention":
+			out.Values[i] = ec._InsightsStorageHealth_retention(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -110628,34 +112385,34 @@ func (ec *executionContext) _InsightsStorageHealth(ctx context.Context, sel ast.
 	return out
 }
 
-var insightsStorageMemoryImplementors = []string{"InsightsStorageMemory"}
+var insightsStorageMaintenanceImplementors = []string{"InsightsStorageMaintenance"}
 
-func (ec *executionContext) _InsightsStorageMemory(ctx context.Context, sel ast.SelectionSet, obj *model.InsightsStorageMemory) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, insightsStorageMemoryImplementors)
+func (ec *executionContext) _InsightsStorageMaintenance(ctx context.Context, sel ast.SelectionSet, obj *model.InsightsStorageMaintenance) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, insightsStorageMaintenanceImplementors)
 
 	out := graphql.NewFieldSet(fields)
 	deferred := make(map[string]*graphql.FieldSet)
 	for i, field := range fields {
 		switch field.Name {
 		case "__typename":
-			out.Values[i] = graphql.MarshalString("InsightsStorageMemory")
-		case "processRssBytes":
-			out.Values[i] = ec._InsightsStorageMemory_processRssBytes(ctx, field, obj)
+			out.Values[i] = graphql.MarshalString("InsightsStorageMaintenance")
+		case "deadRows":
+			out.Values[i] = ec._InsightsStorageMaintenance_deadRows(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "cgroupUsedBytes":
-			out.Values[i] = ec._InsightsStorageMemory_cgroupUsedBytes(ctx, field, obj)
+		case "vacuumsRunning":
+			out.Values[i] = ec._InsightsStorageMaintenance_vacuumsRunning(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "cgroupTotalBytes":
-			out.Values[i] = ec._InsightsStorageMemory_cgroupTotalBytes(ctx, field, obj)
+		case "waitingLocks":
+			out.Values[i] = ec._InsightsStorageMaintenance_waitingLocks(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "uptimeSeconds":
-			out.Values[i] = ec._InsightsStorageMemory_uptimeSeconds(ctx, field, obj)
+		case "oldestTransactionSeconds":
+			out.Values[i] = ec._InsightsStorageMaintenance_oldestTransactionSeconds(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -110703,23 +112460,18 @@ func (ec *executionContext) _InsightsStorageQueries(ctx context.Context, sel ast
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "peakMemoryBytes":
-			out.Values[i] = ec._InsightsStorageQueries_peakMemoryBytes(ctx, field, obj)
+		case "running":
+			out.Values[i] = ec._InsightsStorageQueries_running(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "items":
-			out.Values[i] = ec._InsightsStorageQueries_items(ctx, field, obj)
+		case "topStatements":
+			out.Values[i] = ec._InsightsStorageQueries_topStatements(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "recentHeaviest":
-			out.Values[i] = ec._InsightsStorageQueries_recentHeaviest(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "recentLatest":
-			out.Values[i] = ec._InsightsStorageQueries_recentLatest(ctx, field, obj)
+		case "statementsAvailable":
+			out.Values[i] = ec._InsightsStorageQueries_statementsAvailable(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -110767,8 +112519,13 @@ func (ec *executionContext) _InsightsStorageQuery(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "memoryBytes":
-			out.Values[i] = ec._InsightsStorageQuery_memoryBytes(ctx, field, obj)
+		case "state":
+			out.Values[i] = ec._InsightsStorageQuery_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "waitEvent":
+			out.Values[i] = ec._InsightsStorageQuery_waitEvent(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -110777,8 +112534,138 @@ func (ec *executionContext) _InsightsStorageQuery(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "finishedAt":
-			out.Values[i] = ec._InsightsStorageQuery_finishedAt(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var insightsStorageRetentionImplementors = []string{"InsightsStorageRetention"}
+
+func (ec *executionContext) _InsightsStorageRetention(ctx context.Context, sel ast.SelectionSet, obj *model.InsightsStorageRetention) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, insightsStorageRetentionImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InsightsStorageRetention")
+		case "observationRetentionDays":
+			out.Values[i] = ec._InsightsStorageRetention_observationRetentionDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "relationRetentionDays":
+			out.Values[i] = ec._InsightsStorageRetention_relationRetentionDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attemptRetentionDays":
+			out.Values[i] = ec._InsightsStorageRetention_attemptRetentionDays(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "everRan":
+			out.Values[i] = ec._InsightsStorageRetention_everRan(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastRunAt":
+			out.Values[i] = ec._InsightsStorageRetention_lastRunAt(ctx, field, obj)
+		case "lastRunOk":
+			out.Values[i] = ec._InsightsStorageRetention_lastRunOk(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastError":
+			out.Values[i] = ec._InsightsStorageRetention_lastError(ctx, field, obj)
+		case "observationsDeleted":
+			out.Values[i] = ec._InsightsStorageRetention_observationsDeleted(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "attemptsDeleted":
+			out.Values[i] = ec._InsightsStorageRetention_attemptsDeleted(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var insightsStorageStatementImplementors = []string{"InsightsStorageStatement"}
+
+func (ec *executionContext) _InsightsStorageStatement(ctx context.Context, sel ast.SelectionSet, obj *model.InsightsStorageStatement) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, insightsStorageStatementImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("InsightsStorageStatement")
+		case "query":
+			out.Values[i] = ec._InsightsStorageStatement_query(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "calls":
+			out.Values[i] = ec._InsightsStorageStatement_calls(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalSeconds":
+			out.Values[i] = ec._InsightsStorageStatement_totalSeconds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "meanMs":
+			out.Values[i] = ec._InsightsStorageStatement_meanMs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rows":
+			out.Values[i] = ec._InsightsStorageStatement_rows(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -110823,60 +112710,18 @@ func (ec *executionContext) _InsightsStorageTable(ctx context.Context, sel ast.S
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "deadRows":
+			out.Values[i] = ec._InsightsStorageTable_deadRows(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "bytesOnDisk":
 			out.Values[i] = ec._InsightsStorageTable_bytesOnDisk(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "activeParts":
-			out.Values[i] = ec._InsightsStorageTable_activeParts(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		default:
-			panic("unknown field " + strconv.Quote(field.Name))
-		}
-	}
-	out.Dispatch(ctx)
-	if out.Invalids > 0 {
-		return graphql.Null
-	}
-
-	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
-
-	for label, dfs := range deferred {
-		ec.processDeferredGroup(graphql.DeferredGroup{
-			Label:    label,
-			Path:     graphql.GetPath(ctx),
-			FieldSet: dfs,
-			Context:  ctx,
-		})
-	}
-
-	return out
-}
-
-var insightsStorageWritePressureImplementors = []string{"InsightsStorageWritePressure"}
-
-func (ec *executionContext) _InsightsStorageWritePressure(ctx context.Context, sel ast.SelectionSet, obj *model.InsightsStorageWritePressure) graphql.Marshaler {
-	fields := graphql.CollectFields(ec.OperationContext, sel, insightsStorageWritePressureImplementors)
-
-	out := graphql.NewFieldSet(fields)
-	deferred := make(map[string]*graphql.FieldSet)
-	for i, field := range fields {
-		switch field.Name {
-		case "__typename":
-			out.Values[i] = graphql.MarshalString("InsightsStorageWritePressure")
-		case "unfinishedMutations":
-			out.Values[i] = ec._InsightsStorageWritePressure_unfinishedMutations(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "activeParts":
-			out.Values[i] = ec._InsightsStorageWritePressure_activeParts(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
+		case "lastVacuumAt":
+			out.Values[i] = ec._InsightsStorageTable_lastVacuumAt(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -125306,6 +127151,26 @@ func (ec *executionContext) marshalNInsightsStorageConnection2ᚖgithubᚗcomᚋ
 	return ec._InsightsStorageConnection(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNInsightsStorageConnections2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageConnections(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageConnections) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InsightsStorageConnections(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInsightsStorageDatabaseStats2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageDatabaseStats(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageDatabaseStats) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InsightsStorageDatabaseStats(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNInsightsStorageDisk2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageDisk(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageDisk) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -125350,14 +127215,14 @@ func (ec *executionContext) marshalNInsightsStorageHealthStatus2githubᚗcomᚋo
 	return v
 }
 
-func (ec *executionContext) marshalNInsightsStorageMemory2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageMemory(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageMemory) graphql.Marshaler {
+func (ec *executionContext) marshalNInsightsStorageMaintenance2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageMaintenance(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageMaintenance) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
 		}
 		return graphql.Null
 	}
-	return ec._InsightsStorageMemory(ctx, sel, v)
+	return ec._InsightsStorageMaintenance(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNInsightsStorageQueries2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageQueries(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageQueries) graphql.Marshaler {
@@ -125424,6 +127289,70 @@ func (ec *executionContext) marshalNInsightsStorageQuery2ᚖgithubᚗcomᚋodigo
 	return ec._InsightsStorageQuery(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNInsightsStorageRetention2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageRetention(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageRetention) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InsightsStorageRetention(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNInsightsStorageStatement2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageStatementᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.InsightsStorageStatement) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNInsightsStorageStatement2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageStatement(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNInsightsStorageStatement2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageStatement(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageStatement) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._InsightsStorageStatement(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNInsightsStorageTable2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageTableᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.InsightsStorageTable) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -125476,16 +127405,6 @@ func (ec *executionContext) marshalNInsightsStorageTable2ᚖgithubᚗcomᚋodigo
 		return graphql.Null
 	}
 	return ec._InsightsStorageTable(ctx, sel, v)
-}
-
-func (ec *executionContext) marshalNInsightsStorageWritePressure2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageWritePressure(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageWritePressure) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._InsightsStorageWritePressure(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNInsightsStorageWriteback2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐInsightsStorageWriteback(ctx context.Context, sel ast.SelectionSet, v *model.InsightsStorageWriteback) graphql.Marshaler {
