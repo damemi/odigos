@@ -80,7 +80,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 env:
   PREFLIGHT_VERSION: "1.21.0"
