@@ -23,7 +23,7 @@ func TestDeleteTransactionCascade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	other, err := r.UpsertTransaction(ctx, svc, "ns", "GET /keep", repo.KindHTTP, nil)
+	other, err := r.UpsertTransaction(ctx, svc, "ns", "GET /keep", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert other: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestDeleteTransactionCascade(t *testing.T) {
 func TestDeleteAllTransactionsKeepsGlobalPolicies(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
-	tx, err := r.UpsertTransaction(ctx, uniqueService("wipe"), "ns", "GET /wipe", repo.KindHTTP, nil)
+	tx, err := r.UpsertTransaction(ctx, uniqueService("wipe"), "ns", "GET /wipe", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -171,11 +171,11 @@ func TestActivityAndServiceStats(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
 	svc := uniqueService("stats")
-	busy, err := r.UpsertTransaction(ctx, svc, "ns", "GET /busy", repo.KindHTTP, nil)
+	busy, err := r.UpsertTransaction(ctx, svc, "ns", "GET /busy", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
-	quiet, err := r.UpsertTransaction(ctx, svc, "ns", "GET /quiet", repo.KindHTTP, nil)
+	quiet, err := r.UpsertTransaction(ctx, svc, "ns", "GET /quiet", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -376,7 +376,7 @@ func TestRecommendationsLifecycle(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
 	svc := uniqueService("rec")
-	tx, err := r.UpsertTransaction(ctx, svc, "ns", "POST /pay", repo.KindHTTP, nil)
+	tx, err := r.UpsertTransaction(ctx, svc, "ns", "POST /pay", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -660,7 +660,7 @@ func TestServiceGuardrailsAndProfile(t *testing.T) {
 
 	// Profile: caller -> svc and svc -> callee edges, plus egress owned by svc.
 	caller, callee := uniqueService("caller"), uniqueService("callee")
-	tx, err := r.UpsertTransaction(ctx, svc, "ns", "GET /p", repo.KindHTTP, nil)
+	tx, err := r.UpsertTransaction(ctx, svc, "ns", "GET /p", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}

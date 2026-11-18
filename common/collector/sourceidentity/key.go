@@ -34,6 +34,12 @@ func K8sWorkloadKindAndNameFromResourceAttributes(attrs pcommon.Map) (kind, name
 	return k8sKindAndName(pcommonGetter(attrs))
 }
 
+// K8sWorkloadKindAndNameFromResourceAttributesMap is K8sWorkloadKindAndNameFromResourceAttributes
+// for resource attributes held as a plain string map, for consumers that don't work with pdata.
+func K8sWorkloadKindAndNameFromResourceAttributesMap(attrs map[string]string) (kind, name string) {
+	return k8sKindAndName(mapGetter(attrs))
+}
+
 func k8sSourceKey(get attrGetter) (string, error) {
 	ns := attrString(get, string(semconv.K8SNamespaceNameKey))
 	kind, name := k8sKindAndName(get)

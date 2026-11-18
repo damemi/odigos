@@ -37,6 +37,18 @@ func TestK8sSourceKeyFromResourceAttributes_PrefersOdigosWorkloadAttributes(t *t
 	require.Equal(t, "default/DeploymentConfig/checkout/app", key)
 }
 
+func TestK8sWorkloadKindAndNameFromResourceAttributesMap(t *testing.T) {
+	kind, name := K8sWorkloadKindAndNameFromResourceAttributesMap(map[string]string{
+		string(semconv.K8SStatefulSetNameKey): "db",
+	})
+	require.Equal(t, "StatefulSet", kind)
+	require.Equal(t, "db", name)
+
+	kind, name = K8sWorkloadKindAndNameFromResourceAttributesMap(map[string]string{})
+	require.Empty(t, kind)
+	require.Empty(t, name)
+}
+
 func TestK8sSourceKeyFromResourceAttributes_MissingAttributes(t *testing.T) {
 	attrs := pcommon.NewMap()
 	attrs.PutStr(string(semconv.K8SNamespaceNameKey), "default")

@@ -184,7 +184,8 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// Persistence of the transactions row rides the write-behind flush with
 	// activity/baselines, so delete+recreate works across replicas without a
 	// per-trace upsert or a cross-pod identity cache.
-	ident, ok := identifyTransaction(t)
+	sourceIdentity := e.sourceIdentity(t.Root.ResourceAttrs)
+	ident, ok := identifyTransaction(t, sourceIdentity)
 	if !ok {
 		// Broken-context trace (root is an outbound client span). Drop
 		// silently - see discardableRoot for the reasoning.
@@ -198,7 +199,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// come from the same settings generation.
 	system := e.system.snapshot()
 	ident.Operation = applyIdentityDimensions(ident.Operation, t.Root, system.settings.TransactionIdentityDimensions)
-	tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind, e.sourceIdentity(t.Root.ResourceAttrs))
+	tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind, sourceIdentity)
 	// 1a. Per-service cap on distinct transactions. An identity the inventory
 	// does not know yet is dropped once its service is full, before anything
 	// (guardrail state, baselines, activity, samples) is recorded for it. This

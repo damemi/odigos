@@ -19,3 +19,5 @@ DROP TABLE IF EXISTS baseline_meta;
 DROP TABLE IF EXISTS baseline_counters;
 DROP TABLE IF EXISTS baseline_set_members;
 DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS k8s_source_identity;
+DROP TABLE IF EXISTS sources;

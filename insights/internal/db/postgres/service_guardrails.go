@@ -408,12 +408,17 @@ func (r *Repo) distinctEdgePeers(ctx context.Context, selectSide, matchSide, ser
 // A raw IP matches no service name and still shows up. Each dest is
 // "host:port", or "host" when no port was captured.
 func (r *Repo) distinctEgressHosts(ctx context.Context, namespace, service string) ([]string, error) {
+	var a args
+	class := a.add(string(repo.D2Egress))
+	inService := namespaceFilter(namespace, &a) + " AND t.service = " + a.add(service)
+	owner := a.add(service)
+	inNamespace := namespaceFilter(namespace, &a)
 	return queryRows(ctx, r.pool, "service profile egress",
 		`WITH d2 AS MATERIALIZED (
 			SELECT member::jsonb AS m
 			FROM baseline_set_members
-			WHERE class = $1
-			  AND transaction_id IN (SELECT transaction_id FROM transactions WHERE namespace = $2 AND service = $3)
+			WHERE class = `+class+`
+			  AND transaction_id IN (SELECT t.transaction_id FROM `+transactionsWithNamespace+` WHERE `+inService+`)
 		 ), peers AS (
 			SELECT COALESCE(m->>'host', '') AS host,
 			       COALESCE((m->>'port')::bigint, 0) AS port,
@@ -424,9 +429,9 @@ func (r *Repo) distinctEgressHosts(ctx context.Context, namespace, service strin
 		 SELECT DISTINCT host || CASE WHEN port > 0 THEN ':' || port::text ELSE '' END AS dest
 		 FROM peers
 		 WHERE host <> ''
-		   AND owner = $4
+		   AND owner = `+owner+`
 		   AND external
-		   AND split_part(host, '.', 1) NOT IN (SELECT service FROM transactions WHERE namespace = $5)
+		   AND split_part(host, '.', 1) NOT IN (SELECT t.service FROM `+transactionsWithNamespace+` WHERE `+inNamespace+`)
 		 ORDER BY dest ASC`,
-		scanString, string(repo.D2Egress), namespace, service, service, namespace)
+		scanString, a...)
 }

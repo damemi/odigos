@@ -16,9 +16,9 @@ import (
 // Attribute keys read in scorers / transaction identification.
 var (
 	ServiceName      = string(otelsemconv.ServiceNameKey)
-	ServiceNamespace = string(otelsemconv.ServiceNamespaceKey)
 	K8SNamespaceName = string(otelsemconv.K8SNamespaceNameKey)
 	K8SPodName       = string(otelsemconv.K8SPodNameKey)
+	K8SContainerName = string(otelsemconv.K8SContainerNameKey)
 	ServerAddress    = string(otelsemconv.ServerAddressKey)
 	ServerPort       = string(otelsemconv.ServerPortKey)
 	RPCSystem        = string(otelsemconv.RPCSystemKey)

@@ -8,8 +8,27 @@ replicas never overwrite each other.
 
 | Table | Key | Merge on write |
 |---|---|---|
-| `transactions` | `transaction_id` | Overwrite. The id is a hash of `(service, namespace, operation, kind, source identity)`. |
+| `sources` | `source_id` | Insert-if-missing. The Odigos source a transaction came from and its `platform`, which names the table holding its fields. The id is a hash of the source identity. |
+| `k8s_source_identity` | `source_id` | Insert-if-missing. Typed fields of a `k8s` source (namespace, workload kind/name, container). A new platform gets its own `<platform>_source_identity` table. |
+| `transactions` | `transaction_id` | Overwrite. The id is a hash of `(service, namespace, operation, entry_kind, source identity)`; `source_id` points at its source. The namespace is not stored here - it belongs to the source. |
 | `transaction_activity` | `transaction_id` | `volume` summed, `last_seen` max. Powers "most active" ordering. |
+
+Queries that need a transaction's namespace join the source's platform table
+through the `namespaceJoin` / `transactionNamespace` constants in
+`transactions.go` (`unknown` when the platform has none).
+
+### Adding a source platform
+
+1. Add a `<platform>_source_identity` table keyed by `source_id`, holding the
+   platform's typed fields.
+2. Teach `repo.NewSource` to recognise the platform's identity and write its
+   row in `UpsertTransactions`.
+3. If the platform has a namespace, add its table to `namespaceJoin` and the
+   namespace expressions next to it, and return it from
+   `repo.SourceNamespace`. The two must agree.
+
+`sources`, `transactions` and every table keyed by `transaction_id` stay
+unchanged.
 
 ## Baselines - the learned "normal", per (transaction, class)
 

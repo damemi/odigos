@@ -105,7 +105,7 @@ func TestEngine_AllowedTransactionsFires(t *testing.T) {
 	root := &Span{
 		SpanID: "root", Name: "GET /malicious/request", Service: "shop",
 		Kind:      tracepb.Span_SPAN_KIND_SERVER,
-		SpanAttrs: map[string]string{"http.method": "GET", "service.namespace": "ns"},
+		SpanAttrs: map[string]string{"http.method": "GET"}, ResourceAttrs: k8sResourceAttrs("ns"),
 	}
 	eng.Process(context.Background(), &Trace{TraceID: "tid", Root: root, Spans: []*Span{root}})
 	if err := eng.Flush(context.Background()); err != nil {
@@ -154,9 +154,10 @@ func TestEngine_AllowedTransactionsSilentUnderStaleAllowlist(t *testing.T) {
 		SpanID: "root", Name: "GET /anything", Service: "shop",
 		Kind: tracepb.Span_SPAN_KIND_SERVER,
 		SpanAttrs: map[string]string{
-			"http.method": "GET", "service.namespace": "ns",
+			"http.method":            "GET",
 			"deployment.environment": "prod",
 		},
+		ResourceAttrs: k8sResourceAttrs("ns"),
 	}
 	eng.Process(context.Background(), &Trace{TraceID: "tid", Root: root, Spans: []*Span{root}})
 	if err := eng.Flush(context.Background()); err != nil {
@@ -290,7 +291,7 @@ func TestEngine_AllowedTransactionsSuggestSilent(t *testing.T) {
 	root := &Span{
 		SpanID: "root", Name: "GET /x", Service: "shop",
 		Kind:      tracepb.Span_SPAN_KIND_SERVER,
-		SpanAttrs: map[string]string{"http.method": "GET", "service.namespace": "ns"},
+		SpanAttrs: map[string]string{"http.method": "GET"}, ResourceAttrs: k8sResourceAttrs("ns"),
 	}
 	eng.Process(context.Background(), &Trace{TraceID: "tid", Root: root, Spans: []*Span{root}})
 	_ = eng.Flush(context.Background())

@@ -1,17 +1,37 @@
 -- Initial schema. Unset timestamps are stored as the Unix epoch (not NULL) so
 -- GREATEST/LEAST merges and the Go side treat "never" uniformly.
 
+-- The Odigos source a transaction's entry span came from.
+CREATE TABLE IF NOT EXISTS sources (
+    source_id bigint PRIMARY KEY,
+    -- The platform the source belongs to, e.g. "k8s", "vm"
+    platform  text NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS k8s_source_identity (
+    source_id      bigint PRIMARY KEY REFERENCES sources ON DELETE CASCADE,
+    namespace      text NOT NULL,
+    workload_kind  text NOT NULL,
+    workload_name  text NOT NULL,
+    container_name text NOT NULL
+);
+-- One identity per container.
+CREATE UNIQUE INDEX IF NOT EXISTS k8s_source_identity_workload_idx
+    ON k8s_source_identity (namespace, workload_kind, workload_name, container_name);
+
 CREATE TABLE IF NOT EXISTS transactions (
     transaction_id  bigint PRIMARY KEY,
+    source_id       bigint NOT NULL REFERENCES sources,
     service         text NOT NULL,
-    namespace       text NOT NULL,
+    -- The entry span's name, e.g. 'POST /checkout', 'myapp.UserService/Login'
+    -- or 'kafka.consume orders'.
     operation       text NOT NULL,
-    kind            text NOT NULL,
-    -- Resource attributes naming the Odigos source of the entry span (for k8s
-    -- the namespace, container and workload kind/name). Hashed into the id.
-    source_identity jsonb NOT NULL DEFAULT '{}'
+    -- HTTP, GRPC, CONSUMER, PRODUCER, CRON or INTERNAL.
+    entry_kind      text NOT NULL
 );
-CREATE INDEX IF NOT EXISTS transactions_service_idx ON transactions (namespace, service);
+CREATE INDEX IF NOT EXISTS transactions_service_idx ON transactions (service);
+-- (source_id, service) so a namespace's services are read from the index alone.
+CREATE INDEX IF NOT EXISTS transactions_source_idx ON transactions (source_id, service);
 
 -- Set classes (D1/D2/D5/D6): one row per learned member. Members can be long
 -- JSON, so uniqueness is on a hash to stay under the btree entry size limit.

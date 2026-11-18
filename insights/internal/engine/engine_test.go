@@ -30,6 +30,17 @@ func mkTrace(opts ...func(*Trace)) *Trace {
 	return t
 }
 
+// k8sResourceAttrs is a complete k8s source identity, which is what gives a
+// transaction its namespace.
+func k8sResourceAttrs(namespace string) map[string]string {
+	return map[string]string{
+		"k8s.namespace.name":   namespace,
+		"k8s.container.name":   "app",
+		"odigos.workload.kind": "Deployment",
+		"odigos.workload.name": "workload",
+	}
+}
+
 func withRoot(name, service string, kind tracepb.Span_SpanKind, attrs map[string]string) func(*Trace) {
 	return func(t *Trace) {
 		s := &Span{
@@ -1059,7 +1070,7 @@ func TestIdentifyTransaction_KindFromRoot(t *testing.T) {
 				Name:      "op",
 				Kind:      tc.kind,
 				SpanAttrs: tc.attrs,
-			}})
+			}}, nil)
 			if !ok {
 				t.Fatalf("identifyTransaction dropped a kind we expected to keep: %v", tc.kind)
 			}
@@ -1084,7 +1095,7 @@ func TestIdentifyTransaction_DropsClientRoots(t *testing.T) {
 			Service: "frontend",
 			Name:    "GET http://shipping:8080/quote?id=21",
 			Kind:    tracepb.Span_SPAN_KIND_CLIENT,
-		}})
+		}}, nil)
 		if ok {
 			t.Fatalf("expected HTTP CLIENT root span to be dropped, but identifyTransaction returned ok=true")
 		}
@@ -1096,7 +1107,7 @@ func TestIdentifyTransaction_DropsClientRoots(t *testing.T) {
 			Name:      "myapp.Greeter/SayHello",
 			Kind:      tracepb.Span_SPAN_KIND_CLIENT,
 			SpanAttrs: map[string]string{"rpc.system": "grpc"},
-		}})
+		}}, nil)
 		if !ok {
 			t.Fatalf("expected gRPC CLIENT root span to be kept, but identifyTransaction dropped it")
 		}

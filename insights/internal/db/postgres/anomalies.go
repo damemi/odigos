@@ -98,12 +98,12 @@ func (r *Repo) ResolveAnomalyIssue(ctx context.Context, transactionID int64, sig
 // anomalyIssueLeanCols is scanAnomalyIssueLean's column order (no evidence).
 const anomalyIssueLeanCols = `a.transaction_id, a.signature, a.triggered_classes, a.offending, a.policy_id,
 	a.occurrences, a.max_score, a.first_seen, a.last_seen, a.accepted_at, a.dismissed_at, a.reopened_at, a.last_trace_id,
-	COALESCE(t.service, ''), COALESCE(t.namespace, ''), COALESCE(t.operation, ''), COALESCE(t.kind, '')`
+	COALESCE(t.service, ''), ` + optionalTransactionNamespace + `, COALESCE(t.operation, ''), COALESCE(t.entry_kind, '')`
 
 // anomalyIssueCols is scanAnomalyIssue's column order (includes evidence).
 const anomalyIssueCols = `a.transaction_id, a.signature, a.triggered_classes, a.offending, a.evidence, a.policy_id,
 	a.occurrences, a.max_score, a.first_seen, a.last_seen, a.accepted_at, a.dismissed_at, a.reopened_at, a.last_trace_id,
-	COALESCE(t.service, ''), COALESCE(t.namespace, ''), COALESCE(t.operation, ''), COALESCE(t.kind, '')`
+	COALESCE(t.service, ''), ` + optionalTransactionNamespace + `, COALESCE(t.operation, ''), COALESCE(t.entry_kind, '')`
 
 // ListAnomalyIssues returns issue summaries whose newest timestamp is within
 // the window, worst/most-recent first. Evidence is not loaded - fetch with
@@ -124,6 +124,7 @@ func (r *Repo) ListAnomalyIssues(ctx context.Context, f repo.FindingListFilter) 
 	q := fmt.Sprintf(`SELECT %s
 		 FROM anomaly_issues AS a
 		 LEFT JOIN transactions AS t ON t.transaction_id = a.transaction_id
+		 `+namespaceJoin+`
 		 %s
 		 ORDER BY a.max_score DESC, a.last_seen DESC
 		 LIMIT %s`, anomalyIssueLeanCols, where.String(), a.add(limit))
@@ -149,6 +150,7 @@ func (r *Repo) ListAnomalyIssuesByTransaction(ctx context.Context, transactionID
 	q := fmt.Sprintf(`SELECT %s
 		 FROM anomaly_issues AS a
 		 LEFT JOIN transactions AS t ON t.transaction_id = a.transaction_id
+		 `+namespaceJoin+`
 		 %s
 		 ORDER BY a.max_score DESC, a.last_seen DESC
 		 LIMIT %s`, anomalyIssueLeanCols, where.String(), a.add(limit))
@@ -163,6 +165,7 @@ func (r *Repo) GetAnomalyIssue(ctx context.Context, transactionID int64, signatu
 		`SELECT `+anomalyIssueCols+`
 		 FROM anomaly_issues AS a
 		 LEFT JOIN transactions AS t ON t.transaction_id = a.transaction_id
+		 `+namespaceJoin+`
 		 WHERE a.transaction_id = $1 AND a.signature = $2`,
 		scanAnomalyIssue, transactionID, signature)
 }

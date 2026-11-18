@@ -332,12 +332,13 @@ func (e *Engine) subtreeWidens(sc Scorer, sub *Trace, stored json.RawMessage) bo
 // subTransactionID resolves a sub-trace's transaction id the same way ingest
 // does, so accept widens the identities live traffic will actually hit.
 func (e *Engine) subTransactionID(sub *Trace, dims []repo.TransactionIdentityDimension) (int64, bool) {
-	ident, ok := identifyTransaction(sub)
+	sourceIdentity := e.sourceIdentity(sub.Root.ResourceAttrs)
+	ident, ok := identifyTransaction(sub, sourceIdentity)
 	if !ok {
 		return 0, false
 	}
 	operation := applyIdentityDimensions(ident.Operation, sub.Root, dims)
-	return repo.HashTransactionID(ident.Service, ident.Namespace, operation, ident.Kind, e.sourceIdentity(sub.Root.ResourceAttrs)), true
+	return repo.HashTransactionID(ident.Service, ident.Namespace, operation, ident.Kind, sourceIdentity), true
 }
 
 // DismissAnomalyIssue closes an issue without widening the baseline. The decision

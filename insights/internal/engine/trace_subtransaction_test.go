@@ -71,7 +71,7 @@ func TestSubTraces_BuildsPerEntrySubtree(t *testing.T) {
 		t.Fatalf("coupon subtree should have 2 spans (coupon, inner), got %d", len(coupon.Spans))
 	}
 	// Identity derives from the entry span, independent of the caller.
-	id, ok := identifyTransaction(coupon)
+	id, ok := identifyTransaction(coupon, nil)
 	if !ok {
 		t.Fatalf("coupon entry should be a valid transaction")
 	}

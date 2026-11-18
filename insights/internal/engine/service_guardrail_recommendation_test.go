@@ -323,7 +323,7 @@ func TestServiceGuardrailRecommendation_ShadowCountsPerRule(t *testing.T) {
 	// checkout calls payments (on the list) and ledger (not), and reaches
 	// evil.example.com (not on the egress list).
 	checkout := &Span{SpanID: "root", Name: "POST /pay", Service: "checkout", Kind: tracepb.Span_SPAN_KIND_SERVER,
-		SpanAttrs: map[string]string{"service.namespace": "ns", "http.method": "POST"}}
+		SpanAttrs: map[string]string{"http.method": "POST"}, ResourceAttrs: k8sResourceAttrs("ns")}
 	payments := &Span{SpanID: "c1", ParentSpanID: "root", Name: "POST /charge", Service: "payments", Kind: tracepb.Span_SPAN_KIND_SERVER}
 	ledger := &Span{SpanID: "c2", ParentSpanID: "root", Name: "GET /post", Service: "ledger", Kind: tracepb.Span_SPAN_KIND_SERVER}
 	egress := &Span{SpanID: "c3", ParentSpanID: "root", Name: "GET", Service: "checkout", Kind: tracepb.Span_SPAN_KIND_CLIENT,
@@ -724,9 +724,9 @@ func TestServiceGuardrailRecommendation_ShadowCallersEmptyListAndFingerprint(t *
 	// gateway → checkout: callers holds (gateway is on the list). checkout
 	// also reaches evil.example.com; egress items are empty, so that is a break.
 	gateway := &Span{SpanID: "gw", Name: "POST /entry", Service: "gateway", Kind: tracepb.Span_SPAN_KIND_SERVER,
-		SpanAttrs: map[string]string{"service.namespace": "ns", "http.method": "POST"}}
+		SpanAttrs: map[string]string{"http.method": "POST"}, ResourceAttrs: k8sResourceAttrs("ns")}
 	checkout := &Span{SpanID: "pay", ParentSpanID: "gw", Name: "POST /pay", Service: "checkout", Kind: tracepb.Span_SPAN_KIND_SERVER,
-		SpanAttrs: map[string]string{"service.namespace": "ns", "http.method": "POST"}}
+		SpanAttrs: map[string]string{"http.method": "POST"}, ResourceAttrs: k8sResourceAttrs("ns")}
 	egress := &Span{SpanID: "out", ParentSpanID: "pay", Name: "GET", Service: "checkout", Kind: tracepb.Span_SPAN_KIND_CLIENT,
 		SpanAttrs: map[string]string{"server.address": "evil.example.com", "server.port": "443"}}
 	gateway.Children = []*Span{checkout}

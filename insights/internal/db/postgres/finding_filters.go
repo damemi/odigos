@@ -27,8 +27,19 @@ func appendTxnIdentityFilter(where *strings.Builder, a *args, f repo.FindingList
 		where.WriteString(fmt.Sprintf(" AND %s.service = %s", alias, a.add(f.Service)))
 	}
 	if f.Namespace != "" {
-		where.WriteString(fmt.Sprintf(" AND %s.namespace = %s", alias, a.add(f.Namespace)))
+		where.WriteString(" AND " + namespaceFilter(f.Namespace, a))
 	}
+}
+
+// namespaceFilter matches the transactions joined by namespaceJoin that are in
+// a namespace. A real namespace is matched on the platform table's column,
+// which the planner can use an index for; transactionNamespace is a COALESCE
+// and cannot be.
+func namespaceFilter(namespace string, a *args) string {
+	if namespace == repo.UnknownNamespace {
+		return transactionNamespace + " = " + a.add(namespace)
+	}
+	return "k.namespace = " + a.add(namespace)
 }
 
 // appendScopeKeyFilter matches a "namespace/service" scope key; a key with no

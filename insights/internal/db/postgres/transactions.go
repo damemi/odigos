@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"time"
 
@@ -22,36 +23,85 @@ func (r *Repo) UpsertTransaction(ctx context.Context, service, namespace, operat
 	return tx, nil
 }
 
-// UpsertTransactions batch-writes transaction identity rows. Idempotent - the
-// id is a hash of the identity, so a repeat overwrites the same row.
+// UpsertTransactions batch-writes transaction identity rows and the sources
+// they belong to. Idempotent - both ids are hashes of the identity, so a
+// repeat overwrites the same rows.
 func (r *Repo) UpsertTransactions(ctx context.Context, txs []repo.Transaction) error {
 	if len(txs) == 0 {
 		return nil
 	}
 	sorted := append([]repo.Transaction(nil), txs...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
-	rows := make([][]any, 0, len(sorted))
+	sources := map[int64]repo.Source{}
+	txRows := make([][]any, 0, len(sorted))
 	for _, tx := range sorted {
-		identity := tx.SourceIdentity
-		if identity == nil {
-			identity = map[string]string{}
-		}
-		rows = append(rows, []any{tx.ID, tx.Service, tx.Namespace, tx.Operation, string(tx.Kind), identity})
+		src := repo.NewSource(tx.SourceIdentity)
+		sources[src.ID] = src
+		txRows = append(txRows, []any{tx.ID, src.ID, tx.Service, tx.Operation, string(tx.Kind)})
 	}
-	err := execBatch(ctx, r.pool,
-		`INSERT INTO transactions (transaction_id, service, namespace, operation, kind, source_identity)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 ON CONFLICT (transaction_id) DO UPDATE SET
-			service = EXCLUDED.service, namespace = EXCLUDED.namespace, operation = EXCLUDED.operation,
-			kind = EXCLUDED.kind, source_identity = EXCLUDED.source_identity`,
-		rows)
+	sourceRows, k8sRows := sourceRowsByID(sources)
+	err := r.inTx(ctx, func(tx pgx.Tx) error {
+		if err := execBatch(ctx, tx,
+			`INSERT INTO sources (source_id, platform) VALUES ($1, $2)
+			 ON CONFLICT (source_id) DO NOTHING`,
+			sourceRows); err != nil {
+			return err
+		}
+		if err := execBatch(ctx, tx,
+			`INSERT INTO k8s_source_identity (source_id, namespace, workload_kind, workload_name, container_name)
+			 VALUES ($1, $2, $3, $4, $5)
+			 ON CONFLICT (source_id) DO NOTHING`,
+			k8sRows); err != nil {
+			return err
+		}
+		return execBatch(ctx, tx,
+			`INSERT INTO transactions (transaction_id, source_id, service, operation, entry_kind)
+			 VALUES ($1, $2, $3, $4, $5)
+			 ON CONFLICT (transaction_id) DO UPDATE SET
+				source_id = EXCLUDED.source_id, service = EXCLUDED.service,
+				operation = EXCLUDED.operation, entry_kind = EXCLUDED.entry_kind`,
+			txRows)
+	})
 	if err != nil {
 		return fmt.Errorf("upsert transactions: %w", err)
 	}
 	return nil
 }
 
-const transactionCols = `transaction_id, service, namespace, operation, kind, source_identity`
+// sourceRowsByID returns the sources and k8s_source_identity rows sorted by
+// source_id, so concurrent replicas lock rows in the same order.
+func sourceRowsByID(sources map[int64]repo.Source) (sourceRows, k8sRows [][]any) {
+	ids := make([]int64, 0, len(sources))
+	for id := range sources {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	for _, id := range ids {
+		src := sources[id]
+		sourceRows = append(sourceRows, []any{src.ID, string(src.Platform)})
+		if k := src.K8s; k != nil {
+			k8sRows = append(k8sRows, []any{src.ID, k.Namespace, k.WorkloadKind, k.WorkloadName, k.ContainerName})
+		}
+	}
+	return sourceRows, k8sRows
+}
+
+const (
+	// namespaceJoin reaches the platform tables that know the namespace of
+	// transactions row t. A new platform that has a namespace adds a LEFT JOIN
+	// here and a COALESCE argument to the two expressions below.
+	namespaceJoin = `LEFT JOIN k8s_source_identity AS k ON k.source_id = t.source_id`
+	// transactionNamespace is the namespace of a transactions row t that is
+	// known to exist. 'unknown' is repo.UnknownNamespace.
+	transactionNamespace = `COALESCE(k.namespace, 'unknown')`
+	// optionalTransactionNamespace is transactionNamespace for a LEFT JOINed
+	// t: empty when the transaction is gone.
+	optionalTransactionNamespace = `COALESCE(k.namespace, CASE WHEN t.transaction_id IS NULL THEN '' ELSE 'unknown' END)`
+
+	transactionsWithNamespace = `transactions AS t ` + namespaceJoin
+
+	transactionCols = `t.transaction_id, t.service, ` + transactionNamespace + `, t.operation, t.entry_kind`
+)
 
 // ListTransactions returns transactions for internal id→identity lookups (UI
 // listings use ListServiceStats/ListTransactionStats instead).
@@ -60,7 +110,7 @@ func (r *Repo) ListTransactions(ctx context.Context, limit int) ([]repo.Transact
 		limit = 100
 	}
 	return queryRows(ctx, r.pool, "list transactions",
-		`SELECT `+transactionCols+` FROM transactions ORDER BY transaction_id ASC LIMIT $1`,
+		`SELECT `+transactionCols+` FROM `+transactionsWithNamespace+` ORDER BY t.transaction_id ASC LIMIT $1`,
 		scanTransaction, limit)
 }
 
@@ -68,7 +118,7 @@ func (r *Repo) ListTransactions(ctx context.Context, limit int) ([]repo.Transact
 // the engine's per-service admission index.
 func (r *Repo) ListTransactionRefs(ctx context.Context) ([]repo.TransactionRef, error) {
 	return queryRows(ctx, r.pool, "list transaction refs",
-		"SELECT transaction_id, namespace, service FROM transactions",
+		`SELECT t.transaction_id, `+transactionNamespace+`, t.service FROM `+transactionsWithNamespace,
 		func(s rowScanner) (repo.TransactionRef, error) {
 			var ref repo.TransactionRef
 			err := s.Scan(&ref.ID, &ref.Namespace, &ref.Service)
@@ -79,14 +129,14 @@ func (r *Repo) ListTransactionRefs(ctx context.Context) ([]repo.TransactionRef, 
 // GetTransactionByID returns one transaction's identity. ok=false when unknown.
 func (r *Repo) GetTransactionByID(ctx context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	return queryRow(ctx, r.pool, "get transaction",
-		`SELECT `+transactionCols+` FROM transactions WHERE transaction_id = $1`,
+		`SELECT `+transactionCols+` FROM `+transactionsWithNamespace+` WHERE t.transaction_id = $1`,
 		scanTransaction, transactionID)
 }
 
 func scanTransaction(s rowScanner) (repo.Transaction, error) {
 	var t repo.Transaction
 	var kind string
-	if err := s.Scan(&t.ID, &t.Service, &t.Namespace, &t.Operation, &kind, &t.SourceIdentity); err != nil {
+	if err := s.Scan(&t.ID, &t.Service, &t.Namespace, &t.Operation, &kind); err != nil {
 		return repo.Transaction{}, err
 	}
 	t.Kind = repo.TransactionKind(kind)
@@ -129,13 +179,13 @@ func (r *Repo) ListServiceStats(ctx context.Context, limit int) ([]repo.ServiceS
 		limit = 200
 	}
 	return queryRows(ctx, r.pool, "list service stats",
-		`SELECT t.namespace, t.service,
+		`SELECT `+transactionNamespace+` AS namespace, t.service,
 			count(*) AS txn_count,
 			COALESCE(sum(a.volume), 0) AS volume,
 			COALESCE(max(a.last_seen), 'epoch') AS last_seen
-		 FROM transactions AS t
+		 FROM `+transactionsWithNamespace+`
 		 LEFT JOIN transaction_activity AS a ON a.transaction_id = t.transaction_id
-		 GROUP BY t.namespace, t.service
+		 GROUP BY k.namespace, t.service
 		 ORDER BY volume DESC, txn_count DESC, t.service ASC
 		 LIMIT $1`,
 		scanServiceStat, limit)
@@ -179,12 +229,12 @@ func (r *Repo) ListTransactionStats(ctx context.Context, params repo.Transaction
 	// single-service lookup does not aggregate every baseline in the database.
 	classScope := ""
 	if params.Namespace != "" && params.Service != "" {
-		ns, svc := a.add(params.Namespace), a.add(params.Service)
-		where += " AND t.namespace = " + ns + " AND t.service = " + svc
-		classScope = "WHERE transaction_id IN (SELECT transaction_id FROM transactions WHERE namespace = " + ns + " AND service = " + svc + ")"
+		inService := namespaceFilter(params.Namespace, &a) + " AND t.service = " + a.add(params.Service)
+		where += " AND " + inService
+		classScope = "WHERE transaction_id IN (SELECT t.transaction_id FROM " + transactionsWithNamespace + " WHERE " + inService + ")"
 	}
 	if params.Kind != "" {
-		where += " AND t.kind = " + a.add(string(params.Kind))
+		where += " AND t.entry_kind = " + a.add(string(params.Kind))
 	}
 	if !params.ActiveSince.IsZero() {
 		where += " AND COALESCE(a.last_seen, 'epoch') >= " + a.add(params.ActiveSince)
@@ -195,12 +245,12 @@ func (r *Repo) ListTransactionStats(ctx context.Context, params repo.Transaction
 	limit := a.add(params.Limit)
 
 	return queryRows(ctx, r.pool, "list transaction stats", fmt.Sprintf(
-		`SELECT t.transaction_id, t.service, t.namespace, t.operation, t.kind,
+		`SELECT t.transaction_id, t.service, `+transactionNamespace+`, t.operation, t.entry_kind,
 			COALESCE(a.volume, 0) AS volume, COALESCE(a.last_seen, 'epoch') AS last_seen,
 			COALESCE(p.total, 0) > 0 AS has_baseline,
 			COALESCE(p.total, 0) > 0 AND p.settled = p.total AS promoted,
 			p.saturated_classes
-		 FROM transactions AS t
+		 FROM `+transactionsWithNamespace+`
 		 LEFT JOIN transaction_activity AS a ON a.transaction_id = t.transaction_id
 		 LEFT JOIN (
 			SELECT transaction_id, count(*) AS total, count(*) FILTER (WHERE is_settled) AS settled,
@@ -225,7 +275,7 @@ func transactionStatsOrderBy(by repo.TransactionSortBy, order repo.SortOrder) (s
 	case repo.SortByService:
 		col = "t.service"
 	case repo.SortByNamespace:
-		col = "t.namespace"
+		col = transactionNamespace
 	default:
 		return "", fmt.Errorf("%w: sort_by %q", repo.ErrInvalidSort, by)
 	}
@@ -301,7 +351,7 @@ func (r *Repo) DeleteAllTransactions(ctx context.Context) error {
 		if _, err := tx.Exec(ctx, `TRUNCATE anomaly_issues, trace_observations,
 			baseline_meta, baseline_set_members, baseline_counters,
 			guardrail_recommendations, recommendation_live_counts, recommendation_mining_runs,
-			transaction_activity, transactions`); err != nil {
+			transaction_activity, transactions, k8s_source_identity, sources`); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM learning_policies WHERE scope_type = $1`, scope); err != nil {

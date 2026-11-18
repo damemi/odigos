@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/odigos-io/odigos/insights/internal/db/postgres"
 	"github.com/odigos-io/odigos/insights/internal/db/postgres/migrate"
 	"github.com/odigos-io/odigos/insights/internal/engine"
@@ -50,6 +52,15 @@ func testRepo(t *testing.T) *postgres.Repo {
 	return r
 }
 
+// testSourceIdentity is a complete k8s source in namespace "ns", so the
+// transactions upserted with it are listed under that namespace.
+var testSourceIdentity = map[string]string{
+	"k8s.namespace.name":   "ns",
+	"k8s.container.name":   "app",
+	"odigos.workload.kind": "Deployment",
+	"odigos.workload.name": "workload",
+}
+
 // uniqueService keeps each test's rows isolated from previous runs (the shared
 // container persists data; the transaction id is a hash of the identity).
 func uniqueService(prefix string) string {
@@ -74,12 +85,12 @@ func TestTransactions(t *testing.T) {
 	ctx := context.Background()
 	svc := uniqueService("txn")
 
-	tx, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, nil)
+	tx, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
 	// Idempotent: same identity → same id, no duplicate.
-	again, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, nil)
+	again, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert again: %v", err)
 	}
@@ -115,6 +126,69 @@ func TestTransactions(t *testing.T) {
 	}
 	if !stats[0].HasBaseline || !stats[0].Promoted {
 		t.Fatalf("promoted transaction = has:%v promoted:%v, want true/true", stats[0].HasBaseline, stats[0].Promoted)
+	}
+}
+
+func TestTransactionSources(t *testing.T) {
+	r := testRepo(t)
+	ctx := context.Background()
+	svc := uniqueService("src")
+	identity := map[string]string{
+		"k8s.namespace.name":   "ns",
+		"k8s.container.name":   "app",
+		"odigos.workload.kind": "Deployment",
+		"odigos.workload.name": svc,
+	}
+
+	a, err := r.UpsertTransaction(ctx, svc, "ns", "GET /a", repo.KindHTTP, identity)
+	if err != nil {
+		t.Fatalf("upsert a: %v", err)
+	}
+	if _, err := r.UpsertTransaction(ctx, svc, "ns", "GET /b", repo.KindHTTP, identity); err != nil {
+		t.Fatalf("upsert b: %v", err)
+	}
+	unknown, err := r.UpsertTransaction(ctx, svc, "ns", "GET /c", repo.KindHTTP, map[string]string{"host.name": svc})
+	if err != nil {
+		t.Fatalf("upsert c: %v", err)
+	}
+
+	got, ok, err := r.GetTransactionByID(ctx, a.ID)
+	if err != nil || !ok {
+		t.Fatalf("get a: ok=%v err=%v", ok, err)
+	}
+	if got.Namespace != "ns" || got.Service != svc {
+		t.Fatalf("transaction = %+v, want namespace ns and service %s", got, svc)
+	}
+
+	conn, err := pgx.Connect(ctx, testDSN())
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	var txCount int
+	if err := conn.QueryRow(ctx,
+		`SELECT count(*) FROM transactions AS t
+		 JOIN k8s_source_identity AS k ON k.source_id = t.source_id
+		 WHERE k.namespace = 'ns' AND k.workload_kind = 'Deployment' AND k.workload_name = $1 AND k.container_name = 'app'`,
+		svc).Scan(&txCount); err != nil {
+		t.Fatalf("query by k8s source: %v", err)
+	}
+	if txCount != 2 {
+		t.Fatalf("transactions for k8s source = %d, want 2", txCount)
+	}
+
+	var platform string
+	var k8sRows int
+	if err := conn.QueryRow(ctx,
+		`SELECT s.platform, (SELECT count(*) FROM k8s_source_identity AS k WHERE k.source_id = s.source_id)
+		 FROM transactions AS t JOIN sources AS s ON s.source_id = t.source_id
+		 WHERE t.transaction_id = $1`,
+		unknown.ID).Scan(&platform, &k8sRows); err != nil {
+		t.Fatalf("query unknown source: %v", err)
+	}
+	if platform != string(repo.SourcePlatformUnknown) || k8sRows != 0 {
+		t.Fatalf("unknown source: platform=%q k8s rows=%d", platform, k8sRows)
 	}
 }
 
@@ -321,7 +395,7 @@ func TestAnomalyIssueLifecycle(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
 	svc := uniqueService("anom")
-	tx, err := r.UpsertTransaction(ctx, svc, "ns", "POST /x", repo.KindHTTP, nil)
+	tx, err := r.UpsertTransaction(ctx, svc, "ns", "POST /x", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert txn: %v", err)
 	}
@@ -416,7 +490,7 @@ func TestListAnomalyIssuesByTransactionScoped(t *testing.T) {
 	since := time.Now().Add(-time.Hour)
 
 	mkTxnWithIssue := func(op string) (int64, string) {
-		tx, err := r.UpsertTransaction(ctx, uniqueService("anom-scope"), "ns", op, repo.KindHTTP, nil)
+		tx, err := r.UpsertTransaction(ctx, uniqueService("anom-scope"), "ns", op, repo.KindHTTP, testSourceIdentity)
 		if err != nil {
 			t.Fatalf("upsert txn: %v", err)
 		}
@@ -464,7 +538,7 @@ func TestListAnomalyIssuesByTransactionScoped(t *testing.T) {
 func TestDeleteAnomalyIssues(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
-	tx, err := r.UpsertTransaction(ctx, uniqueService("del-anom"), "ns", "POST /buy", repo.KindHTTP, nil)
+	tx, err := r.UpsertTransaction(ctx, uniqueService("del-anom"), "ns", "POST /buy", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert: %v", err)
 	}
@@ -572,7 +646,7 @@ func TestSystemSettingsRoundTrip(t *testing.T) {
 func TestObservationCountAndBoundedRead(t *testing.T) {
 	r := testRepo(t)
 	ctx := context.Background()
-	tx, err := r.UpsertTransaction(ctx, uniqueService("obs-cap"), "ns", "GET /c", repo.KindHTTP, nil)
+	tx, err := r.UpsertTransaction(ctx, uniqueService("obs-cap"), "ns", "GET /c", repo.KindHTTP, testSourceIdentity)
 	if err != nil {
 		t.Fatalf("upsert txn: %v", err)
 	}

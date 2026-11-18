@@ -126,11 +126,11 @@ const recommendationCols = `
 	r.spec, r.transform, r.transport, r.rules, r.applied_rules, r.observed, r.held, r.distinct_values, r.sample_count, r.examples,
 	r.mined_at, r.created_at, r.updated_at,
 	COALESCE(lc.live_held, 0), COALESCE(lc.live_broken, 0), COALESCE(lc.live_first_at, 'epoch'), COALESCE(lc.live_last_at, 'epoch'), lc.live_by_rule,
-	` + recommendationServiceExpr + `, ` + recommendationNamespaceExpr + `, COALESCE(t.operation, ''), COALESCE(t.kind, '')`
+	` + recommendationServiceExpr + `, ` + recommendationNamespaceExpr + `, COALESCE(t.operation, ''), COALESCE(t.entry_kind, '')`
 
 const (
 	recommendationServiceExpr   = `CASE WHEN r.scope_type = 'service' THEN r.service ELSE COALESCE(t.service, '') END`
-	recommendationNamespaceExpr = `CASE WHEN r.scope_type = 'service' THEN r.namespace ELSE COALESCE(t.namespace, '') END`
+	recommendationNamespaceExpr = `CASE WHEN r.scope_type = 'service' THEN r.namespace ELSE ` + optionalTransactionNamespace + ` END`
 	// liveByRuleSep joins one rule's counters into a single aggregated string.
 	liveByRuleSep = "|"
 )
@@ -150,7 +150,8 @@ const recommendationFrom = `
 		) AS per_rule
 		GROUP BY recommendation_id
 	) AS lc ON lc.recommendation_id = r.recommendation_id
-	LEFT JOIN transactions AS t ON t.transaction_id = r.transaction_id`
+	LEFT JOIN transactions AS t ON t.transaction_id = r.transaction_id
+	` + namespaceJoin
 
 func scanRecommendation(s rowScanner) (repo.Recommendation, error) {
 	var (
