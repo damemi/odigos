@@ -126,7 +126,11 @@ type tracesRedis struct {
 	logger *commonlogger.OdigosLogger
 }
 
-func openTracesRedis(endpoint string, logger *commonlogger.OdigosLogger) (*tracesRedis, error) {
+// newTracesRedis builds the cacheDb client without dialing. go-redis connects
+// lazily and redials on every command, so an unreachable Redis at startup
+// (cacheDb still rolling out) heals once it comes up instead of disabling
+// autopilot for the life of the pod.
+func newTracesRedis(endpoint string, logger *commonlogger.OdigosLogger) *tracesRedis {
 	client := redis.NewClient(&redis.Options{
 		Addr:                  endpoint,
 		DB:                    redisDB,
@@ -135,17 +139,18 @@ func openTracesRedis(endpoint string, logger *commonlogger.OdigosLogger) (*trace
 		WriteTimeout:          2 * time.Second,
 		ContextTimeoutEnabled: true,
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := client.Ping(ctx).Err(); err != nil {
-		_ = client.Close()
-		return nil, fmt.Errorf("ping redis: %w", err)
-	}
 	return &tracesRedis{
 		rdb:    client,
 		closer: client.Close,
 		logger: logger,
-	}, nil
+	}
+}
+
+func (r *tracesRedis) ping(ctx context.Context) error {
+	if err := r.rdb.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("ping redis: %w", err)
+	}
+	return nil
 }
 
 func (r *tracesRedis) Close() error {

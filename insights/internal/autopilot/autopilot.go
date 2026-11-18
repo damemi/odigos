@@ -120,7 +120,7 @@ func Run(ctx context.Context, opts Options) error {
 		log.Info("starting autopilot loop")
 		waitForClickHouse(groupCtx, log, chClient)
 		if opts.RedisEndpoint != "" {
-			if flusher := openTrieFlusher(groupCtx, opts.RedisEndpoint, opts.ClickHouseDSN, log, mgr.GetClient()); flusher != nil {
+			if flusher := openTrieFlusher(opts.RedisEndpoint, opts.ClickHouseDSN, log, mgr.GetClient()); flusher != nil {
 				defer func() {
 					if err := flusher.Close(); err != nil {
 						log.Warn("autopilot trie flusher close failed", "error", err)
@@ -138,21 +138,17 @@ func Run(ctx context.Context, opts Options) error {
 	return g.Wait()
 }
 
-// openTrieFlusher opens Redis + ClickHouse for the structure-only dump. It
-// returns nil when either is unavailable, so the loop runs without flushing.
-func openTrieFlusher(ctx context.Context, redisEndpoint, clickHouseDSN string, log *commonlogger.OdigosLogger, kube client.Client) *trieFlusher {
-	rdb, err := openTracesRedis(redisEndpoint, log)
+// openTrieFlusher builds Redis + ClickHouse clients for the structure-only
+// dump. Neither dials here: an unreachable Redis at startup only fails the
+// current tick's Flush (logged), and the next tick retries. It returns nil
+// only for an invalid ClickHouse DSN, so the loop runs without flushing.
+func openTrieFlusher(redisEndpoint, clickHouseDSN string, log *commonlogger.OdigosLogger, kube client.Client) *trieFlusher {
+	ch, err := openTracesClickHouse(clickHouseDSN, log)
 	if err != nil {
-		log.Warn("autopilot trie flusher unavailable", "error", err)
-		return nil
-	}
-	ch, err := openTracesClickHouse(ctx, clickHouseDSN, log)
-	if err != nil {
-		_ = rdb.Close()
 		log.Warn("autopilot trie flusher clickhouse unavailable", "error", err)
 		return nil
 	}
-	return &trieFlusher{redis: rdb, ch: ch, logger: log, kube: kube}
+	return &trieFlusher{redis: newTracesRedis(redisEndpoint, log), ch: ch, logger: log, kube: kube}
 }
 
 const (

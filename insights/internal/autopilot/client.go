@@ -1,6 +1,7 @@
 package autopilot
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -16,7 +17,14 @@ type Client struct {
 	logger  *commonlogger.OdigosLogger
 }
 
-// Open connects to cacheDb Redis (logical DB 1) and starts the flush loop.
+// startupPingTimeout bounds the best-effort reachability log in Open.
+const startupPingTimeout = 2 * time.Second
+
+// Open builds the cacheDb Redis client (logical DB 1) and starts the flush
+// loop. It fails only on invalid configuration: go-redis redials on every
+// command, so a Redis that is unreachable at startup (e.g. cacheDb still
+// rolling out) is picked up on a later flush instead of disabling
+// correlation for the life of the pod.
 func Open(redisEndpoint string, logger *commonlogger.OdigosLogger) (*Client, error) {
 	if redisEndpoint == "" {
 		return nil, fmt.Errorf("redis endpoint is required")
@@ -24,10 +32,12 @@ func Open(redisEndpoint string, logger *commonlogger.OdigosLogger) (*Client, err
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required")
 	}
-	rdb, err := openTracesRedis(redisEndpoint, logger)
-	if err != nil {
-		return nil, err
+	rdb := newTracesRedis(redisEndpoint, logger)
+	pingCtx, cancel := context.WithTimeout(context.Background(), startupPingTimeout)
+	if err := rdb.ping(pingCtx); err != nil {
+		logger.Warn("autopilot redis not reachable yet; correlation will retry on each flush", "error", err)
 	}
+	cancel()
 	batcher := newInvocationBatcher(defaultFlushInterval, defaultFlushThreshold, logger)
 	batcher.start(&callTrieCorrelator{redis: rdb, logger: logger})
 	logger.Info("autopilot call-trie writer ready",
