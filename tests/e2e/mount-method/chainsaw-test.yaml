@@ -5,6 +5,9 @@ metadata:
 spec:
   description: This e2e test runs a multi-apps scenario testing all four mount methods (init-container, host-path, CSI driver)
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: '[1 - Setup] Install - Simple Demo Apps'
       try:

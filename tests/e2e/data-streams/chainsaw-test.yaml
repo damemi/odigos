@@ -5,15 +5,21 @@ metadata:
 spec:
   description: This e2e test runs a data streams scenario
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: '[1 - Setup] Prepare destination 1'
       try:
         - apply:
             file: ../../common/apply/simple-trace-db-deployment.yaml
     - name: '[1 - Setup] Prepare destination 2'
+      bindings:
+        - name: traceDbNamespace
+          value: traces-2
       try:
         - apply:
-            file: ../../common/apply/simple-trace-db-deployment-2.yaml
+            file: ../../common/apply/simple-trace-db-deployment.yaml
 
     - name: '[1 - Setup] Install Odigos'
       try:
@@ -40,10 +46,13 @@ spec:
             file: ../../common/assert/simple-trace-db-running.yaml
 
     - name: '[1 - Setup] Assert Trace DB 2 is up'
+      bindings:
+        - name: traceDbNamespace
+          value: traces-2
       try:
         - assert:
             timeout: 1m10s
-            file: ../../common/assert/simple-trace-db-running-2.yaml
+            file: ../../common/assert/simple-trace-db-running.yaml
 
     - name: '[1 - Setup] Install - Simple Demo Apps'
       try:
@@ -140,4 +149,4 @@ spec:
       try:
         - script:
             timeout: 1m10s
-            content: bash ../../common/simple_trace_db_query_runner.sh --wait -n traces-2 -s simple-trace-db-2 ../../common/queries/wait-for-trace-stream-2.yaml
+            content: bash ../../common/simple_trace_db_query_runner.sh --wait -n traces-2 ../../common/queries/wait-for-trace-stream-2.yaml

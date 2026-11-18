@@ -2,6 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: simple-trace-db
-  namespace: traces
+  namespace: ($traceDbNamespace)
 status:
   readyReplicas: 1

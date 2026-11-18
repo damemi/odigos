@@ -12,6 +12,9 @@ spec:
     asserts that every extracted target attribute appears on spans
     collected by the simple-trace-db.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

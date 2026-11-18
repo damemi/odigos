@@ -9,6 +9,9 @@ spec:
     Helm flags for each customer are declared in customers.sh.
     Only runs on release PRs (head branch: release-bot-*, base branch: releases/*).
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

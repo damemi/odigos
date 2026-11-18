@@ -10,6 +10,9 @@ spec:
     comes up healthy as a non-root, non-privileged workload and that distributed traces still
     arrive end-to-end.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

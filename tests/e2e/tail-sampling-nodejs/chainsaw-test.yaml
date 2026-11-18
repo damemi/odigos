@@ -10,6 +10,9 @@ spec:
     and asserts odigos.sampling.* span attributes plus VictoriaMetrics sampling
     counter deltas.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

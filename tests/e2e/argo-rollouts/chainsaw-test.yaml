@@ -11,6 +11,9 @@ spec:
     3. InstrumentationConfig is created with correct owner references
     4. Rollouts remain healthy/stable after instrumentation
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Install Argo Rollouts Controller
       try:

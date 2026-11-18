@@ -534,12 +534,14 @@ jobs:
           LATEST_RELEASE_TAG: ${{ steps.latest-release.outputs.tag }}
           KUBERNETES_MINOR_VERSION: ${{ steps.node-image.outputs.minor-version }}
           CUSTOMER: ${{ matrix.customer }}
-        # The asserts read k8sMinorVersion (e.g. odiglet uses hostNetwork before 1.26), and
-        # important-customers reads customer.
+          DEPOT_PULL_TOKEN_TEST_IMAGES: ${{ secrets.DEPOT_PULL_TOKEN_TEST_IMAGES }}
+        # The asserts read k8sMinorVersion (e.g. odiglet uses hostNetwork before 1.26),
+        # important-customers reads customer, and depotPullTokenTestImages pulls the test images from Depot.
         run: |
           chainsaw test "$TEST_DIR" --apply-timeout 30s --values - <<EOF
           k8sMinorVersion: ${KUBERNETES_MINOR_VERSION}
           customer: "${CUSTOMER}"
+          depotPullTokenTestImages: "${DEPOT_PULL_TOKEN_TEST_IMAGES}"
           EOF
 
       - name: Cluster diagnostics
