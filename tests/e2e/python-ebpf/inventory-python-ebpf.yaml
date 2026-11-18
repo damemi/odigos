@@ -17,8 +17,8 @@ apiVersion: odigos.io/v1alpha1
 kind: InstrumentationInstance
 metadata:
   namespace: default
-  labels:
-    instrumented-app: deployment-inventory
+  annotations:
+    odigos.io/instrumented-app: deployment-inventory
 status:
   healthy: true
 ---

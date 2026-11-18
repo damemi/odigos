@@ -5,8 +5,8 @@ apiVersion: odigos.io/v1alpha1
 kind: InstrumentationInstance
 metadata:
   namespace: default
-  labels:
-    instrumented-app: deployment-nodejs-minimum-version
+  annotations:
+    odigos.io/instrumented-app: deployment-nodejs-minimum-version
 status:
   healthy: true
   (identifyingAttributes[?key == 'telemetry.sdk.language']):
@@ -30,8 +30,8 @@ apiVersion: odigos.io/v1alpha1
 kind: InstrumentationInstance
 metadata:
   namespace: default
-  labels:
-    instrumented-app: deployment-nodejs-latest-version
+  annotations:
+    odigos.io/instrumented-app: deployment-nodejs-latest-version
 status:
   healthy: true
   (identifyingAttributes[?key == 'telemetry.sdk.language']):
@@ -55,8 +55,8 @@ apiVersion: odigos.io/v1alpha1
 kind: InstrumentationInstance
 metadata:
   namespace: default
-  labels:
-    instrumented-app: deployment-python-latest-version
+  annotations:
+    odigos.io/instrumented-app: deployment-python-latest-version
 status:
   healthy: true
   (identifyingAttributes[?key == 'service.instance.id']):

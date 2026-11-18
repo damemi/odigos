@@ -18,6 +18,7 @@ import (
 	"github.com/odigos-io/odigos/frontend/kube"
 	"github.com/odigos-io/odigos/frontend/services/common"
 	"github.com/odigos-io/odigos/k8sutils/pkg/client"
+	"github.com/odigos-io/odigos/k8sutils/pkg/instrumentation_instance"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	"golang.org/x/sync/errgroup"
@@ -799,12 +800,7 @@ func GetInstrumentationInstances(ctx context.Context, namespace string, name str
 	listOptions := metav1.ListOptions{}
 	if namespace != "" && name != "" && kind != "" {
 		objectName := workload.CalculateWorkloadRuntimeObjectName(name, kind)
-		if len(objectName) > 63 {
-			// prevents k8s error: must be no more than 63 characters
-			// see https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
-			return result, nil
-		}
-		listOptions.LabelSelector = fmt.Sprintf("%s=%s", consts.InstrumentedAppNameLabel, objectName)
+		listOptions.LabelSelector = fmt.Sprintf("%s=%s", consts.InstrumentedAppNameLabel, instrumentation_instance.InstrumentedAppLabelValue(objectName))
 	}
 
 	list, err := kube.DefaultClient.OdigosClient.InstrumentationInstances("").List(ctx, listOptions)
@@ -831,7 +827,7 @@ func getInstrumentationInstancesConditions(ctx context.Context, namespace string
 
 	// Count instances and group by workload
 	for _, instance := range items {
-		objectName, exists := instance.Labels[consts.InstrumentedAppNameLabel]
+		objectName, exists := instrumentation_instance.InstrumentedAppName(instance)
 		if !exists {
 			continue
 		}

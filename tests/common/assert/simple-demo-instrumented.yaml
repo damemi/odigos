@@ -375,8 +375,8 @@ apiVersion: odigos.io/v1alpha1
 kind: InstrumentationInstance
 metadata:
   namespace: default
-  labels:
-    instrumented-app: deployment-coupon
+  annotations:
+    odigos.io/instrumented-app: deployment-coupon
 status:
   healthy: true
 ---
@@ -384,8 +384,8 @@ apiVersion: odigos.io/v1alpha1
 kind: InstrumentationInstance
 metadata:
   namespace: default
-  labels:
-    instrumented-app: deployment-inventory
+  annotations:
+    odigos.io/instrumented-app: deployment-inventory
 status:
   healthy: true
 ---
@@ -393,7 +393,7 @@ apiVersion: odigos.io/v1alpha1
 kind: InstrumentationInstance
 metadata:
   namespace: default
-  labels:
-    instrumented-app: deployment-membership
+  annotations:
+    odigos.io/instrumented-app: deployment-membership
 status:
   healthy: true
