@@ -383,32 +383,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
-      - uses: depot/setup-action@v1
-        with:
-          oidc: true
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4.2.0
-        with:
-          version: v3.15.2
-
-      - name: Install chainsaw
-        uses: kyverno/action-install-chainsaw@v0.2.13
-
-      # karpenter-mount-methods builds the Karpenter KWOK controller into the kind cluster with ko.
-      - name: Set up Go
-        if: matrix.test == 'karpenter-mount-methods'
-        uses: actions/setup-go@v7
-        with:
-          go-version: "~1.26.6"
-          check-latest: true
-          cache: true
-
-      - name: Install ko
-        if: matrix.test == 'karpenter-mount-methods'
-        uses: ko-build/setup-ko@v0.9
-
       # A test with its own kind-config.yaml runs on that cluster layout, as in the kubernetes-tests action.
       - name: Resolve test directory
         env:
@@ -439,17 +413,44 @@ jobs:
           echo "node-image=$(jq -r .nodeImage <<<"$version")" >> "$GITHUB_OUTPUT"
           echo "minor-version=$(jq -r .minorVersion <<<"$version")" >> "$GITHUB_OUTPUT"
 
-      - name: Create kind cluster
+      # Runs in the background, so the steps up to "Wait for the kind cluster" run while the cluster starts.
+      - name: Create the kind cluster
+        id: kind-create
+        background: true
         uses: helm/kind-action@v1.14.0
         with:
-          node_image: ${{ steps.node-image.outputs.node-image }}
           version: "v0.33.0"
+          node_image: ${{ steps.node-image.outputs.node-image }}
           cluster_name: kind
           config: ${{ env.KIND_CONFIG }}
+          wait: 120s
           ignore_failed_clean: true
 
-      - name: Wait for cluster readiness
-        run: bash tests/common/wait_for_kind_ready.sh
+      # oidc exchanges the job's GitHub OIDC token for a Depot token and exports it as DEPOT_TOKEN.
+      - uses: depot/setup-action@v1
+        with:
+          oidc: true
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.15.2
+
+      - name: Install chainsaw
+        uses: kyverno/action-install-chainsaw@v0.2.13
+
+      # karpenter-mount-methods builds the Karpenter KWOK controller into the kind cluster with ko.
+      - name: Set up Go
+        if: matrix.test == 'karpenter-mount-methods'
+        uses: actions/setup-go@v7
+        with:
+          go-version: "~1.26.6"
+          check-latest: true
+          cache: true
+
+      - name: Install ko
+        if: matrix.test == 'karpenter-mount-methods'
+        uses: ko-build/setup-ko@v0.9
 
       # Copies the odigos binary out of the cli image saved by build-depot-images to cli/odigos,
       # where the tests run it from. The image is distroless, so the container is created, never run.
@@ -461,28 +462,6 @@ jobs:
           docker cp "$container:/odigos" cli/odigos
           docker rm "$container"
           cli/odigos version --cli
-
-      # Pull secret for the Depot images. From 1.35 the kubelet re-verifies credentials of cached images,
-      # so the agents init container also needs it in the apps namespace.
-      # https://kubernetes.io/docs/concepts/containers/images/#ensureimagepullcredentialverification
-      - name: Create the Depot registry pull secret
-        env:
-          KUBERNETES_MINOR_VERSION: ${{ steps.node-image.outputs.minor-version }}
-        run: |
-          set -euo pipefail
-          kubectl create namespace odigos-test
-          namespaces=(odigos-test)
-          if [ "$KUBERNETES_MINOR_VERSION" -ge 35 ]; then
-            namespaces+=(default)
-          fi
-          token=$(depot pull-token --project "$DEPOT_PROJECT")
-          for ns in "${namespaces[@]}"; do
-            kubectl create secret docker-registry depot-registry \
-              --namespace "$ns" \
-              --docker-server=registry.depot.dev \
-              --docker-username=x-token \
-              --docker-password="$token"
-          done
 
       # Points each chart image component at its image saved by build-depot-images, in the values file
       # every test installs with. The scheduler and autoscaler Deployments run 0 replicas, so they need no override.
@@ -524,6 +503,35 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           path: ~/.npmrc
+
+      # The steps since "Create the kind cluster" do not use the cluster, so they run while it starts.
+      - name: Wait for the kind cluster
+        wait: kind-create
+
+      - name: Wait for cluster readiness
+        run: bash tests/common/wait_for_kind_ready.sh
+
+      # Pull secret for the Depot images. From 1.35 the kubelet re-verifies credentials of cached images,
+      # so the agents init container also needs it in the apps namespace.
+      # https://kubernetes.io/docs/concepts/containers/images/#ensureimagepullcredentialverification
+      - name: Create the Depot registry pull secret
+        env:
+          KUBERNETES_MINOR_VERSION: ${{ steps.node-image.outputs.minor-version }}
+        run: |
+          set -euo pipefail
+          kubectl create namespace odigos-test
+          namespaces=(odigos-test)
+          if [ "$KUBERNETES_MINOR_VERSION" -ge 35 ]; then
+            namespaces+=(default)
+          fi
+          token=$(depot pull-token --project "$DEPOT_PROJECT")
+          for ns in "${namespaces[@]}"; do
+            kubectl create secret docker-registry depot-registry \
+              --namespace "$ns" \
+              --docker-server=registry.depot.dev \
+              --docker-username=x-token \
+              --docker-password="$token"
+          done
 
       - name: Run E2E test
         env:
