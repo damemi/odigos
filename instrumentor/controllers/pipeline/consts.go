@@ -22,6 +22,10 @@ const (
 
 	// Cluster gateway profiles pipeline — OTLP in from nodes, export to UI (no extra processors).
 	ProfilingGatewayToUIExporter = "otlp_grpc/profiles-to-ui"
+
+	// AutopilotProfilesExporter writes profile stacks to Redis for insights
+	// correlation. Appended to the gateway profiles pipeline when enabled.
+	AutopilotProfilesExporter = "odigos_autopilot_profiles"
 )
 
 // OpenTelemetry component instance name for the side-channel exporter

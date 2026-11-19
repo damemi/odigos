@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
+	"github.com/odigos-io/odigos/common/consts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/common/urltemplate"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
@@ -72,6 +73,7 @@ func (j *LiveTrafficLearningJob) Start(ctx context.Context) error {
 
 	j.rdb = redis.NewClient(&redis.Options{
 		Addr:                  endpoint,
+		DB:                    consts.RedisDBURLTemplatizationLiveTrafficLearning,
 		DialTimeout:           2 * time.Second,
 		ReadTimeout:           2 * time.Second,
 		WriteTimeout:          2 * time.Second,

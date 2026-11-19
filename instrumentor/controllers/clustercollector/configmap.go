@@ -192,9 +192,11 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 	collectorLogLevel := string(odigoscommon.LogLevelInfo)
 	var profilingCfg *odigoscommon.ProfilingConfiguration
 	var insightsCfg *odigoscommon.InsightsConfiguration
+	var autopilotCfg *odigoscommon.AutopilotConfiguration
 	var cardinalityControlCfg *odigoscommon.CardinalityControlConfiguration
 	if odigosCfg, err := utils.GetCurrentOdigosConfiguration(ctx, c); err == nil {
 		profilingCfg = odigosCfg.Profiling
+		autopilotCfg = odigosCfg.Autopilot
 		insightsCfg = odigosCfg.Insights
 		cardinalityControlCfg = odigosCfg.CardinalityControl
 		if odigosCfg.ComponentLogLevels != nil {
@@ -223,6 +225,9 @@ func syncConfigMap(enabledDests *odigosv1.DestinationList, allProcessors *odigos
 				return err
 			}
 			if err := addProfilingGatewayPipeline(c, env.GetCurrentNamespace(), profilingCfg); err != nil {
+				return err
+			}
+			if err := addAutopilotExporters(c, env.GetCurrentNamespace(), autopilotCfg, autopilotGroupByTraceWait(gatewayOptions.TraceAggregation)); err != nil {
 				return err
 			}
 			addEnterpriseAuthExtension(c)

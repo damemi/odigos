@@ -627,6 +627,14 @@ type InsightsConfiguration struct {
 }
 
 // +kubebuilder:object:generate=true
+// AutopilotConfiguration toggles autopilot. Disabled unless Enabled is set.
+// When on and profiling is enabled, the cluster gateway writes linked profile
+// stacks to the shared cacheDb Redis for later trace–profile correlation.
+type AutopilotConfiguration struct {
+	Enabled *bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
 // LiveTrafficLearningAutomaticRulesConfiguration controls live-traffic automatic
 // rules — applying URL templatization rules learned from live traffic.
 type LiveTrafficLearningAutomaticRulesConfiguration struct {
@@ -785,6 +793,8 @@ type OdigosConfiguration struct {
 
 	Insights *InsightsConfiguration `json:"insights,omitempty" yaml:"insights,omitempty"`
 
+	Autopilot *AutopilotConfiguration `json:"autopilot,omitempty" yaml:"autopilot,omitempty"`
+
 	CardinalityControl *CardinalityControlConfiguration `json:"cardinalityControl,omitempty" yaml:"cardinalityControl,omitempty"`
 }
 
@@ -810,6 +820,18 @@ func InsightsPipelineActive(a *InsightsConfiguration) bool {
 // explicitly enabled on this configuration.
 func (o *OdigosConfiguration) InsightsEnabled() bool {
 	return o != nil && InsightsPipelineActive(o.Insights)
+}
+
+// AutopilotActive reports whether autopilot should run. Opt-in: Enabled must
+// be explicitly true.
+func AutopilotActive(c *AutopilotConfiguration) bool {
+	return c != nil && c.Enabled != nil && *c.Enabled
+}
+
+// AutopilotEnabled reports whether autopilot is explicitly enabled on
+// this configuration.
+func (o *OdigosConfiguration) AutopilotEnabled() bool {
+	return o != nil && AutopilotActive(o.Autopilot)
 }
 
 // UrlTemplatizationLiveTrafficLearningActive reports whether traffic-based URL

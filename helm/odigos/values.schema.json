@@ -52,7 +52,7 @@
     },
     "cacheDb": {
       "additionalProperties": false,
-      "description": "Shared cache DB used by Odigos features that need a cluster-local cache\n(for example cardinality-control URL templatization rule computation).\nDeployed when a consuming feature is enabled (currently\ncardinalityControl.urlTemplatization.liveTrafficLearning.enabled).\nBackend is an implementation detail (Redis, published as odigos-cache with the\nOdigos release tag); values stay backend-agnostic so the chart can switch to\nanother cache (e.g. Memcached) without renaming this section. Override the\nimage via images.cache or imagePrefix like other Odigos components.",
+      "description": "Shared cache DB used by Odigos features that need a cluster-local cache\n(for example cardinality-control URL templatization rule computation).\nDeployed when a consuming feature is enabled (currently\ncardinalityControl.urlTemplatization.liveTrafficLearning.enabled or\ninsights.autopilot.enabled).\nBackend is an implementation detail (Redis, published as odigos-cache with the\nOdigos release tag); values stay backend-agnostic so the chart can switch to\nanother cache (e.g. Memcached) without renaming this section. Override the\nimage via images.cache or imagePrefix like other Odigos components.",
       "properties": {
         "maxmemory": {
           "default": "220mb",
@@ -62,8 +62,45 @@
         },
         "resources": {
           "additionalProperties": true,
-          "default": "",
-          "description": "Optional CPU/memory requests and limits for the shared cache pod.\nWhen unset, defaults use Burstable QoS (requests below limits) since the\ncache is usually idle. Set requests and/or limits to override; if only one\nside is set, the other is mirrored from it.",
+          "description": "CPU/memory requests and limits for the shared cache pod. The defaults are\nthe same whichever features use the cache. Requests are below limits\n(Burstable QoS) since the cache is usually idle.",
+          "properties": {
+            "limits": {
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "default": "300m",
+                  "title": "cpu",
+                  "type": "string"
+                },
+                "memory": {
+                  "default": "756Mi",
+                  "title": "memory",
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "title": "limits",
+              "type": "object"
+            },
+            "requests": {
+              "additionalProperties": false,
+              "properties": {
+                "cpu": {
+                  "default": "75m",
+                  "title": "cpu",
+                  "type": "string"
+                },
+                "memory": {
+                  "default": "192Mi",
+                  "title": "memory",
+                  "type": "string"
+                }
+              },
+              "required": [],
+              "title": "requests",
+              "type": "object"
+            }
+          },
           "required": [],
           "title": "resources"
         }
@@ -720,6 +757,20 @@
           "additionalProperties": true,
           "required": [],
           "title": "affinity"
+        },
+        "autopilot": {
+          "additionalProperties": false,
+          "description": "Autopilot (off by default). When enabled and profiling.enabled is true,\nthe cluster gateway writes profile stacks linked to traces into the shared\ncache (cacheDb), keyed by trace id, for later trace-profile correlation.\nEnabling it also deploys the shared cache (cacheDb).",
+          "properties": {
+            "enabled": {
+              "default": "false",
+              "description": "When true, enables autopilot. Requires profiling.enabled=true to write profile stacks.",
+              "required": [],
+              "title": "enabled"
+            }
+          },
+          "required": [],
+          "title": "autopilot"
         },
         "autoscaling": {
           "additionalProperties": false,

@@ -58,7 +58,7 @@ spec:
             timeoutSeconds: 3
             failureThreshold: 3
           resources:
-            {{- include "cacheDb.resolvedResources" . | nindent 12 }}
+            {{- toYaml .Values.cacheDb.resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
