@@ -163,13 +163,11 @@ spec:
             timeout: 1m10s
             file: 04-odiglet-ready-with-csi-driver.yaml
 
-    - name: '[4 - CSI Driver Test] Restart trace DB for fresh data'
+    - name: '[4 - CSI Driver Test] Clear trace DB for fresh data'
       try:
         - script:
-            timeout: 1m40s
-            content: |
-              kubectl delete pod -l app=simple-trace-db -n traces
-              kubectl wait --for=condition=Ready pod -l app=simple-trace-db -n traces --timeout=2m
+            timeout: 30s
+            content: kubectl get --raw /api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/clear
 
     - name: '[4 - CSI Driver Test] Restart workloads to pick up CSI volumes'
       try:
