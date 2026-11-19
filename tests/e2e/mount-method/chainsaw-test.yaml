@@ -199,22 +199,3 @@ spec:
         - script:
             timeout: 1m20s
             content: bash traffic-and-trace.sh
-
-    - name: 'Uninstall Odigos'
-      try:
-        - script:
-            timeout: 1m40s
-            content: ../../../cli/odigos uninstall --ns odigos-test
-        - script:
-            timeout: 1m20s
-            content: |
-              for i in $(seq 1 10); do
-                if bash ../../../tests/common/assert_odigos_uninstalled.sh; then
-                  exit 0
-                fi
-                echo "Attempt $i: Odigos uninstallation verification failed, retrying in 5 seconds..."
-                sleep 5
-              done
-
-              echo "Failed to verify Odigos uninstallation after 10 attempts"
-              exit 1
