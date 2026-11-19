@@ -916,6 +916,28 @@ instrumentor:
 
   # @schema
   # description: |-
+  #   Run the instrumentor on the node network instead of the pod network.
+  #   The Kubernetes API server calls the instrumentor webhooks by pod IP. On clusters where the control plane
+  #   is outside the pod network, such as EKS with an overlay CNI (Cilium tunnel mode, Calico VXLAN),
+  #   it can't reach pod IPs and these calls fail. With hostNetwork the instrumentor uses the node IP instead.
+  #   cert-manager and Kyverno offer the same option for their webhooks.
+  #   The instrumentor ports are then opened on the node, so they must be free there.
+  # @schema
+  hostNetwork: false
+
+  # @schema
+  # description: |-
+  #   Ports the instrumentor listens on. Change them when hostNetwork is true and a port is already taken on the node.
+  #   The Service ports stay the same, so the webhook and APIService configurations don't change.
+  # @schema
+  ports:
+    webhook: 9443
+    metrics: 8080
+    healthProbe: 8081
+    pprof: 6060
+
+  # @schema
+  # description: |-
   #   resources for the instrumentor deployment.
   # @schema
   resources:

@@ -50,6 +50,7 @@ type Instrumentor struct {
 	dp                 *distros.Provider
 	webhooksRegistered *atomic.Bool
 	k8sVersion         *version.Version
+	pprofPort          int
 }
 
 // Options configures a new Instrumentor.
@@ -61,6 +62,7 @@ type Options struct {
 	// so the runnable can use its cached client. Runnables participate in manager
 	// lifecycle and can opt into leader election via manager.LeaderElectionRunnable.
 	Runnables []func(mgr manager.Manager) manager.Runnable
+	PprofPort int
 }
 
 func New(opts Options) (*Instrumentor, error) {
@@ -224,6 +226,7 @@ func New(opts Options) (*Instrumentor, error) {
 		dp:                 opts.DistrosProvider,
 		webhooksRegistered: webhooksRegistered,
 		k8sVersion:         k8sVersion,
+		pprofPort:          opts.PprofPort,
 	}, nil
 }
 
@@ -233,7 +236,7 @@ func (i *Instrumentor) Run(ctx context.Context, odigosTelemetryDisabled bool) {
 
 	// Start pprof server
 	g.Go(func() error {
-		err := common.StartPprofServer(groupCtx, commonlogger.ToLogr(), int(k8sconsts.DefaultPprofEndpointPort))
+		err := common.StartPprofServer(groupCtx, commonlogger.ToLogr(), i.pprofPort)
 		if err != nil {
 			logger.Error("Failed to start pprof server", "err", err)
 		} else {

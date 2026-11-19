@@ -58,7 +58,8 @@
                       "enterprise/setup/helm-values",
                       "enterprise/setup/docker-registry",
                       "enterprise/setup/odigos-with-argocd",
-                      "enterprise/setup/odigos-with-karpenter"
+                      "enterprise/setup/odigos-with-karpenter",
+                      "enterprise/setup/troubleshooting"
                     ]
                   },
                   "enterprise/setup/verifying-images",

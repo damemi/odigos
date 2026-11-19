@@ -1,0 +1,22 @@
+## Webhooks fail on EKS with an overlay CNI
+
+Creating a Source fails with an error like:
+
+```text
+failed calling webhook "odigos-source-mutating-webhook.odigos.io": ... Address is not allowed
+```
+
+On EKS, the Kubernetes API server runs outside the cluster nodes and calls the instrumentor by pod IP.
+With an overlay CNI, such as Cilium in tunnel mode or Calico with VXLAN, it can't reach pod IPs.
+
+Run the instrumentor on the host network, so it uses the node IP:
+
+```bash
+helm upgrade --install odigos oci://registry.odigos.io/charts/odigos \
+  --namespace odigos-system --create-namespace \
+  --set onPremToken=$ODIGOS_TOKEN \
+  --set instrumentor.hostNetwork=true
+```
+
+The instrumentor ports are then opened on the node, so each replica needs its own node and the ports must be free there.
+If a port is taken, for example `9443` by the AWS Load Balancer Controller, change it with `instrumentor.ports`, for example `--set instrumentor.ports.webhook=10443`.

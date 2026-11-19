@@ -16,6 +16,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -35,9 +36,12 @@ func main() {
 
 	managerOptions := controllers.KubeManagerOptions{}
 	var telemetryDisabled bool
+	var pprofPort int
 
 	flag.StringVar(&managerOptions.MetricsServerBindAddress, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&managerOptions.HealthProbeBindAddress, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.IntVar(&managerOptions.WebhookPort, "webhook-port", webhook.DefaultPort, "The port the webhook server listens on.")
+	flag.IntVar(&pprofPort, "pprof-port", int(k8sconsts.DefaultPprofEndpointPort), "The port the pprof server listens on.")
 	flag.BoolVar(&managerOptions.EnableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -68,6 +72,7 @@ func main() {
 		ManagerOptions:  managerOptions,
 		DistrosProvider: dp,
 		Runnables:       runnables,
+		PprofPort:       pprofPort,
 	})
 	if err != nil {
 		logger.Error("Failed to initialize instrumentor", "err", err)

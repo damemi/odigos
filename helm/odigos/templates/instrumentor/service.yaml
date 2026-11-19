@@ -10,9 +10,9 @@ spec:
   ports:
     - name: webhook-server
       port: 9443
-      targetPort: 9443
+      targetPort: {{ .Values.instrumentor.ports.webhook }}
     - name: metrics
       port: 8080
-      targetPort: 8080
+      targetPort: {{ .Values.instrumentor.ports.metrics }}
   selector:
     app.kubernetes.io/name: odigos-instrumentor

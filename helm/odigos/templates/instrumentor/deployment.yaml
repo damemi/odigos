@@ -56,13 +56,18 @@ spec:
                     app.kubernetes.io/name: odigos-instrumentor
                 topologyKey: "kubernetes.io/hostname"
         {{- end }}
+      {{- if .Values.instrumentor.hostNetwork }}
+      hostNetwork: true
+      {{- end }}
       {{- if .Values.instrumentor.priorityClassName }}
       priorityClassName: {{ .Values.instrumentor.priorityClassName }}
       {{- end }}
       containers:
       - args:
-          - --health-probe-bind-address=:8081
-          - --metrics-bind-address=0.0.0.0:8080
+          - --health-probe-bind-address=:{{ .Values.instrumentor.ports.healthProbe }}
+          - --metrics-bind-address=0.0.0.0:{{ .Values.instrumentor.ports.metrics }}
+          - --webhook-port={{ .Values.instrumentor.ports.webhook }}
+          - --pprof-port={{ .Values.instrumentor.ports.pprof }}
           - --leader-elect
         command:
           - /app
@@ -74,7 +79,7 @@ spec:
         {{- $agentsImageTag := printf "%s%s" $imageTag $extendedSuffix -}}
         image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-instrumentor" "Tag" $imageTag) }}
         ports:
-          - containerPort: 9443
+          - containerPort: {{ .Values.instrumentor.ports.webhook }}
             name: webhook-server
             protocol: TCP
         env:
@@ -125,14 +130,14 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8081
+            port: {{ .Values.instrumentor.ports.healthProbe }}
           initialDelaySeconds: 15
           periodSeconds: 20
           timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /readyz
-            port: 8081
+            port: {{ .Values.instrumentor.ports.healthProbe }}
           periodSeconds: 10
           timeoutSeconds: 5
         name: manager

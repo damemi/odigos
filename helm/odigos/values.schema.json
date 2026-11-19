@@ -1187,6 +1187,12 @@
           "required": [],
           "title": "deploymentName"
         },
+        "hostNetwork": {
+          "default": "false",
+          "description": "Run the instrumentor on the node network instead of the pod network.\nThe Kubernetes API server calls the instrumentor webhooks by pod IP. On clusters where the control plane\nis outside the pod network, such as EKS with an overlay CNI (Cilium tunnel mode, Calico VXLAN),\nit can't reach pod IPs and these calls fail. With hostNetwork the instrumentor uses the node IP instead.\ncert-manager and Kyverno offer the same option for their webhooks.\nThe instrumentor ports are then opened on the node, so they must be free there.",
+          "required": [],
+          "title": "hostNetwork"
+        },
         "logLevel": {
           "default": "info",
           "description": "Log level for instrumentor. Defaults to info.",
@@ -1210,6 +1216,34 @@
           "description": "the timeout in seconds for the pods webhook.\ndefault is 10 seconds and it is recommended to keep it as is unless you are experiencing issues with the webhook.\nvalue must be 30 seconds max (inforced by kubernetes)\na shorter timeout will relieve API pressure, but may result in more pods failing to instrument",
           "required": [],
           "title": "podsWebhookTimeoutSeconds"
+        },
+        "ports": {
+          "additionalProperties": false,
+          "description": "Ports the instrumentor listens on. Change them when hostNetwork is true and a port is already taken on the node.\nThe Service ports stay the same, so the webhook and APIService configurations don't change.",
+          "properties": {
+            "healthProbe": {
+              "default": 8081,
+              "title": "healthProbe",
+              "type": "integer"
+            },
+            "metrics": {
+              "default": 8080,
+              "title": "metrics",
+              "type": "integer"
+            },
+            "pprof": {
+              "default": 6060,
+              "title": "pprof",
+              "type": "integer"
+            },
+            "webhook": {
+              "default": 9443,
+              "title": "webhook",
+              "type": "integer"
+            }
+          },
+          "required": [],
+          "title": "ports"
         },
         "priorityClassName": {
           "default": "",
