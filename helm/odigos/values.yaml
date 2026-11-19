@@ -563,6 +563,20 @@ collectorGateway:
   # @schema
   # deploymentName: 'odigos-gateway'
 
+  # @schema
+  # description: Settings for the ServiceAccount the cluster gateway collector runs as (odigos-gateway).
+  # @schema
+  serviceAccount:
+    # @schema
+    # additionalProperties: true
+    # description: |-
+    #   Annotations to add to the cluster gateway collector ServiceAccount.
+    #   For example, to export to Google Cloud with GKE Workload Identity, link it to a
+    #   Google Cloud service account:
+    #     iam.gke.io/gcp-service-account: <name>@<project>.iam.gserviceaccount.com
+    # @schema
+    annotations: {}
+
 # @schema
 # description: Settings for Odigos data-collection (node) Collectors
 # @schema
