@@ -57,7 +57,9 @@ type tracesClickHouse struct {
 // openTracesClickHouse dials the autopilot database using the insights
 // ClickHouse DSN (any database in the DSN is rewritten to "autopilot").
 // Tables are created by the Helm migrate Job (migrate.Apply), not here.
-func openTracesClickHouse(ctx context.Context, insightsDSN string, logger *commonlogger.OdigosLogger) (*tracesClickHouse, error) {
+// It does not dial: the driver connects on first use and redials per query,
+// so only a malformed DSN is an error.
+func openTracesClickHouse(insightsDSN string, logger *commonlogger.OdigosLogger) (*tracesClickHouse, error) {
 	opts, err := buildClickHouseOptions(insightsDSN)
 	if err != nil {
 		return nil, err
@@ -66,10 +68,6 @@ func openTracesClickHouse(ctx context.Context, insightsDSN string, logger *commo
 	db, err := clickhouse.Open(opts)
 	if err != nil {
 		return nil, fmt.Errorf("open clickhouse: %w", err)
-	}
-	if err := db.Ping(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("ping clickhouse: %w", err)
 	}
 
 	return &tracesClickHouse{

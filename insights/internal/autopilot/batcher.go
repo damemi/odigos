@@ -11,6 +11,7 @@ import (
 const (
 	defaultFlushInterval  = 5 * time.Second
 	defaultFlushThreshold = 500
+	failureLogEvery       = time.Minute
 )
 
 // TraceTransaction is one service invocation to correlate under a TraceId.
@@ -48,6 +49,11 @@ type invocationBatcher struct {
 	correlator     traceCorrelator
 
 	pending map[string]*TraceBatch
+
+	// Flush-failure log throttling; owned by the loop goroutine.
+	failedFlushes  int
+	droppedTraces  int
+	lastFailureLog time.Time
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -118,8 +124,30 @@ func (b *invocationBatcher) flush(ctx context.Context) {
 	if b.correlator == nil {
 		return
 	}
-	if err := b.correlator.correlate(ctx, toFlush); err != nil {
-		b.logger.Error("autopilot call trie correlation failed", "error", err)
+	err := b.correlator.correlate(ctx, toFlush)
+	b.reportFlush(err, len(toFlush), time.Now())
+}
+
+// reportFlush logs correlation failures at most once per failureLogEvery so
+// a Redis outage (or one still starting up) does not log every flush, and
+// logs once when flushes recover. The dropped batches are lost; later traces
+// correlate normally once Redis is reachable.
+func (b *invocationBatcher) reportFlush(err error, traces int, now time.Time) {
+	if err == nil {
+		if b.failedFlushes > 0 {
+			b.logger.Info("autopilot call trie correlation recovered",
+				"failed_flushes", b.failedFlushes, "dropped_traces", b.droppedTraces)
+			b.failedFlushes, b.droppedTraces = 0, 0
+			b.lastFailureLog = time.Time{}
+		}
+		return
+	}
+	b.failedFlushes++
+	b.droppedTraces += traces
+	if b.lastFailureLog.IsZero() || now.Sub(b.lastFailureLog) >= failureLogEvery {
+		b.logger.Error("autopilot call trie correlation failed; will retry on next flush",
+			"error", err, "failed_flushes", b.failedFlushes, "dropped_traces", b.droppedTraces)
+		b.lastFailureLog = now
 	}
 }
 
