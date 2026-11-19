@@ -55,8 +55,7 @@ genref: tools
 docgen: genref
 	@if [ ! -f "$(CURDIR)/../go.work" ]; then \
 		echo "go.work not found; creating workspace (required for operator.odigos.io API docs)..."; \
-		cd $(CURDIR)/.. && go work init && go work use -r . && \
-		go work edit -dropuse=./odiglet/enterprise -dropuse=./connectors/base -dropuse=./connectors/providers/aws -dropuse=./connectors/providers/azure -dropuse=./connectors/providers/gcp -dropuse=./connectors/providers/mulesoft -dropuse=./connector-opamp-gateway; \
+		cd $(CURDIR)/.. && go work init ./api ./common ./operator; \
 	fi
 	rm -rf $(CURDIR)/../docs/snippets/enterprise/api-reference/*
 	$(TOOLS)/genref -c genref-config.yaml -f markdown -o $(CURDIR)/../docs/snippets/enterprise/api-reference
