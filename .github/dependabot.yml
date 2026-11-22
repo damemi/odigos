@@ -22,7 +22,6 @@ updates:
       - /instrumentor
       - /k8sutils
       - /odiglet
-      - /odiglet/enterprise
       - /odigosauth
       - /opampserver
       - /operator
@@ -78,7 +77,7 @@ updates:
       - /
       - /collector
       - /instrumentor/enterprise
-      - /odiglet/enterprise
+      - /odiglet
       - /operator
       - /ui
     schedule:

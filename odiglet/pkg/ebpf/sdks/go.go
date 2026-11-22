@@ -132,7 +132,7 @@ func (g *GoInstrumentationFactoryEnterprise) updateLocalOffsets() error {
 }
 
 // WatchGoOffsets polls the custom Go offsets file (OTEL_GO_OFFSETS_FILE) for changes and, on each
-// detected update, asks the OSS instrumentation manager to retry failed Go instrumentations. It
+// detected update, asks the instrumentation manager to retry failed Go instrumentations. It
 // blocks until ctx is canceled. If OTEL_GO_OFFSETS_FILE is not set, it returns immediately.
 func WatchGoOffsets(ctx context.Context, requestsChannel ebpf.K8sInstrumentationRequests, logger *commonlogger.OdigosLogger) error {
 	path := os.Getenv(GoOffsetsFilePathEnv)

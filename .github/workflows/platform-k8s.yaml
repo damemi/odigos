@@ -610,6 +610,7 @@ jobs:
     runs-on: depot-ubuntu-24.04-8
     permissions:
       contents: read
+      id-token: write
     env:
       MODULES: >-
         common
@@ -632,6 +633,19 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update && sudo apt-get install -y clang llvm libbpf-dev
+      # odiglet downloads private instrumentation repos.
+      - name: Get ro tokens for private module dependencies
+        uses: odigos-io/ci-core/sts@main
+        with:
+          pairs: |
+            odigos-io/ebpf-core:ro
+            odigos-io/ebpf-java-instrumentation:enterprise-ro
+            odigos-io/ebpf-nodejs-instrumentation:enterprise-ro
+            odigos-io/ebpf-generic-instrumentation:enterprise-ro
+            odigos-io/enterprise-go-instrumentation:enterprise-ro
+            odigos-io/mysql-instrumentation:enterprise-ro
+            odigos-io/python-ebpf:enterprise-ro
+            odigos-io/odigos-device-plugin:ro
       # Tests every module even after a failure, then fails if any module failed.
       - name: Test modules
         run: |

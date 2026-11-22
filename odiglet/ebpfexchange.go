@@ -1,4 +1,4 @@
-package main
+package odiglet
 
 import (
 	"context"
@@ -7,16 +7,14 @@ import (
 	cilumebpf "github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/rlimit"
 
-	"github.com/odigos-io/odigos/odiglet/enterprise/pkg/ebpf/logcapture"
 	"github.com/odigos-io/odigos/common/ebpf/ebpfmaps"
 	"github.com/odigos-io/odigos/common/ebpf/unixfd"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
-	"github.com/odigos-io/odigos/odiglet/pkg/ebpf"
+	"github.com/odigos-io/odigos/odiglet/pkg/ebpf/logcapture"
 )
 
-// ebpfMapExchange owns the eBPF maps the enterprise SDKs write into and the unix socket that
-// hands their file descriptors to the enterprise collector's odigosebpfreceiver. Both ends are
-// enterprise-only, so none of this exists in the OSS odiglet.
+// ebpfMapExchange owns the eBPF maps the SDKs write into and the unix socket that
+// hands their file descriptors to the collector's odigosebpfreceiver.
 type ebpfMapExchange struct {
 	traces *cilumebpf.Map
 	logs   *cilumebpf.Map
@@ -51,13 +49,6 @@ func newEbpfMapExchange() (*ebpfMapExchange, error) {
 		traces: traces,
 		logs:   logs,
 	}, nil
-}
-
-// applyTo hands the maps to the instrumentation manager, so the enterprise SDK factories run as
-// external readers against them instead of creating maps of their own.
-func (e *ebpfMapExchange) applyTo(opts *ebpf.InstrumentationManagerOptions) {
-	opts.TracesMap = e.traces
-	opts.LogsMap = e.logs
 }
 
 // serve runs the file descriptor server until ctx is canceled. It stays up for odiglet's whole

@@ -38,7 +38,7 @@ upgrade-agent:
 		cpp) \
 			$(MAKE) -f $(MK) upgrade-cpp-version AGENT_VERSION=$(AGENT_VERSION) ;; \
 		*) \
-			echo "Instrumentation agent '$(INSTRUMENTATION_AGENT)' is not consumed by odigos-enterprise; nothing to do." ;; \
+			echo "Instrumentation agent '$(INSTRUMENTATION_AGENT)' is not consumed by odiglet; nothing to do." ;; \
 	esac
 
 .PHONY: upgrade-java-ebpf-version

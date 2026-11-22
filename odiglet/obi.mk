@@ -11,7 +11,7 @@
 #   - go-mod-replace:  go mod edit -replace only (no download).
 # Keep the go.opentelemetry.io/obi version in go.mod (require) in sync with the
 # selected method: the OBI_COMMIT pseudo-version for pin, or the OBI_VERSION
-# tag for release. Pinned to the same OBI commit as OSS odigos.
+# tag for release.
 
 .PHONY: materialize-obi materialize-obi-pin materialize-obi-release go-mod-replace
 
