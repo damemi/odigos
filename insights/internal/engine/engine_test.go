@@ -15,6 +15,8 @@ import (
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
+
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
@@ -28,6 +30,16 @@ func mkTrace(opts ...func(*Trace)) *Trace {
 		opt(t)
 	}
 	return t
+}
+
+// decodeRequest is DecodeRequest with the engine's default SourceIdentityFunc.
+func decodeRequest(req *tracepb.TracesData) []*Trace {
+	return DecodeRequest(req, sourceidentity.FromK8sResourceAttributesMap)
+}
+
+// k8sSourceIdentity is the source identity of k8sResourceAttrs(namespace).
+func k8sSourceIdentity(namespace string) map[string]string {
+	return sourceidentity.FromK8sResourceAttributesMap(k8sResourceAttrs(namespace))
 }
 
 // k8sResourceAttrs is a complete k8s source identity, which is what gives a
@@ -970,7 +982,7 @@ func TestDecodeRequest_BuildsTrace(t *testing.T) {
 			}},
 		}},
 	}
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 trace, got %d", len(traces))
 	}
@@ -1009,7 +1021,7 @@ func TestDecodeRequest_EncodesOnlyWhenAsked(t *testing.T) {
 		}},
 	}
 
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 trace, got %d", len(traces))
 	}
@@ -1023,7 +1035,7 @@ func TestDecodeRequest_EncodesOnlyWhenAsked(t *testing.T) {
 		t.Fatal("RawOTLP returned nothing for a trace that has spans")
 	}
 	// Deferring must not change what a user ends up opening.
-	reopened := DecodeRequest(mustUnmarshalTraces(t, raw))
+	reopened := decodeRequest(mustUnmarshalTraces(t, raw))
 	if len(reopened) != 1 {
 		t.Fatalf("stored bytes should reopen as 1 trace, got %d", len(reopened))
 	}
@@ -1140,7 +1152,7 @@ func TestDecodeRequest_StripsNULBytes(t *testing.T) {
 			}},
 		}},
 	}
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 trace, got %d", len(traces))
 	}

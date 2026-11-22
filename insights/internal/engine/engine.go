@@ -184,7 +184,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// Persistence of the transactions row rides the write-behind flush with
 	// activity/baselines, so delete+recreate works across replicas without a
 	// per-trace upsert or a cross-pod identity cache.
-	sourceIdentity := e.sourceIdentity(t.Root.ResourceAttrs)
+	sourceIdentity := t.Root.SourceIdentity
 	ident, ok := identifyTransaction(t, sourceIdentity)
 	if !ok {
 		// Broken-context trace (root is an outbound client span). Drop

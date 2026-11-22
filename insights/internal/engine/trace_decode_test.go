@@ -9,6 +9,8 @@ import (
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	resourcepb "go.opentelemetry.io/proto/otlp/resource/v1"
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
+
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 )
 
 // TestDecodeRequest_SplitsBatchByTrace covers a batched export: several traces
@@ -45,7 +47,7 @@ func TestDecodeRequest_SplitsBatchByTrace(t *testing.T) {
 		}},
 	}}
 
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 2 {
 		t.Fatalf("expected 2 traces, got %d", len(traces))
 	}
@@ -115,7 +117,7 @@ func TestDecodeRequest_StripsNULFromNamesAndAttributes(t *testing.T) {
 		}}}},
 	}}}
 
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 trace, got %d", len(traces))
 	}
@@ -156,7 +158,7 @@ func TestSpanAttrPrefersSpanOverResource(t *testing.T) {
 		}}}},
 	}}}
 
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 trace, got %d", len(traces))
 	}
@@ -186,9 +188,49 @@ func BenchmarkDecodeRequest(b *testing.B) {
 		b.Run(fmt.Sprintf("traces=%d", n), func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				DecodeRequest(req)
+				decodeRequest(req)
 			}
 			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N*n), "ns/trace")
 		})
+	}
+}
+
+// TestDecodeTraceTrees_SetsSourceIdentityPerResource checks that every span
+// carries its resource's source identity, and the render path (no
+// SourceIdentityFunc) leaves it nil.
+func TestDecodeTraceTrees_SetsSourceIdentityPerResource(t *testing.T) {
+	tid := []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
+	resource := func(workload string) *resourcepb.Resource {
+		return &resourcepb.Resource{Attributes: []*commonpb.KeyValue{
+			kvStr("service.name", workload),
+			kvStr("k8s.namespace.name", "shop"),
+			kvStr("k8s.deployment.name", workload),
+			kvStr("k8s.container.name", "app"),
+		}}
+	}
+	req := &tracepb.TracesData{ResourceSpans: []*tracepb.ResourceSpans{
+		{Resource: resource("checkout"), ScopeSpans: []*tracepb.ScopeSpans{{Spans: []*tracepb.Span{
+			{TraceId: tid, SpanId: []byte{1, 1, 1, 1, 1, 1, 1, 1}, Name: "GET /buy"},
+			{TraceId: tid, SpanId: []byte{2, 2, 2, 2, 2, 2, 2, 2}, ParentSpanId: []byte{1, 1, 1, 1, 1, 1, 1, 1}, Name: "call pricing"},
+		}}}},
+		{Resource: resource("pricing"), ScopeSpans: []*tracepb.ScopeSpans{{Spans: []*tracepb.Span{
+			{TraceId: tid, SpanId: []byte{3, 3, 3, 3, 3, 3, 3, 3}, ParentSpanId: []byte{2, 2, 2, 2, 2, 2, 2, 2}, Name: "POST /price"},
+		}}}},
+	}}
+
+	traces := decodeTraceTrees(req, sourceidentity.FromK8sResourceAttributesMap)
+	if len(traces) != 1 {
+		t.Fatalf("expected 1 trace, got %d", len(traces))
+	}
+	for _, s := range traces[0].Spans {
+		if got := s.SourceIdentity["k8s.deployment.name"]; got != s.Service {
+			t.Errorf("span %q: source identity workload = %q, want %q", s.Name, got, s.Service)
+		}
+	}
+
+	for _, s := range decodeTraceTrees(req, nil)[0].Spans {
+		if s.SourceIdentity != nil {
+			t.Errorf("span %q: source identity %v without a SourceIdentityFunc", s.Name, s.SourceIdentity)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"slices"
 	"testing"
 
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
@@ -10,6 +11,7 @@ import (
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
@@ -43,8 +45,8 @@ func TestServiceEntrySpans_RootPlusNestedServers(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries (frontend, coupon), got %d", len(entries))
 	}
-	if entries[0].SpanID != "frontend" || entries[1].SpanID != "coupon" {
-		t.Fatalf("expected pre-order [frontend, coupon], got [%s, %s]", entries[0].SpanID, entries[1].SpanID)
+	if entries[0].InvocationEntrySpan.SpanID != "frontend" || entries[1].InvocationEntrySpan.SpanID != "coupon" {
+		t.Fatalf("expected pre-order [frontend, coupon], got [%s, %s]", entries[0].InvocationEntrySpan.SpanID, entries[1].InvocationEntrySpan.SpanID)
 	}
 }
 
@@ -104,7 +106,7 @@ func TestReRootedOTLP_EntryBecomesRoot(t *testing.T) {
 		}},
 	}
 
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 decoded trace, got %d", len(traces))
 	}
@@ -119,7 +121,7 @@ func TestReRootedOTLP_EntryBecomesRoot(t *testing.T) {
 	}
 
 	// Decode the re-rooted bytes back into a trace: coupon must now be the root.
-	redecoded := DecodeRequest(mustUnmarshalTraces(t, coupon.RawOTLP()))
+	redecoded := decodeRequest(mustUnmarshalTraces(t, coupon.RawOTLP()))
 	if len(redecoded) != 1 {
 		t.Fatalf("expected re-rooted OTLP to decode to 1 trace, got %d", len(redecoded))
 	}
@@ -162,7 +164,7 @@ func TestReRootedOTLP_InnerEntryDoesNotCorruptOuter(t *testing.T) {
 		}},
 	}
 
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 decoded trace, got %d", len(traces))
 	}
@@ -377,5 +379,68 @@ func TestSubTraces_FlatTraceUnchanged(t *testing.T) {
 	subs := subTraces(tr)
 	if len(subs) != 1 || subs[0] != tr {
 		t.Fatalf("flat trace should yield exactly the original trace, got %d sub-traces", len(subs))
+	}
+}
+
+// TestServiceEntrySpans_Invocations: an entry's invocation stops at a call into
+// another service and at a call back into its own service, and skips their
+// subtrees.
+//
+//	checkout SERVER /buy
+//	└── checkout INTERNAL validate
+//	    └── checkout CLIENT GET pricing
+//	        └── pricing SERVER /price        (another service)
+//	            └── checkout SERVER /stock   (back into checkout)
+//	                └── checkout INTERNAL load
+func TestServiceEntrySpans_Invocations(t *testing.T) {
+	identity := func(workload string) map[string]string {
+		return sourceidentity.FromK8sResourceAttributesMap(map[string]string{
+			"k8s.namespace.name":  "shop",
+			"k8s.deployment.name": workload,
+			"k8s.container.name":  "app",
+		})
+	}
+	span := func(name, service string, kind tracepb.Span_SpanKind, children ...*Span) *Span {
+		s := &Span{SpanID: name, Name: name, Service: service, Kind: kind, SourceIdentity: identity(service), Children: children}
+		for _, c := range children {
+			c.ParentSpanID = s.SpanID
+		}
+		return s
+	}
+	load := span("load", "checkout", tracepb.Span_SPAN_KIND_INTERNAL)
+	stock := span("/stock", "checkout", tracepb.Span_SPAN_KIND_SERVER, load)
+	price := span("/price", "pricing", tracepb.Span_SPAN_KIND_SERVER, stock)
+	call := span("GET pricing", "checkout", tracepb.Span_SPAN_KIND_CLIENT, price)
+	validate := span("validate", "checkout", tracepb.Span_SPAN_KIND_INTERNAL, call)
+	buy := span("/buy", "checkout", tracepb.Span_SPAN_KIND_SERVER, validate)
+
+	names := func(spans []*Span) []string {
+		out := make([]string, 0, len(spans))
+		for _, s := range spans {
+			out = append(out, s.Name)
+		}
+		return out
+	}
+	tr := &Trace{Root: buy, Spans: subtreeSpans(buy)}
+	want := map[string][]string{
+		"/buy":   {"/buy", "validate", "GET pricing"},
+		"/price": {"/price"},
+		"/stock": {"/stock", "load"},
+	}
+	entries := serviceEntrySpans(tr)
+	if len(entries) != len(want) {
+		t.Fatalf("got %d entries, want %d", len(entries), len(want))
+	}
+	for _, e := range entries {
+		if got := names(e.ServiceInvocationSpans); !slices.Equal(got, want[e.InvocationEntrySpan.Name]) {
+			t.Errorf("invocation of %s = %v, want %v", e.InvocationEntrySpan.Name, got, want[e.InvocationEntrySpan.Name])
+		}
+	}
+
+	// subTraces sets it on every sub-trace, the root's included.
+	for _, sub := range subTraces(tr) {
+		if got := names(sub.ServiceInvocationSpans); !slices.Equal(got, want[sub.Root.Name]) {
+			t.Errorf("sub-trace %s: ServiceInvocationSpans = %v, want %v", sub.Root.Name, got, want[sub.Root.Name])
+		}
 	}
 }

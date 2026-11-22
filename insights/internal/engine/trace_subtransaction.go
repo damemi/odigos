@@ -54,30 +54,50 @@ func isServiceEntry(s *Span) bool {
 	}
 }
 
+// serviceEntry is one service-entry span (the invocation entry span) and the
+// spans of its own service invocation (see Trace.ServiceInvocationSpans).
+type serviceEntry struct {
+	InvocationEntrySpan    *Span
+	ServiceInvocationSpans []*Span
+}
+
 // serviceEntrySpans returns a trace's entry spans in pre-order: the root first,
 // then every nested SERVER / CONSUMER span down to maxSubtransactionDepth
 // levels. Non-entry spans are walked through (so an entry nested under a CLIENT
-// span is still found) but never returned. Used by subTraces.
-func serviceEntrySpans(t *Trace) []*Span {
+// span is still found) but never returned as entries. Used by subTraces.
+//
+// Each entry also gets its invocation: the entry plus its descendants up to the
+// next nested entry (a call into another service, or back into the same one).
+// Spans under an entry deeper than maxSubtransactionDepth belong to no
+// invocation.
+func serviceEntrySpans(t *Trace) []serviceEntry {
 	if t == nil || t.Root == nil {
 		return nil
 	}
-	entries := []*Span{t.Root} // root is always entry level 0
-	var walk func(s *Span, level int)
-	walk = func(s *Span, level int) {
+	entries := []serviceEntry{{InvocationEntrySpan: t.Root, ServiceInvocationSpans: []*Span{t.Root}}} // root is always entry level 0
+	// inv is the index in entries of the invocation s belongs to, or -1.
+	var walk func(s *Span, level, inv int)
+	walk = func(s *Span, level, inv int) {
 		for _, c := range s.Children {
-			if isServiceEntry(c) {
-				childLevel := level + 1
-				if childLevel < maxSubtransactionDepth {
-					entries = append(entries, c)
-				}
-				walk(c, childLevel)
+			if c == nil {
 				continue
 			}
-			walk(c, level)
+			if isServiceEntry(c) {
+				childLevel, childInv := level+1, -1
+				if childLevel < maxSubtransactionDepth {
+					entries = append(entries, serviceEntry{InvocationEntrySpan: c, ServiceInvocationSpans: []*Span{c}})
+					childInv = len(entries) - 1
+				}
+				walk(c, childLevel, childInv)
+				continue
+			}
+			if inv >= 0 {
+				entries[inv].ServiceInvocationSpans = append(entries[inv].ServiceInvocationSpans, c)
+			}
+			walk(c, level, inv)
 		}
 	}
-	walk(t.Root, 0)
+	walk(t.Root, 0, 0)
 	return entries
 }
 
@@ -129,20 +149,23 @@ func subTraces(t *Trace) []*Trace {
 		byID[s.SpanID] = s
 	}
 	out := make([]*Trace, 0, len(entries))
-	for _, e := range entries {
+	for _, entry := range entries {
+		e := entry.InvocationEntrySpan
 		if e == t.Root {
+			t.ServiceInvocationSpans = entry.ServiceInvocationSpans
 			out = append(out, t) // root: external ingress, no in-trace caller
 			continue
 		}
 		spans := subtreeSpans(e)
 		entryID, ids := e.SpanID, spanIDSet(spans)
 		out = append(out, &Trace{
-			TraceID:       t.TraceID,
-			Root:          e,
-			Spans:         spans,
-			DurationUs:    spanDurationUs(e),
-			otlpSpansFn:   func() *tracepb.TracesData { return reRootedOTLP(t.otlpSpans, entryID, ids) },
-			CallerService: callerService(e, byID),
+			TraceID:                t.TraceID,
+			Root:                   e,
+			Spans:                  spans,
+			ServiceInvocationSpans: entry.ServiceInvocationSpans,
+			DurationUs:             spanDurationUs(e),
+			otlpSpansFn:            func() *tracepb.TracesData { return reRootedOTLP(t.otlpSpans, entryID, ids) },
+			CallerService:          callerService(e, byID),
 		})
 	}
 	return out

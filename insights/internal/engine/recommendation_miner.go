@@ -249,7 +249,7 @@ func (e *Engine) loadRelationSamples(ctx context.Context, transactionID int64) (
 		if len(obs.RawOTLP) == 0 {
 			continue
 		}
-		full, err := traceFromOTLP(obs.RawOTLP, obs.TraceID)
+		full, err := e.traceFromOTLP(obs.RawOTLP, obs.TraceID)
 		if err != nil {
 			continue
 		}

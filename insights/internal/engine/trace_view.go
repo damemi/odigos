@@ -89,7 +89,7 @@ func SpansFromOTLP(raw []byte) []SpanView {
 		}
 	}
 
-	traces := decodeTraceTrees(&td)
+	traces := decodeTraceTrees(&td, nil)
 	if len(traces) == 0 || traces[0].Root == nil {
 		return nil
 	}

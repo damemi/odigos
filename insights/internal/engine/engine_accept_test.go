@@ -69,7 +69,7 @@ func TestAcceptAnomalyIssue_WidensEnclosedSubTransactions(t *testing.T) {
 
 	process := func(td *tracepb.TracesData) {
 		t.Helper()
-		for _, tr := range DecodeRequest(td) {
+		for _, tr := range decodeRequest(td) {
 			eng.Process(ctx, tr)
 		}
 		if err := eng.Flush(ctx); err != nil {
@@ -139,7 +139,7 @@ func TestAcceptAnomalyIssue_SkipsSiblingBranches(t *testing.T) {
 
 	process := func(td *tracepb.TracesData) {
 		t.Helper()
-		for _, tr := range DecodeRequest(td) {
+		for _, tr := range decodeRequest(td) {
 			eng.Process(ctx, tr)
 		}
 		if err := eng.Flush(ctx); err != nil {
@@ -227,7 +227,7 @@ func TestAcceptAnomalyIssue_LeavesLearningSubTransactionsAlone(t *testing.T) {
 
 	process := func(td *tracepb.TracesData) {
 		t.Helper()
-		for _, tr := range DecodeRequest(td) {
+		for _, tr := range decodeRequest(td) {
 			eng.Process(ctx, tr)
 		}
 		if err := eng.Flush(ctx); err != nil {
