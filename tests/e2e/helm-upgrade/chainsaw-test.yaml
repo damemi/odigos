@@ -5,6 +5,9 @@ metadata:
 spec:
   description: Check successful upgrade from latest version of Helm chart
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

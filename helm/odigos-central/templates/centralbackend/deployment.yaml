@@ -18,7 +18,7 @@ spec:
       labels:
         app: central-backend
     spec:
-      serviceAccountName: central-backend
+      serviceAccountName: {{ include "odigos.serviceAccountName" (dict "values" .Values.centralBackend "default" "central-backend") }}
       {{ include "odigos.renderPullSecrets" . | nindent 6 }}
       containers:
         - name: central-backend

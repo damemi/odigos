@@ -72,7 +72,7 @@ port-forward-stop:
 		echo "no insights port-forward running (no pid file)"; \
 	fi
 
-# In-cluster OTLP loadtest (see loadtest/Makefile). Requires insights ClickHouse Ready.
+# In-cluster OTLP loadtest (see loadtest/Makefile). Requires insights Postgres Ready.
 ## loadtest-start: deploy k6 loadtest (optional VUS=20 SLEEP_MS=10 TENANTS=10)
 loadtest-start:
 	$(MAKE) -C loadtest start VUS="$(VUS)" SLEEP_MS="$(SLEEP_MS)" DURATION="$(DURATION)" ENDPOINT="$(ENDPOINT)" TENANTS="$(TENANTS)"

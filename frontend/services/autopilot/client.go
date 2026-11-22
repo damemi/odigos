@@ -1,5 +1,5 @@
-// Package autopilot reads transaction call-path tries from the
-// autopilot ClickHouse database written by the insights service.
+// Package autopilot reads transaction call-path tries from the autopilot
+// tables in the insights Postgres, written by the insights service.
 package autopilot
 
 import (
@@ -7,43 +7,37 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math"
-	"net/url"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/frontend/services"
 )
 
-// Must match insights autopilot ClickHouse storage layout.
+// Must match the insights autopilot storage layout (insights/internal/autopilot/store).
 const (
-	clickhouseUser     = "odigos_insights"
-	clickhouseDatabase = "autopilot"
-	callTrieTable      = "tx_call_trie_structure"
-	transactionsTable  = "tx_transactions"
-	trieRootParent     = "root"
+	callTrieTable  = "autopilot_call_trie_nodes"
+	trieRootParent = "root"
 
 	// The insights transaction inventory: each transaction's operation and kind, keyed by the
-	// same hashed id the trie stores as TransactionId (see insights/AGENTS.md).
-	insightsDatabase          = "odigos_insights"
+	// same hashed id the trie stores as transaction_id (see insights/AGENTS.md).
 	insightsTransactionsTable = "transactions"
 
-	clickhouseDialTimeout = 5 * time.Second
-	clickhouseReadTimeout = 5 * time.Second
+	postgresConnectTimeout = 5 * time.Second
+	postgresQueryTimeout   = 5 * time.Second
 )
 
 var (
 	// ErrNotEnabled is returned when autopilot is off in effective config.
 	ErrNotEnabled = errors.New("autopilot is not enabled")
-	// ErrUnavailable is returned when ClickHouse cannot be reached or is not configured.
-	ErrUnavailable = errors.New("autopilot clickhouse is unavailable")
+	// ErrUnavailable is returned when Postgres cannot be reached or is not configured.
+	ErrUnavailable = errors.New("autopilot postgres is unavailable")
 )
 
 // Function is one aggregated profile function for a transaction.
@@ -51,7 +45,7 @@ type Function struct {
 	Name       string
 	FrameType  string
 	SampleType string
-	// SeenCount is how many trie rows insights flushed for this function.
+	// SeenCount is how many stored call-trie nodes call this function.
 	SeenCount int64
 }
 
@@ -62,13 +56,13 @@ type Transaction struct {
 	// from the insights inventory. Empty when the inventory has no row for the id.
 	Operation string
 	Kind      string
-	// SeenCount is how many sample-root rows insights flushed for this transaction.
+	// SeenCount is how many sample root nodes the transaction's trie has.
 	SeenCount int64
 	Functions []Function
 }
 
 // CallTrieNode is one flat node in a transaction call-path trie.
-// ParentID is empty for roots (ClickHouse Parent "root").
+// ParentID is empty for roots (stored parent "root").
 type CallTrieNode struct {
 	ID         string
 	ParentID   string
@@ -78,7 +72,6 @@ type CallTrieNode struct {
 	SeenCount  int64
 }
 
-// ContainerTransactions is the result for one workload container.
 // SourceTransactions counts the transactions stored for one workload container.
 type SourceTransactions struct {
 	Namespace        string
@@ -88,6 +81,7 @@ type SourceTransactions struct {
 	TransactionCount uint64
 }
 
+// ContainerTransactions is the result for one workload container.
 type ContainerTransactions struct {
 	Namespace     string
 	Kind          string
@@ -112,7 +106,7 @@ type TransactionsFilter struct {
 	// IDs restricts results to these transaction ids when non-nil. An empty
 	// non-nil slice matches nothing.
 	IDs []string
-	// Search is a case-insensitive substring match on the transaction id.
+	// Search is a substring match on the transaction id.
 	Search string
 	// Limit caps the number of transactions returned; 0 means no limit.
 	Limit int
@@ -120,132 +114,63 @@ type TransactionsFilter struct {
 	Offset int
 }
 
-// Client talks to autopilot ClickHouse (read-only).
+// querier is the read surface of a pgx pool, so tests can substitute it.
+type querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+// Client reads the autopilot tables (read-only).
 type Client struct {
-	db             driver.Conn
-	callTrieFQN    string
-	callTrieSQL    string
-	sampleTraceSQL string
-	sourcesSQL     string
-	namesSQL       string
+	db    querier
+	close func()
 }
 
-// NewClient builds a ClickHouse client for the autopilot database.
-// endpoint is a tcp:// host:port (or host:port). Empty endpoint or password
-// leaves the client unconfigured; reads then return ErrUnavailable. Does not
-// ping at construction so UI bootstrap succeeds when ClickHouse is not deployed.
-func NewClient(endpoint, password string) *Client {
-	endpoint = strings.TrimSpace(endpoint)
-	password = strings.TrimSpace(password)
-	if endpoint == "" || password == "" {
+// NewClient builds a client for the insights Postgres at dsn
+// (postgres://user:pass@host:5432/db). An empty dsn leaves the client
+// unconfigured; reads then return ErrUnavailable. Does not connect at
+// construction so UI bootstrap succeeds when Postgres is not deployed.
+func NewClient(dsn string) *Client {
+	dsn = strings.TrimSpace(dsn)
+	if dsn == "" {
 		return &Client{}
 	}
-	opts, err := buildClickHouseOptions(endpoint, password)
+	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return &Client{}
 	}
-	db, err := clickhouse.Open(opts)
+	cfg.ConnConfig.ConnectTimeout = postgresConnectTimeout
+	cfg.MaxConns = 4
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
 		return &Client{}
 	}
-	return newClientWithConn(db)
+	return &Client{db: pool, close: pool.Close}
 }
 
-// NewClientWithConn is for tests.
-func NewClientWithConn(db driver.Conn) *Client {
-	if db == nil {
-		return &Client{}
-	}
-	return newClientWithConn(db)
+// newClientWithQuerier is for tests.
+func newClientWithQuerier(db querier) *Client {
+	return &Client{db: db}
 }
 
-func newClientWithConn(db driver.Conn) *Client {
-	fqn := fmt.Sprintf("%q.%q", clickhouseDatabase, callTrieTable)
-	txFqn := fmt.Sprintf("%q.%q", clickhouseDatabase, transactionsTable)
-	inventoryFqn := fmt.Sprintf("%q.%q", insightsDatabase, insightsTransactionsTable)
-	return &Client{
-		db:          db,
-		callTrieFQN: fqn,
-		callTrieSQL: fmt.Sprintf(`
-SELECT
-	TransactionId,
-	NodeId,
-	Parent,
-	FunctionName,
-	FrameType,
-	SampleType,
-	count() AS Count
-FROM %s
-WHERE Namespace = ?
-	AND WorkloadKind = ?
-	AND WorkloadName = ?
-	AND ContainerName = ?
-	AND TransactionId = ?
-GROUP BY TransactionId, NodeId, Parent, FunctionName, FrameType, SampleType
-`, fqn),
-		sourcesSQL: fmt.Sprintf(`
-SELECT
-	Namespace,
-	WorkloadKind,
-	WorkloadName,
-	ContainerName,
-	uniqExact(TransactionId) AS Transactions
-FROM %s
-GROUP BY Namespace, WorkloadKind, WorkloadName, ContainerName
-ORDER BY Namespace, WorkloadName, WorkloadKind, ContainerName
-`, fqn),
-		sampleTraceSQL: fmt.Sprintf(`
-SELECT SampleTrace
-FROM %s
-WHERE Namespace = ?
-	AND WorkloadKind = ?
-	AND WorkloadName = ?
-	AND ContainerName = ?
-	AND TransactionId = ?
-LIMIT 1
-`, txFqn),
-		namesSQL: fmt.Sprintf(`
-SELECT
-	transaction_id,
-	operation,
-	kind
-FROM %s FINAL
-WHERE transaction_id IN ?
-`, inventoryFqn),
-	}
-}
-
-func buildClickHouseOptions(endpoint, password string) (*clickhouse.Options, error) {
-	if !strings.Contains(endpoint, "://") {
-		endpoint = "tcp://" + endpoint
-	}
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, fmt.Errorf("parse clickhouse endpoint: %w", err)
-	}
-	q := u.Query()
-	if !q.Has("compress") {
-		q.Set("compress", "lz4")
-	}
-	u.RawQuery = q.Encode()
-	u.User = url.UserPassword(clickhouseUser, password)
-
-	opts, err := clickhouse.ParseDSN(u.String())
-	if err != nil {
-		return nil, fmt.Errorf("parse clickhouse dsn: %w", err)
-	}
-	opts.Auth.Database = clickhouseDatabase
-	opts.DialTimeout = clickhouseDialTimeout
-	opts.ReadTimeout = clickhouseReadTimeout
-	return opts, nil
-}
-
-// Close closes the underlying ClickHouse connection.
+// Close closes the underlying pool.
 func (c *Client) Close() error {
-	if c == nil || c.db == nil {
+	if c == nil || c.close == nil {
 		return nil
 	}
-	return c.db.Close()
+	c.close()
+	return nil
+}
+
+// query runs sql with the client's query timeout. The returned cancel must
+// be called once the rows are consumed.
+func (c *Client) query(ctx context.Context, sql string, args ...any) (pgx.Rows, context.CancelFunc, error) {
+	ctx, cancel := context.WithTimeout(ctx, postgresQueryTimeout)
+	rows, err := c.db.Query(ctx, sql, args...)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+	return rows, cancel, nil
 }
 
 // IsEnabled reports whether autopilot is enabled in effective config.
@@ -262,9 +187,6 @@ func EnabledFromOdigosConfig(cfg *common.OdigosConfiguration) bool {
 	return cfg.AutopilotEnabled()
 }
 
-// ListContainerTransactions returns the transactions of the workload container
-// that match filter, with aggregated functions from tx_call_trie_structure, ordered by
-// seenCount desc, then id.
 // ListSources returns every workload container that has stored transactions, in
 // a single query, so callers can find sources with autopilot transactions without probing each one.
 func (c *Client) ListSources(ctx context.Context) ([]SourceTransactions, error) {
@@ -272,18 +194,30 @@ func (c *Client) ListSources(ctx context.Context) ([]SourceTransactions, error) 
 		return nil, ErrUnavailable
 	}
 
-	rows, err := c.db.Query(ctx, c.sourcesSQL)
+	rows, cancel, err := c.query(ctx, `
+SELECT
+	namespace,
+	workload_kind,
+	workload_name,
+	container_name,
+	count(DISTINCT transaction_id) AS transactions
+FROM `+callTrieTable+`
+GROUP BY namespace, workload_kind, workload_name, container_name
+ORDER BY namespace, workload_name, workload_kind, container_name`)
 	if err != nil {
 		return nil, fmt.Errorf("%w: query sources: %v", ErrUnavailable, err)
 	}
+	defer cancel()
 	defer rows.Close()
 
 	out := []SourceTransactions{}
 	for rows.Next() {
 		var s SourceTransactions
-		if err := rows.Scan(&s.Namespace, &s.Kind, &s.Name, &s.ContainerName, &s.TransactionCount); err != nil {
+		var count int64
+		if err := rows.Scan(&s.Namespace, &s.Kind, &s.Name, &s.ContainerName, &count); err != nil {
 			return nil, fmt.Errorf("%w: scan sources: %v", ErrUnavailable, err)
 		}
+		s.TransactionCount = uint64(count)
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {
@@ -292,6 +226,9 @@ func (c *Client) ListSources(ctx context.Context) ([]SourceTransactions, error) 
 	return out, nil
 }
 
+// ListContainerTransactions returns the transactions of the workload container
+// that match filter, with aggregated functions from the call trie, ordered by
+// seenCount desc, then id.
 func (c *Client) ListContainerTransactions(ctx context.Context, namespace, kind, name, containerName string, filter TransactionsFilter) (*ContainerTransactions, error) {
 	if c == nil || c.db == nil {
 		return nil, ErrUnavailable
@@ -314,15 +251,23 @@ func (c *Client) ListContainerTransactions(ctx context.Context, namespace, kind,
 		ContainerName: containerName,
 		Transactions:  []Transaction{},
 	}
-	if filter.IDs != nil && len(filter.IDs) == 0 {
-		return result, nil
+	if filter.IDs != nil {
+		// Stored ids are the insights int64 hashes, so other ids match nothing.
+		filter.IDs = slices.DeleteFunc(slices.Clone(filter.IDs), func(id string) bool {
+			_, err := strconv.ParseInt(id, 10, 64)
+			return err != nil
+		})
+		if len(filter.IDs) == 0 {
+			return result, nil
+		}
 	}
 
-	query, args := buildListEdgesQuery(c.callTrieFQN, namespace, kind, name, containerName, filter)
-	rows, err := c.db.Query(ctx, query, args...)
+	query, args := buildListEdgesQuery(namespace, kind, name, containerName, filter)
+	rows, cancel, err := c.query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("%w: query call trie: %v", ErrUnavailable, err)
 	}
+	defer cancel()
 	defer rows.Close()
 
 	edges, err := scanCallTrieEdges(rows)
@@ -333,16 +278,15 @@ func (c *Client) ListContainerTransactions(ctx context.Context, namespace, kind,
 	result.Transactions = assembleTransactions(edges)
 	// Names are display only: without them the UI falls back to the id, so a failed lookup must not fail the page.
 	if err := c.attachNames(ctx, result.Transactions); err != nil {
-		log.Printf("interrogation: naming transactions of %s/%s/%s: %v", namespace, kind, name, err)
+		log.Printf("autopilot: naming transactions of %s/%s/%s: %v", namespace, kind, name, err)
 	}
 	return result, nil
 }
 
 // attachNames fills each transaction's Operation and Kind from the insights inventory, in one query.
-// Ids that aren't the inventory's int64 hashes (tries written before ids were hashed) are left unnamed.
 func (c *Client) attachNames(ctx context.Context, txs []Transaction) error {
 	byID := make(map[int64][]int, len(txs))
-	ids := make([]any, 0, len(txs))
+	ids := make([]int64, 0, len(txs))
 	for i, tx := range txs {
 		id, err := strconv.ParseInt(tx.ID, 10, 64)
 		if err != nil {
@@ -357,10 +301,14 @@ func (c *Client) attachNames(ctx context.Context, txs []Transaction) error {
 		return nil
 	}
 
-	rows, err := c.db.Query(ctx, c.namesSQL, clickhouse.GroupSet{Value: ids})
+	rows, cancel, err := c.query(ctx, `
+SELECT transaction_id, operation, entry_kind
+FROM `+insightsTransactionsTable+`
+WHERE transaction_id = ANY($1)`, ids)
 	if err != nil {
 		return fmt.Errorf("query transaction names: %w", err)
 	}
+	defer cancel()
 	defer rows.Close()
 
 	for rows.Next() {
@@ -377,65 +325,66 @@ func (c *Client) attachNames(ctx context.Context, txs []Transaction) error {
 	return rows.Err()
 }
 
-// buildListEdgesQuery selects the aggregated call-trie edges of every
-// transaction matching filter. Paging runs in a subquery over transaction ids,
-// ordered like assembleTransactions, so each page holds whole transactions.
-func buildListEdgesQuery(table, namespace, kind, name, containerName string, filter TransactionsFilter) (string, []any) {
-	where := `Namespace = ?
-	AND WorkloadKind = ?
-	AND WorkloadName = ?
-	AND ContainerName = ?`
-	args := []any{namespace, kind, name, containerName}
+// buildListEdgesQuery selects the call-trie edges of every transaction
+// matching filter. Paging runs in a subquery over transaction ids, ordered
+// like assembleTransactions, so each page holds whole transactions. filter.IDs
+// must hold only int64 ids.
+func buildListEdgesQuery(namespace, kind, name, containerName string, filter TransactionsFilter) (string, []any) {
+	var args []any
+	arg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+	where := fmt.Sprintf(`namespace = %s
+	AND workload_kind = %s
+	AND workload_name = %s
+	AND container_name = %s`, arg(namespace), arg(kind), arg(name), arg(containerName))
 	if filter.IDs != nil {
-		ids := make([]any, 0, len(filter.IDs))
+		ids := make([]int64, 0, len(filter.IDs))
 		for _, id := range filter.IDs {
-			ids = append(ids, id)
+			n, _ := strconv.ParseInt(id, 10, 64)
+			ids = append(ids, n)
 		}
 		where += `
-	AND TransactionId IN ?`
-		args = append(args, clickhouse.GroupSet{Value: ids})
+	AND transaction_id = ANY(` + arg(ids) + `)`
 	}
 	if search := strings.TrimSpace(filter.Search); search != "" {
 		where += `
-	AND positionCaseInsensitiveUTF8(TransactionId, ?) > 0`
-		args = append(args, search)
+	AND strpos(lower(transaction_id::text), lower(` + arg(search) + `)) > 0`
 	}
 
 	if filter.Limit > 0 || filter.Offset > 0 {
-		limit := uint64(math.MaxUint64)
+		limit := "ALL"
 		if filter.Limit > 0 {
-			limit = uint64(filter.Limit)
+			limit = arg(filter.Limit)
 		}
-		pageArgs := append(slices.Clone(args), limit, uint64(filter.Offset))
 		where += fmt.Sprintf(`
-	AND TransactionId IN (
-		SELECT TransactionId
+	AND transaction_id IN (
+		SELECT transaction_id
 		FROM %s
 		WHERE %s
-		GROUP BY TransactionId
-		ORDER BY countIf(Parent = '%s' AND SampleType = 'samples') DESC, TransactionId ASC
-		LIMIT ? OFFSET ?
-	)`, table, where, trieRootParent)
-		args = append(args, pageArgs...)
+		GROUP BY transaction_id
+		ORDER BY count(*) FILTER (WHERE parent = '%s' AND sample_type = 'samples') DESC, transaction_id::text ASC
+		LIMIT %s OFFSET %s
+	)`, callTrieTable, where, trieRootParent, limit, arg(filter.Offset))
 	}
 
 	return fmt.Sprintf(`
 SELECT
-	TransactionId,
-	NodeId,
-	Parent,
-	FunctionName,
-	FrameType,
-	SampleType,
-	count() AS Count
+	transaction_id::text,
+	node_id,
+	parent,
+	function_name,
+	frame_type,
+	sample_type,
+	count(*) AS count
 FROM %s
 WHERE %s
-GROUP BY TransactionId, NodeId, Parent, FunctionName, FrameType, SampleType
-`, table, where), args
+GROUP BY transaction_id, node_id, parent, function_name, frame_type, sample_type`, callTrieTable, where), args
 }
 
 // GetTransactionSampleTrace returns the stored OTLP JSON sample for a
-// transaction (service-invocation ResourceSpans only). Empty when none stored.
+// transaction. Autopilot does not store sample traces, so it is always empty.
 func (c *Client) GetTransactionSampleTrace(ctx context.Context, namespace, kind, name, containerName, txID string) (string, error) {
 	if c == nil || c.db == nil {
 		return "", ErrUnavailable
@@ -448,21 +397,7 @@ func (c *Client) GetTransactionSampleTrace(ctx context.Context, namespace, kind,
 	if namespace == "" || kind == "" || name == "" || containerName == "" || txID == "" {
 		return "", fmt.Errorf("namespace, kind, name, containerName, and transactionId are required")
 	}
-
-	rows, err := c.db.Query(ctx, c.sampleTraceSQL, namespace, kind, name, containerName, txID)
-	if err != nil {
-		return "", fmt.Errorf("%w: query sample trace: %v", ErrUnavailable, err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		return "", rows.Err()
-	}
-	var sample string
-	if err := rows.Scan(&sample); err != nil {
-		return "", fmt.Errorf("%w: scan sample trace: %v", ErrUnavailable, err)
-	}
-	return sample, nil
+	return "", nil
 }
 
 // GetTransactionCallTrie returns flat call-path trie nodes for a transaction.
@@ -479,11 +414,33 @@ func (c *Client) GetTransactionCallTrie(ctx context.Context, namespace, kind, na
 	if namespace == "" || kind == "" || name == "" || containerName == "" || txID == "" {
 		return nil, false, fmt.Errorf("namespace, kind, name, containerName, and transactionId are required")
 	}
+	id, err := strconv.ParseInt(txID, 10, 64)
+	if err != nil {
+		// Stored ids are the insights int64 hashes, so no trie has this id.
+		return nil, false, nil
+	}
 
-	rows, err := c.db.Query(ctx, c.callTrieSQL, namespace, kind, name, containerName, txID)
+	rows, cancel, err := c.query(ctx, `
+SELECT
+	transaction_id::text,
+	node_id,
+	parent,
+	function_name,
+	frame_type,
+	sample_type,
+	count(*) AS count
+FROM `+callTrieTable+`
+WHERE namespace = $1
+	AND workload_kind = $2
+	AND workload_name = $3
+	AND container_name = $4
+	AND transaction_id = $5
+GROUP BY transaction_id, node_id, parent, function_name, frame_type, sample_type`,
+		namespace, kind, name, containerName, id)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w: query call trie: %v", ErrUnavailable, err)
 	}
+	defer cancel()
 	defer rows.Close()
 
 	edges, err := scanCallTrieEdges(rows)
@@ -496,10 +453,11 @@ func (c *Client) GetTransactionCallTrie(ctx context.Context, namespace, kind, na
 	return callTrieFromEdges(edges), true, nil
 }
 
-func scanCallTrieEdges(rows driver.Rows) ([]callTrieEdgeRow, error) {
+func scanCallTrieEdges(rows pgx.Rows) ([]callTrieEdgeRow, error) {
 	var out []callTrieEdgeRow
 	for rows.Next() {
 		var r callTrieEdgeRow
+		var count int64
 		if err := rows.Scan(
 			&r.TransactionID,
 			&r.NodeID,
@@ -507,11 +465,15 @@ func scanCallTrieEdges(rows driver.Rows) ([]callTrieEdgeRow, error) {
 			&r.FunctionName,
 			&r.FrameType,
 			&r.SampleType,
-			&r.Count,
+			&count,
 		); err != nil {
 			return nil, err
 		}
+		r.Count = uint64(count)
 		out = append(out, r)
 	}
 	return out, rows.Err()
 }
+
+// Compile-time check that the pool satisfies querier.
+var _ querier = (*pgxpool.Pool)(nil)

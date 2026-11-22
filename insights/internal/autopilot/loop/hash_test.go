@@ -3,23 +3,23 @@ package loop
 import (
 	"testing"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func TestHashEvidenceStable(t *testing.T) {
-	base := BuildAppEvidence([]clickhouse.CallTrieNode{
+	base := BuildAppEvidence([]store.CallTrieNode{
 		{ID: "1", ParentID: "", Name: "com.example.A.a"},
 		{ID: "2", ParentID: "1", Name: "com.example.B.b"},
 	})
 	h1 := hashEvidence(base)
-	reordered := BuildAppEvidence([]clickhouse.CallTrieNode{
+	reordered := BuildAppEvidence([]store.CallTrieNode{
 		{ID: "2", ParentID: "1", Name: "com.example.B.b"},
 		{ID: "1", ParentID: "", Name: "com.example.A.a"},
 	})
 	if h1 != hashEvidence(reordered) {
 		t.Fatal("node order must not change structural evidence hash")
 	}
-	withNew := BuildAppEvidence([]clickhouse.CallTrieNode{
+	withNew := BuildAppEvidence([]store.CallTrieNode{
 		{ID: "1", ParentID: "", Name: "com.example.A.a"},
 		{ID: "2", ParentID: "1", Name: "com.example.B.b"},
 		{ID: "3", ParentID: "2", Name: "com.example.C.c"},

@@ -1,5 +1,5 @@
 type: odigos_autopilot_profiles
-github_project: odigos-io/odigos-enterprise
+github_project: odigos-io/odigos
 
 status:
   class: exporter

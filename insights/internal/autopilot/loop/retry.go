@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/model"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 const (
@@ -36,9 +36,9 @@ const (
 
 func (c failureClass) analysisStatus() string {
 	if c == failurePermanent {
-		return clickhouse.AnalysisFailedPermanent
+		return store.AnalysisFailedPermanent
 	}
-	return clickhouse.AnalysisFailedTransient
+	return store.AnalysisFailedTransient
 }
 
 // classifyModelError maps a CompleteAnalysis error to a failure class and the
@@ -81,7 +81,7 @@ type retryKey struct {
 	transactionID string
 }
 
-func newRetryKey(source clickhouse.SourceKey, transactionID string) retryKey {
+func newRetryKey(source store.SourceKey, transactionID string) retryKey {
 	return retryKey{
 		namespace:     source.Namespace,
 		workloadKind:  source.WorkloadKind,
@@ -178,7 +178,7 @@ func (t *retryTracker) recordSuccess(k retryKey) {
 }
 
 // forgetSource drops state for every transaction of a deleted workload.
-func (t *retryTracker) forgetSource(source clickhouse.SourceKey) {
+func (t *retryTracker) forgetSource(source store.SourceKey) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for k := range t.entries {

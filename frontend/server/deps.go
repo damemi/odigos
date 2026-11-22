@@ -47,7 +47,7 @@ type Deps struct {
 	PromAPI       v1.API
 	// InsightsClient is the client for the Odigos Insights service.
 	InsightsClient *insights.Client
-	// AutopilotClient reads transaction call tries from autopilot ClickHouse.
+	// AutopilotClient reads transaction call tries from the insights Postgres.
 	AutopilotClient  *autopilot.Client
 	ProfileStore     *profiles.ProfileStore
 	ProfilingGate    *profiles.IngestGate
@@ -144,10 +144,7 @@ func Bootstrap(ctx context.Context, flags Flags, logger logr.Logger) (*Deps, err
 		return nil, fmt.Errorf("initializing insights client: %w", err)
 	}
 
-	autopilotClient := autopilot.NewClient(
-		k8sconsts.InsightsClickHouseEndpoint(flags.Namespace),
-		os.Getenv(k8sconsts.OdigosInsightsClickHousePasswordEnv),
-	)
+	autopilotClient := autopilot.NewClient(os.Getenv(k8sconsts.OdigosInsightsPostgresDSNEnv))
 
 	distrosProvider, err := enterprisedistros.NewEnterpriseProvider()
 	if err != nil {

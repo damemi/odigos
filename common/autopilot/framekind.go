@@ -9,35 +9,28 @@ import "strings"
 type FrameKind string
 
 const (
-	// FrameKindApp is customer code: probe candidates and AI evidence.
+	// FrameKindApp is customer code and the libraries it calls: probe candidates and AI evidence.
 	FrameKindApp FrameKind = "app"
-	// FrameKindLibrary is third-party framework or library code. Kept in call tries so
-	// the function map can draw app → library → app flows, but never probed.
-	FrameKindLibrary FrameKind = "library"
-	// FrameKindRuntime is the JDK, the VM and agent plumbing. Dropped at ingest.
+	// FrameKindRuntime is the JDK, the VM and third-party agent plumbing. Dropped at ingest.
 	FrameKindRuntime FrameKind = "runtime"
+	// FrameKindInstrumentation is the Odigos agent, running inside requests it instruments. Dropped at ingest.
+	FrameKindInstrumentation FrameKind = "instrumentation"
 )
 
 var runtimePrefixes = []string{
 	"java.", "javax.", "jakarta.", "sun.", "jdk.", "kotlin.", "scala.", "com.sun.", "org.jcp.",
 	"net.bytebuddy.", "io.opentelemetry.",
-	// The Odigos Java agent: its own classes, and ByteBuddy shaded into it. It transforms classes inside
-	// requests, so without these its frames would pass for the application's.
+}
+
+// instrumentationPrefixes are the Odigos Java agent: its own classes, and ByteBuddy shaded into it. It
+// transforms classes inside requests, so without these its frames would pass for the application's.
+var instrumentationPrefixes = []string{
 	"dev.keyval.ebpfJava.", "dev.keyval.net.bytebuddy.", "io.odigos.",
 }
 
-var libraryPrefixes = []string{
-	"reactor.", "io.netty.", "io.micrometer.",
-	"org.springframework.", "org.hibernate.", "org.apache.", "org.postgresql.", "org.h2.",
-	"org.slf4j.", "ch.qos.logback.", "com.zaxxer.",
-	// JSON (de)serialization; Spring MVC runs every request body through Jackson.
-	"com.fasterxml.",
-	// Common servers, clients and drivers.
-	"org.eclipse.jetty.", "io.undertow.", "com.mysql.", "org.mariadb.jdbc.", "oracle.jdbc.",
-	"com.microsoft.sqlserver.jdbc.", "redis.clients.jedis.", "io.lettuce.core.", "com.mongodb.",
-	"io.grpc.", "okhttp3.", "software.amazon.awssdk.", "com.amazonaws.", "org.elasticsearch.client.",
-	"com.rabbitmq.client.", "com.datastax.oss.driver.",
-}
+// agentAdviceMethods are the enter/exit hooks the Odigos Java agent weaves into instrumented methods.
+// They run inside the instrumented class, so they can carry any package prefix.
+var agentAdviceMethods = []string{".funcEnter", ".funcExit"}
 
 // ClassifyFrame reports which FrameKind a JVM frame label belongs to.
 func ClassifyFrame(name string) FrameKind {
@@ -55,21 +48,10 @@ func ClassifyFrame(name string) FrameKind {
 	if class == "" || hasAnyPrefix(class, runtimePrefixes) {
 		return FrameKindRuntime
 	}
-	if hasAnyPrefix(class, libraryPrefixes) {
-		return FrameKindLibrary
+	if hasAnyPrefix(class, instrumentationPrefixes) || hasAnySuffix(class, agentAdviceMethods) {
+		return FrameKindInstrumentation
 	}
 	return FrameKindApp
-}
-
-// IsApplicationFrame reports whether name is customer code worth probe
-// recommendations and stable evidence hashing.
-func IsApplicationFrame(name string) bool {
-	return ClassifyFrame(name) == FrameKindApp
-}
-
-// IsRuntimeFrame is true when the frame should be dropped at ingest.
-func IsRuntimeFrame(name string) bool {
-	return ClassifyFrame(name) == FrameKindRuntime
 }
 
 // ClassFromFrameName extracts the qualified class/method prefix from a JVM frame label.
@@ -89,6 +71,15 @@ func ClassFromFrameName(name string) string {
 func hasAnyPrefix(s string, prefixes []string) bool {
 	for _, p := range prefixes {
 		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAnySuffix(s string, suffixes []string) bool {
+	for _, p := range suffixes {
+		if strings.HasSuffix(s, p) {
 			return true
 		}
 	}

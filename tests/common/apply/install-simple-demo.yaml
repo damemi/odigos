@@ -1,3 +1,13 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: depot-test-images
+  namespace: default
+type: kubernetes.io/dockerconfigjson
+stringData:
+  .dockerconfigjson: >-
+    (($values.depotPullTokenTestImages && to_string({auths: {"p0xd21zf5r.registry.depot.dev": {username: 'x-token', password: $values.depotPullTokenTestImages}}})) || '{"auths":{}}')
+---
 ##################################################
 # Coupon (JavaScript)
 ##################################################
@@ -17,9 +27,10 @@ spec:
       labels:
         app: coupon
     spec:
+      imagePullSecrets: (($values.depotPullTokenTestImages && `[{"name":"depot-test-images"}]`) || `[]`)
       containers:
         - name: coupon
-          image: ghcr.io/odigos-io/simple-demo/odigos-demo-coupon:v0.1.45
+          image: (($values.depotPullTokenTestImages && 'p0xd21zf5r.registry.depot.dev/test/simple-demo/coupon:v0.1.46') || 'us-central1-docker.pkg.dev/odigos-cloud/components/odigos-demo-coupon:v0.1.46')
           imagePullPolicy: IfNotPresent
           env:
             - name: MEMBERSHIP_SERVICE_HOST
@@ -65,9 +76,10 @@ spec:
       labels:
         app: currency
     spec:
+      imagePullSecrets: (($values.depotPullTokenTestImages && `[{"name":"depot-test-images"}]`) || `[]`)
       containers:
         - name: currency
-          image: ghcr.io/odigos-io/simple-demo/odigos-demo-currency:v0.1.45
+          image: (($values.depotPullTokenTestImages && 'p0xd21zf5r.registry.depot.dev/test/simple-demo/currency:v0.1.46') || 'us-central1-docker.pkg.dev/odigos-cloud/components/odigos-demo-currency:v0.1.46')
           imagePullPolicy: IfNotPresent
           env:
             - name: GEOLOCATION_SERVICE_HOST
@@ -138,9 +150,10 @@ spec:
       labels:
         app: frontend
     spec:
+      imagePullSecrets: (($values.depotPullTokenTestImages && `[{"name":"depot-test-images"}]`) || `[]`)
       containers:
         - name: frontend
-          image: ghcr.io/odigos-io/simple-demo/odigos-demo-frontend:v0.1.45
+          image: (($values.depotPullTokenTestImages && 'p0xd21zf5r.registry.depot.dev/test/simple-demo/frontend:v0.1.46') || 'us-central1-docker.pkg.dev/odigos-cloud/components/odigos-demo-frontend:v0.1.46')
           imagePullPolicy: IfNotPresent
           env:
             - name: INVENTORY_SERVICE_HOST
@@ -190,9 +203,10 @@ spec:
       labels:
         app: geolocation
     spec:
+      imagePullSecrets: (($values.depotPullTokenTestImages && `[{"name":"depot-test-images"}]`) || `[]`)
       containers:
         - name: geolocation
-          image: ghcr.io/odigos-io/simple-demo/odigos-demo-geolocation:v0.1.45
+          image: (($values.depotPullTokenTestImages && 'p0xd21zf5r.registry.depot.dev/test/simple-demo/geolocation:v0.1.46') || 'us-central1-docker.pkg.dev/odigos-cloud/components/odigos-demo-geolocation:v0.1.46')
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
@@ -264,9 +278,10 @@ spec:
       labels:
         app: inventory
     spec:
+      imagePullSecrets: (($values.depotPullTokenTestImages && `[{"name":"depot-test-images"}]`) || `[]`)
       containers:
         - name: inventory
-          image: ghcr.io/odigos-io/simple-demo/odigos-demo-inventory:v0.1.45
+          image: (($values.depotPullTokenTestImages && 'p0xd21zf5r.registry.depot.dev/test/simple-demo/inventory:v0.1.46') || 'us-central1-docker.pkg.dev/odigos-cloud/components/odigos-demo-inventory:v0.1.46')
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -304,9 +319,10 @@ spec:
       labels:
         app: membership
     spec:
+      imagePullSecrets: (($values.depotPullTokenTestImages && `[{"name":"depot-test-images"}]`) || `[]`)
       containers:
         - name: membership
-          image: ghcr.io/odigos-io/simple-demo/odigos-demo-membership:v0.1.45
+          image: (($values.depotPullTokenTestImages && 'p0xd21zf5r.registry.depot.dev/test/simple-demo/membership:v0.1.46') || 'us-central1-docker.pkg.dev/odigos-cloud/components/odigos-demo-membership:v0.1.46')
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -347,9 +363,10 @@ spec:
       labels:
         app: pricing
     spec:
+      imagePullSecrets: (($values.depotPullTokenTestImages && `[{"name":"depot-test-images"}]`) || `[]`)
       containers:
         - name: pricing
-          image: ghcr.io/odigos-io/simple-demo/odigos-demo-pricing:v0.1.45
+          image: (($values.depotPullTokenTestImages && 'p0xd21zf5r.registry.depot.dev/test/simple-demo/pricing:v0.1.46') || 'us-central1-docker.pkg.dev/odigos-cloud/components/odigos-demo-pricing:v0.1.46')
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
@@ -387,9 +404,10 @@ spec:
       labels:
         app: shipping
     spec:
+      imagePullSecrets: (($values.depotPullTokenTestImages && `[{"name":"depot-test-images"}]`) || `[]`)
       containers:
         - name: shipping
-          image: ghcr.io/odigos-io/simple-demo/odigos-demo-shipping:v0.1.45
+          image: (($values.depotPullTokenTestImages && 'p0xd21zf5r.registry.depot.dev/test/simple-demo/shipping:v0.1.46') || 'us-central1-docker.pkg.dev/odigos-cloud/components/odigos-demo-shipping:v0.1.46')
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

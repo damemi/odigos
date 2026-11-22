@@ -73,8 +73,8 @@ func assembleTransactions(edges []callTrieEdgeRow) []Transaction {
 	return out
 }
 
-// callTrieFromEdges maps aggregated ClickHouse edges to flat GraphQL trie nodes.
-// Roots have ParentID == "" (ClickHouse Parent "root"). Sorted by seenCount desc, then name.
+// callTrieFromEdges maps stored call-trie edges to flat GraphQL trie nodes.
+// Roots have ParentID == "" (stored parent "root"). Sorted by seenCount desc, then name.
 func callTrieFromEdges(edges []callTrieEdgeRow) []CallTrieNode {
 	out := make([]CallTrieNode, 0, len(edges))
 	for _, e := range edges {

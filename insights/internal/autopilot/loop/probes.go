@@ -8,7 +8,7 @@ import (
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/api/instrumentationrules"
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -22,7 +22,7 @@ type customProbe struct {
 // listCustomProbesForSource returns probes from enabled rules that apply to
 // the source, skipping the rule object named excludeObject (pass the
 // autopilot rule's name to see only probes other rules provide).
-func listCustomProbesForSource(ctx context.Context, c client.Client, source clickhouse.SourceKey, excludeObject string) ([]customProbe, error) {
+func listCustomProbesForSource(ctx context.Context, c client.Client, source store.SourceKey, excludeObject string) ([]customProbe, error) {
 	if c == nil {
 		return nil, nil
 	}
@@ -73,7 +73,7 @@ func sortCustomProbes(out []customProbe) {
 }
 
 // ruleAffectsSource matches SourcesScopes for the workload. Language filters are
-// ignored here because ClickHouse source keys do not carry programming language;
+// ignored here because stored source keys do not carry programming language;
 // language-scoped custom-probe rules are still included when source/namespace match.
 func ruleAffectsSource(rule *odigosv1.InstrumentationRule, pw k8sconsts.PodWorkload) bool {
 	scopes := rule.Spec.Scopes

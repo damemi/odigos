@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"hash"
 	"hash/fnv"
 	"slices"
 	"time"
@@ -20,6 +21,11 @@ func HashTransactionID(service, namespace, operation string, kind TransactionKin
 	_, _ = h.Write([]byte(operation))
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(kind))
+	writeSourceIdentity(h, sourceIdentity)
+	return int64(h.Sum64() >> 1) // drop the sign bit → always non-negative
+}
+
+func writeSourceIdentity(h hash.Hash64, sourceIdentity map[string]string) {
 	keys := make([]string, 0, len(sourceIdentity))
 	for k := range sourceIdentity {
 		keys = append(keys, k)
@@ -31,7 +37,6 @@ func HashTransactionID(service, namespace, operation string, kind TransactionKin
 		_, _ = h.Write([]byte{0})
 		_, _ = h.Write([]byte(sourceIdentity[k]))
 	}
-	return int64(h.Sum64() >> 1) // drop the sign bit → always non-negative
 }
 
 // NewTransaction builds a Transaction with a deterministic id from its identity
@@ -81,7 +86,8 @@ type Transaction struct {
 	// SourceIdentity holds the resource attributes that name the Odigos source
 	// the entry span came from (see engine.SourceIdentityFunc). It is part of
 	// the identity hash, so the same operation in two workloads is two
-	// transactions.
+	// transactions. Not stored as-is: the DB keeps the source's typed fields,
+	// so it is empty on a transaction read back from the DB.
 	SourceIdentity map[string]string
 }
 

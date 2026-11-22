@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// EvidenceSnapshot is persisted on tx_runs for delta payloads on later ticks.
+// EvidenceSnapshot is persisted on autopilot_runs for delta payloads on later ticks.
 type EvidenceSnapshot struct {
 	CallGraph []CallGraphEdge `json:"callGraph"`
 }

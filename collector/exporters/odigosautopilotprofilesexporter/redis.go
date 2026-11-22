@@ -11,13 +11,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/collector/pdata/pprofile"
 	"go.uber.org/zap"
+
+	"github.com/odigos-io/odigos/common/consts"
 )
 
 const (
 	redisKeyPrefix         = "odigos:autopilot:profile:"
 	redisMaxStacksPerTrace = 500
-	// redisDB isolates autopilot stacks from URL-templatization keys (DB 0).
-	redisDB = 1
 	// stackDigestBytes is the sha1 prefix length identifying a distinct stack in a field.
 	stackDigestBytes = 8
 )
@@ -92,7 +92,7 @@ func openProfilesRedis(endpoint string, keyTTL time.Duration, logger *zap.Logger
 	}
 	client := redis.NewClient(&redis.Options{
 		Addr:                  endpoint,
-		DB:                    redisDB,
+		DB:                    consts.RedisDBAutopilotProfilesTransactionsCorrelation,
 		DialTimeout:           2 * time.Second,
 		ReadTimeout:           2 * time.Second,
 		WriteTimeout:          2 * time.Second,
@@ -245,14 +245,8 @@ func encodeStackField(s *profileStack) (blob string, field string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("marshal stack blob: %w", err)
 	}
-	// All samples in one profile share profile.Time(), so a time-based field would
-	// let the first stack of a span (usually its span-end event) hide every
-	// on-CPU sample of that span in the same report.
+	// Field is span id + stack digest: each distinct stack of a span is stored once.
 	digest := sha1.Sum(raw)
 	field = hex.EncodeToString(s.SpanID) + ":" + hex.EncodeToString(digest[:stackDigestBytes])
 	return string(raw), field, nil
-}
-
-func redisProfileKey(traceID []byte) string {
-	return redisKeyPrefix + hex.EncodeToString(traceID)
 }

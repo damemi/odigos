@@ -7,6 +7,9 @@ spec:
     This e2e test verifies end-to-end trace collection functionality.
     It deploys instrumented workloads, generates traffic, and verifies traces are collected.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

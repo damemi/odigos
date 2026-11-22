@@ -1,16 +1,16 @@
 package loop
 
 import (
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 type transactionTrie struct {
-	Transaction clickhouse.Transaction
-	Nodes       []clickhouse.CallTrieNode
+	Transaction store.Transaction
+	Nodes       []store.CallTrieNode
 }
 
-func buildFullAnalysisRequest(source clickhouse.SourceKey, probes []customProbe, tx transactionTrie, ev AppEvidence) schema.AnalysisRequest {
+func buildFullAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionTrie, ev AppEvidence) schema.AnalysisRequest {
 	return schema.NewFullEvidenceRequest(
 		schema.Service{
 			Namespace: source.Namespace,
@@ -28,7 +28,7 @@ func buildFullAnalysisRequest(source clickhouse.SourceKey, probes []customProbe,
 	)
 }
 
-func buildDeltaAnalysisRequest(source clickhouse.SourceKey, probes []customProbe, tx transactionTrie, addedGraph []CallGraphEdge) schema.AnalysisRequest {
+func buildDeltaAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionTrie, addedGraph []CallGraphEdge) schema.AnalysisRequest {
 	return schema.NewDeltaEvidenceRequest(
 		schema.Service{
 			Namespace: source.Namespace,

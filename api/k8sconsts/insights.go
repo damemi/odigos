@@ -14,26 +14,13 @@ const (
 	// instead of pinning to a single pod behind the regular ClusterIP VIP.
 	OdigosInsightsHeadlessServiceName = "odigos-insights-headless"
 
-	// Bundled insights ClickHouse (shared with autopilot profile storage).
-	OdigosInsightsClickHouseServiceName = "odigos-insights-clickhouse"
-	OdigosInsightsClickHouseNativePort  = 9000
-	OdigosInsightsClickHouseUser        = "odigos_insights"
-	OdigosInsightsClickHouseDatabase    = "odigos_insights"
-	OdigosInsightsClickHouseSecretName  = "odigos-insights-clickhouse"
-	OdigosInsightsClickHouseSecretKey   = "password"
-	// OdigosInsightsClickHousePasswordEnv is the gateway env var that holds the
-	// bundled ClickHouse password (distinct from destination CLICKHOUSE_PASSWORD).
-	OdigosInsightsClickHousePasswordEnv = "ODIGOS_INSIGHTS_CLICKHOUSE_PASSWORD"
+	// OdigosInsightsPostgresDSNEnv is the UI env var that holds the insights
+	// Postgres connection URI, for reading the autopilot tables.
+	OdigosInsightsPostgresDSNEnv = "ODIGOS_INSIGHTS_POSTGRES_DSN"
 )
 
 // InsightsHTTPEndpoint returns the base URL of the insights HTTP API in the
 // given namespace (Kubernetes cluster DNS: odigos-insights.<namespace>).
 func InsightsHTTPEndpoint(namespace string) string {
 	return fmt.Sprintf("http://%s.%s:%d", OdigosInsightsServiceName, namespace, OdigosInsightsHTTPPort)
-}
-
-// InsightsClickHouseEndpoint returns the native-protocol tcp:// endpoint for the
-// bundled insights ClickHouse Service (cluster DNS).
-func InsightsClickHouseEndpoint(namespace string) string {
-	return fmt.Sprintf("tcp://%s.%s:%d", OdigosInsightsClickHouseServiceName, namespace, OdigosInsightsClickHouseNativePort)
 }

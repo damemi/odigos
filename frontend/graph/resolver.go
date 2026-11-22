@@ -26,7 +26,7 @@ type Resolver struct {
 	ProfileStore fecommon.ProfileStoreRef
 	// InsightsClient is the client for the Odigos Insights service.
 	InsightsClient *insights.Client
-	// AutopilotClient reads transaction call tries from autopilot ClickHouse.
+	// AutopilotClient reads transaction call tries from the insights Postgres.
 	AutopilotClient *autopilot.Client
 	// DistrosProvider resolves the default otel distro per language for the
 	// running tier — the same provider the instrumentor uses.

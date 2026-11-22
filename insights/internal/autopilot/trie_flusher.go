@@ -6,37 +6,31 @@ import (
 
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// trieFlusher copies Redis trie nodes into autopilot.tx_call_trie_structure
-// at the start of each autopilot loop tick. The table is created by
-// migrate.Apply, not here. Repeat inserts of the same node collapse in
-// ClickHouse. Runs only on the insights leader.
+// trieFlusher copies Redis trie nodes into the autopilot store at the start
+// of each autopilot loop tick. Nodes already stored are skipped. Runs only on
+// the insights leader.
 type trieFlusher struct {
-	redis  *tracesRedis
-	ch     *tracesClickHouse
+	redis *tracesRedis
+	// store is owned by the caller, which closes it.
+	store  *store.Client
 	logger *commonlogger.OdigosLogger
 	// kube reads InstrumentationConfigs from the insights controller cache.
 	kube client.Client
 }
 
 func (f *trieFlusher) Close() error {
-	var redisErr, chErr error
-	if f != nil && f.redis != nil {
-		redisErr = f.redis.Close()
-		f.redis = nil
+	if f == nil || f.redis == nil {
+		return nil
 	}
-	if f != nil && f.ch != nil {
-		chErr = f.ch.Close()
-		f.ch = nil
-	}
-	if redisErr != nil {
-		return redisErr
-	}
-	return chErr
+	err := f.redis.Close()
+	f.redis = nil
+	return err
 }
 
 func (f *trieFlusher) Flush(tickCtx context.Context) {
@@ -49,7 +43,7 @@ func (f *trieFlusher) Flush(tickCtx context.Context) {
 		return
 	}
 
-	var nodes []callTrieStructureNode
+	var nodes []store.FlushedTrieNode
 	var keysLoaded, keysSkipped int
 	for _, key := range keys {
 		meta, ok := parseRedisTrieKey(key)
@@ -91,15 +85,17 @@ func (f *trieFlusher) Flush(tickCtx context.Context) {
 	if len(nodes) == 0 {
 		return
 	}
-	if err := f.ch.insertCallTrieStructure(tickCtx, nodes); err != nil {
+	nodesSkipped, err := f.store.InsertCallTrieNodes(tickCtx, nodes)
+	if err != nil {
 		f.logger.Warn("trie flusher insert failed", "error", err, "nodes", len(nodes))
 		return
 	}
-	f.logger.Info("flushed redis trie structure to clickhouse",
+	f.logger.Info("flushed redis trie structure to the autopilot store",
 		"keys", len(keys),
 		"keys_loaded", keysLoaded,
 		"keys_skipped", keysSkipped,
 		"nodes", len(nodes),
+		"nodes_skipped", nodesSkipped,
 	)
 }
 

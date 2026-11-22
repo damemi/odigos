@@ -1,5 +1,5 @@
 // Package autopilot is the insights autopilot feature: a control loop
-// that analyzes per-transaction call tries in ClickHouse with an LLM (via the
+// that analyzes per-transaction call tries with an LLM (via the
 // in-cluster odigos-litellm), stores the recommended probes, and optionally
 // reconciles InstrumentationRules to them.
 //
@@ -19,20 +19,17 @@ import (
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
 	"github.com/odigos-io/odigos/insights/internal/autopilot/controllers"
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/loop"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/model"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 // Options configures the autopilot feature.
 type Options struct {
 	Log *commonlogger.OdigosLogger
-	// ClickHouseDSN points at the autopilot database
-	// (clickhouse://user:pass@host:9000/autopilot).
-	ClickHouseDSN string
-	// InsightsDatabase is the insights inventory database that holds
-	// transactions.source_identity (usually odigos_insights).
-	InsightsDatabase string
+	// PostgresDSN points at the insights Postgres, which holds the autopilot
+	// tables next to the insights transaction inventory.
+	PostgresDSN string
 	// RedisEndpoint is the cacheDb Redis address (host:port) the loop flushes
 	// call tries from (logical DB 1). When empty the flush is skipped.
 	RedisEndpoint string
@@ -51,17 +48,17 @@ type Options struct {
 // leader: losing leadership must cancel ctx so the loop and the cache stop.
 func Run(ctx context.Context, opts Options) error {
 	log := opts.Log
-	if opts.ClickHouseDSN == "" {
-		return errors.New("autopilot: missing ClickHouse DSN")
+	if opts.PostgresDSN == "" {
+		return errors.New("autopilot: missing Postgres DSN")
 	}
 
-	chClient, err := clickhouse.Open(opts.ClickHouseDSN, opts.InsightsDatabase)
+	st, err := store.Open(opts.PostgresDSN)
 	if err != nil {
-		return fmt.Errorf("autopilot: open clickhouse: %w", err)
+		return fmt.Errorf("autopilot: open store: %w", err)
 	}
 	defer func() {
-		if err := chClient.Close(); err != nil {
-			log.Warn("failed to close autopilot clickhouse", "error", err)
+		if err := st.Close(); err != nil {
+			log.Warn("failed to close autopilot store", "error", err)
 		}
 	}()
 
@@ -83,7 +80,7 @@ func Run(ctx context.Context, opts Options) error {
 	modelCfg := model.Config{APIKey: opts.LiteLLMMasterKey}
 	loopMgr := &loop.Manager{
 		Client:               mgr.GetClient(),
-		ClickHouse:           chClient,
+		Store:                st,
 		Log:                  log,
 		Model:                model.New(modelCfg),
 		ModelName:            model.LiteLLMModelName,
@@ -118,16 +115,15 @@ func Run(ctx context.Context, opts Options) error {
 			return nil
 		}
 		log.Info("starting autopilot loop")
-		waitForClickHouse(groupCtx, log, chClient)
+		waitForStore(groupCtx, log, st)
 		if opts.RedisEndpoint != "" {
-			if flusher := openTrieFlusher(opts.RedisEndpoint, opts.ClickHouseDSN, log, mgr.GetClient()); flusher != nil {
-				defer func() {
-					if err := flusher.Close(); err != nil {
-						log.Warn("autopilot trie flusher close failed", "error", err)
-					}
-				}()
-				loopMgr.TrieFlusher = flusher
-			}
+			flusher := newTrieFlusher(opts.RedisEndpoint, st, log, mgr.GetClient())
+			defer func() {
+				if err := flusher.Close(); err != nil {
+					log.Warn("autopilot trie flusher close failed", "error", err)
+				}
+			}()
+			loopMgr.TrieFlusher = flusher
 		} else {
 			log.Warn("autopilot redis endpoint unset; trie flusher disabled")
 		}
@@ -138,17 +134,11 @@ func Run(ctx context.Context, opts Options) error {
 	return g.Wait()
 }
 
-// openTrieFlusher builds Redis + ClickHouse clients for the structure-only
-// dump. Neither dials here: an unreachable Redis at startup only fails the
-// current tick's Flush (logged), and the next tick retries. It returns nil
-// only for an invalid ClickHouse DSN, so the loop runs without flushing.
-func openTrieFlusher(redisEndpoint, clickHouseDSN string, log *commonlogger.OdigosLogger, kube client.Client) *trieFlusher {
-	ch, err := openTracesClickHouse(clickHouseDSN, log)
-	if err != nil {
-		log.Warn("autopilot trie flusher clickhouse unavailable", "error", err)
-		return nil
-	}
-	return &trieFlusher{redis: newTracesRedis(redisEndpoint, log), ch: ch, logger: log, kube: kube}
+// newTrieFlusher builds the Redis client for the structure-only dump without
+// dialing: an unreachable Redis at startup only fails the current tick's Flush
+// (logged), and the next tick retries.
+func newTrieFlusher(redisEndpoint string, st *store.Client, log *commonlogger.OdigosLogger, kube client.Client) *trieFlusher {
+	return &trieFlusher{redis: newTracesRedis(redisEndpoint, log), store: st, logger: log, kube: kube}
 }
 
 const (
@@ -158,25 +148,25 @@ const (
 	dbRetryLogEvery = 60 * time.Second
 )
 
-// waitForClickHouse retries Ping and SchemaReady until the migrate Job has
+// waitForStore retries Ping and SchemaReady until the migrate Job has
 // created the autopilot tables, or ctx is cancelled.
-func waitForClickHouse(ctx context.Context, log *commonlogger.OdigosLogger, ch *clickhouse.Client) {
+func waitForStore(ctx context.Context, log *commonlogger.OdigosLogger, st *store.Client) {
 	delay := dbRetryInitial
 	var lastLog time.Time
 	for attempt := 1; ; attempt++ {
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		err := ch.Ping(checkCtx)
+		err := st.Ping(checkCtx)
 		if err == nil {
-			err = ch.SchemaReady(checkCtx)
+			err = st.SchemaReady(checkCtx)
 		}
 		cancel()
 		if err == nil {
-			log.Info("autopilot clickhouse ready", "attempts", attempt, "insights_database", ch.InsightsDatabase())
+			log.Info("autopilot store ready", "attempts", attempt)
 			return
 		}
 		now := time.Now()
 		if lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {
-			log.Warn("waiting for autopilot clickhouse", "attempt", attempt, "retry_in", delay.String(), "insights_database", ch.InsightsDatabase(), "error", err)
+			log.Warn("waiting for autopilot store", "attempt", attempt, "retry_in", delay.String(), "error", err)
 			lastLog = now
 		}
 		select {

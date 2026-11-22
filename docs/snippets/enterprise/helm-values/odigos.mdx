@@ -194,7 +194,8 @@ cardinalityControl:
 #   Shared cache DB used by Odigos features that need a cluster-local cache
 #   (for example cardinality-control URL templatization rule computation).
 #   Deployed when a consuming feature is enabled (currently
-#   cardinalityControl.urlTemplatization.liveTrafficLearning.enabled).
+#   cardinalityControl.urlTemplatization.liveTrafficLearning.enabled or
+#   insights.autopilot.enabled).
 #   Backend is an implementation detail (Redis, published as odigos-cache with the
 #   Odigos release tag); values stay backend-agnostic so the chart can switch to
 #   another cache (e.g. Memcached) without renaming this section. Override the
@@ -211,18 +212,17 @@ cacheDb:
   # @schema
   # additionalProperties: true
   # description: |-
-  #   Optional CPU/memory requests and limits for the shared cache pod.
-  #   When unset, defaults use Burstable QoS (requests below limits) since the
-  #   cache is usually idle. Set requests and/or limits to override; if only one
-  #   side is set, the other is mirrored from it.
+  #   CPU/memory requests and limits for the shared cache pod. The defaults are
+  #   the same whichever features use the cache. Requests are below limits
+  #   (Burstable QoS) since the cache is usually idle.
   # @schema
-  # resources:
-  #   requests:
-  #     cpu: 50m
-  #     memory: 64Mi
-  #   limits:
-  #     cpu: 200m
-  #     memory: 256Mi
+  resources:
+    requests:
+      cpu: 75m
+      memory: 192Mi
+    limits:
+      cpu: 300m
+      memory: 756Mi
 
 # @schema
 # description: |-
@@ -566,6 +566,20 @@ collectorGateway:
   # @schema
   # deploymentName: 'odigos-gateway'
 
+  # @schema
+  # description: Settings for the ServiceAccount the cluster gateway collector runs as (odigos-gateway).
+  # @schema
+  serviceAccount:
+    # @schema
+    # additionalProperties: true
+    # description: |-
+    #   Annotations to add to the cluster gateway collector ServiceAccount.
+    #   For example, to export to Google Cloud with GKE Workload Identity, link it to a
+    #   Google Cloud service account:
+    #     iam.gke.io/gcp-service-account: <name>@<project>.iam.gserviceaccount.com
+    # @schema
+    annotations: {}
+
 # @schema
 # description: Settings for Odigos data-collection (node) Collectors
 # @schema
@@ -899,6 +913,28 @@ instrumentor:
   # additionalProperties: true
   # @schema
   affinity: {}
+
+  # @schema
+  # description: |-
+  #   Run the instrumentor on the node network instead of the pod network.
+  #   The Kubernetes API server calls the instrumentor webhooks by pod IP. On clusters where the control plane
+  #   is outside the pod network, such as EKS with an overlay CNI (Cilium tunnel mode, Calico VXLAN),
+  #   it can't reach pod IPs and these calls fail. With hostNetwork the instrumentor uses the node IP instead.
+  #   cert-manager and Kyverno offer the same option for their webhooks.
+  #   The instrumentor ports are then opened on the node, so they must be free there.
+  # @schema
+  hostNetwork: false
+
+  # @schema
+  # description: |-
+  #   Ports the instrumentor listens on. Change them when hostNetwork is true and a port is already taken on the node.
+  #   The Service ports stay the same, so the webhook and APIService configurations don't change.
+  # @schema
+  ports:
+    webhook: 9443
+    metrics: 8080
+    healthProbe: 8081
+    pprof: 6060
 
   # @schema
   # description: |-
@@ -1392,6 +1428,19 @@ insights:
 
   # @schema
   # description: |-
+  #   Autopilot (off by default). When enabled and profiling.enabled is true,
+  #   the cluster gateway writes profile stacks linked to traces into the shared
+  #   cache (cacheDb), keyed by trace id, for later trace-profile correlation.
+  #   Enabling it also deploys the shared cache (cacheDb).
+  # @schema
+  autopilot:
+    # @schema
+    # description: When true, enables autopilot. Requires profiling.enabled=true to write profile stacks.
+    # @schema
+    enabled: false
+
+  # @schema
+  # description: |-
   #   CPU-based HorizontalPodAutoscaler for insights (always on; requires
   #   metrics-server). The HPA owns the replica count. min/max replicas default
   #   to the gateway's values.
@@ -1459,28 +1508,59 @@ insights:
 
   # @schema
   # description: |-
-  #   Bundled ClickHouse for the insights service. Single replica, no
-  #   replication, no backups. Data is on a PVC by default
-  #   (insights.clickhouse.storage.persistence); set that to false for
-  #   emptyDir. Scale insights pods for HA of ingestion; keep ClickHouse at
-  #   one replica. User and database name stay hardcoded (odigos_insights);
-  #   image, resources, scheduling, and storage are tunable.
+  #   Postgres database for the insights service.
   # @schema
-  clickhouse:
+  database:
+    # @schema
+    # enum: [bundled, external]
+    # description: |-
+    #   Where the Insights Postgres lives.
+    #     bundled  - the chart runs a single-replica Postgres (no replication,
+    #                no backups) on a PVC (insights.database.storage). For
+    #                development and light use.
+    #     external - bring your own Postgres (e.g. RDS / Cloud SQL / an
+    #                operator-managed cluster) via insights.database.external;
+    #                the bundled database is not deployed. The production path.
+    #   A future "cnpg" value will render an operator-managed HA Postgres
+    #   (CloudNativePG: replication, PITR backups, TLS) in-cluster.
+    # @schema
+    provider: bundled
+
     # @schema
     # description: |-
-    #   ClickHouse server image. Third-party image (not built by Odigos);
+    #   Used when provider=external. The database must exist and the user must
+    #   be able to create tables in it; the migration Job creates the schema.
+    # @schema
+    external:
+      # @schema
+      # description: |-
+      #   Connection URI, e.g. postgres://user:pass@host:5432/insights?sslmode=require.
+      #   Stored in a chart-managed Secret. Prefer existingSecret for production.
+      # @schema
+      dsn: ''
+      # @schema
+      # description: Name of an existing Secret in the release namespace that holds the connection URI.
+      # @schema
+      existingSecret: ''
+      # @schema
+      # description: Key in existingSecret that holds the connection URI.
+      # @schema
+      existingSecretKey: dsn
+
+    # @schema
+    # description: |-
+    #   Bundled Postgres server image. Third-party image (not built by Odigos);
     #   override repository/tag for private mirrors or version pins.
     # @schema
     image:
       # @schema
       # description: Container image repository.
       # @schema
-      repository: clickhouse/clickhouse-server
+      repository: postgres
       # @schema
       # description: Container image tag.
       # @schema
-      tag: "24.8-alpine"
+      tag: "17-alpine"
       # @schema
       # description: Image pull policy.
       # @schema
@@ -1489,6 +1569,7 @@ insights:
     resources:
       requests:
         cpu: 100m
+        # At least shared_buffers so the pod is scheduled where its page cache fits.
         memory: 512Mi
       limits:
         cpu: 2000m
@@ -1496,10 +1577,11 @@ insights:
 
     # @schema
     # description: |-
-    #   Override the global nodeSelector for ClickHouse. Use this to pin the
-    #   DB to nodes with suitable disk (e.g. SSD / stateful pool). Falls back
-    #   to values.nodeSelector when unset. Independent of insights.nodeSelector
-    #   so the stateful DB can be scheduled separately from the app pods.
+    #   Override the global nodeSelector for the bundled Postgres. Use this to
+    #   pin the DB to nodes with suitable disk (e.g. SSD / stateful pool). Falls
+    #   back to values.nodeSelector when unset. Independent of
+    #   insights.nodeSelector so the stateful DB can be scheduled separately
+    #   from the app pods.
     # @schema
     # nodeSelector:
     #   kubernetes.io/os: linux
@@ -1528,84 +1610,53 @@ insights:
 
     # @schema
     # description: |-
-    #   Priority class name for ClickHouse. Prefer a higher priority than
-    #   general workloads so the single-replica DB is not evicted under pressure.
+    #   Priority class name for the bundled Postgres. Prefer a higher priority
+    #   than general workloads so the single-replica DB is not evicted under
+    #   pressure.
     # @schema
     # priorityClassName: ''
 
     # @schema
-    # description: |-
-    #   Curated ClickHouse server settings mounted into config.d / users.d.
-    #   Defaults follow common Kubernetes guidance: leave headroom under the
-    #   pod memory limit, bound concurrent queries, and cap single-query memory.
+    # description: Server settings for the bundled Postgres, passed as -c flags.
     # @schema
     config:
       # @schema
       # description: |-
-      #   Fraction of detected RAM (pod limit) ClickHouse may use.
-      #   Leave headroom for the OS page cache and background merges so the
-      #   kubelet does not OOM-kill the pod.
-      # minimum: 0.1
-      # maximum: 1
+      #   max_connections. Each insights replica opens a pool of up to
+      #   max(4, CPUs) connections, so the default leaves room for the HPA
+      #   maximum plus the migration Job and debugging sessions.
       # @schema
-      maxServerMemoryUsageToRamRatio: 0.85
-
+      maxConnections: 200
       # @schema
       # description: |-
-      #   Max queries executing at once (server-wide). Caps concurrent load
-      #   from Insights flushes and UI reads.
-      # minimum: 1
+      #   shared_buffers, the Postgres page cache. Keep it at roughly a quarter
+      #   of the memory limit.
       # @schema
-      maxConcurrentQueries: 100
-
-      # @schema
-      # description: |-
-      #   ClickHouse logger level (trace, debug, information, warning, error).
-      # @schema
-      logLevel: information
-
-      # @schema
-      # description: |-
-      #   Per-query memory cap (users.xml). Examples: "1Gi"
-      #   Empty string keeps ClickHouse's default.
-      # @schema
-      maxMemoryUsagePerQuery: "1Gi"
-
-      # @schema
-      # description: |-
-      #   Optional raw XML merged as config.d/odigos-extra.xml. Escape hatch
-      #   for advanced tuning; prefer the curated knobs above when possible.
-      #   Example:
-      #     extraConfig: |
-      #       <clickhouse>
-      #         <timezone>UTC</timezone>
-      #       </clickhouse>
-      # @schema
-      extraConfig: ""
+      sharedBuffers: 512MB
 
     storage:
       # @schema
       # description: |-
-      #   When true (default), ClickHouse keeps Insights data on a persistent
-      #   volume so it survives pod restarts. Set to false only for
-      #   development or testing: ClickHouse then uses emptyDir, and all
+      #   When true (default), the bundled Postgres keeps Insights data on a
+      #   persistent volume so it survives pod restarts. Set to false only for
+      #   development or testing: Postgres then uses emptyDir, and all
       #   Insights data is lost when the pod is recreated or rescheduled.
       # @schema
       persistence: true
       # @schema
       # description: |-
-      #   PVC size for the ClickHouse data volume. Growth is driven mainly by
-      #   transaction cardinality and trace_observations retention (TTL).
-      #   Expand only if the StorageClass supports volume expansion.
+      #   PVC size for the bundled Postgres data volume. Growth is driven
+      #   mainly by transaction cardinality and stored sample traces
+      #   (observation retention). Expand only if the StorageClass supports
+      #   volume expansion.
       # @schema
       size: 8Gi
       # @schema
       # description: |-
-      #   StorageClass for the ClickHouse PVC. Empty string uses the cluster
-      #   default. Prefer a class backed by fast local/SSD block storage;
-      #   avoid slow shared NFS for MergeTree. The class is fixed at PVC
-      #   creation — changing this value after install does not migrate an
-      #   existing volume. The PVC is kept across helm uninstall
+      #   StorageClass for the bundled Postgres PVC. Empty string uses the
+      #   cluster default. Prefer a class backed by SSD block storage. The class
+      #   is fixed at PVC creation - changing this value after install does not
+      #   migrate an existing volume. The PVC is kept across helm uninstall
       #   (helm.sh/resource-policy: keep).
       # @schema
       storageClassName: ''

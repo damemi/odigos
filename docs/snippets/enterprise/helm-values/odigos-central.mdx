@@ -26,7 +26,20 @@ images: {}
 # The chart mounts the existing pull secret but does not create it.
 # externalOnpremPullSecret: false
 
+# Global RBAC switch. <component>.rbac.create overrides it per component.
+rbac:
+  # -- Create Roles and RoleBindings for all components unless overridden per component.
+  create: true
+
 centralBackend:
+  serviceAccount:
+    # -- Create the ServiceAccount for the central backend. Set to false to use an existing one in the release namespace.
+    create: true
+    # -- ServiceAccount name (empty = central-backend).
+    name: ''
+  rbac:
+    # -- Create the Role and RoleBinding for the central backend. null = use the global rbac.create.
+    create: null
   # Resources and scheduling for the Central backend
   # -- Maximum WebSocket message size in bytes between central-backend and proxies
   #    (default 33554432 = 32Mi). Raise for very large RemoteFetch payloads.
@@ -249,6 +262,14 @@ cloudConnectors:
 
   # The connector-runtime controller that reconciles OdigosCloudConnector CRs into connector workloads.
   connectorRuntime:
+    serviceAccount:
+      # -- Create the ServiceAccount for the connector-runtime controller. Set to false to use an existing one in the release namespace.
+      create: true
+      # -- ServiceAccount name (empty = connector-runtime).
+      name: ''
+    rbac:
+      # -- Create the Role and RoleBinding for the connector-runtime controller. null = use the global rbac.create.
+      create: null
     # -- Override the controller image (empty = built-in odigos-enterprise-connector-runtime).
     image: ''
     resources:
@@ -262,6 +283,17 @@ cloudConnectors:
       kubernetes.io/os: linux
     tolerations: []
     affinity: {}
+
+  # The OpAMP gateway that routes managed Collector sessions to their connectors.
+  opampGateway:
+    serviceAccount:
+      # -- Create the ServiceAccount for the OpAMP gateway. Set to false to use an existing one in the release namespace.
+      create: true
+      # -- ServiceAccount name (empty = connector-opamp-gateway).
+      name: ''
+    rbac:
+      # -- Create the Role and RoleBinding for the OpAMP gateway. null = use the global rbac.create.
+      create: null
 
   # Odigos-managed telemetry Collectors, deployed into the customer's own cloud account and configured
   # over OpAMP.

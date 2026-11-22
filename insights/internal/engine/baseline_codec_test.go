@@ -10,7 +10,7 @@ import (
 )
 
 // TestCodecRoundTripSets checks that each set class survives Encode → (store
-// would union the members) → Decode unchanged, independent of ClickHouse.
+// would union the members) → Decode unchanged, independent of the database.
 func TestCodecRoundTripSets(t *testing.T) {
 	c := NewBaselineCodec()
 	cases := []struct {

@@ -8,6 +8,9 @@ spec:
     instrumented workloads is scraped, enriched with kubernetes resource attributes, and delivered
     to a destination that declares the LOGS signal.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

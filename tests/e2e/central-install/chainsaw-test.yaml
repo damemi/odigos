@@ -5,6 +5,9 @@ metadata:
 spec:
   description: This e2e test installs both Odigos OSS (odigos-test) and Odigos Central (odigos-central) via helm charts
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

@@ -2,7 +2,7 @@
 // non-negative integer value, used by the engine's metric scorers: D7 observes
 // payload byte sizes, D3 observes entry-span latency in microseconds. Counts
 // are additive across disjoint observation streams (see Add), which lets the
-// baseline store flush deltas and ClickHouse sum them across replicas.
+// baseline store flush deltas and the database sum them across replicas.
 //
 // Bucket geometry comes from Layout (global system settings plus optional
 // service/transaction overrides). Bucket 0 counts value==0; bucket k≥1 covers

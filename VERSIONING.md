@@ -16,7 +16,7 @@ To install a release candidate version, one needs to "hop-in" to the release can
 - **brew** - use the "rc" tap (`homebrew-odigos-cli-rc/odigos`) which is not the default tap. this will always install the latest release candidate version. **Notice**, the tap for stable releases is `homebrew-odigos-cli/odigos`, so pay attention to the tap name and the version you are using to avoid installing the wrong version.
 
 ```bash
-brew update && brew install odigos-io/homebrew-odigos-cli-rc/odigos
+brew update && HOMEBREW_ODIGOS_ONPREM_TOKEN=$ODIGOS_TOKEN brew install odigos-io/homebrew-odigos-cli-rc/odigos
 ```
 
 - **helm repo** - release candidates are published to the same repo and are ignored by helm by default. to install a release candidate, first `helm repo update` then use `--version` flag to specify the release candidate version.
@@ -27,11 +27,12 @@ helm repo update
 helm install odigos odigos/odigos --version v1.0.X-rcY
 ```
 
-- **cli binray** - browse to https://github.com/odigos-io/odigos/releases and download the cli binary for the specific release candidate version.
+- **cli binray** - pull the cli archives for the specific release candidate version from `registry.odigos.io` with your on-prem token.
 
 ```bash
-curl -L https://github.com/odigos-io/odigos/releases/download/v1.0.X-rcY/cli_1.0.X-rcY_linux_amd64.tar.gz -o odigos.tar.gz
-tar -xzf odigos.tar.gz
+echo "$ODIGOS_TOKEN" | oras login registry.odigos.io -u odigos --password-stdin
+oras pull registry.odigos.io/odigos-cli-artifacts:v1.0.X-rcY
+tar -xzf cli_1.0.X-rcY_linux_amd64.tar.gz
 chmod +x odigos
 ./odigos version
 ```

@@ -388,7 +388,7 @@ type K8sWorkloadContainer {
 
   """
   Autopilot: transactions and detected stack functions for this
-  container, read from autopilot ClickHouse (tx_call_trie_structure). Empty when
+  container, read from the autopilot call tries in the insights Postgres. Empty when
   autopilot is disabled or nothing has been stored yet.
   Ordered by seenCount desc, then id. Select callTrie only with a narrow page
   (ids or limit): it costs one ClickHouse query per returned transaction.
@@ -506,7 +506,7 @@ type AutopilotTransaction {
   sampleTrace: String
   """
   Flat call-path trie nodes for this transaction. Resolved on demand from
-  ClickHouse tx_call_trie when selected; null when missing or autopilot is
+  the autopilot call tries when selected; null when missing or autopilot is
   off. Empty when the query returns no nodes. Build the tree in the client via
   id/parentId.
   """
@@ -806,7 +806,7 @@ extend type Query {
   namespaces: [K8sNamespace!]!
   """
   Workload containers with stored autopilot transactions, read with a single
-  ClickHouse query. Empty when autopilot is disabled.
+  query. Empty when autopilot is disabled.
   """
   interrogationSources: [AutopilotSource!]!
 }

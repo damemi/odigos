@@ -4,12 +4,12 @@ import (
 	"testing"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func TestAutopilotRuleLabels(t *testing.T) {
-	source := clickhouse.SourceKey{
+	source := store.SourceKey{
 		Namespace:    "rowan",
 		WorkloadKind: "Deployment",
 		WorkloadName: "edge-gateway",
@@ -24,7 +24,7 @@ func TestAutopilotRuleLabels(t *testing.T) {
 }
 
 func TestWorkloadLabelValue(t *testing.T) {
-	got := workloadLabelValue(clickhouse.SourceKey{
+	got := workloadLabelValue(store.SourceKey{
 		Namespace:    "rowan",
 		WorkloadKind: "Deployment",
 		WorkloadName: "edge-gateway",

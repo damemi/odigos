@@ -8,6 +8,9 @@ spec:
     It tests that supported workloads get properly instrumented and that the instrumentation
     instances are created with correct health status.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

@@ -1,0 +1,167 @@
+{{- if include "odigos.insightsEnabled" . }}
+{{- /*
+Schema migrations run from this Job rather than from serving replicas, so
+multiple Insights replicas never race on DDL.
+
+There are three lifecycle cases:
+
+1. Bootstrap
+   Fresh install, or first upgrade that enables Insights.
+
+   There is no existing bundled Postgres Deployment, so migration is rendered
+   as a regular Kubernetes Job. Helm does not block waiting for it.
+
+   Postgres and the migration Job can start asynchronously. The migrate
+   command retries until Postgres is reachable, and Insights replicas remain
+   unready through waitForSchemaReady until the schema is ready.
+
+2. Normal Insights upgrade
+   An existing bundled Postgres Deployment is present and the requested
+   storage mode is unchanged, or an external database is configured.
+
+   Migration runs as a pre-upgrade Helm hook. Helm waits for it before applying
+   the new release, ensuring new Insights code never runs against an old schema.
+
+   A failed migration intentionally fails the Helm upgrade.
+
+3. Storage-mode transition
+   persistence=true -> false
+   persistence=false -> true
+
+   Migration must NOT run as a pre-upgrade hook.
+
+   For example, when switching true -> false because the PVC is Pending, a
+   pre-upgrade migration would wait for the old PVC-backed Postgres before
+   Helm is allowed to update Postgres to emptyDir. That creates a deadlock.
+
+   During a storage transition, migration therefore runs as a regular Job.
+   Helm first applies the desired Postgres storage configuration, the migrate
+   process retries until that Postgres is reachable, and Insights remains
+   unready until the schema exists.
+
+Regular bootstrap/transition Jobs include the Helm release revision in their
+name. This prevents immutable completed Jobs from colliding with future
+bootstrap or storage-transition Jobs.
+
+Postgres Secret, Service, Deployment and PVC remain ordinary Helm resources.
+The PVC has helm.sh/resource-policy: keep so Insights data is not automatically
+deleted on uninstall or when persistence is temporarily disabled.
+*/}}
+
+{{- /*
+Inspect the bundled Postgres Deployment that exists BEFORE this Helm operation.
+An external database counts as present once its connection Secret exists, and
+its storage mode never changes.
+
+lookup intentionally reflects live cluster state. During helm template and
+client-only dry-runs it may return empty, which safely falls back to the
+non-blocking bootstrap behavior.
+*/}}
+{{- $bundled := include "insights.database.bundled" . }}
+{{- $existingPostgres := lookup "apps/v1" "Deployment" .Release.Namespace "odigos-insights-db" }}
+{{- $existingDSN := lookup "v1" "Secret" .Release.Namespace (include "insights.database.dsnSecretName" .) }}
+{{- $postgresExists := ternary (not (empty $existingPostgres)) (not (empty $existingDSN)) (not (empty $bundled)) }}
+
+{{- /*
+Determine the storage mode requested by the new release.
+*/}}
+{{- $desiredPersistent := ne .Values.insights.database.storage.persistence false }}
+
+{{- /*
+Determine the storage mode used by the currently installed bundled Postgres
+Deployment.
+
+Default false is intentional: if there is no existing Deployment there is no
+previous persistent mode to preserve and this is treated as bootstrap.
+*/}}
+{{- $currentlyPersistent := false }}
+
+{{- if not $bundled }}
+  {{- $currentlyPersistent = $desiredPersistent }}
+{{- else if $postgresExists }}
+  {{- range $volume := $existingPostgres.spec.template.spec.volumes }}
+    {{- if eq $volume.name "data" }}
+      {{- if hasKey $volume "persistentVolumeClaim" }}
+        {{- $currentlyPersistent = true }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+
+{{- /*
+A storage transition must be non-blocking so Helm can first update Postgres
+to the requested storage backend.
+*/}}
+{{- $storageModeChanging := and .Release.IsUpgrade $postgresExists (ne $currentlyPersistent $desiredPersistent) }}
+
+{{- /*
+Only an actual upgrade of an already-existing database with an unchanged
+storage mode requires synchronous pre-upgrade migration.
+*/}}
+{{- $usePreUpgradeHook := and .Release.IsUpgrade $postgresExists (not $storageModeChanging) }}
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  {{- if $usePreUpgradeHook }}
+  name: odigos-insights-migrate
+  {{- else if $storageModeChanging }}
+  name: odigos-insights-migrate-storage-transition-{{ .Release.Revision }}
+  {{- else }}
+  name: odigos-insights-migrate-bootstrap-{{ .Release.Revision }}
+  {{- end }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: odigos-insights-migrate
+    odigos.io/system-object: "true"
+  {{- if $usePreUpgradeHook }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+  {{- end }}
+
+spec:
+  # The process retries connecting internally; this bounds a genuinely stuck run
+  # (e.g. a broken migration) instead of retrying forever.
+  activeDeadlineSeconds: 600
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: odigos-insights-migrate
+    spec:
+      restartPolicy: Never
+      {{- if .Values.insights.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.insights.nodeSelector | nindent 8 }}
+      {{- else if .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{ include "odigos.renderPullSecrets" . | nindent 6 }}
+      containers:
+        - name: migrate
+          {{ $imageTag := .Values.image.tag | default .Chart.AppVersion }}
+          image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-insights" "Tag" $imageTag) }}
+          args: ["migrate"]
+          env:
+            - name: POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "insights.database.dsnSecretName" . }}
+                  key: {{ include "insights.database.dsnSecretKey" . }}
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+      {{- with .Values.insights.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
+{{- end }}

@@ -1,8 +1,6 @@
 package odigosautopilotprofilesexporter
 
 import (
-	"strings"
-
 	"go.opentelemetry.io/collector/pdata/pprofile"
 
 	"github.com/odigos-io/odigos/common/autopilot"
@@ -12,60 +10,46 @@ const (
 	frameTypeJVM     = "jvm"
 	frameTypeHotspot = "hotspot"
 
-	// Substring of jvm FunctionName values from the Java agent utils package
-	// (e.g. "void dev.keyval.ebpfJava.utils.ThreadContext.restoreContext(...)").
-	instrumentationUtilsPackage = "dev.keyval.ebpfJava.utils."
+	// maxFramesPerSample caps stack depth written per profile sample after filtering.
+	maxFramesPerSample = 64
 )
 
 // rootFirstJavaFrames keeps jvm/hotspot frames with non-empty names and reverses
-// leaf-first stacks to root-first. Parallel arrays stay aligned. Instrumentation
-// scaffolding (agent utils package, funcEnter/funcExit advice) and runtime frames are
-// dropped. Library frames are kept, but each consecutive run collapses to its root-most
-// frame so app -> library -> app paths survive without framework noise.
+// leaf-first stacks to root-first. Parallel arrays stay aligned. Runtime and
+// Odigos instrumentation frames are dropped. Stacks deeper than
+// maxFramesPerSample keep their leaf-most frames.
 func rootFirstJavaFrames(names, frameTypes []string) (outNames, outTypes []string) {
 	n := len(names)
 	if n == 0 || n != len(frameTypes) {
 		return nil, nil
 	}
-	var kinds []autopilot.FrameKind
 	for i := 0; i < n; i++ {
 		name := names[i]
 		ft := frameTypes[i]
 		if name == "" || (ft != frameTypeJVM && ft != frameTypeHotspot) {
 			continue
 		}
-		if isInstrumentationFrame(name) {
+
+		frameClassification := autopilot.ClassifyFrame(name)
+		switch frameClassification {
+		case autopilot.FrameKindRuntime, autopilot.FrameKindInstrumentation:
 			continue
+		case autopilot.FrameKindApp:
+			outNames = append(outNames, name)
+			outTypes = append(outTypes, ft)
 		}
-		kind := autopilot.ClassifyFrame(name)
-		if kind == autopilot.FrameKindRuntime {
-			continue
-		}
-		// Leaf-first: a library frame followed by another library frame is a deeper
-		// frame of the same run, so replace it with the root-more one.
-		if last := len(kinds) - 1; kind == autopilot.FrameKindLibrary && last >= 0 && kinds[last] == autopilot.FrameKindLibrary {
-			outNames[last], outTypes[last] = name, ft
-			continue
-		}
-		outNames = append(outNames, name)
-		outTypes = append(outTypes, ft)
-		kinds = append(kinds, kind)
 	}
 	if len(outNames) == 0 {
 		return nil, nil
 	}
-	outNames, outTypes = capFrames(outNames, outTypes, kinds, maxFramesPerSample)
+	if len(outNames) > maxFramesPerSample {
+		outNames, outTypes = outNames[:maxFramesPerSample], outTypes[:maxFramesPerSample]
+	}
 	for i, j := 0, len(outNames)-1; i < j; i, j = i+1, j-1 {
 		outNames[i], outNames[j] = outNames[j], outNames[i]
 		outTypes[i], outTypes[j] = outTypes[j], outTypes[i]
 	}
 	return outNames, outTypes
-}
-
-func isInstrumentationFrame(name string) bool {
-	return strings.Contains(name, instrumentationUtilsPackage) ||
-		strings.Contains(name, ".funcEnter(") ||
-		strings.Contains(name, ".funcExit(")
 }
 
 func resolveStackFrames(dic pprofile.ProfilesDictionary, stackIndex int32) (functionNames, frameTypes []string) {

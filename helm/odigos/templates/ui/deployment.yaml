@@ -57,13 +57,13 @@ spec:
             value: {{ .Values.ui.logLevel | default .Values.logLevel | default "info" | quote }}
           - name: GOMEMLIMIT
             value: {{ include "odigos.gomemlimitFromResources" (dict "Resources" .Values.ui.resources) }}
-          {{- if include "odigos.clickhouseEnabled" . }}
-          # Autopilot (and insights) read from the bundled ClickHouse.
-          - name: ODIGOS_INSIGHTS_CLICKHOUSE_PASSWORD
+          {{- if include "odigos.autopilotEnabled" . }}
+          # Autopilot pages read the autopilot tables in the insights Postgres.
+          - name: ODIGOS_INSIGHTS_POSTGRES_DSN
             valueFrom:
               secretKeyRef:
-                name: odigos-insights-clickhouse
-                key: password
+                name: {{ include "insights.database.dsnSecretName" . }}
+                key: {{ include "insights.database.dsnSecretKey" . }}
           {{- end }}
           - name: ODIGOS_ONPREM_TOKEN
             valueFrom:

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/model"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func TestClassifyModelError(t *testing.T) {
@@ -49,7 +49,7 @@ func TestIsShutdown(t *testing.T) {
 }
 
 var testKey = newRetryKey(
-	clickhouse.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "app", ContainerName: "c"},
+	store.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "app", ContainerName: "c"},
 	"tx",
 )
 
@@ -131,7 +131,7 @@ func TestRetryTrackerForgetSource(t *testing.T) {
 	other := testKey
 	other.workloadName = "other"
 	tr.recordFailure(other, "h", failureTransient, 0, now)
-	tr.forgetSource(clickhouse.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "app", ContainerName: "c"})
+	tr.forgetSource(store.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "app", ContainerName: "c"})
 	if tr.backingOff(testKey, now) {
 		t.Fatal("forgotten source should not back off")
 	}

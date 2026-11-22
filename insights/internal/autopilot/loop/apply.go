@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 const autopilotRuleLabelKey = "odigos.io/autopilot-workload"
@@ -25,7 +25,7 @@ func probeSlotsAvailable(existing []customProbe, maxProbes int) int {
 	return free
 }
 
-func workloadScopes(source clickhouse.SourceKey) *k8sconsts.SourcesScopes {
+func workloadScopes(source store.SourceKey) *k8sconsts.SourcesScopes {
 	return &k8sconsts.SourcesScopes{
 		Sources: []k8sconsts.PodWorkload{{
 			Name:      source.WorkloadName,
@@ -40,7 +40,7 @@ var dnsLabelSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
 // labelValueSanitizer keeps only characters allowed in Kubernetes label values.
 var labelValueSanitizer = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
-func autopilotRuleObjectName(source clickhouse.SourceKey) string {
+func autopilotRuleObjectName(source store.SourceKey) string {
 	const prefix = "odig-int-"
 	ns := dnsLabelSanitizer.ReplaceAllString(strings.ToLower(source.Namespace), "-")
 	wl := dnsLabelSanitizer.ReplaceAllString(strings.ToLower(source.WorkloadName), "-")
@@ -55,18 +55,18 @@ func autopilotRuleObjectName(source clickhouse.SourceKey) string {
 	return prefix + hex.EncodeToString(h[:8])
 }
 
-func autopilotWorkloadRuleName(source clickhouse.SourceKey) string {
+func autopilotWorkloadRuleName(source store.SourceKey) string {
 	return fmt.Sprintf("autopilot-%s", source.WorkloadName)
 }
 
-func autopilotRuleLabels(source clickhouse.SourceKey) map[string]string {
+func autopilotRuleLabels(source store.SourceKey) map[string]string {
 	return map[string]string{
 		k8sconsts.OdigosProfilesManagedByLabel: k8sconsts.OdigosAutopilotLoopManagedByValue,
 		autopilotRuleLabelKey:                  workloadLabelValue(source),
 	}
 }
 
-func workloadLabelValue(source clickhouse.SourceKey) string {
+func workloadLabelValue(source store.SourceKey) string {
 	parts := []string{source.Namespace, source.WorkloadKind, source.WorkloadName}
 	var out []string
 	for _, p := range parts {

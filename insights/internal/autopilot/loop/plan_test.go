@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func edges(pairs ...string) AppEvidence {
@@ -15,13 +15,13 @@ func edges(pairs ...string) AppEvidence {
 	return ev
 }
 
-func successRun(t *testing.T, acked AppEvidence) *clickhouse.Run {
+func successRun(t *testing.T, acked AppEvidence) *store.Run {
 	t.Helper()
 	snap, err := marshalEvidenceSnapshot(acked)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &clickhouse.Run{EvidenceSnapshot: snap, AnalysisStatus: clickhouse.AnalysisSucceeded}
+	return &store.Run{EvidenceSnapshot: snap, AnalysisStatus: store.AnalysisSucceeded}
 }
 
 func TestPlanAnalysisNoPriorSuccessSendsFull(t *testing.T) {
@@ -76,7 +76,7 @@ func TestPlanAnalysisFailedEdgesStayPending(t *testing.T) {
 
 func TestPlanAnalysisUnreadableSnapshotSendsFull(t *testing.T) {
 	observed := edges("a", "b")
-	plan := planAnalysis(&clickhouse.Run{EvidenceSnapshot: "not json"}, observed)
+	plan := planAnalysis(&store.Run{EvidenceSnapshot: "not json"}, observed)
 	if plan.Reason != reasonUnreadableSnapshot || plan.Mode != "full" {
 		t.Fatalf("plan = %+v", plan)
 	}

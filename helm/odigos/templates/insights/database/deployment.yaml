@@ -1,0 +1,115 @@
+{{- if and .Values.insights.enabled (include "insights.database.bundled" .) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: odigos-insights-db
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: odigos-insights-db
+    odigos.io/system-object: "true"
+spec:
+  replicas: 1
+  # Recreate (not RollingUpdate) because a single ReadWriteOnce PVC can
+  # only be attached to one pod at a time. A rolling update would deadlock
+  # waiting for the old pod's PVC to detach.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: odigos-insights-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: odigos-insights-db
+    spec:
+      {{- if .Values.insights.database.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.insights.database.nodeSelector | nindent 8 }}
+      {{- else if .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.insights.database.priorityClassName }}
+      priorityClassName: {{ .Values.insights.database.priorityClassName }}
+      {{- end }}
+      {{ include "odigos.renderPullSecrets" . | nindent 6 }}
+      # Gives Postgres time to checkpoint and shut down cleanly.
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: postgres
+          image: "{{ .Values.insights.database.image.repository }}:{{ .Values.insights.database.image.tag }}"
+          imagePullPolicy: {{ .Values.insights.database.image.pullPolicy }}
+          args:
+            - -c
+            - shared_preload_libraries=pg_stat_statements
+            - -c
+            - max_connections={{ .Values.insights.database.config.maxConnections }}
+            - -c
+            - shared_buffers={{ .Values.insights.database.config.sharedBuffers }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: odigos_insights
+            - name: POSTGRES_DB
+              value: odigos_insights
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: odigos-insights-db
+                  key: password
+            # A subdirectory, because the volume root may hold lost+found and
+            # initdb refuses a non-empty directory.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", "odigos_insights", "-d", "odigos_insights"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          # No livenessProbe on purpose. Liveness probes on a single-replica
+          # datastore are an antipattern: a slow checkpoint under load can trip
+          # the probe and kubelet will kill the process mid-write. If Postgres
+          # really dies, the Deployment controller restarts the pod anyway.
+          resources:
+            requests:
+              cpu: {{ .Values.insights.database.resources.requests.cpu }}
+              memory: {{ .Values.insights.database.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.insights.database.resources.limits.cpu }}
+              memory: {{ .Values.insights.database.resources.limits.memory }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            # The container runtime's default 64Mi /dev/shm is too small for
+            # parallel query workers.
+            - name: shm
+              mountPath: /dev/shm
+      {{- with .Values.insights.database.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.insights.database.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: data
+          {{- if ne .Values.insights.database.storage.persistence false }}
+          persistentVolumeClaim:
+            claimName: odigos-insights-db
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: init
+          configMap:
+            name: odigos-insights-db
+        - name: shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+{{- end }}

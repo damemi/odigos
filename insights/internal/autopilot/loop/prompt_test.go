@@ -5,20 +5,20 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func TestBuildAnalysisRequestIsEvidenceOnly(t *testing.T) {
 	tx := transactionTrie{
-		Transaction: clickhouse.Transaction{ID: "GET /users", RootSpanName: "GET", RootSpanKind: "SERVER"},
-		Nodes: []clickhouse.CallTrieNode{
+		Transaction: store.Transaction{ID: "GET /users", RootSpanName: "GET", RootSpanKind: "SERVER"},
+		Nodes: []store.CallTrieNode{
 			{ID: "1", Name: "com.example.Foo.bar"},
 		},
 	}
 	ev := BuildAppEvidence(tx.Nodes)
 	req := buildFullAnalysisRequest(
-		clickhouse.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "api", ContainerName: "app"},
+		store.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "api", ContainerName: "app"},
 		[]customProbe{{RuleName: "r1", Language: "java", Target: "com.example.Foo.bar"}},
 		tx,
 		ev,

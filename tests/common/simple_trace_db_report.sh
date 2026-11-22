@@ -23,7 +23,7 @@ echo "==== Services per trace"
 jq -r 'to_entries[] | "\(.key): \([.value[].serviceName] | unique | join(","))"' "$traces_file"
 
 # simple-trace-db drops a trace from every query when one of its spans has a parent missing from the trace
-# https://github.com/odigos-io/simple-trace-db/blob/v0.0.12/src/spans-structure/reverse-trace-tree.ts
+# https://github.com/odigos-io/simple-trace-db/blob/v0.0.13/src/spans-structure/reverse-trace-tree.ts
 echo "==== Spans whose parent is missing from the trace"
 jq -r 'to_entries[] | .key as $trace | [.value[].spanId] as $ids | .value[] | select((.parentSpanId // "") != "" and (.parentSpanId | IN($ids[]) | not)) | "\($trace): \(.serviceName) \(.kind) \(.name) span=\(.spanId) parent=\(.parentSpanId)"' "$traces_file"
 

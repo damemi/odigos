@@ -8,6 +8,9 @@ spec:
     It tests that environment variables are properly detected from container runtime vs manifest,
     and that instrumentation preserves and modifies them correctly.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

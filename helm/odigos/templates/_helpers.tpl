@@ -116,13 +116,6 @@ true
 {{- end -}}
 
 {{/*
-  Bundled ClickHouse backs insights (including autopilot).
-*/}}
-{{- define "odigos.clickhouseEnabled" -}}
-{{- include "odigos.insightsEnabled" . -}}
-{{- end -}}
-
-{{/*
   Profiling is on when profiling.enabled is true.
 */}}
 {{- define "odigos.profilingEnabled" -}}
@@ -378,65 +371,15 @@ true
 {{- end }}
 
 {{/*
-  Feature-derived default resources for the shared cache when cacheDb.resources is unset.
-  Used only by cacheDb.resolvedResources; user-configured resources always win.
-  When multiple consuming features are enabled, sum each feature's defaults.
-  Both features use Burstable QoS (requests below limits). Autopilot limits
-  are 100m CPU / 500Mi memory.
-*/}}
-{{- define "cacheDb.featureDefaultResources" -}}
-{{- $ltl := eq (include "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled" .) "true" -}}
-{{- $autopilot := include "odigos.autopilotEnabled" . -}}
-{{- if and $ltl $autopilot -}}
-requests:
-  cpu: 75m
-  memory: 192Mi
-limits:
-  cpu: 300m
-  memory: 756Mi
-{{- else if $autopilot -}}
-requests:
-  cpu: 25m
-  memory: 128Mi
-limits:
-  cpu: 100m
-  memory: 500Mi
-{{- else if $ltl -}}
-requests:
-  cpu: 50m
-  memory: 64Mi
-limits:
-  cpu: 200m
-  memory: 256Mi
-{{- end -}}
-{{- end }}
-
-{{/* Effective cache resources: user override, else feature-derived defaults. */}}
-{{- define "cacheDb.resolvedResources" -}}
-{{- $cacheDb := .Values.cacheDb | default dict -}}
-{{- $resources := deepCopy (get $cacheDb "resources" | default dict) -}}
-{{- $requests := get $resources "requests" | default dict -}}
-{{- $limits := get $resources "limits" | default dict -}}
-{{- if and (empty $limits) (not (empty $requests)) -}}
-  {{- $_ := set $resources "limits" $requests -}}
-{{- else if and (empty $requests) (not (empty $limits)) -}}
-  {{- $_ := set $resources "requests" $limits -}}
-{{- else if and (empty $limits) (empty $requests) -}}
-  {{- $resources = include "cacheDb.featureDefaultResources" . | fromYaml -}}
-{{- end -}}
-{{- toYaml $resources -}}
-{{- end }}
-
-{{/*
   Soft memory cap for the cache process. User override, else ~85% of the
-  effective memory limit (Mi → mb) to leave process overhead headroom.
+  memory limit (Mi → mb) to leave process overhead headroom.
 */}}
 {{- define "cacheDb.resolvedMaxmemory" -}}
 {{- $cacheDb := .Values.cacheDb | default dict -}}
 {{- if get $cacheDb "maxmemory" -}}
 {{- get $cacheDb "maxmemory" -}}
 {{- else -}}
-{{- $resources := include "cacheDb.resolvedResources" . | fromYaml -}}
+{{- $resources := get $cacheDb "resources" | default dict -}}
 {{- $raw := (get (get $resources "limits" | default dict) "memory") | default (get (get $resources "requests" | default dict) "memory") -}}
 {{- $number := regexFind "^[0-9]+" ($raw | toString) -}}
 {{- $unit := regexFind "[a-zA-Z]+$" ($raw | toString) -}}
@@ -453,3 +396,49 @@ limits:
 {{- printf "%dmb" (div (mul $num 85) 100) -}}
 {{- end -}}
 {{- end }}
+
+{{/*
+Insights database provider: bundled (default) or external. A future "cnpg"
+value will render an operator-managed HA Postgres.
+*/}}
+{{- define "insights.database.provider" -}}
+{{- .Values.insights.database.provider | default "bundled" -}}
+{{- end -}}
+
+{{/*
+True when the chart runs the bundled single-replica Postgres.
+*/}}
+{{- define "insights.database.bundled" -}}
+{{- if eq (include "insights.database.provider" .) "bundled" -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+True when an external Postgres is referenced through an existing Secret (the
+chart then renders no DSN Secret of its own).
+*/}}
+{{- define "insights.database.usesExistingSecret" -}}
+{{- if and (eq (include "insights.database.provider" .) "external") .Values.insights.database.external.existingSecret -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
+Secret name and key holding the Insights Postgres connection URI.
+*/}}
+{{- define "insights.database.dsnSecretName" -}}
+{{- if include "insights.database.usesExistingSecret" . -}}
+{{- .Values.insights.database.external.existingSecret -}}
+{{- else -}}
+odigos-insights-db
+{{- end -}}
+{{- end -}}
+
+{{- define "insights.database.dsnSecretKey" -}}
+{{- if include "insights.database.usesExistingSecret" . -}}
+{{- .Values.insights.database.external.existingSecretKey | default "dsn" -}}
+{{- else -}}
+dsn
+{{- end -}}
+{{- end -}}

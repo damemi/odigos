@@ -13,6 +13,7 @@ import (
 	odigosclientset "github.com/odigos-io/odigos/api/generated/odigos/clientset/versioned/typed/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
+	"github.com/odigos-io/odigos/k8sutils/pkg/instrumentation_instance"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 )
 
@@ -61,7 +62,7 @@ func GetRelevantSourceResources(ctx context.Context, kubeClient kubernetes.Inter
 	}
 
 	instrumentedAppSelector := labels.SelectorFromSet(labels.Set{
-		"instrumented-app": runtimeObjectName,
+		"instrumented-app": instrumentation_instance.InstrumentedAppLabelValue(runtimeObjectName),
 	})
 	iis, err := odigosClient.InstrumentationInstances(workloadNs).List(ctx, metav1.ListOptions{LabelSelector: instrumentedAppSelector.String()})
 	if err == nil {

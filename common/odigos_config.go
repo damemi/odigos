@@ -867,8 +867,8 @@ func (o *OdigosConfiguration) InsightsEnabled() bool {
 	return o != nil && InsightsPipelineActive(o.Insights)
 }
 
-// AutopilotActive reports whether the autopilot loop (trace–profile
-// correlation) should run. Opt-in: Enabled must be explicitly true.
+// AutopilotActive reports whether autopilot should run. Opt-in: Enabled must
+// be explicitly true.
 func AutopilotActive(c *AutopilotConfiguration) bool {
 	return c != nil && c.Enabled != nil && *c.Enabled
 }

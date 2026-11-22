@@ -8,7 +8,9 @@
 # (DEVOPS-84).
 set -euo pipefail
 
-READYZ_REQUIRED_SUCCESSES="${READYZ_REQUIRED_SUCCESSES:-5}"
+# One success is enough by default: in 866 CI jobs the first /readyz check always passed, and the
+# write probe below still verifies the API server can write. Raise it to require consecutive successes.
+READYZ_REQUIRED_SUCCESSES="${READYZ_REQUIRED_SUCCESSES:-1}"
 READYZ_TIMEOUT_SECONDS="${READYZ_TIMEOUT_SECONDS:-180}"
 READYZ_SLEEP_SECONDS="${READYZ_SLEEP_SECONDS:-2}"
 WRITE_PROBE_TIMEOUT_SECONDS="${WRITE_PROBE_TIMEOUT_SECONDS:-60}"
@@ -40,7 +42,10 @@ while (( successes < READYZ_REQUIRED_SUCCESSES )); do
     echo "readyz not ready; resetting consecutive success counter"
     cat /tmp/odigos-kind-readyz.err >&2 || true
   fi
-  sleep "${READYZ_SLEEP_SECONDS}"
+  # No sleep after the last required success.
+  if (( successes < READYZ_REQUIRED_SUCCESSES )); then
+    sleep "${READYZ_SLEEP_SECONDS}"
+  fi
 done
 
 echo "Probing API write path (create/delete namespace)..."

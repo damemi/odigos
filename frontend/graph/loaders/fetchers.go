@@ -14,6 +14,7 @@ import (
 	"github.com/odigos-io/odigos/frontend/graph/model"
 	"github.com/odigos-io/odigos/frontend/graph/status"
 	"github.com/odigos-io/odigos/frontend/kube"
+	"github.com/odigos-io/odigos/k8sutils/pkg/instrumentation_instance"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	openshiftappsv1 "github.com/openshift/api/apps/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -765,7 +766,7 @@ func fetchInstrumentationInstances(ctx context.Context, logger logr.Logger, filt
 		// fetch only the instrumentation instances for the specific workload.
 		instrumentationConfigName := workload.CalculateWorkloadRuntimeObjectName(filters.SingleWorkload.WorkloadName, k8sconsts.WorkloadKind(filters.SingleWorkload.WorkloadKind))
 		matchingLabels = map[string]string{
-			consts.InstrumentedAppNameLabel: instrumentationConfigName,
+			consts.InstrumentedAppNameLabel: instrumentation_instance.InstrumentedAppLabelValue(instrumentationConfigName),
 		}
 	}
 
@@ -789,10 +790,10 @@ func fetchInstrumentationInstances(ctx context.Context, logger logr.Logger, filt
 			continue
 		}
 
-		instrumentedAppLabel, hasAppLabel := ii.Labels[consts.InstrumentedAppNameLabel]
+		instrumentedAppName, hasAppName := instrumentation_instance.InstrumentedAppName(&ii)
 		var workloadId model.K8sWorkloadID
-		if hasAppLabel {
-			instrumentedAppDetails, err := workload.ExtractWorkloadInfoFromRuntimeObjectName(instrumentedAppLabel, ii.Namespace)
+		if hasAppName {
+			instrumentedAppDetails, err := workload.ExtractWorkloadInfoFromRuntimeObjectName(instrumentedAppName, ii.Namespace)
 			if err == nil {
 				workloadId = model.K8sWorkloadID{
 					Namespace: instrumentedAppDetails.Namespace,
@@ -823,7 +824,7 @@ func fetchInstrumentationInstances(ctx context.Context, logger logr.Logger, filt
 		}
 		byPodContainer[containerId] = append(byPodContainer[containerId], &ii)
 
-		if !hasAppLabel || workloadId.Name == "" {
+		if !hasAppName || workloadId.Name == "" {
 			continue
 		}
 		workloadContainerId := WorkloadContainerId{

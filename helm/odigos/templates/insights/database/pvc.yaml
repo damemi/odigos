@@ -1,0 +1,23 @@
+{{- if and .Values.insights.enabled (include "insights.database.bundled" .) (ne .Values.insights.database.storage.persistence false) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: odigos-insights-db
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: odigos-insights-db
+    odigos.io/system-object: "true"
+  # Keep the PVC around even if someone helm-uninstalls the release.
+  # Insights data is the one thing that should survive a wipe of every
+  # other resource in the chart.
+  annotations:
+    helm.sh/resource-policy: keep
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.insights.database.storage.storageClassName }}
+  storageClassName: {{ .Values.insights.database.storage.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.insights.database.storage.size }}
+{{- end }}

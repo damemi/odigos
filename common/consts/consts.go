@@ -41,6 +41,8 @@ const (
 	// Used to label instrumentation instances by the corresponding
 	// instrumented app for better query performance.
 	InstrumentedAppNameLabel = "instrumented-app"
+	// Holds the full instrumented app name, since the label value is a hash of it.
+	InstrumentedAppNameAnnotation = "odigos.io/instrumented-app"
 
 	// CRD types
 	InstrumentationConfig   = "InstrumentationConfig"

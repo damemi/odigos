@@ -455,11 +455,13 @@ jobs:
           # come from central-values.yaml.
           IMAGE_TAG: ${{ steps.latest-release.outputs.tag }}
           LATEST_RELEASE_TAG: ${{ steps.latest-release.outputs.tag }}
+          DEPOT_PULL_TOKEN_TEST_IMAGES: ${{ secrets.DEPOT_PULL_TOKEN_TEST_IMAGES }}
         run: |
           set -euo pipefail
           minor=$(kubectl version -o json | jq -r '.serverVersion.minor' | tr -dc '0-9')
           chainsaw test "tests/e2e/$TEST" --apply-timeout 30s --values - <<EOF
           k8sMinorVersion: ${minor}
+          depotPullTokenTestImages: "${DEPOT_PULL_TOKEN_TEST_IMAGES}"
           EOF
 
       - name: Cluster diagnostics

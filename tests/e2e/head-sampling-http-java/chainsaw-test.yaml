@@ -12,6 +12,9 @@ spec:
     HTTP client outbound asserts are omitted until tail-sampling can match url.full
     (Java client spans lack url.template / url.path).
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

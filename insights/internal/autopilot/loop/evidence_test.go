@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func TestBuildAppEvidenceMergesPaths(t *testing.T) {
@@ -13,7 +13,7 @@ func TestBuildAppEvidenceMergesPaths(t *testing.T) {
 	svc := "void com.rowan.notify.Service.handle()"
 	pub := "void com.rowan.notify.RenderMessageProducer.publish(java.lang.String, com.rowan.notify.DocumentRequest)"
 
-	nodes := []clickhouse.CallTrieNode{
+	nodes := []store.CallTrieNode{
 		{ID: "1", ParentID: "", Name: ctrl},
 		{ID: "2", ParentID: "1", Name: svc},
 		{ID: "3", ParentID: "1", Name: pub},
@@ -36,49 +36,51 @@ func TestBuildAppEvidenceMergesPaths(t *testing.T) {
 	}
 }
 
-func TestBuildAppEvidenceIgnoresLibraryNodes(t *testing.T) {
+// Runtime and Odigos agent frames are not application code, so evidence skips
+// over them. Libraries count as application code (see autopilot.FrameKindApp).
+func TestBuildAppEvidenceIgnoresNonAppNodes(t *testing.T) {
 	ctrl := "com.rowan.notify.Controller.entry"
 	svc := "void com.rowan.notify.Service.handle()"
 	repo := "void com.rowan.notify.Repo.load()"
-	spring := "void org.springframework.web.servlet.DispatcherServlet.doDispatch()"
-	tomcat := "void org.apache.catalina.core.StandardWrapperValve.invoke()"
+	runtime := "void java.lang.reflect.Method.invoke(java.lang.Object, java.lang.Object[])"
+	agent := "void io.odigos.spring.servlet.SpringServletAdvice.detach(long)"
 
-	plain := []clickhouse.CallTrieNode{
+	plain := []store.CallTrieNode{
 		{ID: "1", Name: ctrl},
 		{ID: "2", ParentID: "1", Name: svc},
 		{ID: "3", ParentID: "2", Name: repo},
 	}
-	withLibs := []clickhouse.CallTrieNode{
+	withNonApp := []store.CallTrieNode{
 		{ID: "1", Name: ctrl},
-		{ID: "l1", ParentID: "1", Name: spring},
-		{ID: "2", ParentID: "l1", Name: svc},
-		{ID: "l2", ParentID: "2", Name: spring},
-		{ID: "l3", ParentID: "l2", Name: tomcat},
-		{ID: "3", ParentID: "l3", Name: repo},
+		{ID: "r1", ParentID: "1", Name: runtime},
+		{ID: "2", ParentID: "r1", Name: svc},
+		{ID: "r2", ParentID: "2", Name: runtime},
+		{ID: "a1", ParentID: "r2", Name: agent},
+		{ID: "3", ParentID: "a1", Name: repo},
 	}
 	want := BuildAppEvidence(plain)
-	got := BuildAppEvidence(withLibs)
+	got := BuildAppEvidence(withNonApp)
 	if !reflect.DeepEqual(want, got) {
 		t.Fatalf("evidence differs:\nwant %+v\ngot  %+v", want, got)
 	}
 	if hashEvidence(want) != hashEvidence(got) {
-		t.Fatal("evidence hash differs with library nodes")
+		t.Fatal("evidence hash differs with non-app nodes")
 	}
 	if len(got.CallGraph) != 2 {
 		t.Fatalf("expected 2 edges, got %+v", got.CallGraph)
 	}
 }
 
-func TestBuildAppEvidenceLibraryParentChainGuards(t *testing.T) {
+func TestBuildAppEvidenceNonAppParentChainGuards(t *testing.T) {
 	svc := "void com.rowan.notify.Service.handle()"
-	spring := "void org.springframework.web.servlet.DispatcherServlet.doDispatch()"
-	nodes := []clickhouse.CallTrieNode{
-		{ID: "a", ParentID: "b", Name: spring}, // cycle of library nodes
-		{ID: "b", ParentID: "a", Name: spring},
+	runtime := "void java.lang.reflect.Method.invoke(java.lang.Object, java.lang.Object[])"
+	nodes := []store.CallTrieNode{
+		{ID: "a", ParentID: "b", Name: runtime}, // cycle of non-app nodes
+		{ID: "b", ParentID: "a", Name: runtime},
 		{ID: "1", ParentID: "a", Name: svc},
 		{ID: "2", ParentID: "missing", Name: svc},
-		{ID: "3", ParentID: "l", Name: svc}, // library root, no app ancestor
-		{ID: "l", Name: spring},
+		{ID: "3", ParentID: "r", Name: svc}, // non-app root, no app ancestor
+		{ID: "r", Name: runtime},
 	}
 	ev := BuildAppEvidence(nodes)
 	if len(ev.CallGraph) != 0 {

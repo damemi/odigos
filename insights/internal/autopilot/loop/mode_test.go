@@ -14,7 +14,7 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/consts"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func TestReadAutopilotMode(t *testing.T) {
@@ -56,7 +56,7 @@ func TestProcessSourceModeOffSkipsAnalysis(t *testing.T) {
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
 	m := &Manager{Client: c}
-	source := clickhouse.SourceKey{
+	source := store.SourceKey{
 		Namespace:    "shop",
 		WorkloadKind: "Deployment",
 		WorkloadName: "checkout",

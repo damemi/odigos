@@ -5,6 +5,9 @@ metadata:
 spec:
   description: This test checks if a broken instrumentation will not be rolledback after the rollback window expired.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

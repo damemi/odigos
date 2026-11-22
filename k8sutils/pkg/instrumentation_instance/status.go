@@ -101,8 +101,11 @@ func UpdateInstrumentationInstanceStatus(ctx context.Context, owner client.Objec
 				Name:      instrumentationInstanceName,
 				Namespace: owner.GetNamespace(),
 				Labels: map[string]string{
-					consts.InstrumentedAppNameLabel: instrumentedAppName,
+					consts.InstrumentedAppNameLabel: InstrumentedAppLabelValue(instrumentedAppName),
 					odigosv1.OwnerPodNameLabel:      owner.GetName(),
+				},
+				Annotations: map[string]string{
+					consts.InstrumentedAppNameAnnotation: instrumentedAppName,
 				},
 			},
 			Spec: odigosv1.InstrumentationInstanceSpec{

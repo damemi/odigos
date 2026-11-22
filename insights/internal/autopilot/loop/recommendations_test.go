@@ -4,12 +4,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func TestStoredRecommendationsRoundTrip(t *testing.T) {
-	source := clickhouse.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "app", ContainerName: "c"}
+	source := store.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "app", ContainerName: "c"}
 	recs := []schema.Recommendation{
 		{
 			Category: schema.CategorySecurity,
@@ -49,18 +49,18 @@ func TestStoredRecommendationsRoundTrip(t *testing.T) {
 }
 
 func TestUnstoredRecommendations(t *testing.T) {
-	rec := func(lang, target string) clickhouse.Recommendation {
-		return clickhouse.Recommendation{Language: lang, Target: target}
+	rec := func(lang, target string) store.Recommendation {
+		return store.Recommendation{Language: lang, Target: target}
 	}
-	existing := []clickhouse.Recommendation{rec("java", "A.b")}
-	recs := []clickhouse.Recommendation{
+	existing := []store.Recommendation{rec("java", "A.b")}
+	recs := []store.Recommendation{
 		rec("java", "A.b"), // already stored
 		rec("go", "p.F"),
 		rec("go", "p.F"),  // repeated in the same response
 		rec("cpp", "A.b"), // same target, different language
 	}
 	got := unstoredRecommendations(recs, existing)
-	want := []clickhouse.Recommendation{rec("go", "p.F"), rec("cpp", "A.b")}
+	want := []store.Recommendation{rec("go", "p.F"), rec("cpp", "A.b")}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}

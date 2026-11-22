@@ -12,21 +12,18 @@ require (
 )
 
 require (
-	github.com/ClickHouse/ch-go v0.73.0 // indirect
-	github.com/ClickHouse/clickhouse-go/v2 v2.47.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/cenkalti/backoff/v7 v7.0.0 // indirect
-	github.com/go-faster/city v1.0.1 // indirect
-	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-openapi/swag/pools v0.28.0 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
+	github.com/jackc/pgpassfile v1.0.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.13.0 // indirect
+	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/odigos-io/odigos/actions v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/instrumentationrules v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/recommendations v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/status v0.0.0-00010101000000-000000000000 // indirect
-	github.com/paulmach/orb v0.13.0 // indirect
-	github.com/segmentio/asm v1.2.1 // indirect
-	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opentelemetry.io/collector/processor/xprocessor v0.159.0 // indirect

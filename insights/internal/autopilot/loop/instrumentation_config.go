@@ -9,13 +9,13 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/k8sutils/pkg/workload"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 // instrumentationConfigForSource loads the InstrumentationConfig for the source
 // workload. The object name is "<kind>-<name>" in the workload namespace
 // (for example deployment-checkout). A missing object returns a NotFound error.
-func instrumentationConfigForSource(ctx context.Context, c client.Client, source clickhouse.SourceKey) (*odigosv1.InstrumentationConfig, error) {
+func instrumentationConfigForSource(ctx context.Context, c client.Client, source store.SourceKey) (*odigosv1.InstrumentationConfig, error) {
 	if c == nil {
 		return nil, nil
 	}

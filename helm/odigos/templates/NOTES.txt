@@ -16,20 +16,20 @@ Use collectorGateway.traceAggregation.syncWait and collectorGateway.traceAggrega
 Their defaults apply while they are unset.
 {{- end }}{{- end }}{{- end }}
 
-{{ if and (include "odigos.insightsEnabled" .) (eq .Values.insights.clickhouse.storage.persistence false) }}
-{{- $existingPVC := lookup "v1" "PersistentVolumeClaim" .Release.Namespace "odigos-insights-clickhouse" }}
+{{ if and .Values.insights.enabled (include "insights.database.bundled" .) (eq .Values.insights.database.storage.persistence false) }}
+{{- $existingPVC := lookup "v1" "PersistentVolumeClaim" .Release.Namespace "odigos-insights-db" }}
 
 WARNING: Insights persistence is disabled.
 
-ClickHouse is using emptyDir. Insights data will be lost when the
-ClickHouse pod is recreated or rescheduled.
+Postgres is using emptyDir. Insights data will be lost when the
+Postgres pod is recreated or rescheduled.
 
 You can enable persistent storage by setting:
 
-  insights.clickhouse.storage.persistence=true
+  insights.database.storage.persistence=true
 
 {{ if $existingPVC }}
-A previous ClickHouse PVC named "odigos-insights-clickhouse" still exists.
+A previous Postgres PVC named "odigos-insights-db" still exists.
 
 The PVC was intentionally retained to protect existing Insights data and is
 not used while persistence is disabled.

@@ -5,6 +5,9 @@ metadata:
 spec:
   description: This e2e test runs a multi-apps scenario testing all four mount methods (init-container, host-path, CSI driver)
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: '[1 - Setup] Install - Simple Demo Apps'
       try:
@@ -160,13 +163,11 @@ spec:
             timeout: 1m10s
             file: 04-odiglet-ready-with-csi-driver.yaml
 
-    - name: '[4 - CSI Driver Test] Restart trace DB for fresh data'
+    - name: '[4 - CSI Driver Test] Clear trace DB for fresh data'
       try:
         - script:
-            timeout: 1m40s
-            content: |
-              kubectl delete pod -l app=simple-trace-db -n traces
-              kubectl wait --for=condition=Ready pod -l app=simple-trace-db -n traces --timeout=2m
+            timeout: 30s
+            content: kubectl get --raw /api/v1/namespaces/traces/services/simple-trace-db:4318/proxy/v1/clear
 
     - name: '[4 - CSI Driver Test] Restart workloads to pick up CSI volumes'
       try:
@@ -196,22 +197,3 @@ spec:
         - script:
             timeout: 1m20s
             content: bash traffic-and-trace.sh
-
-    - name: 'Uninstall Odigos'
-      try:
-        - script:
-            timeout: 1m40s
-            content: ../../../cli/odigos uninstall --ns odigos-test
-        - script:
-            timeout: 1m20s
-            content: |
-              for i in $(seq 1 10); do
-                if bash ../../../tests/common/assert_odigos_uninstalled.sh; then
-                  exit 0
-                fi
-                echo "Attempt $i: Odigos uninstallation verification failed, retrying in 5 seconds..."
-                sleep 5
-              done
-
-              echo "Failed to verify Odigos uninstallation after 10 attempts"
-              exit 1

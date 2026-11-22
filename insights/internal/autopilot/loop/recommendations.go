@@ -3,18 +3,18 @@ package loop
 import (
 	"strings"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
-// storedRecommendations maps model recommendations onto tx_recommendations
+// storedRecommendations maps model recommendations onto autopilot_recommendations
 // rows. Every recommendation is kept, including probes another rule already
 // covers: whether to apply one is decided when rules are reconciled, so it can
 // change when that other rule does.
-func storedRecommendations(source clickhouse.SourceKey, transactionID, revision string, recs []schema.Recommendation) []clickhouse.Recommendation {
-	out := make([]clickhouse.Recommendation, 0, len(recs))
+func storedRecommendations(source store.SourceKey, transactionID, revision string, recs []schema.Recommendation) []store.Recommendation {
+	out := make([]store.Recommendation, 0, len(recs))
 	for _, rec := range recs {
-		out = append(out, clickhouse.Recommendation{
+		out = append(out, store.Recommendation{
 			Namespace:          source.Namespace,
 			WorkloadKind:       source.WorkloadKind,
 			WorkloadName:       source.WorkloadName,
@@ -40,7 +40,7 @@ func storedRecommendations(source clickhouse.SourceKey, transactionID, revision 
 
 // recommendationFromStored is the inverse of storedRecommendations, used to
 // rebuild rule probes from the store.
-func recommendationFromStored(r clickhouse.Recommendation) schema.Recommendation {
+func recommendationFromStored(r store.Recommendation) schema.Recommendation {
 	return schema.Recommendation{
 		Category: r.Category,
 		Function: r.Function,
@@ -61,12 +61,12 @@ func recommendationFromStored(r clickhouse.Recommendation) schema.Recommendation
 // unstoredRecommendations drops recommendations whose (Language, Target) is
 // already in existing or earlier in recs, so the store keeps one row per
 // probe instead of one per analysis that repeats it.
-func unstoredRecommendations(recs, existing []clickhouse.Recommendation) []clickhouse.Recommendation {
+func unstoredRecommendations(recs, existing []store.Recommendation) []store.Recommendation {
 	have := make(map[string]bool, len(existing)+len(recs))
 	for _, r := range existing {
 		have[r.Language+"|"+r.Target] = true
 	}
-	var out []clickhouse.Recommendation
+	var out []store.Recommendation
 	for _, r := range recs {
 		k := r.Language + "|" + r.Target
 		if have[k] {

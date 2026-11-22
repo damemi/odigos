@@ -3,15 +3,14 @@
 Profiles-only exporter for the autopilot loop. Writes linked sample stacks
 to the shared cacheDb Redis (logical DB 1, separate from URL-templatization on
 DB 0) as an immutable Hash per trace. The insights service later correlates
-those stacks into call-trie structure in ClickHouse.
+those stacks into call-trie structure in its Postgres.
 
 - Key: `odigos:autopilot:profile:<hex(trace)>`
 - Field: `<hex(span)>:<hex(sha1(value)[:8])>`, so each distinct stack (sample
   type + frames) of a span is kept once. All samples in a profile share its
   time, so time is not part of the field.
 - Value: JSON stack blob (`st` + root-first `frames`). JDK/VM and agent frames are
-  dropped; library/framework frames are kept, each consecutive run collapsed to its
-  root-most frame. Depth is capped at 64, dropping library frames before app frames.
+  dropped; all other frames are kept. Depth is capped at 64, keeping the leaf-most frames.
 - Cap: 500 fields per trace hash; further stacks are dropped
 - Whole-trace TTL is `2 × group_by_trace_wait_duration` (gateway groupbytrace
   wait), refreshed when a new field is added

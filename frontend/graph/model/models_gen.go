@@ -188,7 +188,7 @@ type AutopilotTransaction struct {
 	// if stored in autopilot.tx_transactions. Null when missing or autopilot is off.
 	SampleTrace *string `json:"sampleTrace,omitempty"`
 	// Flat call-path trie nodes for this transaction. Resolved on demand from
-	// ClickHouse tx_call_trie when selected; null when missing or autopilot is
+	// the autopilot call tries when selected; null when missing or autopilot is
 	// off. Empty when the query returns no nodes. Build the tree in the client via
 	// id/parentId.
 	CallTrie []*AutopilotCallTrieNode `json:"callTrie,omitempty"`
@@ -1822,65 +1822,109 @@ type InsightsStorageConnection struct {
 	Version       string  `json:"version"`
 	Database      string  `json:"database"`
 	Error         *string `json:"error,omitempty"`
+	UptimeSeconds float64 `json:"uptimeSeconds"`
+}
+
+// Server-side connections to the Insights database by state, and the client
+// pool of the replica that served the request.
+type InsightsStorageConnections struct {
+	Active            int     `json:"active"`
+	Idle              int     `json:"idle"`
+	IdleInTransaction int     `json:"idleInTransaction"`
+	Total             int     `json:"total"`
+	Max               int     `json:"max"`
+	PoolAcquired      int     `json:"poolAcquired"`
+	PoolIdle          int     `json:"poolIdle"`
+	PoolTotal         int     `json:"poolTotal"`
+	PoolMax           int     `json:"poolMax"`
+	PoolWaitCount     int     `json:"poolWaitCount"`
+	PoolWaitSeconds   float64 `json:"poolWaitSeconds"`
+}
+
+// Cumulative database counters since statsSince.
+type InsightsStorageDatabaseStats struct {
+	CacheHitPercent float64 `json:"cacheHitPercent"`
+	Commits         int     `json:"commits"`
+	Rollbacks       int     `json:"rollbacks"`
+	Deadlocks       int     `json:"deadlocks"`
+	TempBytes       int     `json:"tempBytes"`
+	StatsSince      *string `json:"statsSince,omitempty"`
 }
 
 type InsightsStorageDisk struct {
-	InsightsBytes  int                       `json:"insightsBytes"`
-	TotalBytes     int                       `json:"totalBytes"`
-	UsedBytes      int                       `json:"usedBytes"`
-	AvailableBytes int                       `json:"availableBytes"`
-	UsedPercent    float64                   `json:"usedPercent"`
-	Status         InsightsStorageDiskStatus `json:"status"`
+	DatabaseBytes int `json:"databaseBytes"`
+	// Size of the bundled database volume. 0 when unknown (external Postgres).
+	VolumeBytes int                       `json:"volumeBytes"`
+	UsedPercent float64                   `json:"usedPercent"`
+	Status      InsightsStorageDiskStatus `json:"status"`
 }
 
 type InsightsStorageHealth struct {
-	CheckedAt     string                        `json:"checkedAt"`
-	Status        InsightsStorageHealthStatus   `json:"status"`
-	Connection    *InsightsStorageConnection    `json:"connection"`
-	Disk          *InsightsStorageDisk          `json:"disk"`
-	Memory        *InsightsStorageMemory        `json:"memory"`
-	Queries       *InsightsStorageQueries       `json:"queries"`
-	Tables        []*InsightsStorageTable       `json:"tables"`
-	WritePressure *InsightsStorageWritePressure `json:"writePressure"`
-	Writeback     *InsightsStorageWriteback     `json:"writeback"`
+	CheckedAt   string                        `json:"checkedAt"`
+	Status      InsightsStorageHealthStatus   `json:"status"`
+	Connection  *InsightsStorageConnection    `json:"connection"`
+	Disk        *InsightsStorageDisk          `json:"disk"`
+	Connections *InsightsStorageConnections   `json:"connections"`
+	Database    *InsightsStorageDatabaseStats `json:"database"`
+	Queries     *InsightsStorageQueries       `json:"queries"`
+	Tables      []*InsightsStorageTable       `json:"tables"`
+	Maintenance *InsightsStorageMaintenance   `json:"maintenance"`
+	Retention   *InsightsStorageRetention     `json:"retention"`
+	Writeback   *InsightsStorageWriteback     `json:"writeback"`
 }
 
-type InsightsStorageMemory struct {
-	ProcessRssBytes int `json:"processRssBytes"`
-	CgroupUsedBytes int `json:"cgroupUsedBytes"`
-	// 0 means no limit.
-	CgroupTotalBytes int     `json:"cgroupTotalBytes"`
-	UptimeSeconds    float64 `json:"uptimeSeconds"`
+type InsightsStorageMaintenance struct {
+	DeadRows                 int     `json:"deadRows"`
+	VacuumsRunning           int     `json:"vacuumsRunning"`
+	WaitingLocks             int     `json:"waitingLocks"`
+	OldestTransactionSeconds float64 `json:"oldestTransactionSeconds"`
 }
 
 type InsightsStorageQueries struct {
-	Active          int                     `json:"active"`
-	LongestSeconds  float64                 `json:"longestSeconds"`
-	PeakMemoryBytes int                     `json:"peakMemoryBytes"`
-	Items           []*InsightsStorageQuery `json:"items"`
-	RecentHeaviest  []*InsightsStorageQuery `json:"recentHeaviest"`
-	RecentLatest    []*InsightsStorageQuery `json:"recentLatest"`
+	Active         int                     `json:"active"`
+	LongestSeconds float64                 `json:"longestSeconds"`
+	Running        []*InsightsStorageQuery `json:"running"`
+	// Statements with the most total execution time. Empty when
+	// statementsAvailable is false (pg_stat_statements not installed).
+	TopStatements       []*InsightsStorageStatement `json:"topStatements"`
+	StatementsAvailable bool                        `json:"statementsAvailable"`
 }
 
 type InsightsStorageQuery struct {
 	ElapsedSeconds float64 `json:"elapsedSeconds"`
 	User           string  `json:"user"`
-	MemoryBytes    int     `json:"memoryBytes"`
-	Query          string  `json:"query"`
-	// Omitted for still-running queries.
-	FinishedAt *string `json:"finishedAt,omitempty"`
+	State          string  `json:"state"`
+	// <type>:<event> the query is waiting on, empty when running.
+	WaitEvent string `json:"waitEvent"`
+	Query     string `json:"query"`
+}
+
+type InsightsStorageRetention struct {
+	ObservationRetentionDays int     `json:"observationRetentionDays"`
+	RelationRetentionDays    int     `json:"relationRetentionDays"`
+	AttemptRetentionDays     int     `json:"attemptRetentionDays"`
+	EverRan                  bool    `json:"everRan"`
+	LastRunAt                *string `json:"lastRunAt,omitempty"`
+	LastRunOk                bool    `json:"lastRunOk"`
+	LastError                *string `json:"lastError,omitempty"`
+	ObservationsDeleted      int     `json:"observationsDeleted"`
+	AttemptsDeleted          int     `json:"attemptsDeleted"`
+}
+
+type InsightsStorageStatement struct {
+	Query        string  `json:"query"`
+	Calls        int     `json:"calls"`
+	TotalSeconds float64 `json:"totalSeconds"`
+	MeanMs       float64 `json:"meanMs"`
+	Rows         int     `json:"rows"`
 }
 
 type InsightsStorageTable struct {
-	Name        string `json:"name"`
-	Rows        int    `json:"rows"`
-	BytesOnDisk int    `json:"bytesOnDisk"`
-	ActiveParts int    `json:"activeParts"`
-}
-
-type InsightsStorageWritePressure struct {
-	UnfinishedMutations int `json:"unfinishedMutations"`
-	ActiveParts         int `json:"activeParts"`
+	Name         string  `json:"name"`
+	Rows         int     `json:"rows"`
+	DeadRows     int     `json:"deadRows"`
+	BytesOnDisk  int     `json:"bytesOnDisk"`
+	LastVacuumAt *string `json:"lastVacuumAt,omitempty"`
 }
 
 type InsightsStorageWriteback struct {
@@ -2338,7 +2382,7 @@ type K8sWorkloadContainer struct {
 	Instrumentations  []*K8sWorkloadPodContainerProcessInstrumentation `json:"instrumentations,omitempty"`
 	URLTemplatization *K8sWorkloadContainerURLTemplatization           `json:"urlTemplatization,omitempty"`
 	// Autopilot: transactions and detected stack functions for this
-	// container, read from autopilot ClickHouse (tx_call_trie_structure). Empty when
+	// container, read from the autopilot call tries in the insights Postgres. Empty when
 	// autopilot is disabled or nothing has been stored yet.
 	// Ordered by seenCount desc, then id. Select callTrie only with a narrow page
 	// (ids or limit): it costs one ClickHouse query per returned transaction.

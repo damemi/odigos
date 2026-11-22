@@ -3,8 +3,8 @@ package loop
 import (
 	"fmt"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 // Reasons an analysisPlan calls the model.
@@ -40,7 +40,7 @@ type analysisPlan struct {
 // planAnalysis compares observed evidence with lastSuccess, the newest
 // successful run at the current revision (nil if none). Failed runs never
 // reach here, so edges from a failed or skipped call stay pending.
-func planAnalysis(lastSuccess *clickhouse.Run, observed AppEvidence) analysisPlan {
+func planAnalysis(lastSuccess *store.Run, observed AppEvidence) analysisPlan {
 	if lastSuccess == nil {
 		return fullPlan(reasonNoPriorSuccess, observed)
 	}

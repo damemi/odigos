@@ -12,26 +12,26 @@ import (
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/api/instrumentationrules"
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 )
 
-// recommendationStore is the part of the ClickHouse client rules are
+// recommendationStore is the part of the autopilot store rules are
 // reconciled from. Tests substitute it.
 type recommendationStore interface {
-	ListRecommendations(ctx context.Context, source clickhouse.SourceKey) ([]clickhouse.Recommendation, error)
-	ListRecommendedWorkloads(ctx context.Context) ([]clickhouse.SourceKey, error)
+	ListRecommendations(ctx context.Context, source store.SourceKey) ([]store.Recommendation, error)
+	ListRecommendedWorkloads(ctx context.Context) ([]store.SourceKey, error)
 }
 
 func (m *Manager) recommendationStore() recommendationStore {
 	if m.recommendations != nil {
 		return m.recommendations
 	}
-	return m.ClickHouse
+	return m.Store
 }
 
 // reconcileRules converges each workload's autopilot InstrumentationRule
-// to the probes stored in tx_recommendations. It covers every workload with
+// to the probes stored in autopilot_recommendations. It covers every workload with
 // stored recommendations plus every rule the loop manages, so a deleted rule
 // is recreated and a rule for a removed workload is deleted.
 func (m *Manager) reconcileRules(ctx context.Context, mode string) {
@@ -57,7 +57,7 @@ func (m *Manager) reconcileRules(ctx context.Context, mode string) {
 
 // ruleWorkloads returns the union of workloads with stored recommendations
 // and workloads named by managed rules, as container-less keys.
-func (m *Manager) ruleWorkloads(ctx context.Context) ([]clickhouse.SourceKey, error) {
+func (m *Manager) ruleWorkloads(ctx context.Context) ([]store.SourceKey, error) {
 	stored, err := m.recommendationStore().ListRecommendedWorkloads(ctx)
 	if err != nil {
 		return nil, err
@@ -74,12 +74,12 @@ func (m *Manager) ruleWorkloads(ctx context.Context) ([]clickhouse.SourceKey, er
 	// the workload identity.
 	type workloadID struct{ namespace, kind, name string }
 	seen := map[workloadID]bool{}
-	var out []clickhouse.SourceKey
-	add := func(w clickhouse.SourceKey) {
+	var out []store.SourceKey
+	add := func(w store.SourceKey) {
 		id := workloadID{w.Namespace, w.WorkloadKind, w.WorkloadName}
 		if !seen[id] {
 			seen[id] = true
-			out = append(out, clickhouse.SourceKey{Namespace: w.Namespace, WorkloadKind: w.WorkloadKind, WorkloadName: w.WorkloadName})
+			out = append(out, store.SourceKey{Namespace: w.Namespace, WorkloadKind: w.WorkloadKind, WorkloadName: w.WorkloadName})
 		}
 	}
 	for _, w := range stored {
@@ -94,15 +94,15 @@ func (m *Manager) ruleWorkloads(ctx context.Context) ([]clickhouse.SourceKey, er
 }
 
 // ruleWorkload reads the workload a managed rule targets from its scope.
-func ruleWorkload(rule *odigosv1.InstrumentationRule) (clickhouse.SourceKey, bool) {
+func ruleWorkload(rule *odigosv1.InstrumentationRule) (store.SourceKey, bool) {
 	if rule.Spec.Scopes == nil || len(rule.Spec.Scopes.Sources) != 1 {
-		return clickhouse.SourceKey{}, false
+		return store.SourceKey{}, false
 	}
 	s := rule.Spec.Scopes.Sources[0]
-	return clickhouse.SourceKey{Namespace: s.Namespace, WorkloadKind: string(s.Kind), WorkloadName: s.Name}, true
+	return store.SourceKey{Namespace: s.Namespace, WorkloadKind: string(s.Kind), WorkloadName: s.Name}, true
 }
 
-func (m *Manager) reconcileRule(ctx context.Context, w clickhouse.SourceKey, mode string) error {
+func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode string) error {
 	key := client.ObjectKey{Namespace: env.GetCurrentNamespace(), Name: autopilotRuleObjectName(w)}
 	var rule odigosv1.InstrumentationRule
 	found := true
@@ -206,7 +206,7 @@ func (m *Manager) deleteRule(ctx context.Context, rule *odigosv1.Instrumentation
 // desiredProbes builds the rule's probes from stored recommendations, oldest
 // first, leaving out probes another enabled rule already provides and keeping
 // the workload within maxProbes. It returns nil when nothing is left.
-func (m *Manager) desiredProbes(ctx context.Context, w clickhouse.SourceKey, ruleObject string) (*instrumentationrules.CustomInstrumentationsWithMetadata, error) {
+func (m *Manager) desiredProbes(ctx context.Context, w store.SourceKey, ruleObject string) (*instrumentationrules.CustomInstrumentationsWithMetadata, error) {
 	stored, err := m.recommendationStore().ListRecommendations(ctx, w)
 	if err != nil {
 		return nil, err
@@ -221,7 +221,7 @@ func (m *Manager) desiredProbes(ctx context.Context, w clickhouse.SourceKey, rul
 // buildDesiredProbes fills the slots other rules leave under maxProbes with
 // stored recommendations in FirstSeen order, so the oldest probes keep their
 // place when the cap is lowered.
-func buildDesiredProbes(stored []clickhouse.Recommendation, others []customProbe, maxProbes int) (*instrumentationrules.CustomInstrumentationsWithMetadata, error) {
+func buildDesiredProbes(stored []store.Recommendation, others []customProbe, maxProbes int) (*instrumentationrules.CustomInstrumentationsWithMetadata, error) {
 	if maxProbes < 1 {
 		maxProbes = defaultMaxProbesPerWorkload
 	}
@@ -269,7 +269,7 @@ func probeCount(ci *instrumentationrules.CustomInstrumentationsWithMetadata) int
 // other rules plus every stored recommendation, applied or not. Reading our
 // own probes from the store rather than our rule keeps the list right while
 // the rule is missing or in dry-run.
-func (m *Manager) probesForAnalysis(ctx context.Context, source clickhouse.SourceKey) ([]customProbe, error) {
+func (m *Manager) probesForAnalysis(ctx context.Context, source store.SourceKey) ([]customProbe, error) {
 	others, err := listCustomProbesForSource(ctx, m.Client, source, autopilotRuleObjectName(source))
 	if err != nil {
 		return nil, err

@@ -64,7 +64,7 @@ func storedSettings() repo.SystemSettings {
 }
 
 func TestApplySystemSettings_ReadFailureDoesNotWipeInventory(t *testing.T) {
-	r := &stubSettingsRepo{stored: storedSettings(), getErr: errors.New("clickhouse: read timeout")}
+	r := &stubSettingsRepo{stored: storedSettings(), getErr: errors.New("postgres: read timeout")}
 	api, admin := settingsAPI(t, r)
 
 	// The caller's dimensions match what is stored, so the documented contract

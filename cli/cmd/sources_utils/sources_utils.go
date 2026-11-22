@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/odigos-io/odigos/common/consts"
+	"github.com/odigos-io/odigos/k8sutils/pkg/instrumentation_instance"
 
 	cmdcontext "github.com/odigos-io/odigos/cli/pkg/cmd_context"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +40,7 @@ func SourcesStatus(ctx context.Context) ([]SourceStatus, error) {
 			}
 		}
 
-		labelSelector := fmt.Sprintf("%s=%s", consts.InstrumentedAppNameLabel, instruConfig.Name)
+		labelSelector := fmt.Sprintf("%s=%s", consts.InstrumentedAppNameLabel, instrumentation_instance.InstrumentedAppLabelValue(instruConfig.Name))
 		instancesList, err := client.OdigosClient.InstrumentationInstances(instruConfig.Namespace).List(ctx, v1.ListOptions{
 			LabelSelector: labelSelector,
 		})

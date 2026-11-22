@@ -14,11 +14,14 @@ spec:
     Kernel traces: file and subprocess spans are added under the span membership (Go) and frontend
     (Java) are serving, and follow the rule as it is enabled and changed on running processes.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:
         - apply:
-            file: ../../common/apply/simple-trace-db-with-logs-deployment.yaml
+            file: ../../common/apply/simple-trace-db-deployment.yaml
 
     - name: Install - Simple Demo Apps
       try:

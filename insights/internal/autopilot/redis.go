@@ -10,6 +10,8 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 const (
@@ -283,8 +285,8 @@ func (r *tracesRedis) scanTrieKeys(ctx context.Context) ([]string, error) {
 	return out, nil
 }
 
-// loadTrieStructureNodes reads one trie hash into structure-only CH rows.
-func (r *tracesRedis) loadTrieStructureNodes(ctx context.Context, key string, meta redisTrieKeyMeta) ([]callTrieStructureNode, error) {
+// loadTrieStructureNodes reads one trie hash into structure-only trie nodes.
+func (r *tracesRedis) loadTrieStructureNodes(ctx context.Context, key string, meta redisTrieKeyMeta) ([]store.FlushedTrieNode, error) {
 	if r == nil || r.rdb == nil || key == "" {
 		return nil, nil
 	}
@@ -292,7 +294,7 @@ func (r *tracesRedis) loadTrieStructureNodes(ctx context.Context, key string, me
 	if err != nil {
 		return nil, fmt.Errorf("hgetall %s: %w", key, err)
 	}
-	out := make([]callTrieStructureNode, 0, len(fields))
+	out := make([]store.FlushedTrieNode, 0, len(fields))
 	for nodeID, raw := range fields {
 		if nodeID == "" {
 			continue
@@ -307,7 +309,7 @@ func (r *tracesRedis) loadTrieStructureNodes(ctx context.Context, key string, me
 			}
 			continue
 		}
-		out = append(out, callTrieStructureNode{
+		out = append(out, store.FlushedTrieNode{
 			Namespace:     meta.Namespace,
 			WorkloadKind:  meta.WorkloadKind,
 			WorkloadName:  meta.WorkloadName,

@@ -79,6 +79,10 @@ data:
         apiBase: {{ $apiBase | quote }}
         {{- end }}
     {{- end }}
+    {{- if include "odigos.autopilotEnabled" . }}
+    autopilot:
+      enabled: true
+    {{- end }}
     {{- if include "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled" . | eq "true" }}
     {{- $ltl := .Values.cardinalityControl.urlTemplatization.liveTrafficLearning }}
     {{- $ruleComputation := $ltl.ruleComputation | default dict }}

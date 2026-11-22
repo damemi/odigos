@@ -9,7 +9,8 @@ import (
 
 // TransactionID is a transaction's natural identity, derived from a trace's
 // root span: (service, namespace, operation, kind). Namespace keeps same-named
-// services in different namespaces distinct.
+// services in different namespaces distinct; it is the namespace of the
+// trace's source (see repo.SourceNamespace).
 type TransactionID struct {
 	Service   string
 	Namespace string
@@ -33,34 +34,24 @@ type TransactionID struct {
 // kind=INTERNAL while setting rpc.system=grpc); trusting the attribute keeps
 // them out of INTERNAL. Returns ok=false when the root isn't a valid
 // transaction and the caller should drop the trace (see discardableRoot).
-func identifyTransaction(t *Trace) (TransactionID, bool) {
+func identifyTransaction(t *Trace, sourceIdentity map[string]string) (TransactionID, bool) {
 	root := t.Root
 	if discardableRoot(root) {
 		return TransactionID{}, false
 	}
 	id := TransactionID{
 		Service:   root.Service,
-		Namespace: namespaceFromRoot(root),
+		Namespace: repo.SourceNamespace(sourceIdentity),
 		Operation: root.Name,
 		Kind:      kindFromRoot(root),
 	}
 	if id.Service == "" {
 		id.Service = "unknown"
 	}
-	if id.Namespace == "" {
-		id.Namespace = "unknown"
-	}
 	if id.Operation == "" {
 		id.Operation = "unknown"
 	}
 	return id, true
-}
-
-// namespaceFromRoot resolves the workload namespace, preferring OTel
-// service.namespace and falling back to the k8s namespace Odigos injects. Empty
-// when neither is present (identifyTransaction then defaults it to "unknown").
-func namespaceFromRoot(s *Span) string {
-	return firstNonEmpty(s.Attr(semconv.ServiceNamespace), s.Attr(semconv.K8SNamespaceName))
 }
 
 // discardableRoot rejects traces whose root is broken context rather than a

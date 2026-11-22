@@ -35,7 +35,7 @@ const dueLimit = 500
 // ledger and the backend's capabilities, deliver, and record outcomes.
 //
 // It must run on exactly one replica at a time (see leader package). It holds
-// no state across ticks beyond what is in ClickHouse, so a replacement leader
+// no state across ticks beyond what is in the database, so a replacement leader
 // resumes from the cursors.
 type Dispatcher struct {
 	repo     repo.Repository

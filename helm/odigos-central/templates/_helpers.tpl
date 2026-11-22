@@ -147,3 +147,29 @@ true
 {{- define "connectors.postgresDSN" -}}
 postgres://{{ include "connectors.urlEncode" .Values.cloudConnectors.postgres.username }}:{{ include "connectors.urlEncode" .Values.cloudConnectors.postgres.password }}@odigos-connector-postgres:{{ .Values.cloudConnectors.postgres.port }}/{{ include "connectors.urlEncode" .Values.cloudConnectors.postgres.database }}?sslmode=disable
 {{- end -}}
+
+{{/*
+ServiceAccount helpers. Args: dict "root" $ "values" <component values> "default" <default SA name>.
+<component>.rbac.create overrides the global rbac.create when set (including to false).
+*/}}
+{{- define "odigos.serviceAccountName" -}}
+{{- $sa := (.values | default dict).serviceAccount | default dict -}}
+{{- $sa.name | default .default -}}
+{{- end -}}
+
+{{- define "odigos.createServiceAccount" -}}
+{{- $sa := (.values | default dict).serviceAccount | default dict -}}
+{{- if or (not (hasKey $sa "create")) $sa.create -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{- define "odigos.rbacEnabled" -}}
+{{- $component := (.values | default dict).rbac | default dict -}}
+{{- $global := .root.Values.rbac | default dict -}}
+{{- if and (hasKey $component "create") (not (kindIs "invalid" $component.create)) -}}
+{{- if $component.create }}true{{ end -}}
+{{- else if or (not (hasKey $global "create")) $global.create -}}
+true
+{{- end -}}
+{{- end -}}

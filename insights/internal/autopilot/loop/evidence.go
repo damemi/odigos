@@ -7,7 +7,7 @@ import (
 	"sort"
 
 	"github.com/odigos-io/odigos/common/autopilot"
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 // CallGraphEdge is a merged caller→callee link between application functions.
@@ -22,21 +22,22 @@ type AppEvidence struct {
 }
 
 // BuildAppEvidence rolls path trie nodes into a merged application call graph.
-// Library nodes are skipped: an edge's caller is the nearest application ancestor, so
-// app → library → app paths yield the same evidence as app → app.
-func BuildAppEvidence(nodes []clickhouse.CallTrieNode) AppEvidence {
+// Non-application nodes (runtime, Odigos agent) are skipped: an edge's caller is the
+// nearest application ancestor, so app → runtime → app paths yield the same evidence
+// as app → app.
+func BuildAppEvidence(nodes []store.CallTrieNode) AppEvidence {
 	if len(nodes) == 0 {
 		return AppEvidence{}
 	}
 
-	byID := make(map[string]clickhouse.CallTrieNode, len(nodes))
+	byID := make(map[string]store.CallTrieNode, len(nodes))
 	for _, n := range nodes {
 		byID[n.ID] = n
 	}
 
 	edges := map[callGraphEdgeKey]struct{}{}
 	for _, n := range nodes {
-		if !autopilot.IsApplicationFrame(n.Name) || n.ParentID == "" {
+		if autopilot.ClassifyFrame(n.Name) != autopilot.FrameKindApp || n.ParentID == "" {
 			continue
 		}
 		caller, ok := nearestAppAncestor(byID, n)
@@ -51,7 +52,7 @@ func BuildAppEvidence(nodes []clickhouse.CallTrieNode) AppEvidence {
 
 // nearestAppAncestor walks ParentID through non-app nodes. It stops on a missing
 // parent or a cycle.
-func nearestAppAncestor(byID map[string]clickhouse.CallTrieNode, n clickhouse.CallTrieNode) (string, bool) {
+func nearestAppAncestor(byID map[string]store.CallTrieNode, n store.CallTrieNode) (string, bool) {
 	seen := map[string]struct{}{n.ID: {}}
 	for id := n.ParentID; id != ""; {
 		if _, dup := seen[id]; dup {
@@ -62,7 +63,7 @@ func nearestAppAncestor(byID map[string]clickhouse.CallTrieNode, n clickhouse.Ca
 		if !ok {
 			return "", false
 		}
-		if autopilot.IsApplicationFrame(p.Name) {
+		if autopilot.ClassifyFrame(p.Name) == autopilot.FrameKindApp {
 			return p.Name, true
 		}
 		id = p.ParentID

@@ -14,24 +14,27 @@ func TestFromStorageHealth(t *testing.T) {
 		CheckedAt: now,
 		Status:    repo.StorageStatusHealthy,
 		Connection: repo.StorageConnection{
-			Reachable: true, PingLatencyMs: 3, Version: "24.8", Database: "odigos_insights",
+			Reachable: true, PingLatencyMs: 3, Version: "17.6", Database: "odigos_insights", UptimeSeconds: 9,
 		},
-		Disk: repo.StorageDisk{
-			InsightsBytes: 7, TotalBytes: 100, UsedBytes: 40, AvailableBytes: 60, UsedPercent: 40, Status: "ok",
+		Disk: repo.StorageDisk{DatabaseBytes: 7, VolumeBytes: 100, UsedPercent: 7, Status: "ok"},
+		Connections: repo.StorageConnections{
+			Active: 1, Idle: 2, Total: 3, Max: 100, PoolAcquired: 1, PoolTotal: 4, PoolMax: 8, PoolWaitCount: 5,
 		},
-		Memory: repo.StorageMemory{ProcessRSSBytes: 10, CGroupUsedBytes: 11, CGroupTotalBytes: 20, UptimeSeconds: 9},
+		Database: repo.StorageDatabaseStats{CacheHitPercent: 99.5, Commits: 10, Deadlocks: 1, StatsSince: now},
 		Queries: repo.StorageQueries{
-			Active: 1, LongestSeconds: 0.2, PeakMemoryBytes: 5,
-			Items: []repo.StorageQuery{{ElapsedSeconds: 0.2, User: "u", MemoryBytes: 5, Query: "SELECT 1"}},
-			RecentHeaviest: []repo.StorageQuery{{
-				ElapsedSeconds: 1.5, User: "u", MemoryBytes: 9, Query: "SELECT heavy", FinishedAt: now,
+			Active: 1, LongestSeconds: 0.2,
+			Running: []repo.StorageQuery{{ElapsedSeconds: 0.2, User: "u", State: "active", WaitEvent: "Lock:tuple", Query: "SELECT 1"}},
+			TopStatements: []repo.StorageStatement{{
+				Query: "SELECT heavy", Calls: 3, TotalSeconds: 1.5, MeanMs: 500, Rows: 9,
 			}},
-			RecentLatest: []repo.StorageQuery{{
-				ElapsedSeconds: 0.01, User: "u", MemoryBytes: 1, Query: "SELECT latest", FinishedAt: now,
-			}},
+			StatementsAvailable: true,
 		},
-		Tables: []repo.StorageTable{{Name: "t", Rows: 2, BytesOnDisk: 3, ActiveParts: 1}},
-		WritePressure: repo.StorageWritePressure{UnfinishedMutations: 0, ActiveParts: 1},
+		Tables:      []repo.StorageTable{{Name: "t", Rows: 2, DeadRows: 1, BytesOnDisk: 3, LastVacuumAt: now}},
+		Maintenance: repo.StorageMaintenance{DeadRows: 1, WaitingLocks: 2, OldestTransactionSeconds: 4},
+		Retention: repo.StorageRetention{
+			ObservationRetentionDays: 120, RelationRetentionDays: 14, AttemptRetentionDays: 30,
+			EverRan: true, LastRunAt: now, LastRunOK: true, ObservationsDeleted: 6, AttemptsDeleted: 2,
+		},
 		Writeback: repo.StorageWriteback{
 			FlushIntervalSeconds: 15, EverFlushed: true, LastFlushOK: true, LastFlushAt: now,
 		},
@@ -40,25 +43,41 @@ func TestFromStorageHealth(t *testing.T) {
 	if out.Status != apitypes.StorageHealthStatusHealthy {
 		t.Fatalf("status = %q", out.Status)
 	}
-	if out.Memory.ProcessRssBytes != 10 || out.Memory.CgroupTotalBytes != 20 {
-		t.Fatalf("memory = %+v", out.Memory)
+	if out.Connection.UptimeSeconds != 9 || out.Connection.Version != "17.6" {
+		t.Fatalf("connection = %+v", out.Connection)
+	}
+	if out.Disk.DatabaseBytes != 7 || out.Disk.VolumeBytes != 100 {
+		t.Fatalf("disk = %+v", out.Disk)
+	}
+	if out.Connections.PoolMax != 8 || out.Connections.PoolWaitCount != 5 || out.Connections.Max != 100 {
+		t.Fatalf("connections = %+v", out.Connections)
+	}
+	if out.Database.CacheHitPercent != 99.5 || out.Database.Deadlocks != 1 || out.Database.StatsSince != now {
+		t.Fatalf("database = %+v", out.Database)
+	}
+	if len(out.Queries.Running) != 1 || out.Queries.Running[0].WaitEvent != "Lock:tuple" {
+		t.Fatalf("running = %+v", out.Queries.Running)
+	}
+	if !out.Queries.StatementsAvailable || len(out.Queries.TopStatements) != 1 || out.Queries.TopStatements[0].MeanMs != 500 {
+		t.Fatalf("top statements = %+v", out.Queries.TopStatements)
+	}
+	if len(out.Tables) != 1 || out.Tables[0].DeadRows != 1 || out.Tables[0].LastVacuumAt != now {
+		t.Fatalf("tables = %+v", out.Tables)
+	}
+	if out.Maintenance.WaitingLocks != 2 {
+		t.Fatalf("maintenance = %+v", out.Maintenance)
+	}
+	if !out.Retention.EverRan || out.Retention.LastRunAt != now || out.Retention.ObservationsDeleted != 6 {
+		t.Fatalf("retention = %+v", out.Retention)
 	}
 	if !out.Writeback.LastFlushOk || out.Writeback.LastFlushAt != now {
 		t.Fatalf("writeback = %+v", out.Writeback)
 	}
-	if len(out.Tables) != 1 || out.Tables[0].Name != "t" {
-		t.Fatalf("tables = %+v", out.Tables)
-	}
-	if out.Disk.InsightsBytes != 7 {
-		t.Fatalf("insights_bytes = %d", out.Disk.InsightsBytes)
-	}
-	if len(out.Queries.RecentHeaviest) != 1 || out.Queries.RecentHeaviest[0].Query != "SELECT heavy" {
-		t.Fatalf("recent_heaviest = %+v", out.Queries.RecentHeaviest)
-	}
-	if len(out.Queries.RecentLatest) != 1 || out.Queries.RecentLatest[0].Query != "SELECT latest" {
-		t.Fatalf("recent_latest = %+v", out.Queries.RecentLatest)
-	}
-	if out.Queries.RecentHeaviest[0].FinishedAt != now {
-		t.Fatalf("finished_at = %v", out.Queries.RecentHeaviest[0].FinishedAt)
+}
+
+func TestFromStorageHealthOmitsUnsetRetentionRun(t *testing.T) {
+	out := FromStorageHealth(repo.StorageHealth{Retention: repo.StorageRetention{LastRunAt: time.Unix(5, 0)}})
+	if !out.Retention.LastRunAt.IsZero() {
+		t.Fatalf("last_run_at = %v, want zero when the job never ran", out.Retention.LastRunAt)
 	}
 }

@@ -399,56 +399,77 @@ const STORAGE_HEALTH_FIELDS = `
     version
     database
     error
+    uptimeSeconds
   }
   disk {
-    insightsBytes
-    totalBytes
-    usedBytes
-    availableBytes
+    databaseBytes
+    volumeBytes
     usedPercent
     status
   }
-  memory {
-    processRssBytes
-    cgroupUsedBytes
-    cgroupTotalBytes
-    uptimeSeconds
+  connections {
+    active
+    idle
+    idleInTransaction
+    total
+    max
+    poolAcquired
+    poolIdle
+    poolTotal
+    poolMax
+    poolWaitCount
+    poolWaitSeconds
+  }
+  database {
+    cacheHitPercent
+    commits
+    rollbacks
+    deadlocks
+    tempBytes
+    statsSince
   }
   queries {
     active
     longestSeconds
-    peakMemoryBytes
-    items {
+    running {
       elapsedSeconds
       user
-      memoryBytes
+      state
+      waitEvent
       query
-      finishedAt
     }
-    recentHeaviest {
-      elapsedSeconds
-      user
-      memoryBytes
+    topStatements {
       query
-      finishedAt
+      calls
+      totalSeconds
+      meanMs
+      rows
     }
-    recentLatest {
-      elapsedSeconds
-      user
-      memoryBytes
-      query
-      finishedAt
-    }
+    statementsAvailable
   }
   tables {
     name
     rows
+    deadRows
     bytesOnDisk
-    activeParts
+    lastVacuumAt
   }
-  writePressure {
-    unfinishedMutations
-    activeParts
+  maintenance {
+    deadRows
+    vacuumsRunning
+    waitingLocks
+    oldestTransactionSeconds
+  }
+  retention {
+    observationRetentionDays
+    relationRetentionDays
+    attemptRetentionDays
+    everRan
+    lastRunAt
+    lastRunOk
+    lastError
+    observationsDeleted
+    attemptsDeleted
   }
   writeback {
     flushIntervalSeconds

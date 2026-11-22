@@ -47,17 +47,17 @@ fix. Add to this instead of letting TODOs scatter.
   parser (per dialect) behind the same `parseSQLTables` signature. The bounded
   hash fallback keeps storage safe regardless.
 
-## Storage (ClickHouse)
+## Storage (Postgres)
 
 ### Additive counters can be over-counted if a flush is retried
-- **What**: we save learning progress to ClickHouse in batches ("flushes"). We
-  send *increments* ("+5 observations") and ClickHouse sums them. If a flush
+- **What**: we save learning progress to Postgres in batches ("flushes"). We
+  send *increments* ("+5 observations") and the upsert adds them. If a flush
   lands in the DB but the reply is lost, we retry and send the same "+5" again,
-  so ClickHouse ends up with +10. Sets (D1/D2/D5/D6 members) are unaffected -
+  so the database ends up with +10. Sets (D1/D2/D5/D6 members) are unaffected -
   re-adding the same thing is a no-op - only the additive numbers
   (`observation_count`, the D7 size histogram) can double.
 - **Example**: a flush writes "+5 observations", the reply is lost, we retry.
-  ClickHouse now shows 10 for a class that really saw 5.
+  The database now shows 10 for a class that really saw 5.
 - **Why it barely matters today**: the only real effect is a class *promoting*
   (going from learning to enforcing) a little early. But the seeded policies make
   that nearly a non-issue:
@@ -68,31 +68,14 @@ fix. Add to this instead of letting TODOs scatter.
     *time* gate holds them back no matter how inflated the count is. The one
     additive class (D7) is here, so its double-count never promotes anything
     early - it only slightly skews the learned size distribution.
-- **Where**: `ApplyBaselineDeltas` in `internal/db/clickhouse/clickhouse.go`;
+- **Where**: `ApplyBaselineDeltas` in `internal/db/postgres/baselines.go`;
   the flusher's retry in `internal/engine/baseline_store.go`.
-- **The fix (deferred)**: stop sending "add 5" and instead have each replica
-  write "my running total is 5" under its own id, into a `ReplacingMergeTree`
-  that keeps only the latest row per id. Re-sending the same total then does
-  nothing (like a set), and the real total is the sum across ids at read time -
-  which also stays correct across replicas and restarts. It's a bigger change
-  (recreates the two additive tables + a store refactor), so we do it only when
+- **The fix (deferred)**: give each flush an id and record applied ids in the
+  same transaction as the deltas, skipping a flush whose id is already there.
+  A retried flush is then a no-op. It needs a store refactor so a retry reuses
+  the original flush id, so we do it only when
   promotion *timing* starts to matter (e.g. before GA, or if we ship count-only
   or low-threshold policies) - not in the current dev phase.
-
-### A failed migration leaves the DB "dirty" and needs manual recovery
-- **What**: migrations run via golang-migrate. ClickHouse has no transactional
-  DDL, so if a migration fails partway golang-migrate marks that version *dirty*
-  and every later run (including the migration Job's retries) refuses to proceed
-  until an operator forces the version. There is no automatic rollback.
-- **Where**: `migrate.Apply` in `internal/db/clickhouse/migrate/`; the migration
-  files in `internal/db/clickhouse/migrate/migrations/`; the Helm migration Job.
-- **Why**: inherent to golang-migrate + ClickHouse. Mitigated by keeping
-  migrations retry-safe (`IF [NOT] EXISTS`) and simple.
-- **Fix**: prefer one statement per migration file so a partial multi-statement
-  apply can't happen; document/automate the `migrate force <version>` recovery
-  runbook. Revisit a declarative tool (e.g. Atlas) if/when the schema grows
-  materialized views/projections - note Atlas's ClickHouse driver is paid, so
-  it can't ship in the OSS chart as-is.
 
 ## Service / operations
 
@@ -110,7 +93,7 @@ fix. Add to this instead of letting TODOs scatter.
 - **Fix**: add a small circuit breaker around the repo calls: open after N
   consecutive connection failures, short-circuit (drop + count) while open,
   half-open probe on an interval, close on success. Keep it generic so it works
-  for the next backing store, not just ClickHouse.
+  for any backing store.
 
 ### One DB round-trip per trace (no batching)
 - **What**: every trace does its own `UpsertTransaction`, baseline read, and
@@ -129,3 +112,22 @@ fix. Add to this instead of letting TODOs scatter.
 - **What**: `:8080` (HTTP) and `:4317` (OTLP) are constants.
 - **Where**: `cmd/main.go`.
 - **Fix**: make configurable via env/flags when needed.
+
+### The bundled Postgres is dev-grade; production should use an external DB
+- **What**: `insights.database.provider=bundled` runs one Postgres pod with no
+  replication, no backups, no TLS (DSN is `sslmode=disable`), and the default
+  autovacuum. It is for development and light use. The production path today is
+  `provider=external` (a managed Postgres: RDS / Cloud SQL / AlloyDB, or an
+  operator-managed cluster) via `insights.database.external`.
+- **Where**: `helm/odigos/templates/insights/database/`;
+  `insights.database` in `values.yaml`.
+- **Fix (planned)**: add `provider=cnpg` that renders a
+  [CloudNativePG](https://cloudnative-pg.io/) `Cluster` CR for an in-cluster
+  production Postgres - streaming replication + automated failover, WAL
+  archiving + PITR to object storage, TLS, and PgBouncer pooling. The
+  `provider` enum is the extension seam; adding `cnpg` is additive and touches
+  no existing mode. Cheaper in-cluster hardening that does not need the operator:
+  a NetworkPolicy limiting `:5432` to insights pods, `sslmode=require` with a
+  mounted cert, a `securityContext.fsGroup` for restricted clusters, and a
+  `postgres_exporter` sidecar for connection/bloat/long-transaction alerts
+  (the Storage page already surfaces these on demand).

@@ -8,6 +8,9 @@ spec:
     init-container schedule-only, then CSI with karpenter.enabled and startup taints.
     No tracing assertions.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     # Karpenter needs a cloud provider to create nodes. On kind we use KWOK (fake nodes)
     # instead of AWS/GCP: install KWOK + Karpenter KWOK controller, then apply our NodePool

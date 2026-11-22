@@ -5,6 +5,9 @@ metadata:
 spec:
   description: This e2e test runs a multi-apps scenario
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

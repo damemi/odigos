@@ -1,5 +1,5 @@
 // Package loop owns the autopilot control loop that drives function
-// instrumentation decisions from ClickHouse evidence and InstrumentationRules.
+// instrumentation decisions from stored call-trie evidence and InstrumentationRules.
 package loop
 
 import (
@@ -18,9 +18,9 @@ import (
 
 	"github.com/odigos-io/odigos/common/consts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/model"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 )
 
@@ -30,24 +30,24 @@ const tickInterval = time.Minute
 // sequentially and the ticker drops ticks missed while one is running.
 const tickTimeout = 10 * time.Minute
 
-// TrieFlusher copies call tries buffered in Redis into ClickHouse.
+// TrieFlusher copies call tries buffered in Redis into the autopilot store.
 type TrieFlusher interface {
 	Flush(ctx context.Context)
 }
 
 // Manager coordinates the autopilot loop.
 type Manager struct {
-	Client     client.Client
-	ClickHouse *clickhouse.Client
-	Log        *commonlogger.OdigosLogger
-	Model      *model.Client
-	ModelName  string
-	AutoApply  bool
+	Client    client.Client
+	Store     *store.Client
+	Log       *commonlogger.OdigosLogger
+	Model     *model.Client
+	ModelName string
+	AutoApply bool
 	// MaxProbesPerWorkload caps how many distinct custom probes may apply to
 	// one workload. Zero uses defaultMaxProbesPerWorkload.
 	MaxProbesPerWorkload int
 	// TrieFlusher, when set, runs at the start of each tick so call tries
-	// buffered in Redis reach ClickHouse before sources are analyzed.
+	// buffered in Redis reach the store before sources are analyzed.
 	TrieFlusher TrieFlusher
 	// RuleEvents, when set, signals that an InstrumentationRule changed. The
 	// loop then reconciles rules without waiting for the next tick, so a
@@ -56,12 +56,12 @@ type Manager struct {
 
 	retryOnce sync.Once
 	retry     *retryTracker
-	// recommendations overrides ClickHouse as the recommendation store in tests.
+	// recommendations overrides Store as the recommendation store in tests.
 	recommendations recommendationStore
 }
 
 // Run blocks until ctx is cancelled. Every minute it discovers sources that
-// have transactions in ClickHouse and, for each source+transaction, sends the
+// have stored call tries and, for each source+transaction, sends the
 // model the call-graph edges it has not yet successfully analyzed. Edges are
 // acknowledged only by a successful run, so failed or skipped calls are
 // retried on later ticks.
@@ -91,8 +91,8 @@ func (m *Manager) Run(ctx context.Context) {
 }
 
 func (m *Manager) tick(ctx context.Context) {
-	if m.ClickHouse == nil {
-		m.logWarn("skipping tick: clickhouse client is nil")
+	if m.Store == nil {
+		m.logWarn("skipping tick: autopilot store is nil")
 		return
 	}
 
@@ -109,7 +109,7 @@ func (m *Manager) tick(ctx context.Context) {
 		m.TrieFlusher.Flush(tickCtx)
 	}
 
-	sources, err := m.ClickHouse.ListSourcesWithTransactions(tickCtx)
+	sources, err := m.Store.ListSourcesWithTransactions(tickCtx)
 	if err != nil {
 		m.logWarn("failed to list sources with transactions", "error", err)
 		return
@@ -120,8 +120,11 @@ func (m *Manager) tick(ctx context.Context) {
 
 	for _, source := range sources {
 		if !source.K8SComplete() {
-			m.logDebug("skipping source without kubernetes workload attributes",
-				"attributes", source.Attributes)
+			m.logDebug("skipping source without a full kubernetes workload identity",
+				"namespace", source.Namespace,
+				"kind", source.WorkloadKind,
+				"name", source.WorkloadName,
+				"container", source.ContainerName)
 			continue
 		}
 		if err := m.processSource(tickCtx, source, &tickSummary, mode); err != nil {
@@ -144,7 +147,7 @@ func (m *Manager) tick(ctx context.Context) {
 // reconcileRulesNow runs only the rule reconcile, outside a tick. It shares
 // the loop goroutine with tick, so rule writes stay single-writer.
 func (m *Manager) reconcileRulesNow(ctx context.Context) {
-	if m.ClickHouse == nil {
+	if m.Store == nil {
 		return
 	}
 	reconcileCtx, cancel := context.WithTimeout(ctx, tickInterval)
@@ -194,10 +197,10 @@ func (s sourceTickSummary) log(m *Manager) {
 	m.logInfo("autopilot tick summary", fields...)
 }
 
-func (m *Manager) processSource(ctx context.Context, source clickhouse.SourceKey, summary *sourceTickSummary, mode string) error {
+func (m *Manager) processSource(ctx context.Context, source store.SourceKey, summary *sourceTickSummary, mode string) error {
 	if _, err := instrumentationConfigForSource(ctx, m.Client, source); err != nil {
 		if apierrors.IsNotFound(err) {
-			if delErr := m.ClickHouse.DeleteSource(ctx, source); delErr != nil {
+			if delErr := m.Store.DeleteSource(ctx, source); delErr != nil {
 				return fmt.Errorf("delete source data: %w", delErr)
 			}
 			m.retries().forgetSource(source)
@@ -214,7 +217,7 @@ func (m *Manager) processSource(ctx context.Context, source clickhouse.SourceKey
 		return nil
 	}
 
-	txs, err := m.ClickHouse.ListTransactions(ctx, source)
+	txs, err := m.Store.ListTransactions(ctx, source)
 	if err != nil {
 		return fmt.Errorf("list transactions: %w", err)
 	}
@@ -246,7 +249,7 @@ func (m *Manager) processSource(ctx context.Context, source clickhouse.SourceKey
 			summary.skippedAtCap += len(txs) - i
 			break
 		}
-		nodes, err := m.ClickHouse.GetCallTrie(ctx, source, tx.ID)
+		nodes, err := m.Store.GetCallTrie(ctx, source, tx.ID)
 		if err != nil {
 			return fmt.Errorf("get call trie for %s: %w", tx.ID, err)
 		}
@@ -326,7 +329,7 @@ const (
 	analyzeExhausted
 )
 
-func (m *Manager) analyzeTransaction(ctx context.Context, source clickhouse.SourceKey, probes []customProbe, tx transactionTrie, ev AppEvidence) (analyzeOutcome, string, error) {
+func (m *Manager) analyzeTransaction(ctx context.Context, source store.SourceKey, probes []customProbe, tx transactionTrie, ev AppEvidence) (analyzeOutcome, string, error) {
 	if uniqueProbeCount(probes) >= m.maxProbes() {
 		m.logInfo("skipping transaction; probe cap reached",
 			"transaction_id", tx.Transaction.ID,
@@ -346,7 +349,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source clickhouse.Sour
 	}
 
 	revision := analysisRevision(m.ModelName)
-	last, err := m.ClickHouse.LastSuccessfulRun(ctx, source, tx.Transaction.ID, revision)
+	last, err := m.Store.LastSuccessfulRun(ctx, source, tx.Transaction.ID, revision)
 	if err != nil {
 		// Without the acknowledged graph a delta cannot be computed. Retry next
 		// tick rather than paying for a full analysis.
@@ -378,7 +381,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source clickhouse.Sour
 		return analyzeLLM, reason, fmt.Errorf("marshal evidence snapshot: %w", err)
 	}
 
-	run := clickhouse.Run{
+	run := store.Run{
 		Namespace:        source.Namespace,
 		WorkloadKind:     source.WorkloadKind,
 		WorkloadName:     source.WorkloadName,
@@ -423,7 +426,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source clickhouse.Sour
 		if run.AnalysisStatus == "" {
 			run.AnalysisStatus = class.analysisStatus()
 		}
-		if insErr := m.ClickHouse.InsertRun(ctx, run); insErr != nil {
+		if insErr := m.Store.InsertRun(ctx, run); insErr != nil {
 			m.logWarn("failed to record failed run", "transaction_id", tx.Transaction.ID, "error", insErr)
 		}
 		return analyzeLLM, reason, cause
@@ -451,7 +454,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source clickhouse.Sour
 	if err := m.storeRecommendations(ctx, source, tx.Transaction.ID, revision, parsed.Recommendations); err != nil {
 		return fail(failureTransient, 0, fmt.Errorf("store recommendations: %w", err))
 	}
-	run.AnalysisStatus = clickhouse.AnalysisSucceeded
+	run.AnalysisStatus = store.AnalysisSucceeded
 	m.logInfo("analysis succeeded",
 		"transaction_id", tx.Transaction.ID,
 		"recommendations", len(parsed.Recommendations),
@@ -460,7 +463,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source clickhouse.Sour
 	// The insert is the acknowledgement. If it fails, the next tick sends the
 	// same edges again, and storing the same probes again is a no-op. Rules
 	// are reconciled from the store at the end of the tick.
-	if err := m.ClickHouse.InsertRun(ctx, run); err != nil {
+	if err := m.Store.InsertRun(ctx, run); err != nil {
 		return analyzeLLM, reason, err
 	}
 	m.retries().recordSuccess(key)
@@ -469,18 +472,18 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source clickhouse.Sour
 
 // storeRecommendations inserts the probes not already stored for the
 // workload. The loop is the only writer, so read-then-insert is safe.
-func (m *Manager) storeRecommendations(ctx context.Context, source clickhouse.SourceKey, transactionID, revision string, recs []schema.Recommendation) error {
+func (m *Manager) storeRecommendations(ctx context.Context, source store.SourceKey, transactionID, revision string, recs []schema.Recommendation) error {
 	if len(recs) == 0 {
 		return nil
 	}
-	existing, err := m.ClickHouse.ListRecommendations(ctx, source)
+	existing, err := m.Store.ListRecommendations(ctx, source)
 	if err != nil {
 		return err
 	}
-	return m.ClickHouse.InsertRecommendations(ctx, unstoredRecommendations(storedRecommendations(source, transactionID, revision, recs), existing))
+	return m.Store.InsertRecommendations(ctx, unstoredRecommendations(storedRecommendations(source, transactionID, revision, recs), existing))
 }
 
-func buildAnalysisRequest(source clickhouse.SourceKey, probes []customProbe, tx transactionTrie, plan analysisPlan) schema.AnalysisRequest {
+func buildAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionTrie, plan analysisPlan) schema.AnalysisRequest {
 	if plan.Mode == "delta" {
 		return buildDeltaAnalysisRequest(source, probes, tx, plan.Send)
 	}
@@ -504,7 +507,7 @@ func (m *Manager) maxProbes() int {
 	return m.MaxProbesPerWorkload
 }
 
-func emitRequest(source clickhouse.SourceKey, tx clickhouse.Transaction, user string, probeCount int, evidenceMode string, m *Manager) {
+func emitRequest(source store.SourceKey, tx store.Transaction, user string, probeCount int, evidenceMode string, m *Manager) {
 	service := fmt.Sprintf("%s/%s/%s/%s",
 		source.Namespace, source.WorkloadKind, source.WorkloadName, source.ContainerName)
 	label := fmt.Sprintf("%s tx=%s", service, tx.ID)

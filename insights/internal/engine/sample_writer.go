@@ -13,7 +13,7 @@ import (
 // examples shown next to a baseline, and the evidence behind an anomaly or a
 // guardrail violation. They are context for a finding, not the finding itself,
 // so storing one must never slow down ingestion. Until now each sample cost the
-// ingest goroutine a ClickHouse count plus a single-row insert while the
+// ingest goroutine a database count plus a single-row insert while the
 // gateway waited for the OTLP ack. Now the ingest path reserves a slot in
 // memory (sampleCounts) and queues the trace; sampleWriter writes the queue in
 // batches from its own goroutine.

@@ -11,10 +11,12 @@ const (
 	frameTypeHotspot = "hotspot"
 )
 
+// Libraries classify as application code. Odigos agent frames are dropped at
+// ingest, and are shown as runtime if any remain.
 var frameKindToModel = map[autopilot.FrameKind]model.AutopilotFrameKind{
-	autopilot.FrameKindApp:     model.AutopilotFrameKindApp,
-	autopilot.FrameKindLibrary: model.AutopilotFrameKindLibrary,
-	autopilot.FrameKindRuntime: model.AutopilotFrameKindRuntime,
+	autopilot.FrameKindApp:             model.AutopilotFrameKindApp,
+	autopilot.FrameKindRuntime:         model.AutopilotFrameKindRuntime,
+	autopilot.FrameKindInstrumentation: model.AutopilotFrameKindRuntime,
 }
 
 // classifyFrame returns the frame's kind. Non-JVM frames are treated as application
@@ -26,7 +28,7 @@ func classifyFrame(name, frameType string) model.AutopilotFrameKind {
 	return frameKindToModel[autopilot.ClassifyFrame(name)]
 }
 
-// TransactionsToModel converts ClickHouse-backed transactions to GraphQL models.
+// TransactionsToModel converts stored transactions to GraphQL models.
 func TransactionsToModel(txs []Transaction) []*model.AutopilotTransaction {
 	out := make([]*model.AutopilotTransaction, 0, len(txs))
 	for _, tx := range txs {

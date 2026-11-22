@@ -12,7 +12,7 @@ import (
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 func TestInstrumentationConfigForSource(t *testing.T) {
@@ -25,7 +25,7 @@ func TestInstrumentationConfigForSource(t *testing.T) {
 	}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
 
-	source := clickhouse.SourceKey{
+	source := store.SourceKey{
 		Namespace:    "shop",
 		WorkloadKind: "Deployment",
 		WorkloadName: "checkout",

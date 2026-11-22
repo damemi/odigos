@@ -9,10 +9,11 @@ func FromStorageHealth(h repo.StorageHealth) apitypes.StorageHealth {
 	tables := make([]apitypes.StorageTable, 0, len(h.Tables))
 	for _, t := range h.Tables {
 		tables = append(tables, apitypes.StorageTable{
-			Name:        t.Name,
-			Rows:        int64(t.Rows),
-			BytesOnDisk: int64(t.BytesOnDisk),
-			ActiveParts: int64(t.ActiveParts),
+			Name:         t.Name,
+			Rows:         t.Rows,
+			DeadRows:     t.DeadRows,
+			BytesOnDisk:  int64(t.BytesOnDisk),
+			LastVacuumAt: t.LastVacuumAt,
 		})
 	}
 	wb := apitypes.StorageWriteback{
@@ -24,6 +25,19 @@ func FromStorageHealth(h repo.StorageHealth) apitypes.StorageHealth {
 	if h.Writeback.EverFlushed && !h.Writeback.LastFlushAt.IsZero() {
 		wb.LastFlushAt = h.Writeback.LastFlushAt
 	}
+	retention := apitypes.StorageRetention{
+		ObservationRetentionDays: h.Retention.ObservationRetentionDays,
+		RelationRetentionDays:    h.Retention.RelationRetentionDays,
+		AttemptRetentionDays:     h.Retention.AttemptRetentionDays,
+		EverRan:                  h.Retention.EverRan,
+		LastRunOk:                h.Retention.LastRunOK,
+		LastError:                h.Retention.LastError,
+		ObservationsDeleted:      h.Retention.ObservationsDeleted,
+		AttemptsDeleted:          h.Retention.AttemptsDeleted,
+	}
+	if h.Retention.EverRan {
+		retention.LastRunAt = h.Retention.LastRunAt
+	}
 	return apitypes.StorageHealth{
 		CheckedAt: h.CheckedAt,
 		Status:    apitypes.StorageHealthStatus(h.Status),
@@ -33,34 +47,50 @@ func FromStorageHealth(h repo.StorageHealth) apitypes.StorageHealth {
 			Version:       h.Connection.Version,
 			Database:      h.Connection.Database,
 			Error:         h.Connection.Error,
+			UptimeSeconds: h.Connection.UptimeSeconds,
 		},
 		Disk: apitypes.StorageDisk{
-			InsightsBytes:  int64(h.Disk.InsightsBytes),
-			TotalBytes:     int64(h.Disk.TotalBytes),
-			UsedBytes:      int64(h.Disk.UsedBytes),
-			AvailableBytes: int64(h.Disk.AvailableBytes),
-			UsedPercent:    h.Disk.UsedPercent,
-			Status:         apitypes.StorageDiskStatus(h.Disk.Status),
+			DatabaseBytes: int64(h.Disk.DatabaseBytes),
+			VolumeBytes:   int64(h.Disk.VolumeBytes),
+			UsedPercent:   h.Disk.UsedPercent,
+			Status:        apitypes.StorageDiskStatus(h.Disk.Status),
 		},
-		Memory: apitypes.StorageMemory{
-			ProcessRssBytes:  int64(h.Memory.ProcessRSSBytes),
-			CgroupUsedBytes:  int64(h.Memory.CGroupUsedBytes),
-			CgroupTotalBytes: int64(h.Memory.CGroupTotalBytes),
-			UptimeSeconds:    h.Memory.UptimeSeconds,
+		Connections: apitypes.StorageConnections{
+			Active:            h.Connections.Active,
+			Idle:              h.Connections.Idle,
+			IdleInTransaction: h.Connections.IdleInTransaction,
+			Total:             h.Connections.Total,
+			Max:               h.Connections.Max,
+			PoolAcquired:      h.Connections.PoolAcquired,
+			PoolIdle:          h.Connections.PoolIdle,
+			PoolTotal:         h.Connections.PoolTotal,
+			PoolMax:           h.Connections.PoolMax,
+			PoolWaitCount:     h.Connections.PoolWaitCount,
+			PoolWaitSeconds:   h.Connections.PoolWaitSeconds,
+		},
+		Database: apitypes.StorageDatabaseStats{
+			CacheHitPercent: h.Database.CacheHitPercent,
+			Commits:         h.Database.Commits,
+			Rollbacks:       h.Database.Rollbacks,
+			Deadlocks:       h.Database.Deadlocks,
+			TempBytes:       h.Database.TempBytes,
+			StatsSince:      h.Database.StatsSince,
 		},
 		Queries: apitypes.StorageQueries{
-			Active:          h.Queries.Active,
-			LongestSeconds:  h.Queries.LongestSeconds,
-			PeakMemoryBytes: int64(h.Queries.PeakMemoryBytes),
-			Items:           mapStorageQueries(h.Queries.Items),
-			RecentHeaviest:  mapStorageQueries(h.Queries.RecentHeaviest),
-			RecentLatest:    mapStorageQueries(h.Queries.RecentLatest),
+			Active:              h.Queries.Active,
+			LongestSeconds:      h.Queries.LongestSeconds,
+			Running:             mapStorageQueries(h.Queries.Running),
+			TopStatements:       mapStorageStatements(h.Queries.TopStatements),
+			StatementsAvailable: h.Queries.StatementsAvailable,
 		},
 		Tables: tables,
-		WritePressure: apitypes.StorageWritePressure{
-			UnfinishedMutations: int64(h.WritePressure.UnfinishedMutations),
-			ActiveParts:         int64(h.WritePressure.ActiveParts),
+		Maintenance: apitypes.StorageMaintenance{
+			DeadRows:                 h.Maintenance.DeadRows,
+			VacuumsRunning:           h.Maintenance.VacuumsRunning,
+			WaitingLocks:             h.Maintenance.WaitingLocks,
+			OldestTransactionSeconds: h.Maintenance.OldestTransactionSeconds,
 		},
+		Retention: retention,
 		Writeback: wb,
 	}
 }
@@ -68,16 +98,27 @@ func FromStorageHealth(h repo.StorageHealth) apitypes.StorageHealth {
 func mapStorageQueries(in []repo.StorageQuery) []apitypes.StorageQuery {
 	out := make([]apitypes.StorageQuery, 0, len(in))
 	for _, q := range in {
-		item := apitypes.StorageQuery{
+		out = append(out, apitypes.StorageQuery{
 			ElapsedSeconds: q.ElapsedSeconds,
 			User:           q.User,
-			MemoryBytes:    int64(q.MemoryBytes),
+			State:          q.State,
+			WaitEvent:      q.WaitEvent,
 			Query:          q.Query,
-		}
-		if !q.FinishedAt.IsZero() {
-			item.FinishedAt = q.FinishedAt
-		}
-		out = append(out, item)
+		})
+	}
+	return out
+}
+
+func mapStorageStatements(in []repo.StorageStatement) []apitypes.StorageStatement {
+	out := make([]apitypes.StorageStatement, 0, len(in))
+	for _, s := range in {
+		out = append(out, apitypes.StorageStatement{
+			Query:        s.Query,
+			Calls:        s.Calls,
+			TotalSeconds: s.TotalSeconds,
+			MeanMs:       s.MeanMs,
+			Rows:         s.Rows,
+		})
 	}
 	return out
 }

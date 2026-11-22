@@ -8,6 +8,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+
+	"github.com/odigos-io/odigos/common/consts"
 )
 
 // incrUnmatchedPathsScript writes one flush batch of unmatched-path counts.
@@ -88,6 +90,7 @@ type redisPathCounter struct {
 func newRedisPathCounter(endpoint string, maxPaths int, pathIdleTTL time.Duration, logger *zap.Logger) (*redisPathCounter, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:                  endpoint,
+		DB:                    consts.RedisDBURLTemplatizationLiveTrafficLearning,
 		DialTimeout:           2 * time.Second,
 		ReadTimeout:           2 * time.Second,
 		WriteTimeout:          2 * time.Second,

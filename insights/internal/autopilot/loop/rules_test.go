@@ -16,7 +16,7 @@ import (
 	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 	"github.com/odigos-io/odigos/common/consts"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/db/clickhouse"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
 const testOdigosNs = "odigos-system"
@@ -25,33 +25,33 @@ const testOdigosNs = "odigos-system"
 // attributes map and cannot be a map key.
 type fakeWorkload struct{ namespace, kind, name string }
 
-func workloadOf(s clickhouse.SourceKey) fakeWorkload {
+func workloadOf(s store.SourceKey) fakeWorkload {
 	return fakeWorkload{s.Namespace, s.WorkloadKind, s.WorkloadName}
 }
 
-type fakeRecommendationStore map[fakeWorkload][]clickhouse.Recommendation
+type fakeRecommendationStore map[fakeWorkload][]store.Recommendation
 
-func (f fakeRecommendationStore) ListRecommendations(_ context.Context, source clickhouse.SourceKey) ([]clickhouse.Recommendation, error) {
+func (f fakeRecommendationStore) ListRecommendations(_ context.Context, source store.SourceKey) ([]store.Recommendation, error) {
 	return f[workloadOf(source)], nil
 }
 
-func (f fakeRecommendationStore) ListRecommendedWorkloads(context.Context) ([]clickhouse.SourceKey, error) {
-	var out []clickhouse.SourceKey
+func (f fakeRecommendationStore) ListRecommendedWorkloads(context.Context) ([]store.SourceKey, error) {
+	var out []store.SourceKey
 	for k := range f {
-		out = append(out, clickhouse.SourceKey{Namespace: k.namespace, WorkloadKind: k.kind, WorkloadName: k.name})
+		out = append(out, store.SourceKey{Namespace: k.namespace, WorkloadKind: k.kind, WorkloadName: k.name})
 	}
 	return out, nil
 }
 
 var (
-	checkout   = clickhouse.SourceKey{Namespace: "shop", WorkloadKind: "Deployment", WorkloadName: "checkout"}
+	checkout   = store.SourceKey{Namespace: "shop", WorkloadKind: "Deployment", WorkloadName: "checkout"}
 	firstSeen  = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	storedAuth = clickhouse.Recommendation{
+	storedAuth = store.Recommendation{
 		FirstSeen: firstSeen, Language: "java", Target: "com.acme.Auth.check",
 		Category: "security", Function: "com.acme.Auth.check", Why: "auth",
 		ClassName: "com.acme.Auth", MethodName: "check",
 	}
-	storedPrice = clickhouse.Recommendation{
+	storedPrice = store.Recommendation{
 		FirstSeen: firstSeen.Add(time.Minute), Language: "java", Target: "com.acme.Price.total",
 		Category: "performance", Function: "com.acme.Price.total", Why: "pricing",
 		ClassName: "com.acme.Price", MethodName: "total",
@@ -244,7 +244,7 @@ func TestProbesForAnalysisUsesStoreNotOwnRule(t *testing.T) {
 }
 
 func TestBuildDesiredProbesRespectsCap(t *testing.T) {
-	stored := []clickhouse.Recommendation{storedAuth, storedPrice}
+	stored := []store.Recommendation{storedAuth, storedPrice}
 
 	got, err := buildDesiredProbes(stored, nil, 1)
 	if err != nil {

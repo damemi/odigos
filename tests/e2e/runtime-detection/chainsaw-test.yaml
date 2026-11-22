@@ -7,6 +7,9 @@ spec:
     This e2e test verifies runtime detection and version compatibility across different languages.
     It tests Node.js, Java, Python, and C++ workloads to ensure proper language and version detection.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

@@ -9,6 +9,9 @@ spec:
     sampling dry-run, generates traffic, and asserts odigos.sampling.* attributes
     on collected spans.
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

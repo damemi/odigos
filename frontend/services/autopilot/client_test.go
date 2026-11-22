@@ -3,12 +3,10 @@ package autopilot
 import (
 	"context"
 	"errors"
-	"math"
 	"strings"
 	"testing"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,34 +87,39 @@ func TestCallTrieFromEdgesSharedPrefix(t *testing.T) {
 }
 
 func TestGetTransactionSampleTraceUnavailable(t *testing.T) {
-	c := NewClient("", "")
+	c := NewClient("")
 	got, err := c.GetTransactionSampleTrace(context.Background(), "default", "Deployment", "checkout", "app", "tx-1")
 	assert.ErrorIs(t, err, ErrUnavailable)
 	assert.Empty(t, got)
 }
 
 func TestListContainerTransactionsUnavailable(t *testing.T) {
-	c := NewClient("", "")
+	c := NewClient("")
 	_, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{})
 	assert.ErrorIs(t, err, ErrUnavailable)
 }
 
 func TestGetTransactionCallTrieUnavailable(t *testing.T) {
-	c := NewClient("tcp://localhost:9000", "")
+	c := NewClient("")
 	_, ok, err := c.GetTransactionCallTrie(context.Background(), "default", "Deployment", "checkout", "app", "tx-1")
 	assert.ErrorIs(t, err, ErrUnavailable)
 	assert.False(t, ok)
 }
 
 func TestNewClientEmptyConfig(t *testing.T) {
-	c := NewClient("", "secret")
+	c := NewClient("")
 	assert.Nil(t, c.db)
-	c = NewClient("tcp://localhost:9000", "")
+	c = NewClient("postgres://%zz")
 	assert.Nil(t, c.db)
 }
 
+func TestNewClientDoesNotConnect(t *testing.T) {
+	c := NewClient("postgres://user:pass@localhost:1/db")
+	require.NotNil(t, c.db)
+	assert.NoError(t, c.Close())
+}
+
 type fakeConn struct {
-	driver.Conn
 	query string
 	args  []any
 	rows  []callTrieEdgeRow
@@ -132,8 +135,8 @@ type fakeName struct {
 	operation, kind string
 }
 
-func (c *fakeConn) Query(_ context.Context, query string, args ...any) (driver.Rows, error) {
-	if strings.Contains(query, insightsDatabase) {
+func (c *fakeConn) Query(_ context.Context, query string, args ...any) (pgx.Rows, error) {
+	if strings.Contains(query, "FROM "+insightsTransactionsTable) {
 		c.namesQuery = query
 		c.namesArgs = args
 		if c.namesErr != nil {
@@ -147,7 +150,7 @@ func (c *fakeConn) Query(_ context.Context, query string, args ...any) (driver.R
 }
 
 type fakeNameRows struct {
-	driver.Rows
+	pgx.Rows
 	rows []fakeName
 	next int
 }
@@ -165,11 +168,11 @@ func (r *fakeNameRows) Scan(dest ...any) error {
 	return nil
 }
 
-func (r *fakeNameRows) Err() error   { return nil }
-func (r *fakeNameRows) Close() error { return nil }
+func (r *fakeNameRows) Err() error { return nil }
+func (r *fakeNameRows) Close()     {}
 
 type fakeRows struct {
-	driver.Rows
+	pgx.Rows
 	rows []callTrieEdgeRow
 	next int
 }
@@ -187,18 +190,18 @@ func (r *fakeRows) Scan(dest ...any) error {
 	*dest[3].(*string) = row.FunctionName
 	*dest[4].(*string) = row.FrameType
 	*dest[5].(*string) = row.SampleType
-	*dest[6].(*uint64) = row.Count
+	*dest[6].(*int64) = int64(row.Count)
 	return nil
 }
 
-func (r *fakeRows) Err() error   { return nil }
-func (r *fakeRows) Close() error { return nil }
+func (r *fakeRows) Err() error { return nil }
+func (r *fakeRows) Close()     {}
 
 func TestListContainerTransactionsNoFilter(t *testing.T) {
 	conn := &fakeConn{rows: []callTrieEdgeRow{
 		{TransactionID: "tx-a", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2},
 	}}
-	c := NewClientWithConn(conn)
+	c := newClientWithQuerier(conn)
 
 	got, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{})
 	require.NoError(t, err)
@@ -206,8 +209,8 @@ func TestListContainerTransactionsNoFilter(t *testing.T) {
 	assert.Equal(t, "tx-a", got.Transactions[0].ID)
 
 	assert.Equal(t, []any{"default", "Deployment", "checkout", "app"}, conn.args)
-	assert.NotContains(t, conn.query, "TransactionId IN")
-	assert.NotContains(t, conn.query, "positionCaseInsensitiveUTF8")
+	assert.NotContains(t, conn.query, "ANY(")
+	assert.NotContains(t, conn.query, "strpos")
 	assert.NotContains(t, conn.query, "LIMIT")
 }
 
@@ -216,14 +219,13 @@ func TestListContainerTransactionsNames(t *testing.T) {
 		rows: []callTrieEdgeRow{
 			{TransactionID: "-42", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2},
 			{TransactionID: "7636099928166363546", NodeID: "n2", Parent: "root", FunctionName: "Buy", FrameType: "jvm", SampleType: "samples", Count: 1},
-			{TransactionID: "tx-legacy", NodeID: "n3", Parent: "root", FunctionName: "Old", FrameType: "jvm", SampleType: "samples", Count: 1},
 		},
 		names: []fakeName{
 			{id: -42, operation: "POST /pay", kind: "HTTP"},
 			{id: 7636099928166363546, operation: "POST /buy [http.response.status_code=500]", kind: "HTTP"},
 		},
 	}
-	c := NewClientWithConn(conn)
+	c := newClientWithQuerier(conn)
 
 	got, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{})
 	require.NoError(t, err)
@@ -235,12 +237,10 @@ func TestListContainerTransactionsNames(t *testing.T) {
 	assert.Equal(t, "POST /pay", byID["-42"].Operation)
 	assert.Equal(t, "HTTP", byID["-42"].Kind)
 	assert.Equal(t, "POST /buy [http.response.status_code=500]", byID["7636099928166363546"].Operation)
-	// Not an inventory hash: asked for nothing, left unnamed.
-	assert.Empty(t, byID["tx-legacy"].Operation)
 
-	assert.Contains(t, conn.namesQuery, `"odigos_insights"."transactions" FINAL`)
+	assert.Contains(t, conn.namesQuery, "WHERE transaction_id = ANY($1)")
 	require.Len(t, conn.namesArgs, 1)
-	assert.ElementsMatch(t, []any{int64(-42), int64(7636099928166363546)}, conn.namesArgs[0].(clickhouse.GroupSet).Value)
+	assert.ElementsMatch(t, []int64{-42, 7636099928166363546}, conn.namesArgs[0])
 }
 
 func TestListContainerTransactionsNamesFailureKeepsTransactions(t *testing.T) {
@@ -248,7 +248,7 @@ func TestListContainerTransactionsNamesFailureKeepsTransactions(t *testing.T) {
 		rows:     []callTrieEdgeRow{{TransactionID: "42", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2}},
 		namesErr: errors.New("no such table"),
 	}
-	c := NewClientWithConn(conn)
+	c := newClientWithQuerier(conn)
 
 	got, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{})
 	require.NoError(t, err)
@@ -268,27 +268,28 @@ func TestTransactionsToModelNames(t *testing.T) {
 
 func TestListContainerTransactionsFilters(t *testing.T) {
 	conn := &fakeConn{}
-	c := NewClientWithConn(conn)
+	c := newClientWithQuerier(conn)
 
 	_, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{
-		IDs:    []string{"tx-a", "tx-b"},
+		IDs:    []string{"1", "tx-b", "-2"},
 		Search: " Pay ",
 	})
 	require.NoError(t, err)
 
-	assert.Contains(t, conn.query, "AND TransactionId IN ?")
-	assert.Contains(t, conn.query, "AND positionCaseInsensitiveUTF8(TransactionId, ?) > 0")
+	assert.Contains(t, conn.query, "AND transaction_id = ANY($5)")
+	assert.Contains(t, conn.query, "AND strpos(lower(transaction_id::text), lower($6)) > 0")
 	assert.NotContains(t, conn.query, "LIMIT")
+	// Ids that are not insights int64 hashes match nothing and are dropped.
 	assert.Equal(t, []any{
 		"default", "Deployment", "checkout", "app",
-		clickhouse.GroupSet{Value: []any{"tx-a", "tx-b"}},
+		[]int64{1, -2},
 		"Pay",
 	}, conn.args)
 }
 
 func TestListContainerTransactionsPage(t *testing.T) {
 	conn := &fakeConn{}
-	c := NewClientWithConn(conn)
+	c := newClientWithQuerier(conn)
 
 	_, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{
 		Search: "pay",
@@ -297,39 +298,39 @@ func TestListContainerTransactionsPage(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Contains(t, conn.query, "ORDER BY countIf(Parent = 'root' AND SampleType = 'samples') DESC, TransactionId ASC")
-	assert.Contains(t, conn.query, "LIMIT ? OFFSET ?")
-	assert.Equal(t, strings.Count(conn.query, "?"), len(conn.args))
-	assert.Equal(t, []any{
-		"default", "Deployment", "checkout", "app", "pay",
-		"default", "Deployment", "checkout", "app", "pay",
-		uint64(25), uint64(50),
-	}, conn.args)
+	assert.Contains(t, conn.query, "ORDER BY count(*) FILTER (WHERE parent = 'root' AND sample_type = 'samples') DESC, transaction_id::text ASC")
+	assert.Contains(t, conn.query, "LIMIT $6 OFFSET $7")
+	assert.Equal(t, []any{"default", "Deployment", "checkout", "app", "pay", 25, 50}, conn.args)
 }
 
 func TestListContainerTransactionsOffsetWithoutLimit(t *testing.T) {
 	conn := &fakeConn{}
-	c := NewClientWithConn(conn)
+	c := newClientWithQuerier(conn)
 
 	_, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{Offset: 10})
 	require.NoError(t, err)
 
-	require.GreaterOrEqual(t, len(conn.args), 2)
-	assert.Equal(t, []any{uint64(math.MaxUint64), uint64(10)}, conn.args[len(conn.args)-2:])
+	assert.Contains(t, conn.query, "LIMIT ALL OFFSET $5")
+	assert.Equal(t, []any{"default", "Deployment", "checkout", "app", 10}, conn.args)
 }
 
 func TestListContainerTransactionsEmptyIDs(t *testing.T) {
 	conn := &fakeConn{}
-	c := NewClientWithConn(conn)
+	c := newClientWithQuerier(conn)
 
 	got, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{IDs: []string{}})
+	require.NoError(t, err)
+	assert.Empty(t, got.Transactions)
+	assert.Empty(t, conn.query)
+
+	got, err = c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{IDs: []string{"tx-a"}})
 	require.NoError(t, err)
 	assert.Empty(t, got.Transactions)
 	assert.Empty(t, conn.query)
 }
 
 func TestListContainerTransactionsNegativePage(t *testing.T) {
-	c := NewClientWithConn(&fakeConn{})
+	c := newClientWithQuerier(&fakeConn{})
 
 	_, err := c.ListContainerTransactions(context.Background(), "default", "Deployment", "checkout", "app", TransactionsFilter{Limit: -1})
 	assert.Error(t, err)
@@ -338,24 +339,23 @@ func TestListContainerTransactionsNegativePage(t *testing.T) {
 }
 
 func TestListSourcesUnavailable(t *testing.T) {
-	c := NewClient("", "")
+	c := NewClient("")
 	_, err := c.ListSources(context.Background())
 	assert.ErrorIs(t, err, ErrUnavailable)
 }
 
 type fakeSourcesConn struct {
-	driver.Conn
 	query string
 	rows  []SourceTransactions
 }
 
-func (c *fakeSourcesConn) Query(_ context.Context, query string, _ ...any) (driver.Rows, error) {
+func (c *fakeSourcesConn) Query(_ context.Context, query string, _ ...any) (pgx.Rows, error) {
 	c.query = query
 	return &fakeSourceRows{rows: c.rows, next: -1}, nil
 }
 
 type fakeSourceRows struct {
-	driver.Rows
+	pgx.Rows
 	rows []SourceTransactions
 	next int
 }
@@ -371,24 +371,24 @@ func (r *fakeSourceRows) Scan(dest ...any) error {
 	*dest[1].(*string) = row.Kind
 	*dest[2].(*string) = row.Name
 	*dest[3].(*string) = row.ContainerName
-	*dest[4].(*uint64) = row.TransactionCount
+	*dest[4].(*int64) = int64(row.TransactionCount)
 	return nil
 }
 
-func (r *fakeSourceRows) Err() error   { return nil }
-func (r *fakeSourceRows) Close() error { return nil }
+func (r *fakeSourceRows) Err() error { return nil }
+func (r *fakeSourceRows) Close()     {}
 
 func TestListSources(t *testing.T) {
 	conn := &fakeSourcesConn{rows: []SourceTransactions{
 		{Namespace: "shop", Kind: "Deployment", Name: "checkout", ContainerName: "app", TransactionCount: 3},
 	}}
-	c := NewClientWithConn(conn)
+	c := newClientWithQuerier(conn)
 
 	got, err := c.ListSources(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, conn.rows, got)
-	assert.Contains(t, conn.query, "uniqExact(TransactionId)")
-	assert.Contains(t, conn.query, "GROUP BY Namespace, WorkloadKind, WorkloadName, ContainerName")
+	assert.Contains(t, conn.query, "count(DISTINCT transaction_id)")
+	assert.Contains(t, conn.query, "GROUP BY namespace, workload_kind, workload_name, container_name")
 }
 
 func TestSourcesToModelDropsUnknownKinds(t *testing.T) {

@@ -9,6 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
+
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -88,7 +90,7 @@ func TestScanAndLoadTrieStructureNodes(t *testing.T) {
 		t.Fatalf("nodes = %d, want 2 (malformed field skipped); got %#v", len(nodes), nodes)
 	}
 
-	byID := make(map[string]callTrieStructureNode, len(nodes))
+	byID := make(map[string]store.FlushedTrieNode, len(nodes))
 	for _, n := range nodes {
 		byID[n.NodeID] = n
 	}

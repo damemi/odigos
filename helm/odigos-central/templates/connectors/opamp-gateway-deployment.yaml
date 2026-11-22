@@ -23,7 +23,7 @@ spec:
         # both pods report healthy while every Collector session hangs on connect.
         odigos.io/component: connector-opamp-gateway
     spec:
-      serviceAccountName: connector-opamp-gateway
+      serviceAccountName: {{ include "odigos.serviceAccountName" (dict "values" .Values.cloudConnectors.opampGateway "default" "connector-opamp-gateway") }}
       {{ include "odigos.renderPullSecrets" . | nindent 6 }}
       {{- with $gw.nodeSelector }}
       nodeSelector:

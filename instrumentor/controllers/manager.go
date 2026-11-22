@@ -67,6 +67,7 @@ type KubeManagerOptions struct {
 	Logger                   logr.Logger
 	MetricsServerBindAddress string
 	HealthProbeBindAddress   string
+	WebhookPort              int
 	EnableLeaderElection     bool
 }
 
@@ -177,15 +178,12 @@ func CreateManager(opts KubeManagerOptions) (ctrl.Manager, error) {
 		},
 	}
 
-	// Check if the environment variable `LOCAL_WEBHOOK_CERT_DIR` is set.
-	// If defined, add WebhookServer options with the specified certificate directory.
-	// This is used primarily for local development environments to provide a custom path for serving TLS certificates.
-	localCertDir := os.Getenv("LOCAL_MUTATING_WEBHOOK_CERT_DIR")
-	if localCertDir != "" {
-		mgrOptions.WebhookServer = webhook.NewServer(webhook.Options{
-			CertDir: localCertDir,
-		})
-	}
+	// LOCAL_MUTATING_WEBHOOK_CERT_DIR is used primarily for local development environments to provide
+	// a custom path for serving TLS certificates. When empty, the default certificate directory is used.
+	mgrOptions.WebhookServer = webhook.NewServer(webhook.Options{
+		Port:    opts.WebhookPort,
+		CertDir: os.Getenv("LOCAL_MUTATING_WEBHOOK_CERT_DIR"),
+	})
 
 	return ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOptions)
 }

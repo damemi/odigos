@@ -12,6 +12,9 @@ spec:
     - with_wasp: the same, through wasp's write path (ODIGOS_FORCE_WASP)
     - inventory's spans come from python-ebpf only, and continue the trace of the Java frontend
   skipDelete: true
+  bindings:
+    - name: traceDbNamespace
+      value: traces
   steps:
     - name: Prepare destination
       try:

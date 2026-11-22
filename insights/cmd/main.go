@@ -1,6 +1,6 @@
 // Command insights is the entrypoint for the odigos-enterprise-insights
 // service. It boots the HTTP API (consumed by the UI) and the OTLP gRPC
-// receiver (fed by the Odigos gateway), both backed by ClickHouse, and
+// receiver (fed by the Odigos gateway), both backed by Postgres, and
 // optionally the autopilot feature (see internal/autopilot).
 package main
 
@@ -12,7 +12,6 @@ import (
 
 	// Registers the /debug/pprof/* handlers.
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -27,8 +26,8 @@ import (
 	apihttp "github.com/odigos-io/odigos/insights/internal/api/http"
 	"github.com/odigos-io/odigos/insights/internal/autopilot"
 	"github.com/odigos-io/odigos/insights/internal/cache"
-	"github.com/odigos-io/odigos/insights/internal/db/clickhouse"
-	"github.com/odigos-io/odigos/insights/internal/db/clickhouse/migrate"
+	"github.com/odigos-io/odigos/insights/internal/db/postgres"
+	"github.com/odigos-io/odigos/insights/internal/db/postgres/migrate"
 	"github.com/odigos-io/odigos/insights/internal/engine"
 	"github.com/odigos-io/odigos/insights/internal/leader"
 	"github.com/odigos-io/odigos/insights/internal/metrics"
@@ -37,6 +36,7 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/otlp"
 	"github.com/odigos-io/odigos/insights/internal/repo"
 	"github.com/odigos-io/odigos/odigosauth"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const (
@@ -50,10 +50,14 @@ const (
 	// the other Odigos services.
 	pprofPort = 6060
 
-	// envClickHouseDSN names the env var holding the ClickHouse connection URI
-	// (clickhouse://user:pass@host:9000/db). The Helm chart builds it from the
-	// bundled ClickHouse Secret.
-	envClickHouseDSN = "CLICKHOUSE_DSN"
+	// envPostgresDSN names the env var holding the Postgres connection URI
+	// (postgres://user:pass@host:5432/db). The Helm chart takes it from the
+	// bundled Postgres Secret or from the external database settings.
+	envPostgresDSN = "POSTGRES_DSN"
+
+	// envPostgresVolumeSize is the bundled database's volume size (a k8s
+	// quantity such as 8Gi), so the Storage page can report how full it is.
+	envPostgresVolumeSize = "POSTGRES_VOLUME_SIZE"
 
 	// envAutopilotRedisEndpoint is the cacheDb Redis address (host:port)
 	// used to fetch autopilot profile stacks (logical DB 1). Set by Helm
@@ -61,14 +65,13 @@ const (
 	envAutopilotRedisEndpoint = "AUTOPILOT_REDIS_ENDPOINT"
 
 	// leaderLease elects the one replica that runs the singleton jobs: the
-	// findings notifier, recommendation sweeps, and, when enabled, the
-	// autopilot loop. The chart grants leases get/create/update.
+	// findings notifier, recommendation sweeps, retention, and, when enabled,
+	// the autopilot loop. The chart grants leases get/create/update.
 	leaderLease = "odigos-insights-leader"
 
 	// Autopilot feature. The Helm chart sets these only when
 	// insights.autopilot.enabled is true.
 	envAutopilotEnabled              = "AUTOPILOT_ENABLED"
-	envAutopilotClickHouseDSN        = "AUTOPILOT_CLICKHOUSE_DSN"
 	envAutopilotLiteLLMMasterKey     = "AUTOPILOT_LITELLM_MASTER_KEY"
 	envAutopilotAutoApply            = "AUTOPILOT_AUTO_APPLY"
 	envAutopilotMaxProbesPerWorkload = "AUTOPILOT_MAX_PROBES_PER_WORKLOAD"
@@ -98,9 +101,9 @@ func main() {
 	// Hard-fail at startup if the enterprise token is missing or invalid.
 	odigosauth.AssertEnterpriseOdigosToken(log)
 
-	dsn := os.Getenv(envClickHouseDSN)
+	dsn := os.Getenv(envPostgresDSN)
 	if dsn == "" {
-		log.Error("missing required env var", "var", envClickHouseDSN)
+		log.Error("missing required env var", "var", envPostgresDSN)
 		os.Exit(1)
 	}
 
@@ -118,7 +121,7 @@ func main() {
 
 	// Open the repository. The pool connects lazily, so we can build the router
 	// and serve health checks immediately, then wait for the DB without crashing.
-	r, schemaReady, closeRepo, err := openRepo(dsn, log)
+	r, pg, closeRepo, err := openRepo(dsn, log)
 	if err != nil {
 		log.Error("failed to open repository", "error", err)
 		os.Exit(1)
@@ -154,7 +157,7 @@ func main() {
 	// Wait for the DB and the migration Job's schema (retrying). Liveness is
 	// already served, so a slow DB or not-yet-run migration keeps /readyz at 503
 	// without killing the pod. Returns an error only on a shutdown signal mid-wait.
-	if err := waitForSchemaReady(rootCtx, log, r, schemaReady); err != nil {
+	if err := waitForSchemaReady(rootCtx, log, r, pg.SchemaReady); err != nil {
 		log.Info("shutting down before database became ready", "reason", err)
 		shutdownHTTP(httpSrv, log)
 		return
@@ -238,13 +241,14 @@ func main() {
 	// notifier (delivering a finding twice is wrong), the recommendation
 	// miner (one miner serves the queued requests and the periodic sweeps;
 	// requests handled on a follower are picked up by the leader's next sweep),
-	// and the autopilot loop when that feature is enabled. One campaign
-	// covers all of them. Shutdown waits on leaderDone so the elector releases
-	// the lease before the process exits.
+	// the retention job that expires old samples and delivery attempts, and the
+	// autopilot loop when that feature is enabled. One campaign covers all of
+	// them. Shutdown waits on leaderDone so the elector releases the lease
+	// before the process exits.
 	leaderDone := make(chan struct{})
 	go func() {
 		defer close(leaderDone)
-		runLeaderJobs(rootCtx, log, r, integrationRegistry, eng)
+		runLeaderJobs(rootCtx, log, r, pg, dsn, integrationRegistry, eng)
 	}()
 
 	otlpSrv := otlp.NewServer(otlpAddr, eng, log)
@@ -327,36 +331,37 @@ const (
 	dbRetryLogEvery = 60 * time.Second
 )
 
-// openRepo constructs the ClickHouse-backed repository without requiring the DB
-// to be up (the connection is lazy). It returns the repo, a schemaReady func
-// that gates serving on the migration Job having run, and a close func.
-func openRepo(dsn string, log *commonlogger.OdigosLogger) (repo.Repository, func(context.Context) error, func(), error) {
-	r, err := clickhouse.Open(dsn, engine.NewBaselineCodec())
+// openRepo constructs the Postgres-backed repository without requiring the DB
+// to be up (the pool connects lazily). It returns the wrapped repo for queries,
+// the concrete repo for its schema check and retention job, and a close func.
+func openRepo(dsn string, log *commonlogger.OdigosLogger) (repo.Repository, *postgres.Repo, func(), error) {
+	var opts []postgres.Option
+	if size := os.Getenv(envPostgresVolumeSize); size != "" {
+		if q, err := resource.ParseQuantity(size); err == nil && q.Value() > 0 {
+			opts = append(opts, postgres.WithVolumeBytes(uint64(q.Value())))
+		} else {
+			log.Warn("ignoring invalid volume size", "var", envPostgresVolumeSize, "value", size)
+		}
+	}
+	r, err := postgres.Open(dsn, engine.NewBaselineCodec(), opts...)
 	if err != nil {
 		return nil, nil, func() {}, err
 	}
-	// schemaReady and closeRepo capture the concrete *clickhouse.Repo, while
-	// callers use the instrumented+cached wrapper for queries. The service does
-	// not create the schema (that's the migration Job's job, see migrate.Apply);
-	// schemaReady keeps the app not-ready until that Job has run.
-	schemaReady := func(ctx context.Context) error {
-		return r.SchemaReady(ctx)
-	}
 	closeRepo := func() {
 		if err := r.Close(); err != nil {
-			log.Warn("failed to close clickhouse", "error", err)
+			log.Warn("failed to close postgres", "error", err)
 		}
 	}
 	// Order matters: the policy cache wraps the metrics layer, which wraps the
 	// real DB repo, so a cache hit returns before the metrics layer and the
 	// DB-call metric counts only true misses. Transaction identity is resolved
 	// in-memory by the engine and write-behind flushed - no per-trace txn cache.
-	return cache.WrapPolicies(metrics.WrapRepo(r)), schemaReady, closeRepo, nil
+	return cache.WrapPolicies(metrics.WrapRepo(r)), r, closeRepo, nil
 }
 
 // waitForSchemaReady blocks until the DB is reachable AND the migration Job has
 // applied the schema (both retried with backoff). Ping alone isn't enough: the
-// bundled ClickHouse can be up while the migration Job is still running. Returns
+// bundled Postgres can be up while the migration Job is still running. Returns
 // the context error only when ctx is cancelled mid-wait.
 func waitForSchemaReady(
 	ctx context.Context,
@@ -399,16 +404,16 @@ func waitForSchemaReady(
 
 // runMigrate applies pending schema migrations and returns a process exit code.
 // It backs the `insights migrate` entrypoint, run once per rollout by the Helm
-// migration Job. ClickHouse may still be starting, so it retries with the
+// migration Job. Postgres may still be starting, so it retries with the
 // service's backoff until migrations succeed or the process is signalled; the
 // Job's activeDeadlineSeconds bounds a genuinely stuck run.
 func runMigrate() int {
 	commonlogger.Init(getLogLevel(), componentName)
 	log := commonlogger.LoggerCompat()
 
-	dsn := os.Getenv(envClickHouseDSN)
+	dsn := os.Getenv(envPostgresDSN)
 	if dsn == "" {
-		log.Error("missing required env var", "var", envClickHouseDSN)
+		log.Error("missing required env var", "var", envPostgresDSN)
 		return 1
 	}
 
@@ -418,15 +423,16 @@ func runMigrate() int {
 	delay := dbRetryInitial
 	var lastLog time.Time
 	for attempt := 1; ; attempt++ {
-		err := migrate.Apply(dsn, os.Getenv(envAutopilotClickHouseDSN))
+		err := migrate.Apply(dsn)
 		if err == nil {
 			log.Info("schema migrations applied", "attempts", attempt)
 			return 0
-		}
-		now := time.Now()
-		if lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {
-			log.Warn("migration failed, retrying (clickhouse may be starting)", "attempt", attempt, "retry_in", delay.String(), "error", err)
-			lastLog = now
+		} else {
+			now := time.Now()
+			if lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {
+				log.Warn("migration failed, retrying (postgres may be starting)", "attempt", attempt, "retry_in", delay.String(), "error", err)
+				lastLog = now
+			}
 		}
 
 		select {
@@ -535,17 +541,17 @@ func runSystemSettingsReloader(
 // notifier tick or the autopilot loop. Losing the lease cancels them
 // all. Outside a cluster (no in-cluster credentials) they run
 // unconditionally, which is the local single-process case. Autopilot
-// joins the slice only when AUTOPILOT_ENABLED is set. Tries and analysis
-// runs stay in the autopilot database; transaction inventory is read from
-// insights.transactions via source_identity.
-func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, reg *notify.Registry, eng *engine.Engine) {
+// joins the slice only when AUTOPILOT_ENABLED is set. Its tries, analysis
+// runs, and recommendations are stored in the same Postgres as insights.
+func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, pg *postgres.Repo, dsn string, reg *notify.Registry, eng *engine.Engine) {
 	dispatcher := notify.NewDispatcher(r, reg, slog.New(commonlogger.NewSlogHandler("notifier")), leader.Identity(), notify.PollInterval, notify.DefaultOverlap)
-	jobs := []func(context.Context){dispatcher.Run, eng.RunRecommendationMiner}
+	retentionLog := slog.New(commonlogger.NewSlogHandler("retention"))
+	retention := func(ctx context.Context) { pg.RunRetention(ctx, retentionLog) }
+	jobs := []func(context.Context){dispatcher.Run, eng.RunRecommendationMiner, retention}
 	if envTruthy(os.Getenv(envAutopilotEnabled)) {
 		opts := autopilot.Options{
 			Log:                  log,
-			ClickHouseDSN:        os.Getenv(envAutopilotClickHouseDSN),
-			InsightsDatabase:     clickHouseDatabase(os.Getenv(envClickHouseDSN)),
+			PostgresDSN:          dsn,
 			RedisEndpoint:        os.Getenv(envAutopilotRedisEndpoint),
 			LiteLLMMasterKey:     os.Getenv(envAutopilotLiteLLMMasterKey),
 			AutoApply:            envTruthy(os.Getenv(envAutopilotAutoApply)),
@@ -580,24 +586,6 @@ func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.R
 	default:
 		log.Error("leader jobs disabled: leader election unavailable", "error", err)
 	}
-}
-
-// clickHouseDatabase returns the database name from a ClickHouse DSN path.
-// clickhouse-go (v2.30) takes the database only from the path and ignores a
-// ?database= parameter, so the path is the database insights writes to. The
-// autopilot loop logs the name it resolved.
-func clickHouseDatabase(dsn string) string {
-	if dsn == "" {
-		return ""
-	}
-	if !strings.Contains(dsn, "://") {
-		dsn = "clickhouse://" + dsn
-	}
-	u, err := url.Parse(dsn)
-	if err != nil {
-		return ""
-	}
-	return strings.Trim(u.Path, "/")
 }
 
 // shutdownHTTP gracefully shuts the HTTP server down within a 10s deadline.
