@@ -8,18 +8,18 @@ import (
 )
 
 // d5Libraries scores against the set of OpenTelemetry instrumentation libraries
-// (Scope name + version) seen in the trace; a new library reaching a learned
-// transaction is a deviation, often the symptom of an unintended class load
-// (log4shell-style).
+// (Scope names) seen in the trace; a new library reaching a learned transaction
+// is a deviation, often the symptom of an unintended class load
+// (log4shell-style). Libraries are matched by name only, so upgrading a library
+// or the agent that instruments it is not a deviation.
 //
 // JSONB shape:
 //
-//	{"libs": [{"ns": "okhttp3", "ver": "4.x"}, ...]}
+//	{"libs": [{"ns": "okhttp3"}, ...]}
 type d5Libraries struct{}
 
 type lib struct {
-	Ns  string `json:"ns"`
-	Ver string `json:"ver"`
+	Ns string `json:"ns"`
 }
 
 type d5Data struct {
@@ -84,10 +84,7 @@ func (d5Libraries) decodeLearning(raw json.RawMessage) learningBaseline {
 }
 
 func lessLib(a, b lib) bool {
-	if a.Ns != b.Ns {
-		return a.Ns < b.Ns
-	}
-	return a.Ver < b.Ver
+	return a.Ns < b.Ns
 }
 
 func decodeD5(raw json.RawMessage) (d5Data, error) {
@@ -95,21 +92,32 @@ func decodeD5(raw json.RawMessage) (d5Data, error) {
 		return d5Data{}, nil
 	}
 	var d d5Data
-	err := json.Unmarshal(raw, &d)
-	return d, err
+	if err := json.Unmarshal(raw, &d); err != nil {
+		return d, err
+	}
+	// Baselines stored before libraries were matched by name hold one entry
+	// per version, which decode to repeated names.
+	d.Libs = dedupLibs(d.Libs)
+	return d, nil
 }
 
-// libsFromTrace collects the distinct (scope name, version) pairs across the
-// trace's spans, skipping spans with no scope name (some manually-instrumented
-// apps omit it; lumping them together would be noise). Used by Score and Merge.
+// libsFromTrace collects the distinct scope names across the trace's spans,
+// skipping spans with no scope name (some manually-instrumented apps omit it;
+// lumping them together would be noise). Used by Score and Merge.
 func libsFromTrace(t *Trace) []lib {
 	out := []lib{}
-	seen := map[lib]struct{}{}
 	for _, s := range t.Spans {
-		if s.ScopeName == "" {
-			continue
+		if s.ScopeName != "" {
+			out = append(out, lib{Ns: s.ScopeName})
 		}
-		l := lib{Ns: s.ScopeName, Ver: s.ScopeVersion}
+	}
+	return dedupLibs(out)
+}
+
+func dedupLibs(libs []lib) []lib {
+	out := make([]lib, 0, len(libs))
+	seen := make(map[lib]struct{}, len(libs))
+	for _, l := range libs {
 		if _, ok := seen[l]; ok {
 			continue
 		}

@@ -12,33 +12,63 @@ func TestD5_EmptyScopeNameSkipped(t *testing.T) {
 		{ScopeName: "postgresql", ScopeVersion: "42"},
 	}}
 	got := libsFromTrace(tr)
-	if len(got) != 1 || got[0] != (lib{Ns: "postgresql", Ver: "42"}) {
+	if len(got) != 1 || got[0] != (lib{Ns: "postgresql"}) {
 		t.Fatalf("libsFromTrace = %+v, want only named scopes (deduped)", got)
 	}
 }
 
-func TestD5_VersionChangeDeviates(t *testing.T) {
+func TestD5_VersionChangeDoesNotDeviate(t *testing.T) {
 	learned := &Trace{Spans: []*Span{{ScopeName: "okhttp3", ScopeVersion: "4.11.0"}}}
 	baseline, err := (d5Libraries{}).Merge(learned, nil)
 	if err != nil {
 		t.Fatalf("merge: %v", err)
 	}
-
-	same := &Trace{Spans: []*Span{{ScopeName: "okhttp3", ScopeVersion: "4.11.0"}}}
-	if dev, _, _ := (d5Libraries{}).Score(same, baseline); dev {
-		t.Fatal("same name+version must not deviate")
+	if contains(string(baseline), "4.11.0") {
+		t.Fatalf("baseline should not store versions: %s", baseline)
 	}
 
 	upgraded := &Trace{Spans: []*Span{{ScopeName: "okhttp3", ScopeVersion: "4.12.0"}}}
-	dev, ev, err := (d5Libraries{}).Score(upgraded, baseline)
+	if dev, ev, _ := (d5Libraries{}).Score(upgraded, baseline); dev {
+		t.Fatalf("an upgraded library must not deviate: %s", ev)
+	}
+}
+
+func TestD5_NewLibraryDeviatesOnUpgradedTrace(t *testing.T) {
+	baseline, err := (d5Libraries{}).Merge(&Trace{Spans: []*Span{{ScopeName: "okhttp3", ScopeVersion: "4"}}}, nil)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	tr := &Trace{Spans: []*Span{
+		{ScopeName: "okhttp3", ScopeVersion: "5"},
+		{ScopeName: "commons-text", ScopeVersion: "1.9"},
+	}}
+	dev, ev, err := (d5Libraries{}).Score(tr, baseline)
 	if err != nil {
 		t.Fatalf("score: %v", err)
 	}
 	if !dev {
-		t.Fatal("same library name with a new version must deviate")
+		t.Fatal("a library not in the baseline must deviate")
 	}
-	if !contains(string(ev), "4.12.0") {
-		t.Fatalf("evidence should name the new version: %s", ev)
+	if !contains(string(ev), "commons-text") || contains(string(ev), "okhttp3") {
+		t.Fatalf("evidence should name only the new library: %s", ev)
+	}
+}
+
+// Baselines stored before libraries were matched by name hold versions.
+func TestD5_BaselineWithVersionsMatchesByName(t *testing.T) {
+	stored := json.RawMessage(`{"libs":[{"ns":"okhttp3","ver":"4.11.0"},{"ns":"okhttp3","ver":"4.12.0"}]}`)
+
+	upgraded := &Trace{Spans: []*Span{{ScopeName: "okhttp3", ScopeVersion: "5.0.0"}}}
+	if dev, ev, _ := (d5Libraries{}).Score(upgraded, stored); dev {
+		t.Fatalf("a library stored with an older version must not deviate: %s", ev)
+	}
+
+	merged, err := (d5Libraries{}).Merge(upgraded, stored)
+	if err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if string(merged) != `{"libs":[{"ns":"okhttp3"}]}` {
+		t.Fatalf("merge should drop versions and dedupe by name: %s", merged)
 	}
 }
 
