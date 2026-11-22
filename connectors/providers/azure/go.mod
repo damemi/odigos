@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/connectors/providers/azure
 
-go 1.26.2
+go 1.27.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.0

@@ -1,8 +1,9 @@
 module github.com/odigos-io/odigos/collector/extension/odigosenterpriseauthextension
 
-go 1.26.4
+go 1.27.0
 
 require (
+	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.65.0
 	go.opentelemetry.io/collector/component/componentstatus v0.159.0
@@ -33,7 +34,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.159.0 // indirect

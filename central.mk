@@ -137,7 +137,7 @@ build-connector-postgres:
 GOOSE_VERSION ?= v3.28.0
 .PHONY: validate-db-migrations
 validate-db-migrations:
-	docker run --rm -v "$(CURDIR)/connector-postgres/migrations:/migrations" golang:1.26.8 \
+	docker run --rm -v "$(CURDIR)/connector-postgres/migrations:/migrations" golang:1.27.4 \
 		sh -c 'CGO_ENABLED=0 go install github.com/pressly/goose/v3/cmd/goose@$(GOOSE_VERSION) && goose -dir /migrations validate'
 
 .PHONY: build-connector-runtime-dev

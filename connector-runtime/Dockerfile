@@ -5,7 +5,7 @@
 # Build from the repository root:
 #   docker build -f connector-runtime/Dockerfile .
 
-FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.4 AS builder
 ENV GOWORK=off
 ENV GOPRIVATE=github.com/odigos-io/*
 ARG TARGETARCH

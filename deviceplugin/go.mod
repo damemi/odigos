@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/deviceplugin
 
-go 1.26.4
+go 1.27.0
 
 replace github.com/odigos-io/odigos/common => ../common
 

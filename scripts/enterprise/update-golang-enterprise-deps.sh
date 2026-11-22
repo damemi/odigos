@@ -28,7 +28,7 @@ IMG_SUFFIX="${IMG_SUFFIX:-}"
 TAG_PREFIX="${TAG_PREFIX:-a}"
 
 export GOPRIVATE="${GOPRIVATE:-${ENTERPRISE_GO_MODULE}}"
-export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.26.2}"
+export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.27.0}"
 
 image_repo="${ORG}/odigos-enterprise-odiglet${IMG_SUFFIX}"
 

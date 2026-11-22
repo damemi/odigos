@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.22
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.23
 
 ######### dotnet builder #########
 FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS dotnet-builder

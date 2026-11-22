@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.20
-# The floor is the `go 1.26.4` that the collector components declare, since the builder runs with
-# GOTOOLCHAIN=local; above that it tracks the latest 1.26 patch, because the stdlib compiled into both binaries is what
+# The floor is the `go 1.27.0` that the collector components declare, since the builder runs with
+# GOTOOLCHAIN=local; above that it tracks the latest 1.27 patch, because the stdlib compiled into both binaries is what
 # image scans flag.
-FROM --platform=$BUILDPLATFORM golang:1.26.9-trixie AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.4-trixie AS builder
 # install the required tooling for calling `setcap` on the compiled binary
 RUN apt-get update && apt-get install -y --no-install-recommends libcap2-bin
 WORKDIR /go/src

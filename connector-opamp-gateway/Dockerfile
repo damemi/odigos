@@ -6,7 +6,7 @@
 # Build from the repository root:
 #   docker build -f connector-opamp-gateway/Dockerfile .
 
-FROM --platform=$BUILDPLATFORM golang:1.26.2 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.4 AS builder
 ENV GOPRIVATE=github.com/odigos-io/*
 ARG TARGETARCH
 ARG LD_FLAGS

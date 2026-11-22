@@ -50,7 +50,7 @@ dev_image = $(or $(IMAGE),$(call dev_image_repo,$(1)):$(TAG))
 GOLANGCI_LINT_VERSION ?= v2.15.0
 # gofmt is compiled into golangci-lint and its output differs between Go releases,
 # so build and run it like CI: with CI's Go version and without the local go.work.
-LINT_GO_VERSION ?= 1.26.6
+LINT_GO_VERSION ?= 1.27.4
 # Versioned path so a version bump reinstalls.
 GOLANGCI_LINT := $(CURDIR)/.tools/golangci-lint-$(GOLANGCI_LINT_VERSION)-go$(LINT_GO_VERSION)
 LINT_MODULES ?= common k8sutils profiles destinations procdiscovery

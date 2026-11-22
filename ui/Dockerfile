@@ -37,7 +37,7 @@ COPY --from=webapp /webapp/out /
 ############################################################
 # 2) Build Go. ui replaces these odigos modules with local paths.
 ############################################################
-FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.4 AS builder
 ARG SERVICE_NAME=ui
 ARG TARGETARCH
 ARG LD_FLAGS

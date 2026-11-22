@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor
 
-go 1.26.2
+go 1.27.0
 
 require (
 	github.com/stretchr/testify v1.12.1

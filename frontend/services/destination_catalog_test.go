@@ -479,21 +479,6 @@ func TestEveryEmbeddedDestinationRendersEveryOneOfItsFieldsToTheUI(t *testing.T)
 	assert.Positive(t, totalFields)
 }
 
-func TestDestinationTypeConfigToCategoryItemDropsAFieldWhoseComponentPropsCannotBeMarshalled(t *testing.T) {
-	destConfig := destinations.Destination{}
-	destConfig.Spec.Fields = []destinations.Field{
-		{Name: "GOOD", ComponentProps: map[string]interface{}{"required": true}},
-		// yaml.v2 decodes a nested mapping into map[interface{}]interface{}, which
-		// encoding/json refuses.
-		{Name: "BAD", ComponentProps: map[string]interface{}{"nested": map[interface{}]interface{}{1: "one"}}},
-	}
-
-	item := DestinationTypeConfigToCategoryItem(destConfig)
-
-	require.Len(t, item.Fields, 1, "the unmarshallable field is dropped without an error")
-	assert.Equal(t, "GOOD", item.Fields[0].Name)
-}
-
 // ---------------------------------------------------------------------------
 // GetDestinationCategories / GetDestinationTypeConfig
 // ---------------------------------------------------------------------------

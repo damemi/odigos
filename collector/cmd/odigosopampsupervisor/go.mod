@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/collector/cmd/odigosopampsupervisor
 
-go 1.26.4
+go 1.27.0
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/cmd/opampsupervisor v0.160.0

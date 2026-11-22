@@ -1,29 +1,27 @@
 module github.com/odigos-io/odigos/ui
 
-go 1.26.4
+go 1.27.0
 
 require (
+	github.com/gin-gonic/gin v1.12.0
+	github.com/go-logr/logr v1.4.4
+	github.com/mark3labs/mcp-go v0.54.0
 	github.com/odigos-io/odigos/api v1.30.0-pre2.0.20260617121516-bfc5da9bb14b
 	github.com/odigos-io/odigos/common v1.30.0-pre2.0.20260617121516-bfc5da9bb14b
+	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/distros v0.0.0
 	github.com/odigos-io/odigos/frontend v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/mcp v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/profiles v0.0.0-00010101000000-000000000000
+	github.com/prometheus/client_golang v1.24.1
+	k8s.io/api v0.36.1
+	k8s.io/apimachinery v0.36.1
+	k8s.io/client-go v0.36.0
 	k8s.io/klog/v2 v2.140.0
 	sigs.k8s.io/controller-runtime v0.24.1
-)
-
-require (
-	github.com/Microsoft/go-winio v0.6.2 // indirect
-	github.com/cenkalti/backoff/v7 v7.0.0 // indirect
-	github.com/go-openapi/swag/pools v0.28.0 // indirect
-	github.com/google/jsonschema-go v0.4.2 // indirect
-	github.com/odigos-io/odigos/actions v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/instrumentationrules v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/recommendations v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/status v0.0.0-00010101000000-000000000000 // indirect
-	github.com/spf13/cast v1.7.1 // indirect
-	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	go.opentelemetry.io/collector/processor/xprocessor v0.159.0 // indirect
-	go.uber.org/zap/exp v0.3.0 // indirect
+	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
@@ -36,6 +34,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 // indirect
+	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
@@ -64,6 +63,7 @@ require (
 	github.com/bytedance/sonic v1.15.0 // indirect
 	github.com/bytedance/sonic/loader v0.5.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+	github.com/cenkalti/backoff/v7 v7.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/colega/zeropool v0.0.0-20230505084239-6fb4a4f75381 // indirect
@@ -91,12 +91,10 @@ require (
 	github.com/gin-contrib/cors v1.7.5 // indirect
 	github.com/gin-contrib/gzip v1.2.6 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
-	github.com/gin-gonic/gin v1.12.0
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
-	github.com/go-logr/logr v1.4.4
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/analysis v0.25.5 // indirect
@@ -114,6 +112,7 @@ require (
 	github.com/go-openapi/swag/loading v0.28.0 // indirect
 	github.com/go-openapi/swag/mangling v0.28.0 // indirect
 	github.com/go-openapi/swag/netutils v0.28.0 // indirect
+	github.com/go-openapi/swag/pools v0.28.0 // indirect
 	github.com/go-openapi/swag/stringutils v0.28.0 // indirect
 	github.com/go-openapi/swag/typeutils v0.28.0 // indirect
 	github.com/go-openapi/swag/yamlutils v0.28.0 // indirect
@@ -137,6 +136,7 @@ require (
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
+	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/pprof v0.0.0-20260302011040-a15ffb7f9dcc // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -180,7 +180,6 @@ require (
 	github.com/knadh/koanf/v2 v2.3.6 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
-	github.com/mark3labs/mcp-go v0.54.0
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
@@ -196,12 +195,11 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
+	github.com/odigos-io/odigos/actions v0.0.0-00010101000000-000000000000 // indirect
 	github.com/odigos-io/odigos/config v0.0.0-00010101000000-000000000000 // indirect
-	github.com/odigos-io/odigos/destinations v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/distros v0.0.0
-	github.com/odigos-io/odigos/k8sutils v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/mcp v0.0.0-00010101000000-000000000000
-	github.com/odigos-io/odigos/odigosauth v0.0.0-00010101000000-000000000000
+	github.com/odigos-io/odigos/instrumentationrules v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/recommendations v0.0.0-00010101000000-000000000000 // indirect
+	github.com/odigos-io/odigos/status v0.0.0-00010101000000-000000000000 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/exp/metrics v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.159.0 // indirect
@@ -227,7 +225,6 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20250313105119-ba97887b0a25 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/alertmanager v0.31.1 // indirect
-	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_golang/exp v0.0.0-20260325093428-d8591d0db856 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.71.0 // indirect
@@ -247,6 +244,7 @@ require (
 	github.com/sercand/kuberesolver/v6 v6.0.1 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/sosodev/duration v1.3.1 // indirect
+	github.com/spf13/cast v1.7.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/thanos-io/objstore v0.0.0-20250813080715-4e5fd4289b50 // indirect
@@ -259,6 +257,7 @@ require (
 	github.com/vektah/gqlparser/v2 v2.5.27 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.etcd.io/bbolt v1.4.3 // indirect
 	go.etcd.io/etcd/api/v3 v3.6.15 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.6.15 // indirect
@@ -307,6 +306,7 @@ require (
 	go.opentelemetry.io/collector/pipeline v1.67.0 // indirect
 	go.opentelemetry.io/collector/pipeline/xpipeline v0.161.0 // indirect
 	go.opentelemetry.io/collector/processor v1.65.0 // indirect
+	go.opentelemetry.io/collector/processor/xprocessor v0.159.0 // indirect
 	go.opentelemetry.io/collector/receiver v1.67.0 // indirect
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.161.0 // indirect
 	go.opentelemetry.io/collector/receiver/receiverhelper v0.161.0 // indirect
@@ -345,6 +345,7 @@ require (
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
+	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
@@ -371,16 +372,12 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.36.1
 	k8s.io/apiextensions-apiserver v0.36.0 // indirect
-	k8s.io/apimachinery v0.36.1
-	k8s.io/client-go v0.36.0
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
-	sigs.k8s.io/yaml v1.6.0
 )
 
 replace github.com/hashicorp/memberlist => github.com/grafana/memberlist v0.3.1-0.20251126142931-6f9f62ab6f86

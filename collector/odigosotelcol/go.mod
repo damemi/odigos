@@ -2,7 +2,7 @@
 
 module odigos.io/opentelemetry-collector/cmd/odigosotelcol
 
-go 1.26.4
+go 1.27.0
 
 require (
 	github.com/observiq/bindplane-otel-contrib/exporter/azureloganalyticsexporter v1.13.0

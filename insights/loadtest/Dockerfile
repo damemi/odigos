@@ -11,7 +11,7 @@
 # anomalies belong in script.js, not in generator randomness.
 #
 # Image: public.ecr.aws/e1u7m2k3/insights-k6-runner
-ARG GO_VERSION=1.25.4
+ARG GO_VERSION=1.27.4
 ARG XK6_CLIENT_TRACING_VERSION=v0.0.10
 
 FROM golang:${GO_VERSION}-alpine AS build
