@@ -21,16 +21,16 @@ type AppEvidence struct {
 	CallGraph []CallGraphEdge
 }
 
-// BuildAppEvidence rolls path trie nodes into a merged application call graph.
+// BuildAppEvidence rolls path call tree nodes into a merged application call graph.
 // Non-application nodes (runtime, Odigos agent) are skipped: an edge's caller is the
 // nearest application ancestor, so app → runtime → app paths yield the same evidence
 // as app → app.
-func BuildAppEvidence(nodes []store.CallTrieNode) AppEvidence {
+func BuildAppEvidence(nodes []store.CallTreeNode) AppEvidence {
 	if len(nodes) == 0 {
 		return AppEvidence{}
 	}
 
-	byID := make(map[string]store.CallTrieNode, len(nodes))
+	byID := make(map[string]store.CallTreeNode, len(nodes))
 	for _, n := range nodes {
 		byID[n.ID] = n
 	}
@@ -52,7 +52,7 @@ func BuildAppEvidence(nodes []store.CallTrieNode) AppEvidence {
 
 // nearestAppAncestor walks ParentID through non-app nodes. It stops on a missing
 // parent or a cycle.
-func nearestAppAncestor(byID map[string]store.CallTrieNode, n store.CallTrieNode) (string, bool) {
+func nearestAppAncestor(byID map[string]store.CallTreeNode, n store.CallTreeNode) (string, bool) {
 	seen := map[string]struct{}{n.ID: {}}
 	for id := n.ParentID; id != ""; {
 		if _, dup := seen[id]; dup {

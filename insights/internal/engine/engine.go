@@ -69,7 +69,7 @@ type Engine struct {
 	admission *transactionAdmission
 
 	// autopilot optionally correlates java-ebpf traces with Redis profile
-	// stacks and merges call tries into Redis (when autopilot is enabled).
+	// stacks and merges call trees into Redis (when autopilot is enabled).
 	autopilot *autopilot.Client
 
 	warnMu       sync.Mutex
@@ -175,7 +175,7 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 	rawTraceID := e.autopilotTraceID(t)
 	for _, sub := range subs {
 		// Only identities processOne resolved and the per-service cap admitted
-		// get a call trie; see enqueueAutopilot.
+		// get a call tree; see enqueueAutopilot.
 		if tx, ok := e.processOne(ctx, sub, t, claims); ok {
 			e.enqueueAutopilot(rawTraceID, sub, tx)
 		}

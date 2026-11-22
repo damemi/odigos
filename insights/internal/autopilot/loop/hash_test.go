@@ -7,19 +7,19 @@ import (
 )
 
 func TestHashEvidenceStable(t *testing.T) {
-	base := BuildAppEvidence([]store.CallTrieNode{
+	base := BuildAppEvidence([]store.CallTreeNode{
 		{ID: "1", ParentID: "", Name: "com.example.A.a"},
 		{ID: "2", ParentID: "1", Name: "com.example.B.b"},
 	})
 	h1 := hashEvidence(base)
-	reordered := BuildAppEvidence([]store.CallTrieNode{
+	reordered := BuildAppEvidence([]store.CallTreeNode{
 		{ID: "2", ParentID: "1", Name: "com.example.B.b"},
 		{ID: "1", ParentID: "", Name: "com.example.A.a"},
 	})
 	if h1 != hashEvidence(reordered) {
 		t.Fatal("node order must not change structural evidence hash")
 	}
-	withNew := BuildAppEvidence([]store.CallTrieNode{
+	withNew := BuildAppEvidence([]store.CallTreeNode{
 		{ID: "1", ParentID: "", Name: "com.example.A.a"},
 		{ID: "2", ParentID: "1", Name: "com.example.B.b"},
 		{ID: "3", ParentID: "2", Name: "com.example.C.c"},

@@ -9,9 +9,9 @@ import (
 )
 
 // Client correlates java-ebpf traces with Redis profile stacks and merges a
-// structure-only call trie into Redis (DB 1). Transaction inventory is the
-// insights transactions table, written on the engine flush. The leader's trie
-// flusher copies the tries into the autopilot store.
+// structure-only call tree into Redis (DB 1). Transaction inventory is the
+// insights transactions table, written on the engine flush. The leader's call tree
+// flusher copies the call trees into the autopilot store.
 type Client struct {
 	batcher *invocationBatcher
 	logger  *commonlogger.OdigosLogger
@@ -39,12 +39,12 @@ func Open(redisEndpoint string, logger *commonlogger.OdigosLogger) (*Client, err
 	}
 	cancel()
 	batcher := newInvocationBatcher(defaultFlushInterval, defaultFlushThreshold, logger)
-	batcher.start(&callTrieCorrelator{redis: rdb, logger: logger})
-	logger.Info("autopilot call-trie writer ready",
+	batcher.start(&callTreeCorrelator{redis: rdb, logger: logger})
+	logger.Info("autopilot call-tree writer ready",
 		"redis_endpoint", redisEndpoint,
 		"redis_db", redisDB,
-		"redis_trie_prefix", redisTrieKeyPrefix,
-		"redis_trie_ttl", redisTrieKeyTTL.String(),
+		"redis_call_tree_prefix", redisCallTreeKeyPrefix,
+		"redis_call_tree_ttl", redisCallTreeKeyTTL.String(),
 		"flush_interval", defaultFlushInterval.String(),
 		"flush_threshold", defaultFlushThreshold,
 	)

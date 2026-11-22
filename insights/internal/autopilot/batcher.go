@@ -135,7 +135,7 @@ func (b *invocationBatcher) flush(ctx context.Context) {
 func (b *invocationBatcher) reportFlush(err error, traces int, now time.Time) {
 	if err == nil {
 		if b.failedFlushes > 0 {
-			b.logger.Info("autopilot call trie correlation recovered",
+			b.logger.Info("autopilot call tree correlation recovered",
 				"failed_flushes", b.failedFlushes, "dropped_traces", b.droppedTraces)
 			b.failedFlushes, b.droppedTraces = 0, 0
 			b.lastFailureLog = time.Time{}
@@ -145,7 +145,7 @@ func (b *invocationBatcher) reportFlush(err error, traces int, now time.Time) {
 	b.failedFlushes++
 	b.droppedTraces += traces
 	if b.lastFailureLog.IsZero() || now.Sub(b.lastFailureLog) >= failureLogEvery {
-		b.logger.Error("autopilot call trie correlation failed; will retry on next flush",
+		b.logger.Error("autopilot call tree correlation failed; will retry on next flush",
 			"error", err, "failed_flushes", b.failedFlushes, "dropped_traces", b.droppedTraces)
 		b.lastFailureLog = now
 	}

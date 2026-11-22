@@ -16,7 +16,7 @@ const (
 
 // Config configures the autopilot profiles exporter.
 // Linked sample stacks are written to cacheDb Redis for the insights
-// autopilot service to correlate into call-trie structure.
+// autopilot service to correlate into call-tree structure.
 type Config struct {
 	// RedisEndpoint is the cacheDb Redis address (host:port),
 	// e.g. odigos-cache.odigos-system:6379.

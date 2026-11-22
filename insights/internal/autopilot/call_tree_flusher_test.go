@@ -15,9 +15,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestParseRedisTrieKey(t *testing.T) {
-	key := redisTrieKey("default", "Deployment", "checkout", "app", "samples", "nethttp@1.0 SERVER GET /buy")
-	got, ok := parseRedisTrieKey(key)
+func TestParseRedisCallTreeKey(t *testing.T) {
+	key := redisCallTreeKey("default", "Deployment", "checkout", "app", "samples", "nethttp@1.0 SERVER GET /buy")
+	got, ok := parseRedisCallTreeKey(key)
 	if !ok {
 		t.Fatal("expected parse ok")
 	}
@@ -26,37 +26,37 @@ func TestParseRedisTrieKey(t *testing.T) {
 		t.Fatalf("unexpected meta: %+v", got)
 	}
 
-	if _, ok := parseRedisTrieKey("odigos:autopilot:profile:abc"); ok {
-		t.Fatal("profile key must not parse as trie key")
+	if _, ok := parseRedisCallTreeKey("odigos:autopilot:profile:abc"); ok {
+		t.Fatal("profile key must not parse as call tree key")
 	}
-	if _, ok := parseRedisTrieKey(redisTrieKeyPrefix + "a\x1fb\x1fc"); ok {
+	if _, ok := parseRedisCallTreeKey(redisCallTreeKeyPrefix + "a\x1fb\x1fc"); ok {
 		t.Fatal("short key must not parse")
 	}
-	if _, ok := parseRedisTrieKey(redisTrieKeyPrefix + "a\x1fb\x1fc\x1f\x1fsamples\x1ftx"); ok {
+	if _, ok := parseRedisCallTreeKey(redisCallTreeKeyPrefix + "a\x1fb\x1fc\x1f\x1fsamples\x1ftx"); ok {
 		t.Fatal("empty segment must not parse")
 	}
 }
 
-func TestParseTrieHashValue(t *testing.T) {
-	parent, ft, name, ok := parseTrieHashValue("root\x00jvm\x00com.app.Root.run")
+func TestParseCallTreeHashValue(t *testing.T) {
+	parent, ft, name, ok := parseCallTreeHashValue("root\x00jvm\x00com.app.Root.run")
 	if !ok || parent != "root" || ft != "jvm" || name != "com.app.Root.run" {
 		t.Fatalf("got parent=%q ft=%q name=%q ok=%v", parent, ft, name, ok)
 	}
-	if _, _, _, ok := parseTrieHashValue("root\x00native\x00com.app.X"); ok {
+	if _, _, _, ok := parseCallTreeHashValue("root\x00native\x00com.app.X"); ok {
 		t.Fatal("non jvm/hotspot frame type must be rejected")
 	}
-	if _, _, _, ok := parseTrieHashValue("root\x00jvm"); ok {
+	if _, _, _, ok := parseCallTreeHashValue("root\x00jvm"); ok {
 		t.Fatal("short value must be rejected")
 	}
 }
 
-func TestScanAndLoadTrieStructureNodes(t *testing.T) {
+func TestScanAndLoadCallTreeStructureNodes(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
 	tr := &tracesRedis{rdb: rdb}
-	key := redisTrieKey("ns", "Deployment", "svc", "c", "samples", "tx-1")
+	key := redisCallTreeKey("ns", "Deployment", "svc", "c", "samples", "tx-1")
 	rootPayload := "root\x00jvm\x00com.app.Root"
 	rootID := sha1Hex(rootPayload)
 	leafPayload := rootID + "\x00jvm\x00com.app.Leaf"
@@ -65,12 +65,12 @@ func TestScanAndLoadTrieStructureNodes(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Noise key that must be ignored by SCAN match... actually SCAN match is prefix*;
-	// add a malformed trie key and a bad hash value to exercise skips.
-	badKey := redisTrieKeyPrefix + "only\x1ftwo"
+	// add a malformed call tree key and a bad hash value to exercise skips.
+	badKey := redisCallTreeKeyPrefix + "only\x1ftwo"
 	_ = rdb.HSet(context.Background(), badKey, "x", "bad").Err()
 	_ = rdb.HSet(context.Background(), key, "badnode", "not-a-payload").Err()
 
-	keys, err := tr.scanTrieKeys(context.Background())
+	keys, err := tr.scanCallTreeKeys(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,11 +78,11 @@ func TestScanAndLoadTrieStructureNodes(t *testing.T) {
 		t.Fatalf("scan keys = %d, want at least 1", len(keys))
 	}
 
-	meta, ok := parseRedisTrieKey(key)
+	meta, ok := parseRedisCallTreeKey(key)
 	if !ok {
 		t.Fatal("expected parse ok")
 	}
-	nodes, err := tr.loadTrieStructureNodes(context.Background(), key, meta)
+	nodes, err := tr.loadCallTreeStructureNodes(context.Background(), key, meta)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestScanAndLoadTrieStructureNodes(t *testing.T) {
 		t.Fatalf("nodes = %d, want 2 (malformed field skipped); got %#v", len(nodes), nodes)
 	}
 
-	byID := make(map[string]store.FlushedTrieNode, len(nodes))
+	byID := make(map[string]store.FlushedCallTreeNode, len(nodes))
 	for _, n := range nodes {
 		byID[n.NodeID] = n
 	}
@@ -104,7 +104,7 @@ func TestScanAndLoadTrieStructureNodes(t *testing.T) {
 		t.Fatalf("leaf node unexpected: %+v", leaf)
 	}
 
-	if _, ok := parseRedisTrieKey(badKey); ok {
+	if _, ok := parseRedisCallTreeKey(badKey); ok {
 		t.Fatal("malformed key must be rejected by the caller before load")
 	}
 }
@@ -114,7 +114,7 @@ func TestFlushSkipsWorkloadWithoutInstrumentationConfig(t *testing.T) {
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 
-	key := redisTrieKey("shop", "Deployment", "checkout", "app", "samples", "tx-1")
+	key := redisCallTreeKey("shop", "Deployment", "checkout", "app", "samples", "tx-1")
 	if err := rdb.HSet(context.Background(), key, "node", "root\x00jvm\x00com.app.Root").Err(); err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +122,7 @@ func TestFlushSkipsWorkloadWithoutInstrumentationConfig(t *testing.T) {
 	if err := odigosv1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
-	f := &trieFlusher{
+	f := &callTreeFlusher{
 		redis: &tracesRedis{rdb: rdb},
 		kube:  fake.NewClientBuilder().WithScheme(scheme).Build(),
 	}
@@ -138,7 +138,7 @@ func TestFlushSkipsWorkloadWithoutInstrumentationConfig(t *testing.T) {
 	f.kube = fake.NewClientBuilder().WithScheme(scheme).WithObjects(&odigosv1.InstrumentationConfig{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "deployment-checkout"},
 	}).Build()
-	meta, ok := parseRedisTrieKey(key)
+	meta, ok := parseRedisCallTreeKey(key)
 	if !ok {
 		t.Fatal("expected parse ok")
 	}

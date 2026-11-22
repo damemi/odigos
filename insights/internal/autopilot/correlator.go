@@ -6,14 +6,14 @@ import (
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 )
 
-// callTrieCorrelator merges profile stacks into structure-only Redis trie
+// callTreeCorrelator merges profile stacks into structure-only Redis call tree
 // hashes. Transaction inventory is the insights transactions table.
-type callTrieCorrelator struct {
+type callTreeCorrelator struct {
 	redis  *tracesRedis
 	logger *commonlogger.OdigosLogger
 }
 
-func (c *callTrieCorrelator) Close() error {
+func (c *callTreeCorrelator) Close() error {
 	if c == nil || c.redis == nil {
 		return nil
 	}
@@ -22,7 +22,7 @@ func (c *callTrieCorrelator) Close() error {
 	return err
 }
 
-func (c *callTrieCorrelator) correlate(ctx context.Context, traces []TraceBatch) error {
+func (c *callTreeCorrelator) correlate(ctx context.Context, traces []TraceBatch) error {
 	if c == nil || c.redis == nil || len(traces) == 0 {
 		return nil
 	}
@@ -34,7 +34,7 @@ func (c *callTrieCorrelator) correlate(ctx context.Context, traces []TraceBatch)
 		traceID := []byte(tb.TraceID)
 		txN += len(tb.Transactions)
 		for j := range tb.Transactions {
-			n, err := c.redis.mergeCallTrie(ctx, tb.Transactions[j], traceID)
+			n, err := c.redis.mergeCallTree(ctx, tb.Transactions[j], traceID)
 			if err != nil {
 				return err
 			}
@@ -42,7 +42,7 @@ func (c *callTrieCorrelator) correlate(ctx context.Context, traces []TraceBatch)
 		}
 	}
 	if redisNodes > 0 {
-		c.logger.Debug("merged call trie nodes into redis",
+		c.logger.Debug("merged call tree nodes into redis",
 			"traces", len(traces),
 			"transactions", txN,
 			"new_nodes", redisNodes,

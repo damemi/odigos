@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCallTrieToModelClassifiesFrames(t *testing.T) {
-	nodes := CallTrieToModel([]CallTrieNode{
+func TestCallTreeToModelClassifiesFrames(t *testing.T) {
+	nodes := CallTreeToModel([]CallTreeNode{
 		{ID: "n1", Name: "void com.rowan.notify.Controller.create(java.lang.String)", FrameType: "jvm"},
 		{ID: "n2", ParentID: "n1", Name: "java.util.concurrent.CompletableFuture org.springframework.kafka.core.KafkaTemplate.send(java.lang.String, java.lang.Object)", FrameType: "jvm"},
 		{ID: "n3", ParentID: "n2", Name: "java.lang.Object java.util.HashMap.get(java.lang.Object)", FrameType: "hotspot"},

@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// assembleTransactions groups flat call-trie edges into transactions with
+// assembleTransactions groups flat call-tree edges into transactions with
 // aggregated functions. SeenCount is the sum of sample-type root edge row counts.
-func assembleTransactions(edges []callTrieEdgeRow) []Transaction {
+func assembleTransactions(edges []callTreeEdgeRow) []Transaction {
 	type txAcc struct {
 		seen int64
 		fns  map[string]*Function
@@ -23,7 +23,7 @@ func assembleTransactions(edges []callTrieEdgeRow) []Transaction {
 			byTx[e.TransactionID] = acc
 			order = append(order, e.TransactionID)
 		}
-		if e.Parent == trieRootParent && e.SampleType == "samples" {
+		if e.Parent == callTreeRootParent && e.SampleType == "samples" {
 			acc.seen += int64(e.Count)
 		}
 		key := e.FunctionName + "\x00" + e.FrameType + "\x00" + e.SampleType
@@ -73,16 +73,16 @@ func assembleTransactions(edges []callTrieEdgeRow) []Transaction {
 	return out
 }
 
-// callTrieFromEdges maps stored call-trie edges to flat GraphQL trie nodes.
+// callTreeFromEdges maps stored call-tree edges to flat GraphQL call tree nodes.
 // Roots have ParentID == "" (stored parent "root"). Sorted by seenCount desc, then name.
-func callTrieFromEdges(edges []callTrieEdgeRow) []CallTrieNode {
-	out := make([]CallTrieNode, 0, len(edges))
+func callTreeFromEdges(edges []callTreeEdgeRow) []CallTreeNode {
+	out := make([]CallTreeNode, 0, len(edges))
 	for _, e := range edges {
 		parentID := e.Parent
-		if parentID == trieRootParent {
+		if parentID == callTreeRootParent {
 			parentID = ""
 		}
-		out = append(out, CallTrieNode{
+		out = append(out, CallTreeNode{
 			ID:         e.NodeID,
 			ParentID:   parentID,
 			Name:       e.FunctionName,
@@ -91,12 +91,12 @@ func callTrieFromEdges(edges []callTrieEdgeRow) []CallTrieNode {
 			SeenCount:  int64(e.Count),
 		})
 	}
-	sortCallTrieNodes(out)
+	sortCallTreeNodes(out)
 	return out
 }
 
-func sortCallTrieNodes(nodes []CallTrieNode) {
-	slices.SortFunc(nodes, func(a, b CallTrieNode) int {
+func sortCallTreeNodes(nodes []CallTreeNode) {
+	slices.SortFunc(nodes, func(a, b CallTreeNode) int {
 		if c := cmp.Compare(b.SeenCount, a.SeenCount); c != 0 {
 			return c
 		}

@@ -36,7 +36,7 @@ func autopilotGroupByTraceWait(t *common.TraceAggregationConfiguration) string {
 
 // addAutopilotExporters enables the autopilot profiles exporter when
 // autopilot is on and the gateway profiles pipeline exists. Profile stacks
-// land in Redis; insights correlates them into call-trie structure in Postgres.
+// land in Redis; insights correlates them into call-tree structure in Postgres.
 // groupByTraceWaitDuration is how long the gateway groupbytrace holds a trace (e.g. "30s");
 // the profiles exporter uses 2× that as the Redis whole-trace key TTL.
 func addAutopilotExporters(c *config.Config, odigosNs string, autopilot *common.AutopilotConfiguration, groupByTraceWaitDuration string) error {

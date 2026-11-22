@@ -1,5 +1,5 @@
 // Package autopilot is the insights autopilot feature: a control loop
-// that analyzes per-transaction call tries with an LLM (via the
+// that analyzes per-transaction call trees with an LLM (via the
 // in-cluster odigos-litellm), stores the recommended probes, and optionally
 // reconciles InstrumentationRules to them.
 //
@@ -31,7 +31,7 @@ type Options struct {
 	// tables next to the insights transaction inventory.
 	PostgresDSN string
 	// RedisEndpoint is the cacheDb Redis address (host:port) the loop flushes
-	// call tries from (logical DB 1). When empty the flush is skipped.
+	// call trees from (logical DB 1). When empty the flush is skipped.
 	RedisEndpoint string
 	// LiteLLMMasterKey authenticates to odigos-litellm. When empty the loop
 	// still runs but skips model calls.
@@ -117,15 +117,15 @@ func Run(ctx context.Context, opts Options) error {
 		log.Info("starting autopilot loop")
 		waitForStore(groupCtx, log, st)
 		if opts.RedisEndpoint != "" {
-			flusher := newTrieFlusher(opts.RedisEndpoint, st, log, mgr.GetClient())
+			flusher := newCallTreeFlusher(opts.RedisEndpoint, st, log, mgr.GetClient())
 			defer func() {
 				if err := flusher.Close(); err != nil {
-					log.Warn("autopilot trie flusher close failed", "error", err)
+					log.Warn("autopilot call tree flusher close failed", "error", err)
 				}
 			}()
-			loopMgr.TrieFlusher = flusher
+			loopMgr.CallTreeFlusher = flusher
 		} else {
-			log.Warn("autopilot redis endpoint unset; trie flusher disabled")
+			log.Warn("autopilot redis endpoint unset; call tree flusher disabled")
 		}
 		loopMgr.Run(groupCtx)
 		return nil
@@ -134,11 +134,11 @@ func Run(ctx context.Context, opts Options) error {
 	return g.Wait()
 }
 
-// newTrieFlusher builds the Redis client for the structure-only dump without
+// newCallTreeFlusher builds the Redis client for the structure-only dump without
 // dialing: an unreachable Redis at startup only fails the current tick's Flush
 // (logged), and the next tick retries.
-func newTrieFlusher(redisEndpoint string, st *store.Client, log *commonlogger.OdigosLogger, kube client.Client) *trieFlusher {
-	return &trieFlusher{redis: newTracesRedis(redisEndpoint, log), store: st, logger: log, kube: kube}
+func newCallTreeFlusher(redisEndpoint string, st *store.Client, log *commonlogger.OdigosLogger, kube client.Client) *callTreeFlusher {
+	return &callTreeFlusher{redis: newTracesRedis(redisEndpoint, log), store: st, logger: log, kube: kube}
 }
 
 const (

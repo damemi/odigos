@@ -51,7 +51,7 @@ func TestAutopilotTransaction_JavaEbpfOnly(t *testing.T) {
 	}
 	entry.Children = []*Span{child, other}
 
-	// The trie is filed under the transaction processOne resolved for the entry.
+	// The call tree is filed under the transaction processOne resolved for the entry.
 	tx := repo.NewTransaction("checkout", "default", "GET /buy", repo.KindHTTP, sourceidentity.FromK8sResourceAttributesMap(javaRes))
 	itx, ok := autopilotTransaction(entry, tx, sourceidentity.FromK8sResourceAttributesMap)
 	if !ok {
@@ -80,7 +80,7 @@ func TestAutopilotTransaction_JavaEbpfOnly(t *testing.T) {
 
 // TestProcessOne_ReportsAdmission guards what keeps dropped identities out of
 // autopilot: processOne reports ok=false for a sub-transaction the
-// per-service cap dropped, so Process never enqueues a trie for it.
+// per-service cap dropped, so Process never enqueues a call tree for it.
 func TestProcessOne_ReportsAdmission(t *testing.T) {
 	ctx := context.Background()
 	eng := New(newFakeRepo(), nil, nil, nil)

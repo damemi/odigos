@@ -24,11 +24,11 @@ The autopilot loop (`loop/`) analyzes per-transaction call graphs with an LLM an
 
 Track work here until it has a ticket. Remove an entry when it lands.
 
-- **Evidence never expires (staleness).** `autopilot_call_trie_nodes` has no timestamp and only grows, and acknowledged edges and stored recommendations never age out. A function that is renamed or deleted in a later deploy keeps its recommendation, and its probe stays applied for good. Proposed fix:
-  - Add `last_seen` to trie rows, refreshed on every flush, and prune old rows in the retention job.
+- **Evidence never expires (staleness).** `autopilot_call_tree_nodes` has no timestamp and only grows, and acknowledged edges and stored recommendations never age out. A function that is renamed or deleted in a later deploy keeps its recommendation, and its probe stays applied for good. Proposed fix:
+  - Add `last_seen` to call tree rows, refreshed on every flush, and prune old rows in the retention job.
   - Carry `last_seen` into `autopilot_recommendations`.
   - Have the rule reconciler drop probes whose function has not been observed within a window (e.g. 30 days).
-  This touches the trie flusher and the exporter's data contract, so it needs its own ticket.
+  This touches the call tree flusher and the exporter's data contract, so it needs its own ticket.
 - **Old-revision recommendations.** After a revision bump, recommendations from the previous revision stay in the desired set until the full re-analysis replaces them. Decide whether the reconciler should eventually prefer current-revision rows, without shrinking rules while the re-analysis is still running.
 - **Per-probe rejection.** Users can only opt out of a whole autopilot rule (`spec.disabled`). Add a way to reject a single recommended probe (for example a `Rejected` row or flag that the reconciler honors) so it is neither re-applied nor re-recommended.
 - **Probe cap (CORE-1940).** `maxProbesPerWorkload` is not on this branch. Once merged, apply the cap in `buildDesiredProbes` (oldest `FirstSeen` wins) as well as to skip analysis, so rules never exceed it.

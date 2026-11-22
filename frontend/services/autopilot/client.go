@@ -1,4 +1,4 @@
-// Package autopilot reads transaction call-path tries from the autopilot
+// Package autopilot reads transaction call trees from the autopilot
 // tables in the insights Postgres, written by the insights service.
 package autopilot
 
@@ -22,11 +22,11 @@ import (
 
 // Must match the insights autopilot storage layout (insights/internal/autopilot/store).
 const (
-	callTrieTable  = "autopilot_call_trie_nodes"
-	trieRootParent = "root"
+	callTreeTable      = "autopilot_call_tree_nodes"
+	callTreeRootParent = "root"
 
 	// The insights transaction inventory: each transaction's operation and kind, keyed by the
-	// same hashed id the trie stores as transaction_id (see insights/AGENTS.md).
+	// same hashed id the call tree stores as transaction_id (see insights/AGENTS.md).
 	insightsTransactionsTable = "transactions"
 
 	postgresConnectTimeout = 5 * time.Second
@@ -45,7 +45,7 @@ type Function struct {
 	Name       string
 	FrameType  string
 	SampleType string
-	// SeenCount is how many stored call-trie nodes call this function.
+	// SeenCount is how many stored call-tree nodes call this function.
 	SeenCount int64
 }
 
@@ -56,14 +56,14 @@ type Transaction struct {
 	// from the insights inventory. Empty when the inventory has no row for the id.
 	Operation string
 	Kind      string
-	// SeenCount is how many sample root nodes the transaction's trie has.
+	// SeenCount is how many sample root nodes the transaction's call tree has.
 	SeenCount int64
 	Functions []Function
 }
 
-// CallTrieNode is one flat node in a transaction call-path trie.
+// CallTreeNode is one flat node in a transaction call tree.
 // ParentID is empty for roots (stored parent "root").
-type CallTrieNode struct {
+type CallTreeNode struct {
 	ID         string
 	ParentID   string
 	Name       string
@@ -90,7 +90,7 @@ type ContainerTransactions struct {
 	Transactions  []Transaction
 }
 
-type callTrieEdgeRow struct {
+type callTreeEdgeRow struct {
 	TransactionID string
 	NodeID        string
 	Parent        string
@@ -201,7 +201,7 @@ SELECT
 	workload_name,
 	container_name,
 	count(DISTINCT transaction_id) AS transactions
-FROM `+callTrieTable+`
+FROM `+callTreeTable+`
 GROUP BY namespace, workload_kind, workload_name, container_name
 ORDER BY namespace, workload_name, workload_kind, container_name`)
 	if err != nil {
@@ -227,7 +227,7 @@ ORDER BY namespace, workload_name, workload_kind, container_name`)
 }
 
 // ListContainerTransactions returns the transactions of the workload container
-// that match filter, with aggregated functions from the call trie, ordered by
+// that match filter, with aggregated functions from the call tree, ordered by
 // seenCount desc, then id.
 func (c *Client) ListContainerTransactions(ctx context.Context, namespace, kind, name, containerName string, filter TransactionsFilter) (*ContainerTransactions, error) {
 	if c == nil || c.db == nil {
@@ -265,14 +265,14 @@ func (c *Client) ListContainerTransactions(ctx context.Context, namespace, kind,
 	query, args := buildListEdgesQuery(namespace, kind, name, containerName, filter)
 	rows, cancel, err := c.query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("%w: query call trie: %v", ErrUnavailable, err)
+		return nil, fmt.Errorf("%w: query call tree: %v", ErrUnavailable, err)
 	}
 	defer cancel()
 	defer rows.Close()
 
-	edges, err := scanCallTrieEdges(rows)
+	edges, err := scanCallTreeEdges(rows)
 	if err != nil {
-		return nil, fmt.Errorf("%w: scan call trie: %v", ErrUnavailable, err)
+		return nil, fmt.Errorf("%w: scan call tree: %v", ErrUnavailable, err)
 	}
 
 	result.Transactions = assembleTransactions(edges)
@@ -325,7 +325,7 @@ WHERE transaction_id = ANY($1)`, ids)
 	return rows.Err()
 }
 
-// buildListEdgesQuery selects the call-trie edges of every transaction
+// buildListEdgesQuery selects the call-tree edges of every transaction
 // matching filter. Paging runs in a subquery over transaction ids, ordered
 // like assembleTransactions, so each page holds whole transactions. filter.IDs
 // must hold only int64 ids.
@@ -366,7 +366,7 @@ func buildListEdgesQuery(namespace, kind, name, containerName string, filter Tra
 		GROUP BY transaction_id
 		ORDER BY count(*) FILTER (WHERE parent = '%s' AND sample_type = 'samples') DESC, transaction_id::text ASC
 		LIMIT %s OFFSET %s
-	)`, callTrieTable, where, trieRootParent, limit, arg(filter.Offset))
+	)`, callTreeTable, where, callTreeRootParent, limit, arg(filter.Offset))
 	}
 
 	return fmt.Sprintf(`
@@ -380,7 +380,7 @@ SELECT
 	count(*) AS count
 FROM %s
 WHERE %s
-GROUP BY transaction_id, node_id, parent, function_name, frame_type, sample_type`, callTrieTable, where), args
+GROUP BY transaction_id, node_id, parent, function_name, frame_type, sample_type`, callTreeTable, where), args
 }
 
 // GetTransactionSampleTrace returns the stored OTLP JSON sample for a
@@ -400,9 +400,9 @@ func (c *Client) GetTransactionSampleTrace(ctx context.Context, namespace, kind,
 	return "", nil
 }
 
-// GetTransactionCallTrie returns flat call-path trie nodes for a transaction.
+// GetTransactionCallTree returns flat call tree nodes for a transaction.
 // ok is false when no edges exist (caller should treat as null).
-func (c *Client) GetTransactionCallTrie(ctx context.Context, namespace, kind, name, containerName, txID string) (nodes []CallTrieNode, ok bool, err error) {
+func (c *Client) GetTransactionCallTree(ctx context.Context, namespace, kind, name, containerName, txID string) (nodes []CallTreeNode, ok bool, err error) {
 	if c == nil || c.db == nil {
 		return nil, false, ErrUnavailable
 	}
@@ -416,7 +416,7 @@ func (c *Client) GetTransactionCallTrie(ctx context.Context, namespace, kind, na
 	}
 	id, err := strconv.ParseInt(txID, 10, 64)
 	if err != nil {
-		// Stored ids are the insights int64 hashes, so no trie has this id.
+		// Stored ids are the insights int64 hashes, so no call tree has this id.
 		return nil, false, nil
 	}
 
@@ -429,7 +429,7 @@ SELECT
 	frame_type,
 	sample_type,
 	count(*) AS count
-FROM `+callTrieTable+`
+FROM `+callTreeTable+`
 WHERE namespace = $1
 	AND workload_kind = $2
 	AND workload_name = $3
@@ -438,25 +438,25 @@ WHERE namespace = $1
 GROUP BY transaction_id, node_id, parent, function_name, frame_type, sample_type`,
 		namespace, kind, name, containerName, id)
 	if err != nil {
-		return nil, false, fmt.Errorf("%w: query call trie: %v", ErrUnavailable, err)
+		return nil, false, fmt.Errorf("%w: query call tree: %v", ErrUnavailable, err)
 	}
 	defer cancel()
 	defer rows.Close()
 
-	edges, err := scanCallTrieEdges(rows)
+	edges, err := scanCallTreeEdges(rows)
 	if err != nil {
-		return nil, false, fmt.Errorf("%w: scan call trie: %v", ErrUnavailable, err)
+		return nil, false, fmt.Errorf("%w: scan call tree: %v", ErrUnavailable, err)
 	}
 	if len(edges) == 0 {
 		return nil, false, nil
 	}
-	return callTrieFromEdges(edges), true, nil
+	return callTreeFromEdges(edges), true, nil
 }
 
-func scanCallTrieEdges(rows pgx.Rows) ([]callTrieEdgeRow, error) {
-	var out []callTrieEdgeRow
+func scanCallTreeEdges(rows pgx.Rows) ([]callTreeEdgeRow, error) {
+	var out []callTreeEdgeRow
 	for rows.Next() {
-		var r callTrieEdgeRow
+		var r callTreeEdgeRow
 		var count int64
 		if err := rows.Scan(
 			&r.TransactionID,

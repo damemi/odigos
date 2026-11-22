@@ -79,8 +79,8 @@ func SourcesToModel(sources []SourceTransactions) []*model.AutopilotSource {
 	return out
 }
 
-// CallTrieToModel converts flat call-path trie nodes to GraphQL models.
-func CallTrieToModel(nodes []CallTrieNode) []*model.AutopilotCallTrieNode {
+// CallTreeToModel converts flat call tree nodes to GraphQL models.
+func CallTreeToModel(nodes []CallTreeNode) []*model.AutopilotCallTrieNode {
 	out := make([]*model.AutopilotCallTrieNode, 0, len(nodes))
 	for _, n := range nodes {
 		var parentID *string

@@ -61,8 +61,8 @@ func (c *Client) insertInventory(t *testing.T, id int64, operation string) {
 	}
 }
 
-func trieNode(s SourceKey, txID int64, nodeID, parent, function string) FlushedTrieNode {
-	return FlushedTrieNode{
+func callTreeNode(s SourceKey, txID int64, nodeID, parent, function string) FlushedCallTreeNode {
+	return FlushedCallTreeNode{
 		Namespace:     s.Namespace,
 		WorkloadKind:  s.WorkloadKind,
 		WorkloadName:  s.WorkloadName,
@@ -85,22 +85,22 @@ func hasSource(sources []SourceKey, want SourceKey) bool {
 	return false
 }
 
-// TestSourcesComeFromTrie covers the loop's source and transaction discovery:
-// a source with inventory rows but no trie is never listed, a transaction id
+// TestSourcesComeFromCallTree covers the loop's source and transaction discovery:
+// a source with inventory rows but no call tree is never listed, a transaction id
 // shared by two workloads is listed under both (membership comes from the
-// trie, not from the inventory), and DeleteSource takes a source out of the
+// call tree, not from the inventory), and DeleteSource takes a source out of the
 // listing so it is not re-deleted every tick.
-func TestSourcesComeFromTrie(t *testing.T) {
+func TestSourcesComeFromCallTree(t *testing.T) {
 	c := testClient(t)
 	ctx := context.Background()
-	withTrie, noTrie, sharer := testSource("with-trie"), testSource("no-trie"), testSource("sharer")
+	withCallTree, noCallTree, sharer := testSource("with-call-tree"), testSource("no-call-tree"), testSource("sharer")
 	shared, inventoryOnly := rand.Int63(), rand.Int63()
 
 	c.insertInventory(t, shared, "GET /shared")
 	c.insertInventory(t, inventoryOnly, "GET /plain")
-	if _, err := c.InsertCallTrieNodes(ctx, []FlushedTrieNode{
-		trieNode(withTrie, shared, "n1", "root", "main"),
-		trieNode(sharer, shared, "n1", "root", "main"),
+	if _, err := c.InsertCallTreeNodes(ctx, []FlushedCallTreeNode{
+		callTreeNode(withCallTree, shared, "n1", "root", "main"),
+		callTreeNode(sharer, shared, "n1", "root", "main"),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -109,14 +109,14 @@ func TestSourcesComeFromTrie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hasSource(sources, noTrie) {
-		t.Fatal("source with transactions but no trie must not be listed")
+	if hasSource(sources, noCallTree) {
+		t.Fatal("source with transactions but no call tree must not be listed")
 	}
-	if !hasSource(sources, withTrie) || !hasSource(sources, sharer) {
-		t.Fatalf("trie sources missing from %+v", sources)
+	if !hasSource(sources, withCallTree) || !hasSource(sources, sharer) {
+		t.Fatalf("call tree sources missing from %+v", sources)
 	}
 
-	for _, s := range []SourceKey{withTrie, sharer} {
+	for _, s := range []SourceKey{withCallTree, sharer} {
 		txs, err := c.ListTransactions(ctx, s)
 		if err != nil {
 			t.Fatal(err)
@@ -126,14 +126,14 @@ func TestSourcesComeFromTrie(t *testing.T) {
 		}
 	}
 
-	if err := c.DeleteSource(ctx, withTrie); err != nil {
+	if err := c.DeleteSource(ctx, withCallTree); err != nil {
 		t.Fatal(err)
 	}
 	sources, err = c.ListSourcesWithTransactions(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hasSource(sources, withTrie) {
+	if hasSource(sources, withCallTree) {
 		t.Fatal("deleted source must drop out of the listing")
 	}
 	if !hasSource(sources, sharer) {
@@ -141,23 +141,23 @@ func TestSourcesComeFromTrie(t *testing.T) {
 	}
 }
 
-// TestCallTrieReflushIsNoOp checks that re-flushing a trie stores each node
+// TestCallTreeReflushIsNoOp checks that re-flushing a call tree stores each node
 // once, that roots read back without a parent, and that nodes with a
 // malformed transaction id are skipped.
-func TestCallTrieReflushIsNoOp(t *testing.T) {
+func TestCallTreeReflushIsNoOp(t *testing.T) {
 	c := testClient(t)
 	ctx := context.Background()
 	s := testSource("reflush")
 	txID := rand.Int63()
-	nodes := []FlushedTrieNode{
-		trieNode(s, txID, "n1", "root", "main"),
-		trieNode(s, txID, "n2", "n1", "handle"),
+	nodes := []FlushedCallTreeNode{
+		callTreeNode(s, txID, "n1", "root", "main"),
+		callTreeNode(s, txID, "n2", "n1", "handle"),
 	}
-	bad := trieNode(s, txID, "n3", "n1", "other")
+	bad := callTreeNode(s, txID, "n3", "n1", "other")
 	bad.TransactionID = "not-a-number"
 
 	for i := 0; i < 2; i++ {
-		skipped, err := c.InsertCallTrieNodes(ctx, append(nodes, nodes[0], bad))
+		skipped, err := c.InsertCallTreeNodes(ctx, append(nodes, nodes[0], bad))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -166,16 +166,16 @@ func TestCallTrieReflushIsNoOp(t *testing.T) {
 		}
 	}
 
-	got, err := c.GetCallTrie(ctx, s, strconv.FormatInt(txID, 10))
+	got, err := c.GetCallTree(ctx, s, strconv.FormatInt(txID, 10))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []CallTrieNode{
+	want := []CallTreeNode{
 		{ID: "n2", ParentID: "n1", Name: "handle", FrameType: "jvm", SampleType: "samples"},
 		{ID: "n1", ParentID: "", Name: "main", FrameType: "jvm", SampleType: "samples"},
 	}
 	if fmt.Sprint(got) != fmt.Sprint(want) {
-		t.Fatalf("call trie = %+v, want %+v", got, want)
+		t.Fatalf("call tree = %+v, want %+v", got, want)
 	}
 }
 
@@ -194,7 +194,7 @@ func TestLastSuccessfulRun(t *testing.T) {
 	run := func(at time.Time, status, revision, hash string) Run {
 		return Run{
 			Timestamp: at, Namespace: s.Namespace, WorkloadKind: s.WorkloadKind, WorkloadName: s.WorkloadName,
-			ContainerName: s.ContainerName, TransactionID: txID, TrieHash: hash,
+			ContainerName: s.ContainerName, TransactionID: txID, CallTreeHash: hash,
 			AnalysisStatus: status, AnalysisRevision: revision,
 		}
 	}
@@ -213,7 +213,7 @@ func TestLastSuccessfulRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got == nil || got.TrieHash != "newest" || got.TransactionID != txID || !got.Timestamp.Equal(base.Add(time.Second)) {
+	if got == nil || got.CallTreeHash != "newest" || got.TransactionID != txID || !got.Timestamp.Equal(base.Add(time.Second)) {
 		t.Fatalf("last successful run = %+v, want the newest succeeded rev1 run", got)
 	}
 }

@@ -8,19 +8,19 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// trieInsertChunk bounds the nodes sent in one INSERT.
-const trieInsertChunk = 5000
+// callTreeInsertChunk bounds the nodes sent in one INSERT.
+const callTreeInsertChunk = 5000
 
-// InsertCallTrieNodes stores flushed trie nodes. Nodes already stored are
-// skipped, so re-flushing a whole trie only adds its new nodes. Nodes whose
+// InsertCallTreeNodes stores flushed call tree nodes. Nodes already stored are
+// skipped, so re-flushing a whole call tree only adds its new nodes. Nodes whose
 // transaction id is not an insights transaction id are dropped and counted in
 // skipped.
-func (c *Client) InsertCallTrieNodes(ctx context.Context, nodes []FlushedTrieNode) (skipped int, err error) {
+func (c *Client) InsertCallTreeNodes(ctx context.Context, nodes []FlushedCallTreeNode) (skipped int, err error) {
 	if c == nil || c.pool == nil {
 		return 0, fmt.Errorf("autopilot store: nil pool")
 	}
-	for start := 0; start < len(nodes); start += trieInsertChunk {
-		chunk := nodes[start:min(start+trieInsertChunk, len(nodes))]
+	for start := 0; start < len(nodes); start += callTreeInsertChunk {
+		chunk := nodes[start:min(start+callTreeInsertChunk, len(nodes))]
 		var cols [10][]any
 		for _, n := range chunk {
 			txID, err := strconv.ParseInt(n.TransactionID, 10, 64)
@@ -39,7 +39,7 @@ func (c *Client) InsertCallTrieNodes(ctx context.Context, nodes []FlushedTrieNod
 			continue
 		}
 		if _, err := c.pool.Exec(ctx, `
-INSERT INTO `+callTrieNodesTable+` (
+INSERT INTO `+callTreeNodesTable+` (
 	namespace, workload_kind, workload_name, container_name, transaction_id,
 	sample_type, node_id, parent, function_name, frame_type
 )
@@ -48,16 +48,16 @@ SELECT * FROM unnest(
 	$6::text[], $7::text[], $8::text[], $9::text[], $10::text[]
 )
 ON CONFLICT DO NOTHING`, cols[0], cols[1], cols[2], cols[3], cols[4], cols[5], cols[6], cols[7], cols[8], cols[9]); err != nil {
-			return skipped, fmt.Errorf("insert call trie nodes: %w", err)
+			return skipped, fmt.Errorf("insert call tree nodes: %w", err)
 		}
 	}
 	return skipped, nil
 }
 
 // ListSourcesWithTransactions returns the distinct workload containers that
-// have call-trie data. The trie table is the source of truth, not the insights
-// inventory: most inventory sources never produce a trie (only java-ebpf does),
-// and DeleteSource clears the trie, so a removed workload stops being listed
+// have call-tree data. The call tree table is the source of truth, not the insights
+// inventory: most inventory sources never produce a call tree (only java-ebpf does),
+// and DeleteSource clears the call tree, so a removed workload stops being listed
 // instead of being re-deleted every tick.
 func (c *Client) ListSourcesWithTransactions(ctx context.Context) ([]SourceKey, error) {
 	if c == nil || c.pool == nil {
@@ -65,7 +65,7 @@ func (c *Client) ListSourcesWithTransactions(ctx context.Context) ([]SourceKey, 
 	}
 	rows, err := c.pool.Query(ctx, `
 SELECT DISTINCT namespace, workload_kind, workload_name, container_name
-FROM `+callTrieNodesTable+`
+FROM `+callTreeNodesTable+`
 ORDER BY namespace, workload_kind, workload_name, container_name`)
 	if err != nil {
 		return nil, fmt.Errorf("list sources: %w", err)
@@ -81,10 +81,10 @@ ORDER BY namespace, workload_kind, workload_name, container_name`)
 	return out, nil
 }
 
-// ListTransactions returns the transactions that have a call trie under the
+// ListTransactions returns the transactions that have a call tree under the
 // source, with their identity from the insights inventory. Membership comes
-// from the trie (keyed by workload + transaction id), so a source lists exactly
-// the transactions it recorded tries for.
+// from the call tree (keyed by workload + transaction id), so a source lists exactly
+// the transactions it recorded call trees for.
 func (c *Client) ListTransactions(ctx context.Context, source SourceKey) ([]Transaction, error) {
 	if c == nil || c.pool == nil {
 		return nil, fmt.Errorf("autopilot store: nil pool")
@@ -97,7 +97,7 @@ SELECT t.transaction_id, t.operation, t.entry_kind
 FROM transactions AS t
 WHERE t.transaction_id IN (
 	SELECT n.transaction_id
-	FROM `+callTrieNodesTable+` AS n
+	FROM `+callTreeNodesTable+` AS n
 	WHERE n.namespace = $1
 		AND n.workload_kind = $2
 		AND n.workload_name = $3
@@ -123,8 +123,8 @@ ORDER BY t.transaction_id`,
 	return out, nil
 }
 
-// GetCallTrie returns one row per call-path node of the transaction.
-func (c *Client) GetCallTrie(ctx context.Context, source SourceKey, transactionID string) ([]CallTrieNode, error) {
+// GetCallTree returns one row per call-path node of the transaction.
+func (c *Client) GetCallTree(ctx context.Context, source SourceKey, transactionID string) ([]CallTreeNode, error) {
 	if c == nil || c.pool == nil {
 		return nil, fmt.Errorf("autopilot store: nil pool")
 	}
@@ -137,7 +137,7 @@ func (c *Client) GetCallTrie(ctx context.Context, source SourceKey, transactionI
 	}
 	rows, err := c.pool.Query(ctx, `
 SELECT node_id, parent, function_name, frame_type, sample_type
-FROM `+callTrieNodesTable+`
+FROM `+callTreeNodesTable+`
 WHERE namespace = $1
 	AND workload_kind = $2
 	AND workload_name = $3
@@ -146,26 +146,26 @@ WHERE namespace = $1
 ORDER BY function_name, node_id`,
 		source.Namespace, source.WorkloadKind, source.WorkloadName, source.ContainerName, txID)
 	if err != nil {
-		return nil, fmt.Errorf("query call trie: %w", err)
+		return nil, fmt.Errorf("query call tree: %w", err)
 	}
-	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (CallTrieNode, error) {
-		var n CallTrieNode
+	out, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (CallTreeNode, error) {
+		var n CallTreeNode
 		if err := row.Scan(&n.ID, &n.ParentID, &n.Name, &n.FrameType, &n.SampleType); err != nil {
 			return n, err
 		}
-		if n.ParentID == trieRootParent {
+		if n.ParentID == callTreeRootParent {
 			n.ParentID = ""
 		}
 		return n, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("query call trie: %w", err)
+		return nil, fmt.Errorf("query call tree: %w", err)
 	}
 	return out, nil
 }
 
 // DeleteSource removes every container of the workload from the autopilot
-// tables: call tries, analysis runs, and recommendations. Insights
+// tables: call trees, analysis runs, and recommendations. Insights
 // transactions are the shared inventory and are left in place.
 func (c *Client) DeleteSource(ctx context.Context, source SourceKey) error {
 	if c == nil || c.pool == nil {
@@ -175,7 +175,7 @@ func (c *Client) DeleteSource(ctx context.Context, source SourceKey) error {
 		return err
 	}
 	return pgx.BeginFunc(ctx, c.pool, func(tx pgx.Tx) error {
-		for _, table := range []string{callTrieNodesTable, runsTable, recommendationsTable} {
+		for _, table := range []string{callTreeNodesTable, runsTable, recommendationsTable} {
 			if _, err := tx.Exec(ctx,
 				`DELETE FROM `+table+` WHERE namespace = $1 AND workload_kind = $2 AND workload_name = $3`,
 				source.Namespace, source.WorkloadKind, source.WorkloadName); err != nil {

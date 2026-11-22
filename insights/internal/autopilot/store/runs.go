@@ -27,8 +27,8 @@ type Run struct {
 	WorkloadName  string
 	ContainerName string
 	TransactionID string
-	// TrieHash is the structural hash of EvidenceSnapshot (call-graph edges).
-	TrieHash string
+	// CallTreeHash is the structural hash of EvidenceSnapshot (call-graph edges).
+	CallTreeHash string
 	// EvidenceSnapshot is the cumulative call graph the model has seen once
 	// this run succeeds: the previous acknowledged graph plus the edges sent.
 	EvidenceSnapshot string
@@ -61,7 +61,7 @@ func (c *Client) InsertRun(ctx context.Context, run Run) error {
 	if _, err := c.pool.Exec(ctx, `
 INSERT INTO `+runsTable+` (
 	created_at, namespace, workload_kind, workload_name, container_name,
-	transaction_id, trie_hash, evidence_snapshot, model, prompt_hash, raw_response, parsed, error,
+	transaction_id, call_tree_hash, evidence_snapshot, model, prompt_hash, raw_response, parsed, error,
 	analysis_status, analysis_revision
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		run.Timestamp,
@@ -70,7 +70,7 @@ INSERT INTO `+runsTable+` (
 		run.WorkloadName,
 		run.ContainerName,
 		txID,
-		run.TrieHash,
+		run.CallTreeHash,
 		run.EvidenceSnapshot,
 		run.Model,
 		run.PromptHash,
@@ -103,7 +103,7 @@ func (c *Client) LastSuccessfulRun(ctx context.Context, source SourceKey, transa
 	err = c.pool.QueryRow(ctx, `
 SELECT
 	created_at, namespace, workload_kind, workload_name, container_name,
-	transaction_id, trie_hash, evidence_snapshot, model, prompt_hash, raw_response, parsed, error,
+	transaction_id, call_tree_hash, evidence_snapshot, model, prompt_hash, raw_response, parsed, error,
 	analysis_status, analysis_revision
 FROM `+runsTable+`
 WHERE namespace = $1
@@ -124,7 +124,7 @@ LIMIT 1`,
 		&run.WorkloadName,
 		&run.ContainerName,
 		&id,
-		&run.TrieHash,
+		&run.CallTreeHash,
 		&run.EvidenceSnapshot,
 		&run.Model,
 		&run.PromptHash,

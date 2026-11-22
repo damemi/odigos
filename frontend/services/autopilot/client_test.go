@@ -12,7 +12,7 @@ import (
 )
 
 func TestAssembleTransactions(t *testing.T) {
-	edges := []callTrieEdgeRow{
+	edges := []callTreeEdgeRow{
 		{TransactionID: "tx-a", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "events", Count: 7},
 		{TransactionID: "tx-a", NodeID: "n2", Parent: "root", FunctionName: "Encrypt", FrameType: "hotspot", SampleType: "samples", Count: 3},
 		{TransactionID: "tx-a", NodeID: "n3", Parent: "n2", FunctionName: "Encrypt", FrameType: "hotspot", SampleType: "samples", Count: 2},
@@ -47,22 +47,22 @@ func TestAssembleTransactions(t *testing.T) {
 	assert.Equal(t, "tx-a", txs[1].ID)
 }
 
-func TestCallTrieFromEdgesSharedPrefix(t *testing.T) {
+func TestCallTreeFromEdgesSharedPrefix(t *testing.T) {
 	const (
 		nodeB  = "node-b"
 		nodeBA = "node-ba"
 		nodeBC = "node-bc"
 	)
-	edges := []callTrieEdgeRow{
+	edges := []callTreeEdgeRow{
 		{TransactionID: "tx", NodeID: nodeB, Parent: "root", FunctionName: "b", FrameType: "hotspot", SampleType: "samples", Count: 2},
 		{TransactionID: "tx", NodeID: nodeBA, Parent: nodeB, FunctionName: "a", FrameType: "hotspot", SampleType: "samples", Count: 1},
 		{TransactionID: "tx", NodeID: nodeBC, Parent: nodeB, FunctionName: "c", FrameType: "hotspot", SampleType: "samples", Count: 1},
 	}
 
-	nodes := callTrieFromEdges(edges)
+	nodes := callTreeFromEdges(edges)
 	require.Len(t, nodes, 3)
 
-	byID := map[string]CallTrieNode{}
+	byID := map[string]CallTreeNode{}
 	for _, n := range nodes {
 		byID[n.ID] = n
 	}
@@ -99,9 +99,9 @@ func TestListContainerTransactionsUnavailable(t *testing.T) {
 	assert.ErrorIs(t, err, ErrUnavailable)
 }
 
-func TestGetTransactionCallTrieUnavailable(t *testing.T) {
+func TestGetTransactionCallTreeUnavailable(t *testing.T) {
 	c := NewClient("")
-	_, ok, err := c.GetTransactionCallTrie(context.Background(), "default", "Deployment", "checkout", "app", "tx-1")
+	_, ok, err := c.GetTransactionCallTree(context.Background(), "default", "Deployment", "checkout", "app", "tx-1")
 	assert.ErrorIs(t, err, ErrUnavailable)
 	assert.False(t, ok)
 }
@@ -122,8 +122,8 @@ func TestNewClientDoesNotConnect(t *testing.T) {
 type fakeConn struct {
 	query string
 	args  []any
-	rows  []callTrieEdgeRow
-	// The insights inventory lookup, kept apart from the call-trie query above.
+	rows  []callTreeEdgeRow
+	// The insights inventory lookup, kept apart from the call-tree query above.
 	namesQuery string
 	namesArgs  []any
 	names      []fakeName
@@ -173,7 +173,7 @@ func (r *fakeNameRows) Close()     {}
 
 type fakeRows struct {
 	pgx.Rows
-	rows []callTrieEdgeRow
+	rows []callTreeEdgeRow
 	next int
 }
 
@@ -198,7 +198,7 @@ func (r *fakeRows) Err() error { return nil }
 func (r *fakeRows) Close()     {}
 
 func TestListContainerTransactionsNoFilter(t *testing.T) {
-	conn := &fakeConn{rows: []callTrieEdgeRow{
+	conn := &fakeConn{rows: []callTreeEdgeRow{
 		{TransactionID: "tx-a", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2},
 	}}
 	c := newClientWithQuerier(conn)
@@ -216,7 +216,7 @@ func TestListContainerTransactionsNoFilter(t *testing.T) {
 
 func TestListContainerTransactionsNames(t *testing.T) {
 	conn := &fakeConn{
-		rows: []callTrieEdgeRow{
+		rows: []callTreeEdgeRow{
 			{TransactionID: "-42", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2},
 			{TransactionID: "7636099928166363546", NodeID: "n2", Parent: "root", FunctionName: "Buy", FrameType: "jvm", SampleType: "samples", Count: 1},
 		},
@@ -245,7 +245,7 @@ func TestListContainerTransactionsNames(t *testing.T) {
 
 func TestListContainerTransactionsNamesFailureKeepsTransactions(t *testing.T) {
 	conn := &fakeConn{
-		rows:     []callTrieEdgeRow{{TransactionID: "42", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2}},
+		rows:     []callTreeEdgeRow{{TransactionID: "42", NodeID: "n1", Parent: "root", FunctionName: "Pay", FrameType: "jvm", SampleType: "samples", Count: 2}},
 		namesErr: errors.New("no such table"),
 	}
 	c := newClientWithQuerier(conn)

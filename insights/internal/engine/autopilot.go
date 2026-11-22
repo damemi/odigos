@@ -15,7 +15,7 @@ import (
 
 const javaEbpfDistroName = "java-ebpf-instrumentations"
 
-// SetAutopilot installs the optional Redis call-trie correlator.
+// SetAutopilot installs the optional Redis call-tree correlator.
 // Nil is a no-op (correlation stays off). Called from main after Open when
 // AUTOPILOT_REDIS_ENDPOINT is set (autopilot.enabled).
 func (e *Engine) SetAutopilot(c *autopilot.Client) {
@@ -25,11 +25,11 @@ func (e *Engine) SetAutopilot(c *autopilot.Client) {
 	e.autopilot = c
 }
 
-// enqueueAutopilot queues one sub-transaction for Redis call-trie
+// enqueueAutopilot queues one sub-transaction for Redis call-tree
 // correlation, as called by Process for each sub-trace processOne resolved and
-// admitted. tx is processOne's transaction, so the trie's transaction id is the
+// admitted. tx is processOne's transaction, so the call tree's transaction id is the
 // inventory's (source_identity, written on the baseline flush) and a dropped
-// identity never gets a trie it could not be analyzed under. Off the scoring
+// identity never gets a call tree it could not be analyzed under. Off the scoring
 // hot path: Record is non-blocking and the batcher merges a trace's
 // sub-transactions back into one batch; Redis runs on the batcher flush.
 // rawTraceID is the trace's raw id bytes, from autopilotTraceID.
@@ -113,7 +113,7 @@ func workloadIdentityFromSpan(s *Span) (workloadIdentity, bool) {
 	if s == nil {
 		return workloadIdentity{}, false
 	}
-	// The trie is keyed by k8s workload columns, so this is the k8s source
+	// The call tree is keyed by k8s workload columns, so this is the k8s source
 	// identity regardless of the engine's SourceIdentityFunc.
 	attrs := sourceidentity.FromK8sResourceAttributesMap(s.ResourceAttrs)
 	kind, name := workloadKindAndName(attrs)

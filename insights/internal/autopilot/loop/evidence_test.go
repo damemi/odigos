@@ -13,7 +13,7 @@ func TestBuildAppEvidenceMergesPaths(t *testing.T) {
 	svc := "void com.rowan.notify.Service.handle()"
 	pub := "void com.rowan.notify.RenderMessageProducer.publish(java.lang.String, com.rowan.notify.DocumentRequest)"
 
-	nodes := []store.CallTrieNode{
+	nodes := []store.CallTreeNode{
 		{ID: "1", ParentID: "", Name: ctrl},
 		{ID: "2", ParentID: "1", Name: svc},
 		{ID: "3", ParentID: "1", Name: pub},
@@ -45,12 +45,12 @@ func TestBuildAppEvidenceIgnoresNonAppNodes(t *testing.T) {
 	runtime := "void java.lang.reflect.Method.invoke(java.lang.Object, java.lang.Object[])"
 	agent := "void io.odigos.spring.servlet.SpringServletAdvice.detach(long)"
 
-	plain := []store.CallTrieNode{
+	plain := []store.CallTreeNode{
 		{ID: "1", Name: ctrl},
 		{ID: "2", ParentID: "1", Name: svc},
 		{ID: "3", ParentID: "2", Name: repo},
 	}
-	withNonApp := []store.CallTrieNode{
+	withNonApp := []store.CallTreeNode{
 		{ID: "1", Name: ctrl},
 		{ID: "r1", ParentID: "1", Name: runtime},
 		{ID: "2", ParentID: "r1", Name: svc},
@@ -74,7 +74,7 @@ func TestBuildAppEvidenceIgnoresNonAppNodes(t *testing.T) {
 func TestBuildAppEvidenceNonAppParentChainGuards(t *testing.T) {
 	svc := "void com.rowan.notify.Service.handle()"
 	runtime := "void java.lang.reflect.Method.invoke(java.lang.Object, java.lang.Object[])"
-	nodes := []store.CallTrieNode{
+	nodes := []store.CallTreeNode{
 		{ID: "a", ParentID: "b", Name: runtime}, // cycle of non-app nodes
 		{ID: "b", ParentID: "a", Name: runtime},
 		{ID: "1", ParentID: "a", Name: svc},

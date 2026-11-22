@@ -10,9 +10,9 @@ import (
 )
 
 func TestBuildAnalysisRequestIsEvidenceOnly(t *testing.T) {
-	tx := transactionTrie{
+	tx := transactionCallTree{
 		Transaction: store.Transaction{ID: "GET /users", RootSpanName: "GET", RootSpanKind: "SERVER"},
-		Nodes: []store.CallTrieNode{
+		Nodes: []store.CallTreeNode{
 			{ID: "1", Name: "com.example.Foo.bar"},
 		},
 	}

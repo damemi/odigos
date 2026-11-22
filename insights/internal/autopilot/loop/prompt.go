@@ -5,12 +5,12 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
 
-type transactionTrie struct {
+type transactionCallTree struct {
 	Transaction store.Transaction
-	Nodes       []store.CallTrieNode
+	Nodes       []store.CallTreeNode
 }
 
-func buildFullAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionTrie, ev AppEvidence) schema.AnalysisRequest {
+func buildFullAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionCallTree, ev AppEvidence) schema.AnalysisRequest {
 	return schema.NewFullEvidenceRequest(
 		schema.Service{
 			Namespace: source.Namespace,
@@ -28,7 +28,7 @@ func buildFullAnalysisRequest(source store.SourceKey, probes []customProbe, tx t
 	)
 }
 
-func buildDeltaAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionTrie, addedGraph []CallGraphEdge) schema.AnalysisRequest {
+func buildDeltaAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionCallTree, addedGraph []CallGraphEdge) schema.AnalysisRequest {
 	return schema.NewDeltaEvidenceRequest(
 		schema.Service{
 			Namespace: source.Namespace,

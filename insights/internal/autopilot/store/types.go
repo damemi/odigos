@@ -1,6 +1,6 @@
 package store
 
-// SourceKey identifies one workload container that has call tries. Keys for a
+// SourceKey identifies one workload container that has call trees. Keys for a
 // whole workload (recommendations, rules) leave ContainerName empty.
 type SourceKey struct {
 	Namespace     string
@@ -21,9 +21,9 @@ type Transaction struct {
 	RootSpanKind string
 }
 
-// CallTrieNode is one call-path node of a transaction. ParentID is empty for
+// CallTreeNode is one call-path node of a transaction. ParentID is empty for
 // roots.
-type CallTrieNode struct {
+type CallTreeNode struct {
 	ID         string
 	ParentID   string
 	Name       string
@@ -31,9 +31,9 @@ type CallTrieNode struct {
 	SampleType string
 }
 
-// FlushedTrieNode is one call-trie node read from Redis, as the trie flusher
+// FlushedCallTreeNode is one call-tree node read from Redis, as the call tree flusher
 // stores it. Parent is "root" for roots.
-type FlushedTrieNode struct {
+type FlushedCallTreeNode struct {
 	Namespace     string
 	WorkloadKind  string
 	WorkloadName  string

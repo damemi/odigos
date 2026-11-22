@@ -3,7 +3,7 @@
 Profiles-only exporter for the autopilot loop. Writes linked sample stacks
 to the shared cacheDb Redis (logical DB 1, separate from URL-templatization on
 DB 0) as an immutable Hash per trace. The insights service later correlates
-those stacks into call-trie structure in its Postgres.
+those stacks into call-tree structure in its Postgres.
 
 - Key: `odigos:autopilot:profile:<hex(trace)>`
 - Field: `<hex(span)>:<hex(sha1(value)[:8])>`, so each distinct stack (sample

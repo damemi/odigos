@@ -1,4 +1,4 @@
-// Package store keeps the autopilot call tries, analysis runs, and
+// Package store keeps the autopilot call trees, analysis runs, and
 // recommendations in the insights Postgres. The tables are created by the
 // insights migrations (see db/postgres/migrate), not here.
 package store
@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	callTrieNodesTable   = "autopilot_call_trie_nodes"
+	callTreeNodesTable   = "autopilot_call_tree_nodes"
 	runsTable            = "autopilot_runs"
 	recommendationsTable = "autopilot_recommendations"
 
-	// trieRootParent is the parent of a root call-trie node.
-	trieRootParent = "root"
+	// callTreeRootParent is the parent of a root call-tree node.
+	callTreeRootParent = "root"
 )
 
 // Client is the autopilot store. Construct with Open.
@@ -33,7 +33,7 @@ func Open(dsn string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse postgres dsn: %w", err)
 	}
-	// Only the leader's loop and trie flusher use the pool.
+	// Only the leader's loop and call tree flusher use the pool.
 	cfg.MaxConns = 4
 	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
@@ -61,7 +61,7 @@ func (c *Client) SchemaReady(ctx context.Context) error {
 SELECT count(*)
 FROM pg_tables
 WHERE schemaname = current_schema() AND tablename = ANY($1)
-`, []string{callTrieNodesTable, runsTable, recommendationsTable}).Scan(&n); err != nil {
+`, []string{callTreeNodesTable, runsTable, recommendationsTable}).Scan(&n); err != nil {
 		return fmt.Errorf("schema not ready: %w", err)
 	}
 	if n < 3 {

@@ -76,7 +76,7 @@ func (r *autopilotTransactionResolver) CallTrie(ctx context.Context, obj *model.
 		return nil, err
 	}
 
-	nodes, ok, err := r.AutopilotClient.GetTransactionCallTrie(
+	nodes, ok, err := r.AutopilotClient.GetTransactionCallTree(
 		ctx,
 		workloadID.Namespace,
 		string(workloadID.Kind),
@@ -90,7 +90,7 @@ func (r *autopilotTransactionResolver) CallTrie(ctx context.Context, obj *model.
 	if !ok {
 		return nil, nil
 	}
-	return autopilot.CallTrieToModel(nodes), nil
+	return autopilot.CallTreeToModel(nodes), nil
 }
 
 // MarkedForInstrumentation is the resolver for the markedForInstrumentation field.

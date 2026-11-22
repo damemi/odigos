@@ -43,7 +43,7 @@ func TestTracesRedis_RecoversWhenRedisStartsLater(t *testing.T) {
 	if err := r.ping(ctx2); err != nil {
 		t.Fatalf("ping after redis started: %v", err)
 	}
-	if _, err := r.scanTrieKeys(ctx2); err != nil {
+	if _, err := r.scanCallTreeKeys(ctx2); err != nil {
 		t.Fatalf("scan after redis started: %v", err)
 	}
 }

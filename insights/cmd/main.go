@@ -61,7 +61,7 @@ const (
 
 	// envAutopilotRedisEndpoint is the cacheDb Redis address (host:port)
 	// used to fetch autopilot profile stacks (logical DB 1). Set by Helm
-	// only when autopilot.enabled; when unset, call-trie writes stay off.
+	// only when autopilot.enabled; when unset, call-tree writes stay off.
 	envAutopilotRedisEndpoint = "AUTOPILOT_REDIS_ENDPOINT"
 
 	// leaderLease elects the one replica that runs the singleton jobs: the
@@ -185,13 +185,13 @@ func main() {
 	if redisEndpoint := os.Getenv(envAutopilotRedisEndpoint); redisEndpoint != "" {
 		ic, err := autopilot.Open(redisEndpoint, log)
 		if err != nil {
-			log.Warn("autopilot call-trie writer unavailable; java-ebpf profile correlation disabled",
+			log.Warn("autopilot call-tree writer unavailable; java-ebpf profile correlation disabled",
 				"redis_endpoint", redisEndpoint, "error", err)
 		} else {
 			eng.SetAutopilot(ic)
 			defer func() {
 				if err := ic.Close(); err != nil {
-					log.Warn("autopilot call-trie writer close failed", "error", err)
+					log.Warn("autopilot call-tree writer close failed", "error", err)
 				}
 			}()
 		}
@@ -541,7 +541,7 @@ func runSystemSettingsReloader(
 // notifier tick or the autopilot loop. Losing the lease cancels them
 // all. Outside a cluster (no in-cluster credentials) they run
 // unconditionally, which is the local single-process case. Autopilot
-// joins the slice only when AUTOPILOT_ENABLED is set. Its tries, analysis
+// joins the slice only when AUTOPILOT_ENABLED is set. Its call trees, analysis
 // runs, and recommendations are stored in the same Postgres as insights.
 func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, pg *postgres.Repo, dsn string, reg *notify.Registry, eng *engine.Engine) {
 	dispatcher := notify.NewDispatcher(r, reg, slog.New(commonlogger.NewSlogHandler("notifier")), leader.Identity(), notify.PollInterval, notify.DefaultOverlap)

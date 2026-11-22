@@ -12,10 +12,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// trieFlusher copies Redis trie nodes into the autopilot store at the start
+// callTreeFlusher copies Redis call tree nodes into the autopilot store at the start
 // of each autopilot loop tick. Nodes already stored are skipped. Runs only on
 // the insights leader.
-type trieFlusher struct {
+type callTreeFlusher struct {
 	redis *tracesRedis
 	// store is owned by the caller, which closes it.
 	store  *store.Client
@@ -24,7 +24,7 @@ type trieFlusher struct {
 	kube client.Client
 }
 
-func (f *trieFlusher) Close() error {
+func (f *callTreeFlusher) Close() error {
 	if f == nil || f.redis == nil {
 		return nil
 	}
@@ -33,27 +33,27 @@ func (f *trieFlusher) Close() error {
 	return err
 }
 
-func (f *trieFlusher) Flush(tickCtx context.Context) {
-	keys, err := f.redis.scanTrieKeys(tickCtx)
+func (f *callTreeFlusher) Flush(tickCtx context.Context) {
+	keys, err := f.redis.scanCallTreeKeys(tickCtx)
 	if err != nil {
-		f.logger.Warn("trie flusher scan failed", "error", err)
+		f.logger.Warn("call tree flusher scan failed", "error", err)
 		return
 	}
 	if len(keys) == 0 {
 		return
 	}
 
-	var nodes []store.FlushedTrieNode
+	var nodes []store.FlushedCallTreeNode
 	var keysLoaded, keysSkipped int
 	for _, key := range keys {
-		meta, ok := parseRedisTrieKey(key)
+		meta, ok := parseRedisCallTreeKey(key)
 		if !ok || (meta.SampleType != "events" && meta.SampleType != "samples") {
 			keysSkipped++
 			continue
 		}
 		present, err := f.workloadInstrumented(tickCtx, meta)
 		if err != nil {
-			f.logger.Warn("trie flusher instrumentation config lookup failed",
+			f.logger.Warn("call tree flusher instrumentation config lookup failed",
 				"namespace", meta.Namespace,
 				"kind", meta.WorkloadKind,
 				"name", meta.WorkloadName,
@@ -65,14 +65,14 @@ func (f *trieFlusher) Flush(tickCtx context.Context) {
 			// An uninstrumented workload should not produce more spans. If a few
 			// still arrive and recreate the key, the next flush deletes it again.
 			if err := f.redis.deleteKey(tickCtx, key); err != nil {
-				f.logger.Warn("trie flusher delete uninstrumented key failed", "key", key, "error", err)
+				f.logger.Warn("call tree flusher delete uninstrumented key failed", "key", key, "error", err)
 			}
 			keysSkipped++
 			continue
 		}
-		part, err := f.redis.loadTrieStructureNodes(tickCtx, key, meta)
+		part, err := f.redis.loadCallTreeStructureNodes(tickCtx, key, meta)
 		if err != nil {
-			f.logger.Warn("trie flusher load key failed", "key", key, "error", err)
+			f.logger.Warn("call tree flusher load key failed", "key", key, "error", err)
 			continue
 		}
 		if len(part) == 0 {
@@ -85,12 +85,12 @@ func (f *trieFlusher) Flush(tickCtx context.Context) {
 	if len(nodes) == 0 {
 		return
 	}
-	nodesSkipped, err := f.store.InsertCallTrieNodes(tickCtx, nodes)
+	nodesSkipped, err := f.store.InsertCallTreeNodes(tickCtx, nodes)
 	if err != nil {
-		f.logger.Warn("trie flusher insert failed", "error", err, "nodes", len(nodes))
+		f.logger.Warn("call tree flusher insert failed", "error", err, "nodes", len(nodes))
 		return
 	}
-	f.logger.Info("flushed redis trie structure to the autopilot store",
+	f.logger.Info("flushed redis call tree structure to the autopilot store",
 		"keys", len(keys),
 		"keys_loaded", keysLoaded,
 		"keys_skipped", keysSkipped,
@@ -99,7 +99,7 @@ func (f *trieFlusher) Flush(tickCtx context.Context) {
 	)
 }
 
-func (f *trieFlusher) workloadInstrumented(ctx context.Context, meta redisTrieKeyMeta) (bool, error) {
+func (f *callTreeFlusher) workloadInstrumented(ctx context.Context, meta redisCallTreeKeyMeta) (bool, error) {
 	if f == nil || f.kube == nil {
 		return false, fmt.Errorf("instrumentation config client is nil")
 	}
@@ -108,7 +108,7 @@ func (f *trieFlusher) workloadInstrumented(ctx context.Context, meta redisTrieKe
 	err := f.kube.Get(ctx, client.ObjectKey{Namespace: meta.Namespace, Name: name}, &ic)
 	if apierrors.IsNotFound(err) {
 		if f.logger != nil {
-			f.logger.Debug("skipping trie flush; instrumentation config not found",
+			f.logger.Debug("skipping call tree flush; instrumentation config not found",
 				"namespace", meta.Namespace,
 				"kind", meta.WorkloadKind,
 				"name", meta.WorkloadName,

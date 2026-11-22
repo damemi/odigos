@@ -1,5 +1,5 @@
 // Package loop owns the autopilot control loop that drives function
-// instrumentation decisions from stored call-trie evidence and InstrumentationRules.
+// instrumentation decisions from stored call-tree evidence and InstrumentationRules.
 package loop
 
 import (
@@ -30,8 +30,8 @@ const tickInterval = time.Minute
 // sequentially and the ticker drops ticks missed while one is running.
 const tickTimeout = 10 * time.Minute
 
-// TrieFlusher copies call tries buffered in Redis into the autopilot store.
-type TrieFlusher interface {
+// CallTreeFlusher copies call trees buffered in Redis into the autopilot store.
+type CallTreeFlusher interface {
 	Flush(ctx context.Context)
 }
 
@@ -46,9 +46,9 @@ type Manager struct {
 	// MaxProbesPerWorkload caps how many distinct custom probes may apply to
 	// one workload. Zero uses defaultMaxProbesPerWorkload.
 	MaxProbesPerWorkload int
-	// TrieFlusher, when set, runs at the start of each tick so call tries
+	// CallTreeFlusher, when set, runs at the start of each tick so call trees
 	// buffered in Redis reach the store before sources are analyzed.
-	TrieFlusher TrieFlusher
+	CallTreeFlusher CallTreeFlusher
 	// RuleEvents, when set, signals that an InstrumentationRule changed. The
 	// loop then reconciles rules without waiting for the next tick, so a
 	// deleted autopilot rule is recreated promptly.
@@ -61,7 +61,7 @@ type Manager struct {
 }
 
 // Run blocks until ctx is cancelled. Every minute it discovers sources that
-// have stored call tries and, for each source+transaction, sends the
+// have stored call trees and, for each source+transaction, sends the
 // model the call-graph edges it has not yet successfully analyzed. Edges are
 // acknowledged only by a successful run, so failed or skipped calls are
 // retried on later ticks.
@@ -103,10 +103,10 @@ func (m *Manager) tick(ctx context.Context) {
 	if modeErr != nil {
 		m.logWarn("failed to read autopilot mode", "error", modeErr)
 	}
-	// off still flushes tries and deletes data for sources that are gone,
+	// off still flushes call trees and deletes data for sources that are gone,
 	// but does not call the model.
-	if m.TrieFlusher != nil {
-		m.TrieFlusher.Flush(tickCtx)
+	if m.CallTreeFlusher != nil {
+		m.CallTreeFlusher.Flush(tickCtx)
 	}
 
 	sources, err := m.Store.ListSourcesWithTransactions(tickCtx)
@@ -165,7 +165,7 @@ type sourceTickSummary struct {
 	deferredBackoff  int
 	deferredPaused   int
 	exhausted        int
-	emptyTrie        int
+	emptyCallTree    int
 	llmCalls         int
 	analyzeErrors    int
 	duplicateTxRows  int
@@ -186,7 +186,7 @@ func (s sourceTickSummary) log(m *Manager) {
 		"deferred_backoff", s.deferredBackoff,
 		"deferred_paused", s.deferredPaused,
 		"exhausted", s.exhausted,
-		"empty_trie", s.emptyTrie,
+		"empty_call_tree", s.emptyCallTree,
 		"llm_calls", s.llmCalls,
 		"analyze_errors", s.analyzeErrors,
 		"duplicate_tx_rows", s.duplicateTxRows,
@@ -249,17 +249,17 @@ func (m *Manager) processSource(ctx context.Context, source store.SourceKey, sum
 			summary.skippedAtCap += len(txs) - i
 			break
 		}
-		nodes, err := m.Store.GetCallTrie(ctx, source, tx.ID)
+		nodes, err := m.Store.GetCallTree(ctx, source, tx.ID)
 		if err != nil {
-			return fmt.Errorf("get call trie for %s: %w", tx.ID, err)
+			return fmt.Errorf("get call tree for %s: %w", tx.ID, err)
 		}
 		if len(nodes) == 0 {
-			summary.emptyTrie++
+			summary.emptyCallTree++
 			continue
 		}
 		ev := BuildAppEvidence(nodes)
 		if len(ev.CallGraph) == 0 {
-			summary.emptyTrie++
+			summary.emptyCallTree++
 			continue
 		}
 		seenTx[tx.ID]++
@@ -274,7 +274,7 @@ func (m *Manager) processSource(ctx context.Context, source store.SourceKey, sum
 				"occurrence", seenTx[tx.ID],
 			)
 		}
-		outcome, reason, err := m.analyzeTransaction(ctx, source, probes, transactionTrie{Transaction: tx, Nodes: nodes}, ev)
+		outcome, reason, err := m.analyzeTransaction(ctx, source, probes, transactionCallTree{Transaction: tx, Nodes: nodes}, ev)
 		if err != nil {
 			summary.analyzeErrors++
 			m.logWarn("failed to analyze transaction",
@@ -329,7 +329,7 @@ const (
 	analyzeExhausted
 )
 
-func (m *Manager) analyzeTransaction(ctx context.Context, source store.SourceKey, probes []customProbe, tx transactionTrie, ev AppEvidence) (analyzeOutcome, string, error) {
+func (m *Manager) analyzeTransaction(ctx context.Context, source store.SourceKey, probes []customProbe, tx transactionCallTree, ev AppEvidence) (analyzeOutcome, string, error) {
 	if uniqueProbeCount(probes) >= m.maxProbes() {
 		m.logInfo("skipping transaction; probe cap reached",
 			"transaction_id", tx.Transaction.ID,
@@ -360,7 +360,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source store.SourceKey
 		m.logInfo("skipping transaction; no pending evidence",
 			"transaction_id", tx.Transaction.ID,
 			"call_graph_edges", len(ev.CallGraph),
-			"trie_nodes_total", len(tx.Nodes),
+			"call_tree_nodes_total", len(tx.Nodes),
 		)
 		return analyzeSkipped, "", nil
 	}
@@ -387,7 +387,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source store.SourceKey
 		WorkloadName:     source.WorkloadName,
 		ContainerName:    source.ContainerName,
 		TransactionID:    tx.Transaction.ID,
-		TrieHash:         hashEvidence(plan.Commit),
+		CallTreeHash:     hashEvidence(plan.Commit),
 		EvidenceSnapshot: snapshot,
 		Model:            m.ModelName,
 		PromptHash:       inputHash,
@@ -409,7 +409,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source store.SourceKey
 		"transaction_id", tx.Transaction.ID,
 		"call_graph_edges", len(ev.CallGraph),
 		"sent_edges", len(plan.Send),
-		"trie_nodes_total", len(tx.Nodes),
+		"call_tree_nodes_total", len(tx.Nodes),
 		"request_bytes", len(user),
 		"model", m.ModelName,
 	}
@@ -483,7 +483,7 @@ func (m *Manager) storeRecommendations(ctx context.Context, source store.SourceK
 	return m.Store.InsertRecommendations(ctx, unstoredRecommendations(storedRecommendations(source, transactionID, revision, recs), existing))
 }
 
-func buildAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionTrie, plan analysisPlan) schema.AnalysisRequest {
+func buildAnalysisRequest(source store.SourceKey, probes []customProbe, tx transactionCallTree, plan analysisPlan) schema.AnalysisRequest {
 	if plan.Mode == "delta" {
 		return buildDeltaAnalysisRequest(source, probes, tx, plan.Send)
 	}

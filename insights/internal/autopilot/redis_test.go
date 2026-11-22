@@ -13,7 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-func TestMergeCallTrie_BuildsStructureWithoutCounts(t *testing.T) {
+func TestMergeCallTree_BuildsStructureWithoutCounts(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -48,7 +48,7 @@ func TestMergeCallTrie_BuildsStructureWithoutCounts(t *testing.T) {
 		SpanIDs:       []string{string(spanID)},
 	}
 
-	n, err := tr.mergeCallTrie(context.Background(), tx, traceID)
+	n, err := tr.mergeCallTree(context.Background(), tx, traceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,13 +56,13 @@ func TestMergeCallTrie_BuildsStructureWithoutCounts(t *testing.T) {
 		t.Fatalf("new nodes = %d, want 2", n)
 	}
 
-	trieKey := redisTrieKey(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName, "samples", tx.TransactionID)
-	fields, err := rdb.HGetAll(context.Background(), trieKey).Result()
+	callTreeKey := redisCallTreeKey(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName, "samples", tx.TransactionID)
+	fields, err := rdb.HGetAll(context.Background(), callTreeKey).Result()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(fields) != 2 {
-		t.Fatalf("trie fields = %d, want 2; got %#v", len(fields), fields)
+		t.Fatalf("call tree fields = %d, want 2; got %#v", len(fields), fields)
 	}
 
 	rootPayload := "root\x00jvm\x00com.app.Root.run"
@@ -81,7 +81,7 @@ func TestMergeCallTrie_BuildsStructureWithoutCounts(t *testing.T) {
 	}
 
 	// Idempotent: same stacks do not add nodes again.
-	n, err = tr.mergeCallTrie(context.Background(), tx, traceID)
+	n, err = tr.mergeCallTree(context.Background(), tx, traceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestMergeCallTrie_BuildsStructureWithoutCounts(t *testing.T) {
 	}
 }
 
-func TestMergeCallTrie_SeparateKeysPerSampleType(t *testing.T) {
+func TestMergeCallTree_SeparateKeysPerSampleType(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -118,7 +118,7 @@ func TestMergeCallTrie_SeparateKeysPerSampleType(t *testing.T) {
 		ContainerName: "c", TransactionID: "tx",
 		SpanIDs: []string{string(spanA), string(spanB)},
 	}
-	n, err := tr.mergeCallTrie(context.Background(), tx, traceID)
+	n, err := tr.mergeCallTree(context.Background(), tx, traceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,8 +126,8 @@ func TestMergeCallTrie_SeparateKeysPerSampleType(t *testing.T) {
 		t.Fatalf("new nodes = %d, want 2", n)
 	}
 
-	samplesKey := redisTrieKey(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName, "samples", tx.TransactionID)
-	eventsKey := redisTrieKey(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName, "events", tx.TransactionID)
+	samplesKey := redisCallTreeKey(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName, "samples", tx.TransactionID)
+	eventsKey := redisCallTreeKey(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName, "events", tx.TransactionID)
 	if !mr.Exists(samplesKey) || !mr.Exists(eventsKey) {
 		t.Fatalf("expected both sample-type keys; samples=%v events=%v", mr.Exists(samplesKey), mr.Exists(eventsKey))
 	}
@@ -138,7 +138,7 @@ func TestMergeCallTrie_SeparateKeysPerSampleType(t *testing.T) {
 	}
 }
 
-func TestMergeCallTrie_IgnoresUnmatchedSpans(t *testing.T) {
+func TestMergeCallTree_IgnoresUnmatchedSpans(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
@@ -158,15 +158,15 @@ func TestMergeCallTrie_IgnoresUnmatchedSpans(t *testing.T) {
 		ContainerName: "c", TransactionID: "tx",
 		SpanIDs: []string{string([]byte{2, 2, 2, 2, 2, 2, 2, 2})},
 	}
-	n, err := tr.mergeCallTrie(context.Background(), tx, traceID)
+	n, err := tr.mergeCallTree(context.Background(), tx, traceID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n != 0 {
 		t.Fatalf("new nodes = %d, want 0", n)
 	}
-	if mr.Exists(redisTrieKey(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName, "events", tx.TransactionID)) {
-		t.Fatal("trie key should not be created when no spans match")
+	if mr.Exists(redisCallTreeKey(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName, "events", tx.TransactionID)) {
+		t.Fatal("call tree key should not be created when no spans match")
 	}
 }
 

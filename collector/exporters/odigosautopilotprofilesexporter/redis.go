@@ -70,7 +70,7 @@ type profileFrame struct {
 	FrameType    string
 }
 
-// profileStack is one linked sample stack written to Redis (not trie edges).
+// profileStack is one linked sample stack written to Redis (not call tree edges).
 type profileStack struct {
 	TraceID    []byte
 	SpanID     []byte
