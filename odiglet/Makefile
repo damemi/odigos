@@ -12,7 +12,6 @@ LIBRARIES := go.opentelemetry.io/auto \
 			github.com/odigos-io/ebpf-core \
 			github.com/odigos-io/ebpf-generic-instrumentation \
 			github.com/odigos-io/ebpf-nodejs-instrumentation \
-			github.com/odigos-io/mysql-instrumentation \
 			github.com/odigos-io/runtime-detector
 
 # For development, we can modify the libraries by adding a @<version/branch> suffix

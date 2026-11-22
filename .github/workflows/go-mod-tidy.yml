@@ -25,7 +25,6 @@ jobs:
             odigos-io/ebpf-nodejs-instrumentation:enterprise-ro
             odigos-io/ebpf-generic-instrumentation:enterprise-ro
             odigos-io/enterprise-go-instrumentation:enterprise-ro
-            odigos-io/mysql-instrumentation:enterprise-ro
             odigos-io/python-ebpf:enterprise-ro
             odigos-io/odigos-device-plugin:ro
       - name: run make go-mod-tidy
@@ -58,7 +57,6 @@ jobs:
             odigos-io/ebpf-nodejs-instrumentation:enterprise-ro
             odigos-io/ebpf-generic-instrumentation:enterprise-ro
             odigos-io/enterprise-go-instrumentation:enterprise-ro
-            odigos-io/mysql-instrumentation:enterprise-ro
             odigos-io/python-ebpf:enterprise-ro
             odigos-io/odigos-device-plugin:ro
       - name: run make verify-go-mod-graph

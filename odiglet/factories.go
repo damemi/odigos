@@ -19,35 +19,18 @@ import (
 	"github.com/odigos-io/odigos/procdiscovery/pkg/process"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // exporters send to the node collector and are shared by every instrumented process.
 type exporters struct {
-	otlpConn *grpc.ClientConn
-	traces   exporter.Traces
-	metrics  exporter.Metrics
+	traces  exporter.Traces
+	metrics exporter.Metrics
 }
 
 func newExporters(ctx context.Context, logger *commonlogger.OdigosLogger) (*exporters, error) {
 	endpoint := fmt.Sprintf("localhost:%d", consts.OTLPPort)
 	e := &exporters{}
 	var err error
-
-	// create a single gRPC connection that will be shared across instrumentations
-	// of different processes and different languages.
-	// this allows us to keep a single connection to the local collector.
-	// we share the underlying connection transport, but each instrumentation can have
-	// its own exporter with its own lifecycle.
-	// using WithGRPCConn when creating the exporter allows us to manage the lifecycle of this connection
-	// which is open the entire lifecycle of the odiglet.
-	// TODO: we should eventually delete this and move into the collector components such as
-	// NewOTLPGRPCTracesExporter. New instrumentations should avoid using this and use the collector sink instead.
-	e.otlpConn, err = grpc.NewClient(endpoint, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create a gRPC connection to local collector: %w", err)
-	}
 
 	// Build the shared OTLP/gRPC traces exporter once for the whole odiglet. Every
 	// eBPF instrumentation stacks a per-process pdata pipeline on top of it, so a
@@ -84,17 +67,12 @@ func (e *exporters) close(logger *commonlogger.OdigosLogger) {
 			logger.Error("failed to shut down shared ebpf traces exporter", "error", err)
 		}
 	}
-	if e.otlpConn != nil {
-		if err := e.otlpConn.Close(); err != nil {
-			logger.Error("failed to close common OTLP connection", "error", err)
-		}
-	}
 }
 
 // instrumentationFactories builds the per-distro and the generic instrumentation factories. The
 // returned OBI manager backs both OBI factories and must be run alongside the instrumentation manager.
 func instrumentationFactories(cfg Config, exp *exporters, kernelObservability *kernel.Instrumentation, logger *commonlogger.OdigosLogger) (map[string]commonInstrumentation.Factory, map[string]commonInstrumentation.Factory, *obisdk.Manager, error) {
-	factories, err := ebpfInstrumentationFactories(cfg.TraceIDSuffix, logger, cfg.DistributionGetter, exp.otlpConn, exp.traces, exp.metrics, cfg.WaspDisabled)
+	factories, err := ebpfInstrumentationFactories(cfg.TraceIDSuffix, logger, cfg.DistributionGetter, exp.traces, exp.metrics, cfg.WaspDisabled)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -139,7 +117,7 @@ func waspProvider(logger *commonlogger.OdigosLogger, disabled bool) wasp.MapsPro
 	return wasp.NewSimpleProvider(process.HostProcDir())
 }
 
-func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogger, getter *distros.Getter, otlpConn *grpc.ClientConn, tracesConsumer consumer.Traces, metricsConsumer consumer.Metrics, waspDisabled bool) (map[string]commonInstrumentation.Factory, error) {
+func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogger, getter *distros.Getter, tracesConsumer consumer.Traces, metricsConsumer consumer.Metrics, waspDisabled bool) (map[string]commonInstrumentation.Factory, error) {
 	wp := waspProvider(logger, waspDisabled)
 
 	goFactory, err := sdks.NewGoInstrumentationFactoryEnterprise(suffix, wp, tracesConsumer)
@@ -163,10 +141,6 @@ func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogge
 	}
 	pythonEbpfFactory := sdks.NewPythonInstrumentationFactoryEnterprise()
 	nodejsEbpfFactory := sdks.NewNodeJSInstrumentationFactoryEnterprise()
-	mysqlFactory, err := sdks.NewMySQLInstrumentationFactoryEnterprise(otlpConn)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create MySql instrumentation factory: %w", err)
-	}
 	// python-ebpf: out-of-process pure-eBPF CPython tracer (github.com/odigos-io/python-ebpf), wired in
 	// the SAME in-process Factory shape as the Go/Java eBPF instrumentors.
 	pythonOOPEbpfFactory, err := sdks.NewPythonEbpfInstrumentationFactoryEnterprise(tracesConsumer, metricsConsumer, waspDisabled)
@@ -182,7 +156,6 @@ func ebpfInstrumentationFactories(suffix uint8, logger *commonlogger.OdigosLogge
 		"python-enterprise3.8":       pythonEbpfFactory,
 		"nodejs-enterprise":          nodejsEbpfFactory,
 		"nodejs-enterprise-14":       nodejsEbpfFactory,
-		"mysql-enterprise":           mysqlFactory,
 		"python-ebpf":                pythonOOPEbpfFactory,
 		// dotnet, ruby and php are using native instrumentation and does not have ebpf instrumentation.
 	}, nil

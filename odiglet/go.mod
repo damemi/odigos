@@ -11,7 +11,6 @@ require (
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.63.0
 	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.63.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.21.0
-	github.com/odigos-io/mysql-instrumentation v0.0.0-20250724082230-018ecf4e9752
 	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/deviceplugin v0.0.0-00010101000000-000000000000
@@ -223,25 +222,18 @@ require (
 	go.opentelemetry.io/collector/pdata/xpdata v0.161.0 // indirect
 	go.opentelemetry.io/collector/pipeline v1.67.0 // indirect
 	go.opentelemetry.io/collector/pipeline/xpipeline v0.161.0 // indirect
-	go.opentelemetry.io/contrib/bridges/prometheus v0.65.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/ec2/v2 v2.5.1 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/eks v1.44.0 // indirect
 	go.opentelemetry.io/contrib/detectors/azure/azurevm v0.16.0 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.44.0 // indirect
-	go.opentelemetry.io/contrib/exporters/autoexport v0.65.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.70.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.70.0 // indirect
 	go.opentelemetry.io/obi v0.10.1-0.20260706144415-c76a93c8775c // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.20.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.20.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/prometheus v0.68.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdoutlog v0.20.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.44.0 // indirect
-	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.45.0 // indirect
 	go.opentelemetry.io/otel/log v0.20.0 // indirect
 	go.opentelemetry.io/otel/sdk/log v0.20.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.46.0 // indirect
