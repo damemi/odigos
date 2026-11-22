@@ -17,6 +17,7 @@ require (
 
 require (
 	github.com/argoproj/argo-rollouts v1.9.1 // indirect
+	github.com/distribution/reference v0.6.0 // indirect
 	github.com/evanphx/json-patch v5.9.11+incompatible // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/swag/cmdutils v0.25.4 // indirect
@@ -31,6 +32,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.4 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.4 // indirect
 	github.com/google/btree v1.1.3 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/openshift/api v3.9.0+incompatible // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

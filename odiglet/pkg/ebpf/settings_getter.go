@@ -13,9 +13,11 @@ import (
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/distros/distro"
 	"github.com/odigos-io/odigos/instrumentation"
+	k8scontainer "github.com/odigos-io/odigos/k8sutils/pkg/container"
 	workload "github.com/odigos-io/odigos/k8sutils/pkg/workload"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -153,6 +155,7 @@ func getResourceAttributes(kd *K8sProcessDetails) ([]attribute.KeyValue, error) 
 
 	if kd.ContainerName != "" {
 		attrs = append(attrs, semconv.K8SContainerName(kd.ContainerName))
+		attrs = appendContainerImageTag(attrs, pod, kd.ContainerName)
 	}
 
 	if pe.ExecDetails != nil {
@@ -163,6 +166,7 @@ func getResourceAttributes(kd *K8sProcessDetails) ([]attribute.KeyValue, error) 
 		containerName, ok := envs[k8sconsts.OdigosEnvVarContainerName]
 		if ok && containerName != "" && kd.ContainerName == "" {
 			attrs = append(attrs, semconv.K8SContainerName(containerName))
+			attrs = appendContainerImageTag(attrs, pod, containerName)
 		}
 
 		// Parse OTEL_RESOURCE_ATTRIBUTES environment variable
@@ -200,4 +204,19 @@ func getResourceAttributes(kd *K8sProcessDetails) ([]attribute.KeyValue, error) 
 	}
 
 	return attrs, errors.Join(errs...)
+}
+
+// appendContainerImageTag adds the image tag of the pod's container, so every eBPF
+// agent reports the version of the code it instruments.
+func appendContainerImageTag(attrs []attribute.KeyValue, pod *corev1.Pod, containerName string) []attribute.KeyValue {
+	for i := range pod.Spec.Containers {
+		if pod.Spec.Containers[i].Name != containerName {
+			continue
+		}
+		if tag := k8scontainer.ImageTag(pod.Spec.Containers[i].Image); tag != "" {
+			attrs = append(attrs, attribute.String(consts.ContainerImageTagAttribute, tag))
+		}
+		break
+	}
+	return attrs
 }
