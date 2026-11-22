@@ -3,7 +3,7 @@ import { SVG } from '@odigos/ui-kit/types';
 import { GatedFeature } from '@odigos/ui-kit/constants';
 import { NavbarProps } from '@odigos/ui-kit/components';
 import { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import { CodeIcon, InsightsIcon, OverviewIcon, PipelineCollectorIcon, ProfilingIcon, SamplingIcon, ServiceMapIcon, SettingsIcon, UrlTemplatizationIcon } from '@odigos/ui-kit/icons';
+import { InsightsIcon, OverviewIcon, PipelineCollectorIcon, ProfilingIcon, SamplingIcon, ServiceMapIcon, SettingsIcon, UrlTemplatizationIcon } from '@odigos/ui-kit/icons';
 
 const getPayloadForIcon = (router: AppRouterInstance, currentPath: string, targetPath: string, label: string, icon: SVG): NavbarProps['icons'][number] => {
   return {
@@ -35,7 +35,8 @@ export const getNavbarIcons = (router: AppRouterInstance, currentPath: string, i
   add(ROUTES.COLLECTORS, 'Collectors', PipelineCollectorIcon, { group: 'Pipeline' });
   add(ROUTES.SAMPLING, 'Sampling Rules', SamplingIcon, { group: 'Pipeline' });
   add(ROUTES.URL_TEMPLATIZATION, 'URL Templatization', UrlTemplatizationIcon, { group: 'Pipeline' });
-  add(ROUTES.INSTRUMENTATION_AGENTS, 'Instrumentation Agents', CodeIcon, { group: 'Pipeline' });
+  // Instrumentation Agents has no page for now. Its GraphQL query and API adapter entry remain, so bringing it back
+  // takes a page rendering InstrumentationAgentsNext from @odigos/ui-kit/containers, a route and a menu entry here.
 
   add(ROUTES.SETTINGS, 'Settings', SettingsIcon, { bottom: true });
 
