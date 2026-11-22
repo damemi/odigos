@@ -207,6 +207,7 @@ type ComplexityRoot struct {
 		MemoryLimiterLimitMiB      func(childComplexity int) int
 		MemoryLimiterSpikeLimitMiB func(childComplexity int) int
 		MinReplicas                func(childComplexity int) int
+		NoProxy                    func(childComplexity int) int
 		NodeSelector               func(childComplexity int) int
 		RequestCPUm                func(childComplexity int) int
 		RequestMemoryMiB           func(childComplexity int) int
@@ -3517,6 +3518,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.CollectorGatewayConfig.MinReplicas(childComplexity), true
+
+	case "CollectorGatewayConfig.noProxy":
+		if e.complexity.CollectorGatewayConfig.NoProxy == nil {
+			break
+		}
+
+		return e.complexity.CollectorGatewayConfig.NoProxy(childComplexity), true
 
 	case "CollectorGatewayConfig.nodeSelector":
 		if e.complexity.CollectorGatewayConfig.NodeSelector == nil {
@@ -14789,6 +14797,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputLocalUiConfigAllowConcurrentAgentsInput,
 		ec.unmarshalInputLocalUiConfigAutoRollbackInput,
 		ec.unmarshalInputLocalUiConfigCardinalityControlInput,
+		ec.unmarshalInputLocalUiConfigCollectorGatewayInput,
 		ec.unmarshalInputLocalUiConfigComponentLogLevelsInput,
 		ec.unmarshalInputLocalUiConfigInput,
 		ec.unmarshalInputLocalUiConfigInstrumentorInput,
@@ -14809,6 +14818,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		ec.unmarshalInputPodWorkloadInput,
 		ec.unmarshalInputPythonCaptureInput,
 		ec.unmarshalInputPythonCustomProbeInput,
+		ec.unmarshalInputRemoteConfigCollectorGatewayInput,
 		ec.unmarshalInputRemoteConfigInput,
 		ec.unmarshalInputRemoteConfigRolloutInput,
 		ec.unmarshalInputSamplingConfigInput,
@@ -24623,6 +24633,47 @@ func (ec *executionContext) fieldContext_CollectorGatewayConfig_httpsProxyAddres
 	return fc, nil
 }
 
+func (ec *executionContext) _CollectorGatewayConfig_noProxy(ctx context.Context, field graphql.CollectedField, obj *model.CollectorGatewayConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_CollectorGatewayConfig_noProxy(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.NoProxy, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalOString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_CollectorGatewayConfig_noProxy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CollectorGatewayConfig",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _CollectorGatewayConfig_nodeSelector(ctx context.Context, field graphql.CollectedField, obj *model.CollectorGatewayConfig) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_CollectorGatewayConfig_nodeSelector(ctx, field)
 	if err != nil {
@@ -32243,6 +32294,8 @@ func (ec *executionContext) fieldContext_EffectiveConfig_collectorGateway(_ cont
 				return ec.fieldContext_CollectorGatewayConfig_clusterMetricsEnabled(ctx, field)
 			case "httpsProxyAddress":
 				return ec.fieldContext_CollectorGatewayConfig_httpsProxyAddress(ctx, field)
+			case "noProxy":
+				return ec.fieldContext_CollectorGatewayConfig_noProxy(ctx, field)
 			case "nodeSelector":
 				return ec.fieldContext_CollectorGatewayConfig_nodeSelector(ctx, field)
 			}
@@ -101599,6 +101652,40 @@ func (ec *executionContext) unmarshalInputLocalUiConfigCardinalityControlInput(c
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputLocalUiConfigCollectorGatewayInput(ctx context.Context, obj any) (model.LocalUIConfigCollectorGatewayInput, error) {
+	var it model.LocalUIConfigCollectorGatewayInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"httpsProxyAddress", "noProxy"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "httpsProxyAddress":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("httpsProxyAddress"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.HTTPSProxyAddress = data
+		case "noProxy":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("noProxy"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NoProxy = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputLocalUiConfigComponentLogLevelsInput(ctx context.Context, obj any) (model.LocalUIConfigComponentLogLevelsInput, error) {
 	var it model.LocalUIConfigComponentLogLevelsInput
 	asMap := map[string]any{}
@@ -101682,7 +101769,7 @@ func (ec *executionContext) unmarshalInputLocalUiConfigInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"telemetryEnabled", "ignoredNamespaces", "ignoredContainers", "ignoreOdigosNamespace", "clusterName", "instrumentor", "allowConcurrentAgents", "rollout", "autoRollback", "goAutoOffsetsCron", "goAutoOffsetsMode", "sampling", "componentLogLevels", "cardinalityControl"}
+	fieldsInOrder := [...]string{"telemetryEnabled", "ignoredNamespaces", "ignoredContainers", "ignoreOdigosNamespace", "clusterName", "instrumentor", "allowConcurrentAgents", "rollout", "autoRollback", "goAutoOffsetsCron", "goAutoOffsetsMode", "sampling", "componentLogLevels", "cardinalityControl", "collectorGateway"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -101787,6 +101874,13 @@ func (ec *executionContext) unmarshalInputLocalUiConfigInput(ctx context.Context
 				return it, err
 			}
 			it.CardinalityControl = data
+		case "collectorGateway":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("collectorGateway"))
+			data, err := ec.unmarshalOLocalUiConfigCollectorGatewayInput2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐLocalUIConfigCollectorGatewayInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CollectorGateway = data
 		}
 	}
 
@@ -102608,6 +102702,40 @@ func (ec *executionContext) unmarshalInputPythonCustomProbeInput(ctx context.Con
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputRemoteConfigCollectorGatewayInput(ctx context.Context, obj any) (model.RemoteConfigCollectorGatewayInput, error) {
+	var it model.RemoteConfigCollectorGatewayInput
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"httpsProxyAddress", "noProxy"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "httpsProxyAddress":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("httpsProxyAddress"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.HTTPSProxyAddress = data
+		case "noProxy":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("noProxy"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NoProxy = data
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputRemoteConfigInput(ctx context.Context, obj any) (model.RemoteConfigInput, error) {
 	var it model.RemoteConfigInput
 	asMap := map[string]any{}
@@ -102615,7 +102743,7 @@ func (ec *executionContext) unmarshalInputRemoteConfigInput(ctx context.Context,
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"rollout"}
+	fieldsInOrder := [...]string{"rollout", "collectorGateway"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -102629,6 +102757,13 @@ func (ec *executionContext) unmarshalInputRemoteConfigInput(ctx context.Context,
 				return it, err
 			}
 			it.Rollout = data
+		case "collectorGateway":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("collectorGateway"))
+			data, err := ec.unmarshalORemoteConfigCollectorGatewayInput2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐRemoteConfigCollectorGatewayInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.CollectorGateway = data
 		}
 	}
 
@@ -104013,6 +104148,8 @@ func (ec *executionContext) _CollectorGatewayConfig(ctx context.Context, sel ast
 			out.Values[i] = ec._CollectorGatewayConfig_clusterMetricsEnabled(ctx, field, obj)
 		case "httpsProxyAddress":
 			out.Values[i] = ec._CollectorGatewayConfig_httpsProxyAddress(ctx, field, obj)
+		case "noProxy":
+			out.Values[i] = ec._CollectorGatewayConfig_noProxy(ctx, field, obj)
 		case "nodeSelector":
 			out.Values[i] = ec._CollectorGatewayConfig_nodeSelector(ctx, field, obj)
 		default:
@@ -133790,6 +133927,14 @@ func (ec *executionContext) unmarshalOLocalUiConfigCardinalityControlInput2ᚖgi
 	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) unmarshalOLocalUiConfigCollectorGatewayInput2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐLocalUIConfigCollectorGatewayInput(ctx context.Context, v any) (*model.LocalUIConfigCollectorGatewayInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputLocalUiConfigCollectorGatewayInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalOLocalUiConfigComponentLogLevelsInput2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐLocalUIConfigComponentLogLevelsInput(ctx context.Context, v any) (*model.LocalUIConfigComponentLogLevelsInput, error) {
 	if v == nil {
 		return nil, nil
@@ -134508,6 +134653,14 @@ func (ec *executionContext) marshalORemoteConfig2ᚖgithubᚗcomᚋodigosᚑio�
 		return graphql.Null
 	}
 	return ec._RemoteConfig(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalORemoteConfigCollectorGatewayInput2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐRemoteConfigCollectorGatewayInput(ctx context.Context, v any) (*model.RemoteConfigCollectorGatewayInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputRemoteConfigCollectorGatewayInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalORemoteConfigRollout2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐRemoteConfigRollout(ctx context.Context, sel ast.SelectionSet, v *model.RemoteConfigRollout) graphql.Marshaler {

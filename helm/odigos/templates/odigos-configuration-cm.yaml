@@ -140,6 +140,10 @@ data:
       {{- with .Values.collectorGateway.httpsProxyAddress }}
       httpsProxyAddress: {{ . }}
       {{- end }}
+      {{- with .Values.collectorGateway.noProxy }}
+      noProxy:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- if .Values.collectorGateway.nodeSelector }}
       # Component-specific nodeSelector (overrides global values.yaml nodeSelector)
       nodeSelector:

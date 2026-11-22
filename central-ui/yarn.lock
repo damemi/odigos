@@ -709,10 +709,10 @@
   resolved "https://registry.yarnpkg.com/@nolyfill/is-core-module/-/is-core-module-1.0.39.tgz#3dc35ba0f1e66b403c00b39344f870298ebb1c8e"
   integrity sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==
 
-"@odigos/ui-kit@npm:@odigos-io/ui-kit@0.0.332":
-  version "0.0.332"
-  resolved "https://npm.pkg.github.com/download/@odigos-io/ui-kit/0.0.332/dc50a7d05d0e7ed9ece73eef7565c81b45a07f86#dc50a7d05d0e7ed9ece73eef7565c81b45a07f86"
-  integrity sha512-Nw5LmsOR4K0Phov2xyF7Jjx2OPZl3n/xdMhgNABHUk+gf/XAvPL8BZ8aZSUxOf+2MX4gnm49IQXI3AV9yz/CBg==
+"@odigos/ui-kit@npm:@odigos-io/ui-kit@0.0.333":
+  version "0.0.333"
+  resolved "https://npm.pkg.github.com/download/@odigos-io/ui-kit/0.0.333/2a21225502de763aba076bfe18d36b5e65b9a4d3#2a21225502de763aba076bfe18d36b5e65b9a4d3"
+  integrity sha512-tbwjUhG5o5TmAspAAXZsQnggI+jmHnJN1NC6jNrwR8/USIGITPusZHWD9L3peG+ojbCEigMt20VcS1qS4WfcNw==
   dependencies:
     "@base-ui/react" "^1.8.0"
     "@xyflow/react" "^12.12.0"

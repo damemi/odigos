@@ -238,6 +238,13 @@ spec:
                         type: string
                     type: object
                 type: object
+              noProxy:
+                description: |-
+                  hosts to reach directly, bypassing the https proxy (added to the gateway's NO_PROXY).
+                  only applies when HttpsProxyAddress is set.
+                items:
+                  type: string
+                type: array
               nodeSelector:
                 additionalProperties:
                   type: string

@@ -63,7 +63,7 @@ func getOwnMetricsConfig(odigosConfiguration *common.OdigosConfiguration, allDes
 
 func newClusterCollectorGroup(namespace string, resourcesSettings *odigosv1.CollectorsGroupResourcesSettings,
 	serviceGraph common.ServiceGraphOptions, clusterMetricsEnabled *bool,
-	httpsProxyAddress *string, nodeSelector *map[string]string, deploymentName string,
+	httpsProxyAddress *string, noProxy []string, nodeSelector *map[string]string, deploymentName string,
 	metricsConfig *odigosv1.CollectorsGroupMetricsCollectionSettings, tailSampling *sampling.TailSamplingConfiguration,
 	dryRun *bool, spanSamplingAttributes *sampling.SpanSamplingAttributesConfiguration,
 	traceAggregation *common.TraceAggregationConfiguration) *odigosv1.CollectorsGroup {
@@ -85,6 +85,7 @@ func newClusterCollectorGroup(namespace string, resourcesSettings *odigosv1.Coll
 			ServiceGraphVirtualNodePeerAttributes: serviceGraph.VirtualNodePeerAttributes,
 			ClusterMetricsEnabled:                 clusterMetricsEnabled,
 			HttpsProxyAddress:                     httpsProxyAddress,
+			NoProxy:                               noProxy,
 			NodeSelector:                          nodeSelector,
 			DeploymentName:                        deploymentName,
 			Metrics:                               metricsConfig,
@@ -141,6 +142,11 @@ func sync(ctx context.Context, c client.Client, scheme *runtime.Scheme) error {
 		spanSamplingAttributes = odigosConfiguration.Sampling.SpanSamplingAttributes
 	}
 
+	var noProxy []string
+	if odigosConfiguration.CollectorGateway.NoProxy != nil {
+		noProxy = *odigosConfiguration.CollectorGateway.NoProxy
+	}
+
 	// cluster collector is always set and never deleted at the moment.
 	// this is to accelerate spinup time and avoid errors while things are gradually being reconciled
 	// and started.
@@ -148,7 +154,7 @@ func sync(ctx context.Context, c client.Client, scheme *runtime.Scheme) error {
 	// to setup their own collectors, then we would avoid adding the cluster collector by default.
 	clusterCollectorGroup := newClusterCollectorGroup(namespace, resourceSettings,
 		*serviceGraph, clusterMetricsEnabled, odigosConfiguration.CollectorGateway.HttpsProxyAddress,
-		nodeSelector, deploymentName, ownMetricsConfig, tailSampling, dryRun, spanSamplingAttributes,
+		noProxy, nodeSelector, deploymentName, ownMetricsConfig, tailSampling, dryRun, spanSamplingAttributes,
 		resolveTraceAggregation(k8slogger.FromContext(ctx), &odigosConfiguration))
 	err = utils.SetOwnerControllerToInstrumentorDeployment(ctx, c, clusterCollectorGroup, scheme)
 	if err != nil {

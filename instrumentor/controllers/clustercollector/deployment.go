@@ -172,17 +172,14 @@ func getDesiredDeployment(ctx context.Context, c client.Client, enabledDests *od
 			},
 		},
 	}
-	if gateway.Spec.HttpsProxyAddress != nil {
-		odigosNs := env.GetCurrentNamespace()
+	// an empty address means no proxy (the UI and Central set it to clear one set in Helm).
+	if gateway.Spec.HttpsProxyAddress != nil && *gateway.Spec.HttpsProxyAddress != "" {
 		extraEnvVars = append(extraEnvVars, corev1.EnvVar{
 			Name:  "HTTPS_PROXY",
 			Value: *gateway.Spec.HttpsProxyAddress,
 		}, corev1.EnvVar{
-			// prevent the own telemetry metrics from using the https proxy if set.
-			// gRPC uses the HTTPS_PROXY even for non tls connections
-			// since it's always uses HTTP CONNECT, so we need to blacklist the ui service.
 			Name:  "NO_PROXY",
-			Value: fmt.Sprintf("%s.%s:%d", k8sconsts.UIServiceName, odigosNs, odigosconsts.OTLPPort),
+			Value: noProxyValue(env.GetCurrentNamespace(), gateway.Spec.NoProxy),
 		})
 	}
 
@@ -400,4 +397,25 @@ func intPtr(n int32) *int32 {
 //go:fix inline
 func int64Ptr(n int64) *int64 {
 	return new(n)
+}
+
+// noProxyValue is the gateway's NO_PROXY: the UI service, then the user's entries (trimmed, empty and repeated ones dropped).
+// The UI service is always there to prevent the own telemetry metrics from using the https proxy:
+// gRPC uses the HTTPS_PROXY even for non tls connections since it always uses HTTP CONNECT.
+func noProxyValue(odigosNs string, noProxy []string) string {
+	uiService := fmt.Sprintf("%s.%s:%d", k8sconsts.UIServiceName, odigosNs, odigosconsts.OTLPPort)
+	entries := []string{uiService}
+	seen := map[string]struct{}{uiService: {}}
+	for _, entry := range noProxy {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, ok := seen[entry]; ok {
+			continue
+		}
+		seen[entry] = struct{}{}
+		entries = append(entries, entry)
+	}
+	return strings.Join(entries, ",")
 }

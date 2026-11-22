@@ -545,8 +545,22 @@ collectorGateway:
   # description: |-
   #   for destinations that uses https for exporting data, this value can be used to set the address for an https proxy.
   #   when unset or empty, no proxy will be used.
+  #   can also be set in the Odigos UI (Settings) or from Odigos Central, which take precedence over this value.
   # @schema
   # httpsProxyAddress: ''
+
+  # @schema
+  # type: array
+  # items:
+  #   type: string
+  # description: |-
+  #   hosts the gateway reaches directly, bypassing the https proxy (added to its NO_PROXY):
+  #   hostnames, domains (e.g. `.example.com`), IPs or CIDRs, optionally with a port.
+  #   only applies when httpsProxyAddress is set.
+  #   can also be set in the Odigos UI (Settings) or from Odigos Central, which take precedence over this value.
+  # @schema
+  # noProxy:
+  #   - .example.com
 
   # @schema
   # description: |-

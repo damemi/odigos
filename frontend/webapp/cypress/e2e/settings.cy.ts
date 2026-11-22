@@ -218,6 +218,10 @@ describe('Settings CRUD', () => {
         addMultiInputValue('ignoredContainers', 'cypress-test-container');
         clickToggle('ignoreOdigosNamespace');
 
+        // ─ Gateway ─
+        // Only the no-proxy list: a proxy address would send the cluster's data through a proxy that isn't there.
+        addMultiInputValue('collectorGateway.noProxy', '.cypress.example.com');
+
         // ─ Component Log Levels ─
         selectDropdownOption('componentLogLevels.default', 'debug');
         selectDropdownOption('componentLogLevels.instrumentor', 'debug');
@@ -275,6 +279,10 @@ describe('Settings CRUD', () => {
       expect(yaml).to.contain('cypress-test-container');
       expect(yaml).to.contain('ignoreOdigosNamespace:');
 
+      // ─ Gateway (multiInput) ─
+      expect(yaml).to.contain('noProxy:');
+      expect(yaml).to.contain('.cypress.example.com');
+
       // ─ Component Log Levels (dropdowns) ─
       expect(yaml).to.contain('componentLogLevels:');
 
@@ -311,6 +319,9 @@ describe('Settings CRUD', () => {
         expect(yaml).to.contain('cypress-test-ns');
         expect(yaml).to.contain('cypress-test-container');
 
+        // ─ Gateway ─
+        expect(yaml).to.contain('.cypress.example.com');
+
         // ─ Sampling ─
         expect(yaml).to.satisfy((s: string) => s.includes('traceAggregationWaitDuration: 45s') || s.includes('traceAggregationWaitDuration: "45s"'));
         expect(yaml).to.contain('keepPercentage: 50');
@@ -346,6 +357,9 @@ describe('Settings CRUD', () => {
         verifyMultiInputContains('ignoredNamespaces', 'cypress-test-ns');
         verifyMultiInputContains('ignoredContainers', 'cypress-test-container');
         verifyToggle('ignoreOdigosNamespace', false);
+
+        // ─ Gateway ─
+        verifyMultiInputContains('collectorGateway.noProxy', '.cypress.example.com');
 
         // ─ Component Log Levels ─
         verifyDropdown('componentLogLevels.default', 'debug');
@@ -393,6 +407,7 @@ describe('Settings CRUD', () => {
         expect(yaml).to.not.contain('agentEnvVarsInjectionMethod: pod-manifest');
         expect(yaml).to.not.contain('cypress-test-ns');
         expect(yaml).to.not.contain('cypress-test-container');
+        expect(yaml).to.not.contain('.cypress.example.com');
         expect(yaml).to.not.contain('maxConcurrentRollouts: 5');
         expect(yaml).to.not.contain('keepPercentage: 50');
         expect(yaml).to.not.contain('allowConcurrentAgents:');
@@ -407,6 +422,7 @@ describe('Settings CRUD', () => {
         expect(yaml).to.not.contain('agentEnvVarsInjectionMethod: pod-manifest');
         expect(yaml).to.not.contain('cypress-test-ns');
         expect(yaml).to.not.contain('cypress-test-container');
+        expect(yaml).to.not.contain('.cypress.example.com');
         expect(yaml).to.not.contain('maxConcurrentRollouts: 5');
         expect(yaml).to.not.contain('keepPercentage: 50');
       });

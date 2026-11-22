@@ -64,6 +64,9 @@ type CollectorsGroupSpecApplyConfiguration struct {
 	// for destinations that uses https for exporting data, this value can be used to set the address for an https proxy.
 	// when unset or empty, no proxy will be used.
 	HttpsProxyAddress *string `json:"httpsProxyAddress,omitempty"`
+	// hosts to reach directly, bypassing the https proxy (added to the gateway's NO_PROXY).
+	// only applies when HttpsProxyAddress is set.
+	NoProxy []string `json:"noProxy,omitempty"`
 	// configuration for metrics handling in this collectors group
 	// if metric collection is disabled, this will be nil
 	// the content is populated only if relevant to this collectors group
@@ -193,6 +196,16 @@ func (b *CollectorsGroupSpecApplyConfiguration) WithClusterMetricsEnabled(value 
 // If called multiple times, the HttpsProxyAddress field is set to the value of the last call.
 func (b *CollectorsGroupSpecApplyConfiguration) WithHttpsProxyAddress(value string) *CollectorsGroupSpecApplyConfiguration {
 	b.HttpsProxyAddress = &value
+	return b
+}
+
+// WithNoProxy adds the given value to the NoProxy field in the declarative configuration
+// and returns the receiver, so that objects can be build by chaining "With" function invocations.
+// If called multiple times, values provided by each call will be appended to the NoProxy field.
+func (b *CollectorsGroupSpecApplyConfiguration) WithNoProxy(values ...string) *CollectorsGroupSpecApplyConfiguration {
+	for i := range values {
+		b.NoProxy = append(b.NoProxy, values[i])
+	}
 	return b
 }
 

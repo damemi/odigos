@@ -1,0 +1,19 @@
+apiVersion: internal.odigos.io/v1beta1
+kind: Configuration
+metadata:
+  name: gateway
+  displayName: Gateway
+spec:
+  fields:
+    - displayName: HTTPS Proxy Address
+      componentType: input
+      isHelmOnly: false
+      description: The proxy the gateway sends data to https destinations through. Leave empty to send directly. Changing it restarts the gateway pods.
+      helmValuePath: collectorGateway.httpsProxyAddress
+      componentProps:
+        placeholder: http://proxy.example.com:3128
+    - displayName: No Proxy
+      componentType: multiInput
+      isHelmOnly: false
+      description: Hosts the gateway reaches directly, bypassing the proxy - hostnames, domains (.example.com), IPs or CIDRs. Applies only when a proxy is set.
+      helmValuePath: collectorGateway.noProxy

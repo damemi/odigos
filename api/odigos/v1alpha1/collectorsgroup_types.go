@@ -195,6 +195,10 @@ type CollectorsGroupSpec struct {
 	// when unset or empty, no proxy will be used.
 	HttpsProxyAddress *string `json:"httpsProxyAddress,omitempty"`
 
+	// hosts to reach directly, bypassing the https proxy (added to the gateway's NO_PROXY).
+	// only applies when HttpsProxyAddress is set.
+	NoProxy []string `json:"noProxy,omitempty"`
+
 	// configuration for metrics handling in this collectors group
 	// if metric collection is disabled, this will be nil
 	// the content is populated only if relevant to this collectors group

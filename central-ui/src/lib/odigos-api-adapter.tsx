@@ -58,7 +58,7 @@ import { mapVmRuleTypesToOptions } from '@/graphql/remote/vm-rule-types';
 import { CombinedGraphQLErrors, ServerError } from '@apollo/client/errors';
 import { mapVmActionTypesToOptions } from '@/graphql/remote/vm-action-types';
 import { ApolloLink, type ApolloClient, type DocumentNode } from '@apollo/client';
-import type { ComputePlatform, VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
+import type { ComputePlatform, RemoteConfigInput, VersionedRemoteFetch, WorkloadWithOdigosHealthStatus } from '@/types';
 import { normalizeActionForWire, parseRenamesString } from '@/lib/action-form-normalization';
 import { mapVmInstrumentationInstructions, vmInstrumentationInstructionsVariables } from '@/graphql/remote/vm-instrumentation-instructions';
 import { PlatformType, Tier, type Action, type CloudConnectorCreateResult, type CloudConnectorProvider, type Connection } from '@odigos/ui-kit/types';
@@ -1160,10 +1160,15 @@ const withActionRenames = <TData, TVars>(op: Operation<TData, TVars>): Operation
 // shape before the inner variables are embedded in RemoteFetch /
 // RemoteMultiFetch. Each targeted proxy runs the mutation on its own cluster;
 // `connectionIds` selects the fan-out targets in the kit runner, not in the
-// inner GraphQL variables. `RemoteConfigInput` is `Pick<EffectiveConfigInput,
-// 'rollout'>`, so only `rollout` is forwarded.
+// inner GraphQL variables. Only what `RemoteConfigInput` takes is forwarded:
+// `rollout`, and `collectorGateway` (the https proxy, v1.41+; the kit's
+// Cluster Configuration only writes it to clusters that take it).
 const withRemoteConfigVars = <TData,>(op: Operation<TData, UpdateRemoteConfigVars>): Operation<TData, UpdateRemoteConfigVars> => {
-  const toWire = (vars: UpdateRemoteConfigVars | undefined) => ({ config: { rollout: vars?.formData?.rollout } }) as unknown as UpdateRemoteConfigVars;
+  const toWire = (vars: UpdateRemoteConfigVars | undefined) => {
+    const formData = vars?.formData as RemoteConfigInput | undefined;
+    const collectorGateway = formData?.collectorGateway ? { httpsProxyAddress: formData.collectorGateway.httpsProxyAddress, noProxy: formData.collectorGateway.noProxy } : undefined;
+    return { config: { rollout: formData?.rollout, collectorGateway } } as unknown as UpdateRemoteConfigVars;
+  };
   return {
     ...op,
     transformVariables: op.transformVariables ? (vars, ctx) => op.transformVariables!(toWire(vars), ctx) : undefined,

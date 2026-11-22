@@ -646,6 +646,10 @@ func convertCollectorGatewayToModel(gw *common.CollectorGatewayConfiguration, pc
 		result.HTTPSProxyAddress = gw.HttpsProxyAddress
 		pc.record(p("httpsProxyAddress"))
 	}
+	if gw.NoProxy != nil {
+		result.NoProxy = *gw.NoProxy
+		pc.record(p("noProxy"))
+	}
 
 	if gw.ServiceGraph != nil && gw.ServiceGraph.Disabled != nil {
 		result.ServiceGraphDisabled = gw.ServiceGraph.Disabled

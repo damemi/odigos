@@ -15,12 +15,20 @@ import (
 
 // UpdateRemoteConfig is the resolver for the updateRemoteConfig field.
 func (r *mutationResolver) UpdateRemoteConfig(ctx context.Context, config model.RemoteConfigInput) (bool, error) {
+	if config.CollectorGateway != nil {
+		if err := services.ValidateGatewayProxyAddress(config.CollectorGateway.HTTPSProxyAddress); err != nil {
+			return false, err
+		}
+	}
 	err := services.UpdateRemoteConfig(ctx, func(remoteConfig *common.OdigosConfiguration) {
 		if config.Rollout != nil {
 			if remoteConfig.Rollout == nil {
 				remoteConfig.Rollout = &common.RolloutConfiguration{}
 			}
 			remoteConfig.Rollout.AutomaticRolloutDisabled = config.Rollout.AutomaticRolloutDisabled
+		}
+		if config.CollectorGateway != nil {
+			services.ApplyGatewayProxy(remoteConfig, config.CollectorGateway.HTTPSProxyAddress, config.CollectorGateway.NoProxy)
 		}
 	})
 	if err != nil {

@@ -363,7 +363,7 @@
         },
         "httpsProxyAddress": {
           "default": "",
-          "description": "for destinations that uses https for exporting data, this value can be used to set the address for an https proxy.\nwhen unset or empty, no proxy will be used.",
+          "description": "for destinations that uses https for exporting data, this value can be used to set the address for an https proxy.\nwhen unset or empty, no proxy will be used.\ncan also be set in the Odigos UI (Settings) or from Odigos Central, which take precedence over this value.",
           "required": [],
           "title": "httpsProxyAddress"
         },
@@ -402,6 +402,15 @@
           "description": "The number of replicas for the cluster gateway collector deployment.\nAlso uses in MinReplicas the HPA config.",
           "required": [],
           "title": "minReplicas"
+        },
+        "noProxy": {
+          "default": "",
+          "description": "hosts the gateway reaches directly, bypassing the https proxy (added to its NO_PROXY):\nhostnames, domains (e.g. `.example.com`), IPs or CIDRs, optionally with a port.\nonly applies when httpsProxyAddress is set.\ncan also be set in the Odigos UI (Settings) or from Odigos Central, which take precedence over this value.",
+          "items": {
+            "type": "string"
+          },
+          "title": "noProxy",
+          "type": "array"
         },
         "nodeSelector": {
           "default": "",

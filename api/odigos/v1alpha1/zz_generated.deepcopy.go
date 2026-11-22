@@ -403,6 +403,11 @@ func (in *CollectorsGroupSpec) DeepCopyInto(out *CollectorsGroupSpec) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.NoProxy != nil {
+		in, out := &in.NoProxy, &out.NoProxy
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Metrics != nil {
 		in, out := &in.Metrics, &out.Metrics
 		*out = new(CollectorsGroupMetricsCollectionSettings)

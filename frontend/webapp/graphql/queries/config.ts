@@ -41,6 +41,7 @@ export const GET_EFFECTIVE_CONFIG = gql`
         serviceGraphDisabled
         clusterMetricsEnabled
         httpsProxyAddress
+        noProxy
         nodeSelector
       }
       collectorNode {

@@ -1,6 +1,7 @@
 package odigosconfiguration
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/odigos-io/odigos/common"
@@ -201,5 +202,97 @@ func TestMergeConfigs_NoCardinalityControlOverlayLeavesBaseUntouched(t *testing.
 
 	if base.CardinalityControl != nil {
 		t.Errorf("CardinalityControl = %+v, want nil when the overlay sets none", base.CardinalityControl)
+	}
+}
+
+// TestMergeConfigs_GatewayProxy verifies the UI / Central overlay sets the gateway's https proxy and no-proxy list,
+// and leaves the gateway's Helm-only settings alone.
+func TestMergeConfigs_GatewayProxy(t *testing.T) {
+	base := &common.OdigosConfiguration{
+		CollectorGateway: &common.CollectorGatewayConfiguration{
+			MinReplicas:       2,
+			HttpsProxyAddress: new("http://helm-proxy:3128"),
+			NoProxy:           new([]string{"helm.internal"}),
+		},
+	}
+	overlay := &common.OdigosConfiguration{
+		CollectorGateway: &common.CollectorGatewayConfiguration{
+			MinReplicas:       5, // Helm-only: not merged.
+			HttpsProxyAddress: new("http://central-proxy:3128"),
+			NoProxy:           new([]string{".example.com", "10.0.0.0/8"}),
+		},
+	}
+
+	mergeConfigs(base, overlay)
+
+	gw := base.CollectorGateway
+	if gw.HttpsProxyAddress == nil || *gw.HttpsProxyAddress != "http://central-proxy:3128" {
+		t.Errorf("HttpsProxyAddress = %v, want the overlay's", gw.HttpsProxyAddress)
+	}
+	if got := noProxyOf(gw); !slices.Equal(got, []string{".example.com", "10.0.0.0/8"}) {
+		t.Errorf("NoProxy = %v, want the overlay's", got)
+	}
+	if gw.MinReplicas != 2 {
+		t.Errorf("MinReplicas = %d, want 2 (Helm-only, base kept)", gw.MinReplicas)
+	}
+}
+
+// TestMergeConfigs_GatewayProxyCleared verifies an empty address from the overlay clears Helm's proxy, while an
+// overlay without a no-proxy list keeps Helm's.
+func TestMergeConfigs_GatewayProxyCleared(t *testing.T) {
+	base := &common.OdigosConfiguration{
+		CollectorGateway: &common.CollectorGatewayConfiguration{
+			HttpsProxyAddress: new("http://helm-proxy:3128"),
+			NoProxy:           new([]string{"helm.internal"}),
+		},
+	}
+	overlay := &common.OdigosConfiguration{CollectorGateway: &common.CollectorGatewayConfiguration{HttpsProxyAddress: new("")}}
+
+	mergeConfigs(base, overlay)
+
+	if gw := base.CollectorGateway; gw.HttpsProxyAddress == nil || *gw.HttpsProxyAddress != "" {
+		t.Errorf("HttpsProxyAddress = %v, want empty (cleared by the overlay)", gw.HttpsProxyAddress)
+	}
+	if got := noProxyOf(base.CollectorGateway); !slices.Equal(got, []string{"helm.internal"}) {
+		t.Errorf("NoProxy = %v, want Helm's kept", got)
+	}
+}
+
+// TestMergeConfigs_NoProxyCleared verifies an empty no-proxy list clears a lower layer's: Central's list over Helm's,
+// then the cluster's own settings, applied last, emptying it.
+func TestMergeConfigs_NoProxyCleared(t *testing.T) {
+	base := &common.OdigosConfiguration{CollectorGateway: &common.CollectorGatewayConfiguration{NoProxy: new([]string{"helm.internal"})}}
+	remote := &common.OdigosConfiguration{CollectorGateway: &common.CollectorGatewayConfiguration{NoProxy: new([]string{"central.internal"})}}
+	local := &common.OdigosConfiguration{CollectorGateway: &common.CollectorGatewayConfiguration{NoProxy: new([]string{})}}
+
+	mergeConfigs(base, remote)
+	if got := noProxyOf(base.CollectorGateway); !slices.Equal(got, []string{"central.internal"}) {
+		t.Fatalf("NoProxy = %v, want Central's over Helm's", got)
+	}
+	mergeConfigs(base, local)
+	if gw := base.CollectorGateway; gw.NoProxy == nil || len(*gw.NoProxy) != 0 {
+		t.Errorf("NoProxy = %v, want an empty list (cleared by the cluster's settings)", noProxyOf(gw))
+	}
+}
+
+func noProxyOf(gw *common.CollectorGatewayConfiguration) []string {
+	if gw == nil || gw.NoProxy == nil {
+		return nil
+	}
+	return *gw.NoProxy
+}
+
+// TestMergeConfigs_GatewayProxy_EmptyBase verifies the overlay creates the gateway section when Helm has none, and
+// that an overlay gateway section without proxy settings doesn't.
+func TestMergeConfigs_GatewayProxy_EmptyBase(t *testing.T) {
+	base := &common.OdigosConfiguration{}
+	mergeConfigs(base, &common.OdigosConfiguration{CollectorGateway: &common.CollectorGatewayConfiguration{MinReplicas: 3}})
+	if base.CollectorGateway != nil {
+		t.Fatalf("a gateway section without proxy settings was merged: %+v", base.CollectorGateway)
+	}
+
+	mergeConfigs(base, &common.OdigosConfiguration{CollectorGateway: &common.CollectorGatewayConfiguration{NoProxy: new([]string{"svc.local"})}})
+	if len(noProxyOf(base.CollectorGateway)) != 1 {
+		t.Fatalf("overlay no-proxy list not applied to empty base: %+v", base.CollectorGateway)
 	}
 }
