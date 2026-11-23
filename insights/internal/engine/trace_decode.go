@@ -22,6 +22,9 @@ type Span struct {
 	Kind         tracepb.Span_SpanKind
 	StartUnix    uint64
 	EndUnix      uint64
+	StatusCode   tracepb.Status_StatusCode
+	// StatusMessage is the span's status message; it is application text.
+	StatusMessage string
 	// SpanAttrs holds the span's own attributes. ResourceAttrs is the resource
 	// (service, k8s pod, ...) the span came from, shared read-only by every span
 	// of that resource in the batch. Read both through Attr.
@@ -204,6 +207,8 @@ func decodeTraceTrees(req *tracepb.TracesData, sourceIdentity SourceIdentityFunc
 					Kind:           sp.GetKind(),
 					StartUnix:      sp.GetStartTimeUnixNano(),
 					EndUnix:        sp.GetEndTimeUnixNano(),
+					StatusCode:     sp.GetStatus().GetCode(),
+					StatusMessage:  stripNUL(sp.GetStatus().GetMessage()),
 					ScopeName:      scopeName,
 					ScopeVersion:   scopeVer,
 					SpanAttrs:      flattenAttrs(sp.GetAttributes()),

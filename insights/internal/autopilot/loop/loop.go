@@ -18,6 +18,7 @@ import (
 
 	"github.com/odigos-io/odigos/common/consts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/measure"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/model"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
@@ -40,6 +41,11 @@ type CallTreeFlusher interface {
 	Flush(ctx context.Context)
 }
 
+// ProbeTimer reads the probe and entry span timings ingest merged into Redis.
+type ProbeTimer interface {
+	ProbeTimings(ctx context.Context, source store.SourceKey, since time.Time) (measure.Timings, error)
+}
+
 // Manager coordinates the autopilot loop.
 type Manager struct {
 	Client    client.Client
@@ -54,6 +60,8 @@ type Manager struct {
 	// CallTreeFlusher, when set, runs at the start of each tick so call trees
 	// buffered in Redis reach the store before sources are analyzed.
 	CallTreeFlusher CallTreeFlusher
+	// Measures, when set, reads the timings interrogations measure probes by.
+	Measures ProbeTimer
 	// RuleEvents, when set, signals that an InstrumentationRule changed. The
 	// loop then reconciles rules without waiting for the next tick, so a
 	// deleted autopilot rule is recreated promptly.

@@ -13,6 +13,7 @@ import (
 	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 
 	"github.com/odigos-io/odigos/insights/internal/autopilot"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/measure"
 	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
@@ -108,4 +109,35 @@ func TestProcessOne_ReportsAdmission(t *testing.T) {
 func TestAutopilotClientRecordNilSafe(t *testing.T) {
 	var c *autopilot.Client
 	c.Record(autopilot.TraceBatch{})
+}
+
+func TestServiceInvocationMeasures(t *testing.T) {
+	ms := func(v int) uint64 { return uint64(time.Duration(v) * time.Millisecond) }
+	start := uint64(time.Unix(1005, 0).UnixNano())
+	probe := func(id, site string, from, to int) *Span {
+		return &Span{SpanID: id, Service: "checkout", StartUnix: start + ms(from), EndUnix: start + ms(to),
+			SpanAttrs: map[string]string{semconv.CodeFunctionName: site, "arg.0": "123-45-6789"}}
+	}
+	inner := probe("03", "app.Repo.load", 20, 50)
+	inner.StatusCode, inner.StatusMessage = tracepb.Status_STATUS_CODE_ERROR, "boom"
+	outer := probe("02", "app.Svc.buy", 10, 90)
+	outer.Children = []*Span{inner}
+	entry := &Span{SpanID: "01", Service: "checkout", StartUnix: start, EndUnix: start + ms(100),
+		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "503"}, Children: []*Span{outer}}
+	sub := &Trace{Root: entry, ServiceInvocationSpans: []*Span{entry, outer, inner}}
+
+	got := serviceInvocationMeasures(sub)
+	want := []measure.Sample{
+		{Bucket: 1000, Site: "app.Svc.buy", DurUs: 80000, SelfUs: 50000},
+		{Bucket: 1000, Site: "app.Repo.load", DurUs: 30000, SelfUs: 30000, Err: true, Msg: "boom"},
+		{Bucket: 1000, DurUs: 100000, SelfUs: 20000, Err: true, Spans: 3},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("samples = %+v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("sample %d = %+v, want %+v", i, got[i], want[i])
+		}
+	}
 }

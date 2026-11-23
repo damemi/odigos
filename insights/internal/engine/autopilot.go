@@ -2,9 +2,13 @@ package engine
 
 import (
 	"strconv"
+	"time"
+
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
 	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 	"github.com/odigos-io/odigos/insights/internal/autopilot"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/measure"
 	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
@@ -59,6 +63,7 @@ func autopilotServiceInvocation(sub *Trace, tx repo.Transaction) (autopilot.Serv
 		SourceIdentity: tx.SourceIdentity,
 		TransactionID:  strconv.FormatInt(tx.ID, 10),
 		SpanIDs:        spanIDs,
+		Measures:       serviceInvocationMeasures(sub),
 	}, true
 }
 
@@ -76,4 +81,53 @@ func serviceInvocationSpanIDs(sub *Trace) []string {
 		}
 	}
 	return out
+}
+
+// serviceInvocationMeasures returns the timings of every probe span in sub's
+// own service invocation and, last, of its entry span.
+func serviceInvocationMeasures(sub *Trace) []measure.Sample {
+	entry := sub.Root
+	var measures []measure.Sample
+	for _, s := range sub.ServiceInvocationSpans {
+		if site := d4SiteOf(s); site != "" && s != entry {
+			measures = append(measures, spanSample(s, site))
+		}
+	}
+	root := spanSample(entry, "")
+	root.Err = entry.StatusCode == tracepb.Status_STATUS_CODE_ERROR || httpStatus(entry) >= 500
+	root.Spans = int64(len(sub.ServiceInvocationSpans))
+	return append(measures, root)
+}
+
+// spanSample is a span's duration and the part of it outside its direct
+// children. Only the status message of an errored span is kept: argument and
+// return values can hold secrets.
+func spanSample(s *Span, site string) measure.Sample {
+	dur := spanMicros(s)
+	children := int64(0)
+	for _, c := range s.Children {
+		children += spanMicros(c)
+	}
+	sm := measure.Sample{
+		Bucket: int64(s.StartUnix) / int64(time.Second) / measure.BucketSeconds * measure.BucketSeconds,
+		Site:   site,
+		DurUs:  dur,
+		SelfUs: max(dur-children, 0),
+	}
+	if s.StatusCode == tracepb.Status_STATUS_CODE_ERROR {
+		sm.Err, sm.Msg = true, s.StatusMessage
+	}
+	return sm
+}
+
+func spanMicros(s *Span) int64 {
+	if s.EndUnix <= s.StartUnix {
+		return 0
+	}
+	return int64((s.EndUnix - s.StartUnix) / uint64(time.Microsecond))
+}
+
+func httpStatus(s *Span) int {
+	code, _ := strconv.Atoi(s.Attr(semconv.HTTPResponseStatusCode))
+	return code
 }

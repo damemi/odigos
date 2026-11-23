@@ -6,6 +6,7 @@ import (
 	"time"
 
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/measure"
 )
 
 const (
@@ -22,6 +23,8 @@ type ServiceInvocation struct {
 	SourceIdentity map[string]string
 	TransactionID  string
 	SpanIDs        []string // hex span ids
+	// Measures are the timings of the invocation's probe and entry spans.
+	Measures []measure.Sample
 }
 
 // TraceBatch is one trace id with all service invocations seen for it.
@@ -32,6 +35,7 @@ type TraceBatch struct {
 
 type traceCorrelator interface {
 	correlate(ctx context.Context, traces []TraceBatch) error
+	mergeMeasures(ctx context.Context, set measureSet) error
 	Close() error
 }
 
@@ -45,7 +49,8 @@ type invocationBatcher struct {
 	logger         *commonlogger.OdigosLogger
 	correlator     traceCorrelator
 
-	pending map[string]*TraceBatch
+	pending  map[string]*TraceBatch
+	measures measureSet
 
 	// Flush-failure log throttling; owned by the loop goroutine.
 	failedFlushes  int
@@ -69,6 +74,7 @@ func newInvocationBatcher(flushInterval time.Duration, flushThreshold int, logge
 		flushThreshold: flushThreshold,
 		logger:         logger,
 		pending:        make(map[string]*TraceBatch, flushThreshold),
+		measures:       measureSet{},
 	}
 }
 
@@ -117,9 +123,15 @@ func (b *invocationBatcher) flush(ctx context.Context) {
 		toFlush = append(toFlush, *tb)
 	}
 	b.pending = make(map[string]*TraceBatch, b.flushThreshold)
+	set := b.measures
+	b.measures = measureSet{}
 
 	if b.correlator == nil {
 		return
+	}
+	// Measurements are best effort: a failure is logged and the set dropped.
+	if err := b.correlator.mergeMeasures(ctx, set); err != nil {
+		b.logger.Warn("autopilot probe measurements dropped", "error", err)
 	}
 	err := b.correlator.correlate(ctx, toFlush)
 	b.reportFlush(err, len(toFlush), time.Now())
@@ -151,6 +163,9 @@ func (b *invocationBatcher) reportFlush(err error, traces int, now time.Time) {
 func (b *invocationBatcher) merge(batch TraceBatch) {
 	if len(batch.TraceID) == 0 || len(batch.ServiceInvocations) == 0 {
 		return
+	}
+	for i := range batch.ServiceInvocations {
+		b.measures.add(batch.ServiceInvocations[i])
 	}
 	existing := b.pending[batch.TraceID]
 	if existing == nil {

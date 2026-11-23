@@ -58,3 +58,10 @@ func (c *callTreeCorrelator) correlate(ctx context.Context, traces []TraceBatch)
 	}
 	return nil
 }
+
+func (c *callTreeCorrelator) mergeMeasures(ctx context.Context, set measureSet) error {
+	if c == nil || c.redis == nil || len(set) == 0 {
+		return nil
+	}
+	return c.redis.mergeMeasures(ctx, set)
+}

@@ -111,6 +111,17 @@ func Run(ctx context.Context, opts Options) error {
 		log.Warn("autopilot litellm master key missing; analysis will not call the model")
 	}
 
+	// Closed after the group returns: the loop and the interrogations read it.
+	if opts.RedisEndpoint != "" {
+		reader := newMeasureReader(opts.RedisEndpoint, log)
+		defer func() {
+			if err := reader.Close(); err != nil {
+				log.Warn("autopilot measure reader close failed", "error", err)
+			}
+		}()
+		loopMgr.Measures = reader
+	}
+
 	g, groupCtx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {

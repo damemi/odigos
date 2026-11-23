@@ -6,6 +6,7 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/odigos-io/odigos/insights/internal/autopilot/measure"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
 )
@@ -41,6 +42,15 @@ func (m *Manager) Instrumented(ctx context.Context, source store.SourceKey) (boo
 		return false, err
 	}
 	return true, nil
+}
+
+// ProbeTimings returns the probe and entry span timings measured for the
+// workload since the given time. It is empty when Redis is not configured.
+func (m *Manager) ProbeTimings(ctx context.Context, source store.SourceKey, since time.Time) (measure.Timings, error) {
+	if m.Measures == nil {
+		return nil, nil
+	}
+	return m.Measures.ProbeTimings(ctx, source, since)
 }
 
 // ModelPausedUntil returns when model calls resume, or zero when not paused.
