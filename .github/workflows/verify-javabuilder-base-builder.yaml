@@ -6,7 +6,7 @@ name: Verify JavaBuilder Base Builder
 on:
   pull_request:
     paths:
-      - "odiglet/enterprise/javabuilder-base.Dockerfile"
+      - "odiglet/javabuilder-base.Dockerfile"
 
 jobs:
   verify-javabuilder-base-builder:
@@ -24,5 +24,5 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          file: ./odiglet/enterprise/javabuilder-base.Dockerfile
+          file: ./odiglet/javabuilder-base.Dockerfile
           push: false

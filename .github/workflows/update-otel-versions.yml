@@ -23,8 +23,8 @@ jobs:
           echo "Latest version of opentelemetry-dotnet-instrumentation is ${dotnet_latest_version}"
       - name: Replace versions in Dockerfile
         run: |
-          # The released odiglet image is built from odiglet/enterprise/Dockerfile.
-          cd odiglet/enterprise
+          # The released odiglet image is built from odiglet/Dockerfile.
+          cd odiglet
           java_latest_version=${{ steps.fetch_latest_version.outputs.java_latest_version }}
           sed -i "s/^ARG JAVA_OTEL_VERSION=.*/ARG JAVA_OTEL_VERSION=${java_latest_version}/" Dockerfile
           dotnet_latest_version=${{ steps.fetch_latest_version.outputs.dotnet_latest_version }}

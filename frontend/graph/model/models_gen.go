@@ -265,19 +265,20 @@ type CollectorDaemonSetInfo struct {
 }
 
 type CollectorGatewayConfig struct {
-	MinReplicas                *int    `json:"minReplicas,omitempty"`
-	MaxReplicas                *int    `json:"maxReplicas,omitempty"`
-	RequestMemoryMiB           *int    `json:"requestMemoryMiB,omitempty"`
-	LimitMemoryMiB             *int    `json:"limitMemoryMiB,omitempty"`
-	RequestCPUm                *int    `json:"requestCPUm,omitempty"`
-	LimitCPUm                  *int    `json:"limitCPUm,omitempty"`
-	MemoryLimiterLimitMiB      *int    `json:"memoryLimiterLimitMiB,omitempty"`
-	MemoryLimiterSpikeLimitMiB *int    `json:"memoryLimiterSpikeLimitMiB,omitempty"`
-	GoMemLimitMiB              *int    `json:"goMemLimitMiB,omitempty"`
-	ServiceGraphDisabled       *bool   `json:"serviceGraphDisabled,omitempty"`
-	ClusterMetricsEnabled      *bool   `json:"clusterMetricsEnabled,omitempty"`
-	HTTPSProxyAddress          *string `json:"httpsProxyAddress,omitempty"`
-	NodeSelector               *string `json:"nodeSelector,omitempty"`
+	MinReplicas                *int     `json:"minReplicas,omitempty"`
+	MaxReplicas                *int     `json:"maxReplicas,omitempty"`
+	RequestMemoryMiB           *int     `json:"requestMemoryMiB,omitempty"`
+	LimitMemoryMiB             *int     `json:"limitMemoryMiB,omitempty"`
+	RequestCPUm                *int     `json:"requestCPUm,omitempty"`
+	LimitCPUm                  *int     `json:"limitCPUm,omitempty"`
+	MemoryLimiterLimitMiB      *int     `json:"memoryLimiterLimitMiB,omitempty"`
+	MemoryLimiterSpikeLimitMiB *int     `json:"memoryLimiterSpikeLimitMiB,omitempty"`
+	GoMemLimitMiB              *int     `json:"goMemLimitMiB,omitempty"`
+	ServiceGraphDisabled       *bool    `json:"serviceGraphDisabled,omitempty"`
+	ClusterMetricsEnabled      *bool    `json:"clusterMetricsEnabled,omitempty"`
+	HTTPSProxyAddress          *string  `json:"httpsProxyAddress,omitempty"`
+	NoProxy                    []string `json:"noProxy,omitempty"`
+	NodeSelector               *string  `json:"nodeSelector,omitempty"`
 }
 
 type CollectorNodeConfig struct {
@@ -2696,6 +2697,11 @@ type LocalUIConfigCardinalityControlInput struct {
 	URLTemplatization *LocalUIConfigURLTemplatizationCardinalityControlInput `json:"urlTemplatization,omitempty"`
 }
 
+type LocalUIConfigCollectorGatewayInput struct {
+	HTTPSProxyAddress *string  `json:"httpsProxyAddress,omitempty"`
+	NoProxy           []string `json:"noProxy,omitempty"`
+}
+
 type LocalUIConfigComponentLogLevelsInput struct {
 	Default      *OdigosLogLevel `json:"default,omitempty"`
 	Autoscaler   *OdigosLogLevel `json:"autoscaler,omitempty"`
@@ -2723,6 +2729,7 @@ type LocalUIConfigInput struct {
 	ComponentLogLevels    *LocalUIConfigComponentLogLevelsInput    `json:"componentLogLevels,omitempty"`
 	CardinalityControl    *LocalUIConfigCardinalityControlInput    `json:"cardinalityControl,omitempty"`
 	Interrogation         *LocalUIConfigAutopilotInput             `json:"interrogation,omitempty"`
+	CollectorGateway      *LocalUIConfigCollectorGatewayInput      `json:"collectorGateway,omitempty"`
 }
 
 type LocalUIConfigInstrumentorInput struct {
@@ -3136,8 +3143,14 @@ type RemoteConfig struct {
 	Rollout *RemoteConfigRollout `json:"rollout,omitempty"`
 }
 
+type RemoteConfigCollectorGatewayInput struct {
+	HTTPSProxyAddress *string  `json:"httpsProxyAddress,omitempty"`
+	NoProxy           []string `json:"noProxy,omitempty"`
+}
+
 type RemoteConfigInput struct {
-	Rollout *RemoteConfigRolloutInput `json:"rollout,omitempty"`
+	Rollout          *RemoteConfigRolloutInput          `json:"rollout,omitempty"`
+	CollectorGateway *RemoteConfigCollectorGatewayInput `json:"collectorGateway,omitempty"`
 }
 
 type RemoteConfigRollout struct {

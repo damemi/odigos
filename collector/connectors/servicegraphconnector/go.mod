@@ -1,6 +1,6 @@
 module github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector
 
-go 1.26.2
+go 1.27.0
 
 require (
 	github.com/lightstep/go-expohisto v1.0.0

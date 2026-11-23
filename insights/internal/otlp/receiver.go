@@ -56,7 +56,7 @@ func (s *Receiver) Export(ctx context.Context, req *coltracepb.ExportTraceServic
 
 	// Rewrap the request as the engine's TracesData view (same wire-shape,
 	// different proto wrapper).
-	traces := engine.DecodeRequest(&tracepb.TracesData{ResourceSpans: req.GetResourceSpans()})
+	traces := s.Engine.DecodeRequest(&tracepb.TracesData{ResourceSpans: req.GetResourceSpans()})
 	for _, t := range traces {
 		s.Engine.Process(ctx, t)
 		s.processedTrace.Add(1)

@@ -97,7 +97,7 @@ target "operator" {
 
 target "odiglet" {
   inherits   = ["_platform-k8s"]
-  dockerfile = "odiglet/enterprise/Dockerfile"
+  dockerfile = "odiglet/Dockerfile"
   args = {
     BUILDKIT_CACHE_MOUNT_NS = "odiglet"
   }
@@ -113,7 +113,7 @@ target "odiglet" {
 
 target "agents" {
   inherits   = ["_platform-k8s"]
-  dockerfile = "odiglet/enterprise/Dockerfile"
+  dockerfile = "odiglet/Dockerfile"
   target     = "agents"
   args = {
     BUILDKIT_CACHE_MOUNT_NS = "agents"

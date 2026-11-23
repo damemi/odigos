@@ -6,6 +6,7 @@ import (
 
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common/consts"
+	k8scontainer "github.com/odigos-io/odigos/k8sutils/pkg/container"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	corev1 "k8s.io/api/core/v1"
@@ -26,7 +27,7 @@ type resourceAttribute struct {
 	Value string
 }
 
-func getResourceAttributes(podWorkload k8sconsts.PodWorkload, containerName string, ownerReferences []metav1.OwnerReference) []resourceAttribute {
+func getResourceAttributes(podWorkload k8sconsts.PodWorkload, containerName string, image string, ownerReferences []metav1.OwnerReference) []resourceAttribute {
 	workloadKindKey := getWorkloadKindAttributeKey(podWorkload.Kind)
 	resourceAttributes := []resourceAttribute{
 		{
@@ -56,6 +57,9 @@ func getResourceAttributes(podWorkload k8sconsts.PodWorkload, containerName stri
 			Key:   attribute.Key(consts.OdigosWorkloadNameAttribute),
 			Value: podWorkload.Name,
 		},
+	}
+	if tag := k8scontainer.ImageTag(image); tag != "" {
+		resourceAttributes = append(resourceAttributes, resourceAttribute{Key: attribute.Key(consts.ContainerImageTagAttribute), Value: tag})
 	}
 	// Get otel resource attributes for the owner reference (job/replicaset name and uid)
 	// This is more efficient than doing this in the k8s attributes processor in the collector
@@ -131,7 +135,7 @@ func InjectOtelResourceAndServiceNameEnvVars(existingEnvNames EnvVarNamesMap, co
 	existingEnvNames = InjectConstEnvVarToPodContainer(existingEnvNames, container, otelServiceNameEnvVarName, serviceName)
 
 	// OTEL_RESOURCE_ATTRIBUTES or ODIGOS_RESOURCE_ATTRIBUTES
-	resourceAttributes := getResourceAttributes(pw, container.Name, ownerReferences)
+	resourceAttributes := getResourceAttributes(pw, container.Name, container.Image, ownerReferences)
 	resourceAttributesEnvValue := getResourceAttributesEnvVarValue(resourceAttributes)
 
 	if _, exists := existingEnvNames[otelResourceAttributesEnvVarName]; !exists {

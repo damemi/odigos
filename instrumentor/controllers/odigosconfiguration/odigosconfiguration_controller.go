@@ -245,6 +245,20 @@ func mergeConfigs(baseConfig *common.OdigosConfiguration, addtionalConfig *commo
 		}
 	}
 
+	// Of the gateway's settings, only its https proxy can be set from the UI or Central; the rest stays Helm-only.
+	// An empty address clears a proxy set in a lower layer, and an empty no-proxy list clears its list.
+	if gw := addtionalConfig.CollectorGateway; gw != nil && (gw.HttpsProxyAddress != nil || gw.NoProxy != nil) {
+		if baseConfig.CollectorGateway == nil {
+			baseConfig.CollectorGateway = &common.CollectorGatewayConfiguration{}
+		}
+		if gw.HttpsProxyAddress != nil {
+			baseConfig.CollectorGateway.HttpsProxyAddress = gw.HttpsProxyAddress
+		}
+		if gw.NoProxy != nil {
+			baseConfig.CollectorGateway.NoProxy = gw.NoProxy
+		}
+	}
+
 	if addtionalConfig.RollbackDisabled != nil {
 		baseConfig.RollbackDisabled = addtionalConfig.RollbackDisabled
 	}

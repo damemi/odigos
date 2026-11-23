@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
@@ -48,7 +49,7 @@ type KubeManagerOptions struct {
 	AppendEnvVarNames map[string]struct{}
 }
 
-func CreateManager(instrumentationMgrOpts ebpf.InstrumentationManagerOptions) (ctrl.Manager, error) {
+func CreateManager(healthProbeBindPort int) (ctrl.Manager, error) {
 	commonlogger.LoggerCompat().With("subsystem", "runtimedetails").Info("Starting reconcilers for runtime details")
 	ctrl.SetLogger(commonlogger.ToLogr())
 
@@ -61,7 +62,7 @@ func CreateManager(instrumentationMgrOpts ebpf.InstrumentationManagerOptions) (c
 		metricsBindAddress = fmt.Sprintf(":%d", k8sconsts.OdigletMetricsServerPort)
 	}
 
-	return manager.New(config.GetConfigOrDie(), manager.Options{
+	mgr, err := manager.New(config.GetConfigOrDie(), manager.Options{
 		Scheme: scheme,
 		Cache: cache.Options{
 			// ManagedFields are removed to save space. This can save a lot of space and recommended in the cache package.
@@ -82,8 +83,18 @@ func CreateManager(instrumentationMgrOpts ebpf.InstrumentationManagerOptions) (c
 		Metrics: metricsserver.Options{
 			BindAddress: metricsBindAddress,
 		},
-		HealthProbeBindAddress: fmt.Sprintf(":%d", instrumentationMgrOpts.OdigletHealthProbeBindPort),
+		HealthProbeBindAddress: fmt.Sprintf(":%d", healthProbeBindPort),
 	})
+	if err != nil {
+		return nil, err
+	}
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		return nil, fmt.Errorf("unable to set up health check: %w", err)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		return nil, fmt.Errorf("unable to set up ready check: %w", err)
+	}
+	return mgr, nil
 }
 
 func SetupWithManager(kubeManagerOptions KubeManagerOptions, distributionGetter *distros.Getter) error {

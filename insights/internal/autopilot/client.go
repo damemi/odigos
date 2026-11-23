@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/odigos-io/odigos/common/consts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 )
 
 // Client correlates java-ebpf traces with Redis profile stacks and merges a
 // structure-only call tree into Redis (DB 1). Transaction inventory is the
-// insights transactions table, written on the engine flush. The leader's call tree
-// flusher copies the call trees into the autopilot store.
+// insights transactions table, written on the engine flush.
 type Client struct {
 	batcher *invocationBatcher
 	logger  *commonlogger.OdigosLogger
@@ -42,7 +42,7 @@ func Open(redisEndpoint string, logger *commonlogger.OdigosLogger) (*Client, err
 	batcher.start(&callTreeCorrelator{redis: rdb, logger: logger})
 	logger.Info("autopilot call-tree writer ready",
 		"redis_endpoint", redisEndpoint,
-		"redis_db", redisDB,
+		"redis_db", consts.RedisDBAutopilotProfilesTransactionsCorrelation,
 		"redis_call_tree_prefix", redisCallTreeKeyPrefix,
 		"redis_call_tree_ttl", redisCallTreeKeyTTL.String(),
 		"flush_interval", defaultFlushInterval.String(),

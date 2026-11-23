@@ -83,6 +83,10 @@ data:
     autopilot:
       enabled: true
     {{- end }}
+    {{- if include "odigos.autopilotEnabled" . }}
+    autopilot:
+      enabled: true
+    {{- end }}
     {{- if include "cardinalityControl.urlTemplatization.liveTrafficLearning.enabled" . | eq "true" }}
     {{- $ltl := .Values.cardinalityControl.urlTemplatization.liveTrafficLearning }}
     {{- $ruleComputation := $ltl.ruleComputation | default dict }}
@@ -158,6 +162,10 @@ data:
       clusterMetricsEnabled: {{ .Values.collectorGateway.clusterMetricsEnabled }}
       {{- with .Values.collectorGateway.httpsProxyAddress }}
       httpsProxyAddress: {{ . }}
+      {{- end }}
+      {{- with .Values.collectorGateway.noProxy }}
+      noProxy:
+        {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- if .Values.collectorGateway.nodeSelector }}
       # Component-specific nodeSelector (overrides global values.yaml nodeSelector)

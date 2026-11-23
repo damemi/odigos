@@ -199,7 +199,7 @@ func (e *Engine) AcceptAnomalyIssue(ctx context.Context, transactionID int64, si
 	if !ok || len(full.RawOTLP) == 0 {
 		return fmt.Errorf("anomaly issue %d/%s: no stored sample trace, cannot accept", transactionID, signature)
 	}
-	t, err := traceFromOTLP(full.RawOTLP, full.TraceID)
+	t, err := e.traceFromOTLP(full.RawOTLP, full.TraceID)
 	if err != nil {
 		return err
 	}
@@ -332,7 +332,7 @@ func (e *Engine) subtreeWidens(sc Scorer, sub *Trace, stored json.RawMessage) bo
 // subTransactionID resolves a sub-trace's transaction id the same way ingest
 // does, so accept widens the identities live traffic will actually hit.
 func (e *Engine) subTransactionID(sub *Trace, dims []repo.TransactionIdentityDimension) (int64, bool) {
-	sourceIdentity := e.sourceIdentity(sub.Root.ResourceAttrs)
+	sourceIdentity := sub.Root.SourceIdentity
 	ident, ok := identifyTransaction(sub, sourceIdentity)
 	if !ok {
 		return 0, false
@@ -424,12 +424,12 @@ func (e *Engine) SystemSettings() repo.SystemSettings {
 }
 
 // traceFromOTLP rebuilds the engine's Trace for traceID from stored OTLP bytes.
-func traceFromOTLP(raw []byte, traceID string) (*Trace, error) {
+func (e *Engine) traceFromOTLP(raw []byte, traceID string) (*Trace, error) {
 	var td tracepb.TracesData
 	if err := proto.Unmarshal(raw, &td); err != nil {
 		return nil, fmt.Errorf("decode stored trace: %w", err)
 	}
-	for _, t := range decodeTraceTrees(&td) {
+	for _, t := range decodeTraceTrees(&td, e.sourceIdentity) {
 		if t.TraceID == traceID {
 			return t, nil
 		}

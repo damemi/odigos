@@ -627,7 +627,6 @@ func isDistroExpectingInstrumentationInstances(otelDistroName *string) bool {
 		"golang-enterprise",
 		"java-ebpf-instrumentations",
 		"java-enterprise",
-		"mysql-enterprise",
 		"nodejs-enterprise",
 		"python-enterprise",
 		"python-ebpf",

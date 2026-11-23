@@ -116,6 +116,7 @@ type CollectorGatewayConfig {
   serviceGraphDisabled: Boolean
   clusterMetricsEnabled: Boolean
   httpsProxyAddress: String
+  noProxy: [String!]
   nodeSelector: String # JSON string representation of map[string]string
 }
 
@@ -345,8 +346,15 @@ type RemoteConfig {
 input RemoteConfigRolloutInput {
   automaticRolloutDisabled: Boolean
 }
+# The gateway's https proxy: an empty address means no proxy; an empty noProxy list means no bypass list. Each
+# overrides what a lower layer (Helm, or Central under the cluster's own settings) set.
+input RemoteConfigCollectorGatewayInput {
+  httpsProxyAddress: String
+  noProxy: [String!]
+}
 input RemoteConfigInput {
   rollout: RemoteConfigRolloutInput
+  collectorGateway: RemoteConfigCollectorGatewayInput
 }
 
 input LocalUiConfigRolloutInput {
@@ -363,6 +371,13 @@ input LocalUiConfigAutoRollbackInput {
 input LocalUiConfigInstrumentorInput {
   agentEnvVarsInjectionMethod: EnvInjectionMethod
   checkDeviceHealthBeforeInjection: Boolean
+}
+
+# The gateway's https proxy: an empty address means no proxy; an empty noProxy list means no bypass list. Each
+# overrides what a lower layer (Helm, or Central under the cluster's own settings) set.
+input LocalUiConfigCollectorGatewayInput {
+  httpsProxyAddress: String
+  noProxy: [String!]
 }
 
 input LocalUiConfigAllowConcurrentAgentsInput {
@@ -446,6 +461,7 @@ input LocalUiConfigInput {
   componentLogLevels: LocalUiConfigComponentLogLevelsInput
   cardinalityControl: LocalUiConfigCardinalityControlInput
   interrogation: LocalUiConfigAutopilotInput
+  collectorGateway: LocalUiConfigCollectorGatewayInput
 }
 
 type ConfigYamlField {

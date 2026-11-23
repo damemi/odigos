@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM golang:1.26.9 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.4 AS builder
 
 WORKDIR /workspace
 # insights replaces these odigos modules with local paths.

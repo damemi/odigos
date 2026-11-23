@@ -10,3 +10,8 @@ const (
 	// written by the autopilot profiles exporter for correlating transactions with profiles.
 	RedisDBAutopilotProfilesTransactionsCorrelation = 1
 )
+
+// RedisAutopilotProfileKeyPrefix prefixes the per-trace profile stacks hash in
+// RedisDBAutopilotProfilesTransactionsCorrelation: the autopilot profiles
+// exporter writes <prefix><hex(traceId)>, and insights reads it.
+const RedisAutopilotProfileKeyPrefix = "odigos:autopilot:profile:"

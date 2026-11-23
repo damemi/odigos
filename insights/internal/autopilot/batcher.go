@@ -9,28 +9,25 @@ import (
 )
 
 const (
-	defaultFlushInterval  = 5 * time.Second
+	defaultFlushInterval  = 1 * time.Second
 	defaultFlushThreshold = 500
 	failureLogEvery       = time.Minute
 )
 
-// TraceTransaction is one service invocation to correlate under a TraceId.
-type TraceTransaction struct {
-	Timestamp     time.Time
-	Namespace     string
-	WorkloadKind  string
-	WorkloadName  string
-	ContainerName string
-	TransactionID string
-	RootSpanName  string
-	RootSpanKind  string
-	SpanIDs       []string // raw FixedString(8) bytes as Go string
+// ServiceInvocation is one transaction's service invocation to correlate under
+// a trace id: its entry span and the spans of its own invocation.
+type ServiceInvocation struct {
+	// SourceIdentity is the transaction's k8s source identity (resource
+	// attributes); the call tree key's workload segments come from it.
+	SourceIdentity map[string]string
+	TransactionID  string
+	SpanIDs        []string // hex span ids
 }
 
-// TraceBatch is one TraceId with all transactions seen for it.
+// TraceBatch is one trace id with all service invocations seen for it.
 type TraceBatch struct {
-	TraceID      string // raw FixedString(16) bytes as Go string
-	Transactions []TraceTransaction
+	TraceID            string // hex trace id
+	ServiceInvocations []ServiceInvocation
 }
 
 type traceCorrelator interface {
@@ -102,7 +99,7 @@ func (b *invocationBatcher) enabled() bool {
 }
 
 func (b *invocationBatcher) record(batch TraceBatch) {
-	if !b.enabled() || len(batch.TraceID) == 0 || len(batch.Transactions) == 0 {
+	if !b.enabled() || len(batch.TraceID) == 0 || len(batch.ServiceInvocations) == 0 {
 		return
 	}
 	select {
@@ -152,27 +149,27 @@ func (b *invocationBatcher) reportFlush(err error, traces int, now time.Time) {
 }
 
 func (b *invocationBatcher) merge(batch TraceBatch) {
-	if len(batch.TraceID) == 0 || len(batch.Transactions) == 0 {
+	if len(batch.TraceID) == 0 || len(batch.ServiceInvocations) == 0 {
 		return
 	}
 	existing := b.pending[batch.TraceID]
 	if existing == nil {
-		txs := make([]TraceTransaction, 0, len(batch.Transactions))
-		for i := range batch.Transactions {
-			txs = append(txs, copyTransaction(batch.Transactions[i]))
+		txs := make([]ServiceInvocation, 0, len(batch.ServiceInvocations))
+		for i := range batch.ServiceInvocations {
+			txs = append(txs, copyServiceInvocation(batch.ServiceInvocations[i]))
 		}
 		b.pending[batch.TraceID] = &TraceBatch{
-			TraceID:      batch.TraceID,
-			Transactions: txs,
+			TraceID:            batch.TraceID,
+			ServiceInvocations: txs,
 		}
 		return
 	}
-	for i := range batch.Transactions {
-		existing.Transactions = append(existing.Transactions, copyTransaction(batch.Transactions[i]))
+	for i := range batch.ServiceInvocations {
+		existing.ServiceInvocations = append(existing.ServiceInvocations, copyServiceInvocation(batch.ServiceInvocations[i]))
 	}
 }
 
-func copyTransaction(tx TraceTransaction) TraceTransaction {
+func copyServiceInvocation(tx ServiceInvocation) ServiceInvocation {
 	cp := tx
 	cp.SpanIDs = append([]string(nil), tx.SpanIDs...)
 	return cp

@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/collector/internal/tools
 
-go 1.26.2
+go 1.27.0
 
 require (
 	github.com/client9/misspell v0.3.4

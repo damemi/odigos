@@ -43,8 +43,9 @@ func TestTracesRedis_RecoversWhenRedisStartsLater(t *testing.T) {
 	if err := r.ping(ctx2); err != nil {
 		t.Fatalf("ping after redis started: %v", err)
 	}
-	if _, err := r.scanCallTreeKeys(ctx2); err != nil {
-		t.Fatalf("scan after redis started: %v", err)
+	tx := ServiceInvocation{SourceIdentity: deploymentSource("ns", "svc", "c"), TransactionID: "1", SpanIDs: []string{"01"}}
+	if _, err := r.mergeCallTrees(ctx2, "01", []ServiceInvocation{tx}); err != nil {
+		t.Fatalf("merge after redis started: %v", err)
 	}
 }
 

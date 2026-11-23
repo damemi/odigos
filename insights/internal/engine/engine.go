@@ -172,14 +172,19 @@ func (e *Engine) Process(ctx context.Context, t *Trace) {
 	// each firing down the trace and keeps it to a single finding on the
 	// outermost transaction that flagged it. See anomaly_claims.go.
 	claims := newAnomalyClaims(t)
-	rawTraceID := e.autopilotTraceID(t)
+	var invocations []autopilot.ServiceInvocation
 	for _, sub := range subs {
+		tx, ok := e.processOne(ctx, sub, t, claims)
 		// Only identities processOne resolved and the per-service cap admitted
-		// get a call tree; see enqueueAutopilot.
-		if tx, ok := e.processOne(ctx, sub, t, claims); ok {
-			e.enqueueAutopilot(rawTraceID, sub, tx)
+		// get a call tree; see recordAutopilot.
+		if !ok || e.autopilot == nil {
+			continue
+		}
+		if invocation, ok := autopilotServiceInvocation(sub, tx); ok {
+			invocations = append(invocations, invocation)
 		}
 	}
+	e.recordAutopilot(t.TraceID, invocations)
 }
 
 // processOne scores and learns a single (sub-)transaction. The Trace passed
@@ -196,7 +201,7 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// Persistence of the transactions row rides the write-behind flush with
 	// activity/baselines, so delete+recreate works across replicas without a
 	// per-trace upsert or a cross-pod identity cache.
-	sourceIdentity := e.sourceIdentity(t.Root.ResourceAttrs)
+	sourceIdentity := t.Root.SourceIdentity
 	ident, ok := identifyTransaction(t, sourceIdentity)
 	if !ok {
 		// Broken-context trace (root is an outbound client span). Drop

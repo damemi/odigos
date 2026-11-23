@@ -42,7 +42,7 @@ func mkCallTrace(callerSvc, calleeSvc string) *Trace {
 	callee := &Span{
 		SpanID: "c1", ParentSpanID: "root", Name: "POST /charge", Service: calleeSvc,
 		Kind:      tracepb.Span_SPAN_KIND_SERVER,
-		SpanAttrs: map[string]string{"http.method": "POST"}, ResourceAttrs: k8sResourceAttrs("ns"),
+		SpanAttrs: map[string]string{"http.method": "POST"}, ResourceAttrs: k8sResourceAttrs("ns"), SourceIdentity: k8sSourceIdentity("ns"),
 	}
 	root.Children = []*Span{callee}
 	return &Trace{TraceID: "tid", Root: root, Spans: []*Span{root, callee}}

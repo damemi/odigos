@@ -186,7 +186,7 @@ func TestD7_DecodeRequestArrayHeaderValue(t *testing.T) {
 			}},
 		}},
 	}
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		t.Fatalf("expected 1 trace, got %d", len(traces))
 	}

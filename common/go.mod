@@ -1,17 +1,6 @@
 module github.com/odigos-io/odigos/common
 
-go 1.26.2
-
-require (
-	github.com/stretchr/testify v1.12.1
-	go.opentelemetry.io/collector/pdata v1.67.0
-	go.opentelemetry.io/otel/trace v1.46.0
-	go.uber.org/zap v1.28.0
-	go.uber.org/zap/exp v0.3.0
-	golang.org/x/sys v0.47.0
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	gopkg.in/yaml.v2 v2.4.0
-)
+go 1.27.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -28,5 +17,13 @@ require (
 	github.com/go-logr/logr v1.4.4
 	github.com/go-logr/zapr v1.3.0
 	github.com/hashicorp/go-version v1.9.0
+	github.com/stretchr/testify v1.12.1
+	go.opentelemetry.io/collector/pdata v1.67.0
 	go.opentelemetry.io/otel v1.46.0
+	go.opentelemetry.io/otel/trace v1.46.0
+	go.uber.org/zap v1.28.0
+	go.uber.org/zap/exp v0.3.0
+	golang.org/x/sys v0.47.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
+	gopkg.in/yaml.v2 v2.4.0
 )

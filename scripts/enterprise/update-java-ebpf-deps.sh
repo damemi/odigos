@@ -65,7 +65,7 @@ IMG_SUFFIX="${IMG_SUFFIX:-}"
 TAG_PREFIX="${TAG_PREFIX:-j}"
 
 export GOPRIVATE="${GOPRIVATE:-github.com/odigos-io}"
-export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.26.2}"
+export GOTOOLCHAIN="${GOTOOLCHAIN:-go1.27.0}"
 
 image_repo="${ORG}/odigos-enterprise-odiglet${IMG_SUFFIX}"
 

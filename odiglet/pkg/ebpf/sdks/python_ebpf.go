@@ -49,7 +49,7 @@ const odigosDistroNameEnv = "ODIGOS_DISTRO_NAME"
 //     until the pod exits (LOW-8), and Close does not block on the data plane's final flush (LOW-9, a
 //     small span loss on odiglet shutdown). Both are bounded and non-fatal.
 
-// PythonEbpfInstrumentationFactoryEnterprise is the Odigos enterprise odiglet Factory for the
+// PythonEbpfInstrumentationFactoryEnterprise is the odiglet Factory for the
 // out-of-process, pure-eBPF CPython tracer (github.com/odigos-io/python-ebpf). It conforms to the
 // SAME instrumentation.Factory / Instrumentation contract as the Go and Java eBPF instrumentors: the
 // odiglet calls CreateInstrumentation(ctx, hostPID, settings) in-process, then Load -> go Run ->

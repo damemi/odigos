@@ -1,8 +1,9 @@
 module github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor
 
-go 1.26.2
+go 1.27.0
 
 require (
+	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.65.0
 	go.opentelemetry.io/collector/component/componenttest v0.159.0
@@ -23,8 +24,6 @@ require (
 	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.28.0
 )
-
-require github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

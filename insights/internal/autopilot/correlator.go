@@ -27,24 +27,21 @@ func (c *callTreeCorrelator) correlate(ctx context.Context, traces []TraceBatch)
 		return nil
 	}
 
-	var txN int
+	var invocationsN int
 	var redisNodes int64
 	for i := range traces {
 		tb := &traces[i]
-		traceID := []byte(tb.TraceID)
-		txN += len(tb.Transactions)
-		for j := range tb.Transactions {
-			n, err := c.redis.mergeCallTree(ctx, tb.Transactions[j], traceID)
-			if err != nil {
-				return err
-			}
-			redisNodes += n
+		invocationsN += len(tb.ServiceInvocations)
+		n, err := c.redis.mergeCallTrees(ctx, tb.TraceID, tb.ServiceInvocations)
+		if err != nil {
+			return err
 		}
+		redisNodes += n
 	}
 	if redisNodes > 0 {
 		c.logger.Debug("merged call tree nodes into redis",
 			"traces", len(traces),
-			"transactions", txN,
+			"service_invocations", invocationsN,
 			"new_nodes", redisNodes,
 		)
 	}

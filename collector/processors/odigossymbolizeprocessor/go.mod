@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor
 
-go 1.26.2
+go 1.27.0
 
 require (
 	github.com/ianlancetaylor/demangle v0.0.0-20240312041847-bd984b5ce465

@@ -15,16 +15,21 @@ jobs:
         uses: actions/checkout@v5
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.26.6"
-      # odigos-device-plugin is private; the sts token lets git fetch versions the public proxy doesn't have.
+          go-version: "1.27.4"
       - id: sts
         uses: odigos-io/ci-core/sts@main
         with:
           pairs: |
+            odigos-io/ebpf-core:ro
+            odigos-io/ebpf-java-instrumentation:enterprise-ro
+            odigos-io/ebpf-nodejs-instrumentation:enterprise-ro
+            odigos-io/ebpf-generic-instrumentation:enterprise-ro
+            odigos-io/enterprise-go-instrumentation:enterprise-ro
+            odigos-io/python-ebpf:enterprise-ro
             odigos-io/odigos-device-plugin:ro
       - name: run make go-mod-tidy
         env:
-          GOPRIVATE: github.com/odigos-io/odigos-device-plugin
+          GOPRIVATE: github.com/odigos-io/*
         run: make go-mod-tidy
       - name: Check clean repository
         run: make check-clean-work-tree
@@ -42,14 +47,19 @@ jobs:
         uses: actions/checkout@v5
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.26.6"
-      # odigos-device-plugin is private; the sts token lets git fetch versions the public proxy doesn't have.
+          go-version: "1.27.4"
       - id: sts
         uses: odigos-io/ci-core/sts@main
         with:
           pairs: |
+            odigos-io/ebpf-core:ro
+            odigos-io/ebpf-java-instrumentation:enterprise-ro
+            odigos-io/ebpf-nodejs-instrumentation:enterprise-ro
+            odigos-io/ebpf-generic-instrumentation:enterprise-ro
+            odigos-io/enterprise-go-instrumentation:enterprise-ro
+            odigos-io/python-ebpf:enterprise-ro
             odigos-io/odigos-device-plugin:ro
       - name: run make verify-go-mod-graph
         env:
-          GOPRIVATE: github.com/odigos-io/odigos-device-plugin
+          GOPRIVATE: github.com/odigos-io/*
         run: make verify-go-mod-graph

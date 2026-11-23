@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor
 
-go 1.26.2
+go 1.27.0
 
 require (
 	github.com/DataDog/go-sqllexer v0.2.4

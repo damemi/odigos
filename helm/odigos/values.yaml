@@ -570,8 +570,22 @@ collectorGateway:
   # description: |-
   #   for destinations that uses https for exporting data, this value can be used to set the address for an https proxy.
   #   when unset or empty, no proxy will be used.
+  #   can also be set in the Odigos UI (Settings) or from Odigos Central, which take precedence over this value.
   # @schema
   # httpsProxyAddress: ''
+
+  # @schema
+  # type: array
+  # items:
+  #   type: string
+  # description: |-
+  #   hosts the gateway reaches directly, bypassing the https proxy (added to its NO_PROXY):
+  #   hostnames, domains (e.g. `.example.com`), IPs or CIDRs, optionally with a port.
+  #   only applies when httpsProxyAddress is set.
+  #   can also be set in the Odigos UI (Settings) or from Odigos Central, which take precedence over this value.
+  # @schema
+  # noProxy:
+  #   - .example.com
 
   # @schema
   # description: |-
@@ -1463,6 +1477,19 @@ insights:
 
   # @schema
   # description: |-
+  #   Autopilot (off by default). When enabled and profiling.enabled is true,
+  #   the cluster gateway writes profile stacks linked to traces into the shared
+  #   cache (cacheDb), keyed by trace id, for later trace-profile correlation.
+  #   Enabling it also deploys the shared cache (cacheDb).
+  # @schema
+  autopilot:
+    # @schema
+    # description: When true, enables autopilot. Requires profiling.enabled=true to write profile stacks.
+    # @schema
+    enabled: false
+
+  # @schema
+  # description: |-
   #   CPU-based HorizontalPodAutoscaler for insights (always on; requires
   #   metrics-server). The HPA owns the replica count. min/max replicas default
   #   to the gateway's values.
@@ -1531,10 +1558,10 @@ insights:
   # @schema
   # description: |-
   #   Autopilot (off by default): an insights feature that correlates traces
-  #   and profiles, analyzes per-transaction call tries with an LLM, and
+  #   and profiles, analyzes per-transaction call trees with an LLM, and
   #   suggests function probes as InstrumentationRules. The cluster gateway
   #   writes profile stacks linked to traces into the shared cache (cacheDb),
-  #   and insights stores the call tries and analyses in its Postgres. Requires
+  #   and insights stores the call trees and analyses in its Postgres. Requires
   #   insights.enabled=true; the install fails otherwise. Enabling it also
   #   adds the insights profile when profiles is unset; profiling is not
   #   enabled automatically. A profiles list that omits "insights" fails the

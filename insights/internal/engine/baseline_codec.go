@@ -148,12 +148,7 @@ func (baselineCodec) Decode(class repo.DeviationClass, members []string, counter
 		if err := unmarshalMembers(members, "", &libs); err != nil {
 			return nil, err
 		}
-		sort.Slice(libs, func(i, j int) bool {
-			if libs[i].Ns != libs[j].Ns {
-				return libs[i].Ns < libs[j].Ns
-			}
-			return libs[i].Ver < libs[j].Ver
-		})
+		sort.Slice(libs, func(i, j int) bool { return lessLib(libs[i], libs[j]) })
 		return json.Marshal(d5Data{Libs: libs})
 	case repo.D6DBAccess:
 		var (

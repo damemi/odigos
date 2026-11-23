@@ -81,16 +81,21 @@ jobs:
             env:
               SERVICE: ${{ matrix.service }}
             run: |
-              if [ -f odiglet/enterprise/Dockerfile ]; then enterprise=true; else enterprise=false; fi
+              if [ -f instrumentor/enterprise/Dockerfile ]; then enterprise=true; else enterprise=false; fi
+              # Release branches cut before odiglet/enterprise was folded into odiglet still build from it.
+              if [ -f odiglet/enterprise/Dockerfile ]; then odiglet_file=odiglet/enterprise/Dockerfile; else odiglet_file=odiglet/Dockerfile; fi
               skip=false
               context=.
               case "$SERVICE" in
                 autoscaler|scheduler|operator) image="odigos-$SERVICE"; file="$SERVICE/Dockerfile" ;;
-                instrumentor|collector|odiglet)
+                instrumentor|collector)
                   if $enterprise; then image="odigos-enterprise-$SERVICE"; file="$SERVICE/enterprise/Dockerfile"
                   else image="odigos-$SERVICE"; file="$SERVICE/Dockerfile"; fi ;;
+                odiglet)
+                  if $enterprise; then image="odigos-enterprise-odiglet"; file="$odiglet_file"
+                  else image="odigos-odiglet"; file="odiglet/Dockerfile"; fi ;;
                 agents)
-                  if $enterprise; then image="odigos-enterprise-agents"; file="odiglet/enterprise/Dockerfile"
+                  if $enterprise; then image="odigos-enterprise-agents"; file="$odiglet_file"
                   else image="odigos-agents"; file="odiglet/Dockerfile"; fi ;;
                 ui)
                   if $enterprise; then image="odigos-enterprise-ui"; file="ui/Dockerfile"

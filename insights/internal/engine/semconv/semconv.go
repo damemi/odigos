@@ -15,18 +15,11 @@ import (
 
 // Attribute keys read in scorers / transaction identification.
 var (
-	ServiceName       = string(otelsemconv.ServiceNameKey)
-	ServiceNamespace  = string(otelsemconv.ServiceNamespaceKey)
-	ServiceInstanceID = string(otelsemconv.ServiceInstanceIDKey)
-	HostName          = string(otelsemconv.HostNameKey)
-	HostID            = string(otelsemconv.HostIDKey)
-	K8SNamespaceName  = string(otelsemconv.K8SNamespaceNameKey)
-	K8SPodName        = string(otelsemconv.K8SPodNameKey)
-	K8SContainerName  = string(otelsemconv.K8SContainerNameKey)
-	// TelemetryDistroName identifies the Odigos instrumentation distro
-	// (e.g. "java-ebpf-instrumentations"). Plain string: not in the v1.27
-	// typed key set we pin, but emitted by odiglet on every instrumented resource.
-	TelemetryDistroName = "telemetry.distro.name"
+	ServiceName         = string(otelsemconv.ServiceNameKey)
+	K8SNamespaceName    = string(otelsemconv.K8SNamespaceNameKey)
+	K8SPodName          = string(otelsemconv.K8SPodNameKey)
+	K8SContainerName    = string(otelsemconv.K8SContainerNameKey)
+	TelemetryDistroName = string(otelsemconv.TelemetryDistroNameKey)
 	ServerAddress       = string(otelsemconv.ServerAddressKey)
 	ServerPort          = string(otelsemconv.ServerPortKey)
 	RPCSystem           = string(otelsemconv.RPCSystemKey)

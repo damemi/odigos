@@ -1,3 +1,3 @@
 module github.com/odigos-io/odigos/onprem-token-reminders
 
-go 1.26.4
+go 1.27.0

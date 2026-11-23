@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.22
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.23
 
 ######### dotnet builder #########
 FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS dotnet-builder
@@ -139,13 +139,13 @@ FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS go-modules
 ENV GOINSECURE=go.opentelemetry.io*
 ENV GOPRIVATE=github.com/odigos-io/odigos-device-plugin
 
-# 1) Materialize OBI under odiglet/enterprise/.obi/ - only obi.mk (OBI_COMMIT / OBI_VERSION).
+# 1) Materialize OBI under odiglet/.obi/ - only obi.mk (OBI_COMMIT / OBI_VERSION).
 # Cached independently of the Makefile, go.mod and sources.
-WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
-COPY odiglet/obi.mk /go/src/github.com/odigos-io/odigos/odiglet/
-RUN make -f ../obi.mk materialize-obi
+WORKDIR /go/src/github.com/odigos-io/odigos/odiglet
+COPY odiglet/obi.mk ./
+RUN make -f obi.mk materialize-obi
 
-# 2) go.mod/sum of odiglet/enterprise and its local replaces only (not full sources).
+# 2) go.mod/sum of odiglet and its local replaces only (not full sources).
 # Cached until module metadata or the Makefile changes.
 WORKDIR /go/src/github.com/odigos-io/odigos
 COPY api/go.mod api/go.sum ./api/
@@ -157,10 +157,9 @@ COPY k8sutils/go.mod k8sutils/go.sum ./k8sutils/
 COPY odigosauth/go.mod odigosauth/go.sum ./odigosauth/
 COPY opampserver/go.mod opampserver/go.sum ./opampserver/
 COPY procdiscovery/go.mod procdiscovery/go.sum ./procdiscovery/
-COPY odiglet/go.mod odiglet/go.sum ./odiglet/
+COPY odiglet/go.mod odiglet/go.sum odiglet/Makefile ./odiglet/
 COPY odiglet/pkg/ebpf/sdks/obi/go.mod odiglet/pkg/ebpf/sdks/obi/go.sum ./odiglet/pkg/ebpf/sdks/obi/
-COPY odiglet/enterprise/go.mod odiglet/enterprise/go.sum odiglet/enterprise/Makefile ./odiglet/enterprise/
-WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
+WORKDIR /go/src/github.com/odigos-io/odigos/odiglet
 
 ######### Odiglet builder #########
 FROM go-modules AS builder
@@ -194,7 +193,7 @@ COPY odigosauth/ odigosauth/
 COPY opampserver/ opampserver/
 COPY procdiscovery/ procdiscovery/
 COPY odiglet/ odiglet/
-WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
+WORKDIR /go/src/github.com/odigos-io/odigos/odiglet
 
 ARG TARGETARCH
 ARG LD_FLAGS
@@ -214,12 +213,12 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
 RUN setcap cap_bpf,cap_perfmon,cap_sys_admin,cap_sys_ptrace,cap_dac_read_search,cap_ipc_lock,cap_sys_resource,cap_setuid,cap_setgid=p ./odiglet
 
 ######### CSI driver builder #########
-# CSI driver binary (same binary as community odiglet; required when mountMethod is k8s-csi-driver).
+# CSI driver binary (required when mountMethod is k8s-csi-driver).
 # Copies only the sources of the local modules it imports; add a module here if it starts importing another.
 FROM go-modules AS csi-driver-builder
-COPY api/ ../../api/
-COPY common/ ../../common/
-COPY odiglet/ ../
+COPY api/ ../api/
+COPY common/ ../common/
+COPY odiglet/ ./
 ARG TARGETARCH
 ARG LD_FLAGS
 RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
@@ -232,11 +231,11 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
     GOOS=linux GOARCH=$TARGETARCH go build -ldflags="${LD_FLAGS}" -o odigos-csi-driver github.com/odigos-io/odigos/odiglet/cmd/csi-driver
 
 ######### deviceplugin builder #########
-# OSS deviceplugin binary (same binary as community odiglet).
+# deviceplugin binary.
 # Copies only the sources of the local modules it imports; add a module here if it starts importing another.
 FROM go-modules AS deviceplugin-builder
-COPY common/ ../../common/
-COPY deviceplugin/ ../../deviceplugin/
+COPY common/ ../common/
+COPY deviceplugin/ ../deviceplugin/
 ARG TARGETARCH
 ARG LD_FLAGS
 RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
@@ -295,7 +294,7 @@ LABEL "summary"=$SUMMARY
 LABEL "description"=$DESCRIPTION
 WORKDIR /instrumentations/
 COPY --from=agents-builder /instrumentations/ .
-COPY odiglet/enterprise/licenses /licenses
+COPY odiglet/licenses /licenses
 
 # make sure we run as non root user
 # this is required when this container is added to a pod that has runAsNonRoot: true
@@ -318,11 +317,11 @@ LABEL "description"=$DESCRIPTION
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
 COPY --from=grpc-health-probe /tmp/grpc_health_probe /root/grpc_health_probe
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/licenses /licenses
-COPY --from=deviceplugin-builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/deviceplugin /root/deviceplugin
-COPY --from=csi-driver-builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/licenses /licenses
+COPY --from=deviceplugin-builder /go/src/github.com/odigos-io/odigos/odiglet/deviceplugin /root/deviceplugin
+COPY --from=csi-driver-builder /go/src/github.com/odigos-io/odigos/odiglet/odigos-csi-driver /root/odigos-csi-driver
 COPY --from=agents-builder /instrumentations/ /instrumentations/
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/odiglet /root/odiglet
 
 USER 65532:65532
 
@@ -337,10 +336,10 @@ FROM gcr.io/distroless/base-nossl-debian12@sha256:e35893f8ca1cabfbd60394af94899c
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync
 COPY --from=grpc-health-probe /tmp/grpc_health_probe /root/grpc_health_probe
-COPY --from=deviceplugin-builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/deviceplugin /root/deviceplugin
-COPY --from=csi-driver-builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=deviceplugin-builder /go/src/github.com/odigos-io/odigos/odiglet/deviceplugin /root/deviceplugin
+COPY --from=csi-driver-builder /go/src/github.com/odigos-io/odigos/odiglet/odigos-csi-driver /root/odigos-csi-driver
 COPY --from=agents-builder /instrumentations/ /instrumentations/
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/odiglet /root/odiglet
 
 USER 65532:65532
 

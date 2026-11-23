@@ -53,7 +53,7 @@ func otlpAccountTrace(i int, principal, account string) *Trace {
 				Attributes: []*commonpb.KeyValue{kvStr(semconv.ArgKey(0), account)}},
 		),
 	}}
-	traces := DecodeRequest(req)
+	traces := decodeRequest(req)
 	if len(traces) != 1 {
 		panic(fmt.Sprintf("otlpAccountTrace decoded %d traces", len(traces)))
 	}

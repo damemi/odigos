@@ -5,7 +5,7 @@
 #                                via `goose ... up` (the chart's Helm-hook migration Job).
 # Connectors never migrate: each runtime verifies connector_platform.schema_versions at startup and
 # fails fast on mismatch.
-FROM golang:1.26.9 AS goose
+FROM golang:1.27.4 AS goose
 # Static goose binary (no cgo) so it drops cleanly into the postgres:16 (Debian) image below.
 # Pinned for reproducible builds; goose v3.28.x requires Go >= 1.26.
 # Built via a throwaway module (not `go install`) so transitive deps like x/crypto can be pinned.
@@ -20,7 +20,7 @@ RUN go mod init goose-build \
 # postgres:16 ships upstream's prebuilt gosu, built with an EOL Go that upstream won't rebuild, so its
 # stdlib CVEs never clear. Rebuild it from source with a current Go and upstream's static release flags.
 # Pinned to gosu master (Go code unchanged since the 1.19 tag).
-FROM golang:1.26.9 AS gosu
+FROM golang:1.27.4 AS gosu
 ARG GOSU_VERSION=v0.0.0-20260606051551-40506998e34a
 RUN CGO_ENABLED=0 go install -trimpath -ldflags='-d -w' github.com/tianon/gosu@${GOSU_VERSION}
 

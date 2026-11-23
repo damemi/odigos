@@ -268,7 +268,14 @@ type CollectorGatewayConfiguration struct {
 	ClusterMetricsEnabled *bool `json:"clusterMetricsEnabled,omitempty"`
 
 	// for destinations that uses https for exporting data, this value can be used to set the value for the https proxy.
+	// An empty value means no proxy (it overrides one set in a lower layer, e.g. Helm, when set from the UI or Central).
 	HttpsProxyAddress *string `json:"httpsProxyAddress,omitempty"`
+
+	// Hosts the gateway reaches directly, bypassing the https proxy (the NO_PROXY entries: hostnames, domains like
+	// `.example.com`, IPs or CIDRs, optionally with a port). Only applies when httpsProxyAddress is set.
+	// A pointer, like httpsProxyAddress: an empty list set from the UI or Central overrides one set in a lower layer
+	// (nothing bypasses the proxy), while an unset one keeps it.
+	NoProxy *[]string `json:"noProxy,omitempty"`
 
 	// Node selector for the cluster gateway collector deployment.
 	// Use this to force the gateway to run only on nodes with specific labels.

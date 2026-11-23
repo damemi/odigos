@@ -83,7 +83,7 @@ func TestGetInstrumentationAgents_distroMetadata(t *testing.T) {
 		}
 	}
 	// One default row per language in the enterprise defaulter.
-	require.Len(t, defaults, 8)
+	require.Len(t, defaults, 7)
 
 	// Deterministic ordering, so the response doesn't reshuffle between calls.
 	for i := 1; i < len(defaults); i++ {

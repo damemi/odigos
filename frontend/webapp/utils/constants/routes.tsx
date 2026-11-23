@@ -9,7 +9,6 @@ export const ROUTES = {
   SAMPLING: '/sampling',
   PROFILING: '/profiling',
   URL_TEMPLATIZATION: '/url-templatization',
-  INSTRUMENTATION_AGENTS: '/instrumentation-agents',
   AUTOPILOT: '/autopilot',
 
   // legacy routes

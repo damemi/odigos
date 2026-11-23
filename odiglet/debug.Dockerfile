@@ -1,4 +1,4 @@
-ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.22
+ARG ODIGLET_BASE_IMAGE=registry.odigos.io/odiglet-base:v1.23
 
 FROM python:3.11 AS python-builder
 WORKDIR /python-instrumentation
@@ -63,7 +63,7 @@ FROM --platform=$BUILDPLATFORM ${ODIGLET_BASE_IMAGE} AS builder
 
 WORKDIR /go/src/github.com/odigos-io/odigos
 ENV GOPRIVATE=github.com/odigos-io/enterprise-go-instrumentation,github.com/odigos-io/ebpf-java-instrumentation/v2,github.com/odigos-io/odigos-device-plugin
-# odiglet/enterprise replaces these odigos modules with local paths.
+# odiglet replaces these odigos modules with local paths.
 COPY api/ api/
 COPY common/ common/
 COPY deviceplugin/ deviceplugin/
@@ -74,7 +74,7 @@ COPY odigosauth/ odigosauth/
 COPY opampserver/ opampserver/
 COPY procdiscovery/ procdiscovery/
 COPY odiglet/ odiglet/
-WORKDIR /go/src/github.com/odigos-io/odigos/odiglet/enterprise
+WORKDIR /go/src/github.com/odigos-io/odigos/odiglet
 RUN --mount=type=secret,id=github_token \
     --mount=type=cache,target=/go/pkg \
     git config --global url."https://$(cat /run/secrets/github_token)@github.com/".insteadOf "https://github.com/" && \
@@ -146,8 +146,8 @@ RUN wget --directory-prefix=loader https://storage.googleapis.com/odigos-loader/
 FROM ${ODIGLET_BASE_IMAGE} AS rsync-base
 
 FROM registry.fedoraproject.org/fedora-minimal:38
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odiglet /root/odiglet
-COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/enterprise/odigos-csi-driver /root/odigos-csi-driver
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/odiglet /root/odiglet
+COPY --from=builder /go/src/github.com/odigos-io/odigos/odiglet/odigos-csi-driver /root/odigos-csi-driver
 COPY --from=builder /go/bin/dlv /root/dlv
 # Copy statically compiled rsync (no shared libraries needed)
 COPY --from=rsync-base /usr/bin/rsync /usr/bin/rsync

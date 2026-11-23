@@ -25,13 +25,12 @@ type InstrumentationManagerOptions struct {
 	// the factory selected by the process's distribution (e.g. OBI network metrics, eBPF log
 	// capture). They are handled off the main path and never report their status.
 	// See instrumentation.ManagerOptions.GenericFactories.
-	GenericFactories           map[string]instrumentation.Factory
-	DistributionGetter         *distros.Getter
-	OdigletHealthProbeBindPort int
+	GenericFactories   map[string]instrumentation.Factory
+	DistributionGetter *distros.Getter
 	// TracesMap and LogsMap are shared eBPF maps owned by the caller and handed to the
 	// instrumentation factories, which then run as external readers. Creating them and serving
-	// their file descriptors is enterprise-only, so OSS leaves these nil and every factory falls
-	// back to the map it creates itself.
+	// their file descriptors is up to the caller; when nil, every factory falls back to the map
+	// it creates itself.
 	TracesMap *cilumebpf.Map
 	LogsMap   *cilumebpf.Map
 }

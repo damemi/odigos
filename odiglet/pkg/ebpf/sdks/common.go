@@ -1,13 +1,9 @@
 package sdks
 
 import (
-	"errors"
-
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.30.0"
 )
-
-var errNoOTLPConn = errors.New("OTLP connection is nil")
 
 func identifyingAttributeSet(attrs ...attribute.KeyValue) []attribute.KeyValue {
 	identifyingAttrs := []attribute.KeyValue{}

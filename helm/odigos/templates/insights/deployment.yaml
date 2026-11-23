@@ -71,8 +71,10 @@ spec:
               value: {{ .Values.insights.database.storage.size | quote }}
             {{- end }}
             {{- if include "odigos.autopilotEnabled" . }}
-            # Autopilot stores its call tries, analysis runs, and
-            # recommendations in the same Postgres (POSTGRES_DSN).
+            # Autopilot stores its call trees, analysis runs, and
+            # recommendations in the same Postgres (POSTGRES_DSN). Insights
+            # expands the odigos_autopilot_profiles exporter's profile stacks
+            # in odigos-cache into the call trees.
             - name: AUTOPILOT_ENABLED
               value: "true"
             - name: AUTOPILOT_LITELLM_MASTER_KEY
@@ -84,11 +86,6 @@ spec:
               value: {{ .Values.insights.autopilot.model.autoApply | default false | quote }}
             - name: AUTOPILOT_MAX_PROBES_PER_WORKLOAD
               value: {{ .Values.insights.autopilot.maxProbesPerWorkload | default 20 | quote }}
-            # cacheDb Redis (logical DB 1) - profile stacks from the
-            # odigos_autopilot_profiles exporter, which insights expands into
-            # autopilot call tries.
-            - name: AUTOPILOT_REDIS_ENDPOINT
-              value: "odigos-cache.{{ .Release.Namespace }}:6379"
             {{- end }}
           livenessProbe:
             httpGet:

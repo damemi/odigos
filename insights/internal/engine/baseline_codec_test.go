@@ -21,7 +21,7 @@ func TestCodecRoundTripSets(t *testing.T) {
 		// Decode sorts sets deterministically (host asc), so the expected value
 		// is written already sorted.
 		{repo.D2Egress, `{"peers":[{"host":"db","port":5432},{"host":"stripe.com","port":443}]}`},
-		{repo.D5Libraries, `{"libs":[{"ns":"okhttp3","ver":"4"},{"ns":"pg","ver":"42"}]}`},
+		{repo.D5Libraries, `{"libs":[{"ns":"okhttp3"},{"ns":"pg"}]}`},
 		{repo.D6DBAccess, `{"accesses":[{"system":"postgresql","ns":"app","table":"users","op":"SELECT"}],"query_shapes":[{"op":"SELECT","tables":"users"}]}`},
 	}
 	for _, tc := range cases {

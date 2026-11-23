@@ -72,6 +72,14 @@ func recordOverlayProvenance(config *common.OdigosConfiguration, provenance map[
 			provenance["rollout.maxConcurrentRollouts"] = sourceName
 		}
 	}
+	if config.CollectorGateway != nil {
+		if config.CollectorGateway.HttpsProxyAddress != nil {
+			provenance["collectorGateway.httpsProxyAddress"] = sourceName
+		}
+		if config.CollectorGateway.NoProxy != nil {
+			provenance["collectorGateway.noProxy"] = sourceName
+		}
+	}
 	if config.RollbackDisabled != nil {
 		provenance["rollbackDisabled"] = sourceName
 	}

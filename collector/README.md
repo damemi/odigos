@@ -17,7 +17,7 @@ make test             # build a collector from the registry and run every signal
 Use the Go version in `odigosotelcol/go.mod`; if your toolchain is older, run in a container:
 
 ```bash
-docker run -it -v "$(pwd)":/app -w /app golang:1.26.8-trixie make build
+docker run -it -v "$(pwd)":/app -w /app golang:1.27.4-trixie make build
 ```
 
 `-checklinkname=0` is not optional — `github.com/odigos-io/go-rtml` uses `//go:linkname` into

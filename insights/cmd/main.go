@@ -20,8 +20,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 
 	apihttp "github.com/odigos-io/odigos/insights/internal/api/http"
 	"github.com/odigos-io/odigos/insights/internal/autopilot"
@@ -59,18 +61,15 @@ const (
 	// quantity such as 8Gi), so the Storage page can report how full it is.
 	envPostgresVolumeSize = "POSTGRES_VOLUME_SIZE"
 
-	// envAutopilotRedisEndpoint is the cacheDb Redis address (host:port)
-	// used to fetch autopilot profile stacks (logical DB 1). Set by Helm
-	// only when autopilot.enabled; when unset, call-tree writes stay off.
-	envAutopilotRedisEndpoint = "AUTOPILOT_REDIS_ENDPOINT"
-
 	// leaderLease elects the one replica that runs the singleton jobs: the
 	// findings notifier, recommendation sweeps, retention, and, when enabled,
 	// the autopilot loop. The chart grants leases get/create/update.
 	leaderLease = "odigos-insights-leader"
 
 	// Autopilot feature. The Helm chart sets these only when
-	// insights.autopilot.enabled is true.
+	// insights.autopilot.enabled is true. AUTOPILOT_ENABLED turns on the
+	// call-tree writer and the leader's analysis loop when set to any value;
+	// both read profile stacks from odigos-cache in the insights namespace.
 	envAutopilotEnabled              = "AUTOPILOT_ENABLED"
 	envAutopilotLiteLLMMasterKey     = "AUTOPILOT_LITELLM_MASTER_KEY"
 	envAutopilotAutoApply            = "AUTOPILOT_AUTO_APPLY"
@@ -182,7 +181,8 @@ func main() {
 	eng := engine.New(r, log, learningCfg, alertCfg)
 	go runAlertPolicyReloader(rootCtx, log, eng)
 
-	if redisEndpoint := os.Getenv(envAutopilotRedisEndpoint); redisEndpoint != "" {
+	if _, ok := os.LookupEnv(envAutopilotEnabled); ok {
+		redisEndpoint := k8sconsts.OdigosCacheEndpoint(env.GetCurrentNamespace())
 		ic, err := autopilot.Open(redisEndpoint, log)
 		if err != nil {
 			log.Warn("autopilot call-tree writer unavailable; java-ebpf profile correlation disabled",
@@ -541,18 +541,18 @@ func runSystemSettingsReloader(
 // notifier tick or the autopilot loop. Losing the lease cancels them
 // all. Outside a cluster (no in-cluster credentials) they run
 // unconditionally, which is the local single-process case. Autopilot
-// joins the slice only when AUTOPILOT_ENABLED is set. Its call trees, analysis
+// joins the slice when AUTOPILOT_ENABLED is set. Its call trees, analysis
 // runs, and recommendations are stored in the same Postgres as insights.
 func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, pg *postgres.Repo, dsn string, reg *notify.Registry, eng *engine.Engine) {
 	dispatcher := notify.NewDispatcher(r, reg, slog.New(commonlogger.NewSlogHandler("notifier")), leader.Identity(), notify.PollInterval, notify.DefaultOverlap)
 	retentionLog := slog.New(commonlogger.NewSlogHandler("retention"))
 	retention := func(ctx context.Context) { pg.RunRetention(ctx, retentionLog) }
 	jobs := []func(context.Context){dispatcher.Run, eng.RunRecommendationMiner, retention}
-	if envTruthy(os.Getenv(envAutopilotEnabled)) {
+	if _, ok := os.LookupEnv(envAutopilotEnabled); ok {
 		opts := autopilot.Options{
 			Log:                  log,
 			PostgresDSN:          dsn,
-			RedisEndpoint:        os.Getenv(envAutopilotRedisEndpoint),
+			RedisEndpoint:        k8sconsts.OdigosCacheEndpoint(env.GetCurrentNamespace()),
 			LiteLLMMasterKey:     os.Getenv(envAutopilotLiteLLMMasterKey),
 			AutoApply:            envTruthy(os.Getenv(envAutopilotAutoApply)),
 			MaxProbesPerWorkload: envPositiveInt(os.Getenv(envAutopilotMaxProbesPerWorkload)),

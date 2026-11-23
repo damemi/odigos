@@ -33,8 +33,13 @@ type Span struct {
 	// churn that came with it. Sharing the resource map removes it entirely.
 	SpanAttrs     map[string]string
 	ResourceAttrs map[string]string
-	ScopeName     string // OTel instrumentation library name (D5 input)
-	ScopeVersion  string
+	// SourceIdentity is the engine's SourceIdentityFunc applied to
+	// ResourceAttrs: the Odigos source the span came from. Computed once per
+	// resource on decode and shared the same way. Nil on the render path,
+	// which decodes without a SourceIdentityFunc.
+	SourceIdentity map[string]string
+	ScopeName      string // OTel instrumentation library name (D5 input)
+	ScopeVersion   string
 
 	Children []*Span // built after grouping
 }
@@ -58,10 +63,19 @@ func (s *Span) Attr(key string) string {
 // Non-empty for every Trace from DecodeRequest, which drops traces whose spans
 // it cannot pick back out of the batch.
 type Trace struct {
-	TraceID    string
-	Root       *Span
-	Spans      []*Span
-	DurationUs int64
+	TraceID string
+	Root    *Span
+	// Spans is every span under Root, Root included: for a decoded trace the
+	// whole trace, for a sub-trace the entry's whole subtree. It is not limited
+	// to Root's service. It can hold spans of downstream services, and spans
+	// of Root's own service from other invocations (a later call back into the
+	// same service, through the same or a different entry span).
+	Spans []*Span
+	// ServiceInvocationSpans is the part of Spans in Root's own service
+	// invocation: Root and its descendants down to the next service entry.
+	// Set by subTraces (see serviceEntrySpans).
+	ServiceInvocationSpans []*Span
+	DurationUs             int64
 
 	// otlpSpans is this trace's spans, sliced out of the batch they arrived in.
 	// Kept in decoded form because a transaction keeps only a handful of traces
@@ -126,9 +140,10 @@ func marshalOTLP(td *tracepb.TracesData) []byte {
 // worth storing. It is the entry point for the ingest/scoring path (the OTLP
 // receiver). Traces whose spans can't be picked out are dropped rather than
 // stored as an empty observation row. Render-only callers should use
-// decodeTraceTrees, which skips this step entirely.
-func DecodeRequest(req *tracepb.TracesData) []*Trace {
-	traces := decodeTraceTrees(req)
+// decodeTraceTrees, which skips this step entirely. sourceIdentity sets each
+// span's SourceIdentity; Engine.DecodeRequest passes the engine's.
+func DecodeRequest(req *tracepb.TracesData, sourceIdentity SourceIdentityFunc) []*Trace {
+	traces := decodeTraceTrees(req, sourceIdentity)
 	byTrace := splitByTrace(req)
 	out := traces[:0] // reuse backing array; we only ever drop, never add
 	for _, t := range traces {
@@ -148,13 +163,20 @@ func DecodeRequest(req *tracepb.TracesData) []*Trace {
 	return out
 }
 
+// DecodeRequest is DecodeRequest with the engine's SourceIdentityFunc, so each
+// span carries the source identity the engine identifies transactions by.
+func (e *Engine) DecodeRequest(req *tracepb.TracesData) []*Trace {
+	return DecodeRequest(req, e.sourceIdentity)
+}
+
 // decodeTraceTrees groups an OTLP request's spans by trace_id, links each
 // trace's parent/child spans, and picks its root (copying service.name from the
 // resource onto every span; the rest of the resource attributes are shared, not
-// copied). Traces with no identifiable root are dropped. It
+// copied). sourceIdentity, when not nil, sets each span's SourceIdentity, once
+// per resource. Traces with no identifiable root are dropped. It
 // does not give a trace access to its own OTLP spans - DecodeRequest wraps it
 // for that. Also used directly by the render path (SpansFromOTLP).
-func decodeTraceTrees(req *tracepb.TracesData) []*Trace {
+func decodeTraceTrees(req *tracepb.TracesData, sourceIdentity SourceIdentityFunc) []*Trace {
 	if req == nil {
 		return nil
 	}
@@ -164,6 +186,10 @@ func decodeTraceTrees(req *tracepb.TracesData) []*Trace {
 	for _, rs := range req.GetResourceSpans() {
 		resourceAttrs := flattenAttrs(rs.GetResource().GetAttributes())
 		serviceName := resourceAttrs[semconv.ServiceName]
+		var identity map[string]string
+		if sourceIdentity != nil {
+			identity = sourceIdentity(resourceAttrs)
+		}
 
 		for _, ss := range rs.GetScopeSpans() {
 			scope := ss.GetScope()
@@ -171,17 +197,18 @@ func decodeTraceTrees(req *tracepb.TracesData) []*Trace {
 
 			for _, sp := range ss.GetSpans() {
 				out := &Span{
-					SpanID:        hex.EncodeToString(sp.GetSpanId()),
-					ParentSpanID:  hex.EncodeToString(sp.GetParentSpanId()),
-					Service:       serviceName,
-					Name:          stripNUL(sp.GetName()),
-					Kind:          sp.GetKind(),
-					StartUnix:     sp.GetStartTimeUnixNano(),
-					EndUnix:       sp.GetEndTimeUnixNano(),
-					ScopeName:     scopeName,
-					ScopeVersion:  scopeVer,
-					SpanAttrs:     flattenAttrs(sp.GetAttributes()),
-					ResourceAttrs: resourceAttrs,
+					SpanID:         hex.EncodeToString(sp.GetSpanId()),
+					ParentSpanID:   hex.EncodeToString(sp.GetParentSpanId()),
+					Service:        serviceName,
+					Name:           stripNUL(sp.GetName()),
+					Kind:           sp.GetKind(),
+					StartUnix:      sp.GetStartTimeUnixNano(),
+					EndUnix:        sp.GetEndTimeUnixNano(),
+					ScopeName:      scopeName,
+					ScopeVersion:   scopeVer,
+					SpanAttrs:      flattenAttrs(sp.GetAttributes()),
+					ResourceAttrs:  resourceAttrs,
+					SourceIdentity: identity,
 				}
 				tid := hex.EncodeToString(sp.GetTraceId())
 				bySpanID[out.SpanID] = out

@@ -6,6 +6,8 @@ import (
 
 	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
+
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
@@ -31,6 +33,7 @@ func TestEngine_SplitsTransactionsBySourceIdentity(t *testing.T) {
 			"k8s.namespace.name":  "shop",
 			"k8s.deployment.name": workload,
 		}
+		tr.Root.SourceIdentity = sourceidentity.FromK8sResourceAttributesMap(tr.Root.ResourceAttrs)
 		eng.Process(context.Background(), tr)
 	}
 	if err := eng.Flush(context.Background()); err != nil {

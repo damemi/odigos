@@ -274,27 +274,27 @@ jobs:
             description: 'The Odigos build of the OpenTelemetry Collector.'
           - service: odiglet
             image: odigos-enterprise-odiglet
-            file: odiglet/enterprise/Dockerfile
+            file: odiglet/Dockerfile
             runner: depot-ubuntu-24.04-4
             summary: 'Odiglet for Odigos'
             description: 'Odiglet is the core component of Odigos managing auto-instrumentation. This image requires a root user to load and manage eBPF programs.'
           - service: odiglet
             image: odigos-enterprise-odiglet
-            file: odiglet/enterprise/Dockerfile
+            file: odiglet/Dockerfile
             extended: true
             runner: depot-ubuntu-24.04-4
             summary: 'Odiglet for Odigos'
             description: 'Odiglet is the core component of Odigos managing auto-instrumentation. This image requires a root user to load and manage eBPF programs.'
           - service: agents
             image: odigos-enterprise-agents
-            file: odiglet/enterprise/Dockerfile
+            file: odiglet/Dockerfile
             target: agents
             runner: depot-ubuntu-latest
             summary: 'Odigos Agents'
             description: 'The Odigos Agents used to copy Odigos agent relevant files into the user workloads.'
           - service: agents
             image: odigos-enterprise-agents
-            file: odiglet/enterprise/Dockerfile
+            file: odiglet/Dockerfile
             target: agents
             extended: true
             runner: depot-ubuntu-latest

@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/actions
 
-go 1.26.2
+go 1.27.0
 
 require gopkg.in/yaml.v3 v3.0.1
 

@@ -21,6 +21,11 @@ import (
 )
 
 func UpdateLocalUIConfig(ctx context.Context, c client.Client, input model.LocalUIConfigInput) error {
+	if input.CollectorGateway != nil {
+		if err := ValidateGatewayProxyAddress(input.CollectorGateway.HTTPSProxyAddress); err != nil {
+			return err
+		}
+	}
 	ns := env.GetCurrentNamespace()
 
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
@@ -182,6 +187,9 @@ func applyLocalUiConfigInput(cfg *common.OdigosConfiguration, input model.LocalU
 	}
 	if input.Interrogation != nil {
 		applyAutopilotInput(cfg, input.Interrogation)
+	}
+	if input.CollectorGateway != nil {
+		ApplyGatewayProxy(cfg, input.CollectorGateway.HTTPSProxyAddress, input.CollectorGateway.NoProxy)
 	}
 }
 

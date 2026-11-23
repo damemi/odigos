@@ -2,56 +2,65 @@ package autopilot
 
 import (
 	"context"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/odigos-io/odigos/common/collector/sourceidentity"
+	"github.com/odigos-io/odigos/common/consts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
 	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
+	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
 )
 
 const (
-	redisProfileKeyPrefix  = "odigos:autopilot:profile:"
 	redisCallTreeKeyPrefix = "odigos:autopilot:call-tree:"
-	// redisDB matches the profiles exporter (DB 1; URL-templatization uses DB 0).
-	redisDB = 1
 	// redisCallTreeKeyTTL refreshes on each successful merge so idle transaction
 	// call trees eventually drop; structure-only (no counts).
 	redisCallTreeKeyTTL = 7 * 24 * time.Hour
 )
 
-// Merges call-tree structure for one transaction into Redis Hashes.
+// Merges call-tree structure for one trace's service invocations into Redis
+// Hashes, reading the trace's profile stacks once.
 //
-//	ARGV[1] = call tree key prefix (workload only: ns/kind/name/container)
-//	ARGV[2] = transaction id (always the last key segment)
-//	ARGV[3] = profile stacks key for the TraceId
-//	ARGV[4] = TTL seconds (refresh when nodes are added)
-//	ARGV[5..] = span-id hexes belonging to the transaction
+//	ARGV[1] = profile stacks key for the trace
+//	ARGV[2] = TTL seconds (refreshed on every call tree key handled)
+//	ARGV[3] = JSON array of invocations: {"k": call tree key prefix (workload
+//	          only: ns/kind/name/container), "t": transaction id (always the
+//	          last key segment), "s": [span id hexes of the invocation]}
 //
-// Reads profile stacks for the trace, keeps only stacks whose span matches,
-// and HSETNX node fields into prefix\x1f<sampleType>\x1f<txID> (structure only,
-// no counts). Returns newly inserted nodes.
+// Each stack is merged into the call tree of the invocation its span belongs
+// to: HSETNX node fields into k\x1f<sampleType>\x1f<t> (structure only, no
+// counts). Stacks whose span belongs to no invocation are ignored. Returns
+// newly inserted nodes.
 //
 // Hash field = sha1hex(parent\0frameType\0name)
 // Hash value = parent\0frameType\0name  (parent is "root" or node id)
-var mergeCallTreeScript = redis.NewScript(`
-local keyPrefix = ARGV[1]
-local txID = ARGV[2]
-local profileKey = ARGV[3]
-local ttl = tonumber(ARGV[4])
+var mergeCallTreesScript = redis.NewScript(`
+local profileKey = ARGV[1]
+local ttl = tonumber(ARGV[2])
+local invocations = cjson.decode(ARGV[3])
 
-local spanSet = {}
-for i = 5, #ARGV do
-  spanSet[ARGV[i]] = true
+-- Span hex -> the invocations it belongs to (normally exactly one).
+local bySpan = {}
+for _, inv in ipairs(invocations) do
+  for _, spanHex in ipairs(inv.s) do
+    local list = bySpan[spanHex]
+    if not list then
+      list = {}
+      bySpan[spanHex] = list
+    end
+    table.insert(list, inv)
+  end
 end
 
 local stacks = redis.call('HGETALL', profileKey)
 
--- No profile hash (or empty): nothing to correlate for this TraceId.
+-- No profile hash (or empty): nothing to correlate for this trace.
 if #stacks == 0 then
   return 0
 end
@@ -60,6 +69,7 @@ end
 local sep = string.char(31)
 local nul = string.char(0)
 local added = 0
+local touched = {}
 
 local function mergeStack(field, blob)
   -- Profile fields are "<spanHex>:<stackDigest>"; reject unknown shapes.
@@ -68,10 +78,9 @@ local function mergeStack(field, blob)
     return
   end
 
-  local spanHex = string.sub(field, 1, colon - 1)
-
-  -- Only stacks linked to spans in this transaction belong in its call tree.
-  if not spanSet[spanHex] then
+  -- Only stacks linked to an invocation's spans belong in its call tree.
+  local invs = bySpan[string.sub(field, 1, colon - 1)]
+  if not invs then
     return
   end
 
@@ -83,30 +92,36 @@ local function mergeStack(field, blob)
     return
   end
 
-  local callTreeKey = keyPrefix .. sep .. st .. sep .. txID
-  local parent = 'root'
+  for _, inv in ipairs(invs) do
+    local callTreeKey = inv.k .. sep .. st .. sep .. inv.t
+    local parent = 'root'
 
-  -- Frames are already filtered to named jvm/hotspot by the profiles exporter.
-  for _, fr in ipairs(data.frames) do
-    local payload = parent .. nul .. fr.ft .. nul .. fr.f
-    local nid = redis.sha1hex(payload)
+    -- Frames are already filtered to named jvm/hotspot by the profiles exporter.
+    for _, fr in ipairs(data.frames) do
+      local payload = parent .. nul .. fr.ft .. nul .. fr.f
+      local nid = redis.sha1hex(payload)
 
-    -- Insert only if this node is new under the call tree key.
-    if redis.call('HSETNX', callTreeKey, nid, payload) == 1 then
-      added = added + 1
+      -- Insert only if this node is new under the call tree key.
+      if redis.call('HSETNX', callTreeKey, nid, payload) == 1 then
+        added = added + 1
+      end
+
+      parent = nid
     end
 
-    parent = nid
-  end
-
-  -- Refresh TTL whenever this call tree key is handled (new nodes or not).
-  if ttl and ttl > 0 then
-    redis.call('EXPIRE', callTreeKey, ttl)
+    touched[callTreeKey] = true
   end
 end
 
 for i = 1, #stacks, 2 do
   mergeStack(stacks[i], stacks[i + 1])
+end
+
+-- Refresh TTL on every call tree key handled (new nodes or not).
+if ttl and ttl > 0 then
+  for callTreeKey in pairs(touched) do
+    redis.call('EXPIRE', callTreeKey, ttl)
+  end
 end
 
 return added
@@ -135,7 +150,7 @@ type tracesRedis struct {
 func newTracesRedis(endpoint string, logger *commonlogger.OdigosLogger) *tracesRedis {
 	client := redis.NewClient(&redis.Options{
 		Addr:                  endpoint,
-		DB:                    redisDB,
+		DB:                    consts.RedisDBAutopilotProfilesTransactionsCorrelation,
 		DialTimeout:           2 * time.Second,
 		ReadTimeout:           5 * time.Second,
 		WriteTimeout:          2 * time.Second,
@@ -162,8 +177,9 @@ func (r *tracesRedis) Close() error {
 	return r.closer()
 }
 
-func redisProfileKey(traceID []byte) string {
-	return redisProfileKeyPrefix + hex.EncodeToString(traceID)
+// redisProfileKey is the profiles exporter's stacks hash for a hex trace id.
+func redisProfileKey(traceID string) string {
+	return consts.RedisAutopilotProfileKeyPrefix + traceID
 }
 
 // redisCallTreeWorkloadPrefix is the key prefix for a workload container.
@@ -176,39 +192,73 @@ func redisCallTreeWorkloadPrefix(namespace, kind, name, container string) string
 		container
 }
 
+// redisCallTreeSourcePrefix is redisCallTreeWorkloadPrefix for the workload
+// container in a k8s source identity, or false when it is incomplete.
+func redisCallTreeSourcePrefix(sourceIdentity map[string]string) (string, bool) {
+	kind, name := sourceidentity.K8sWorkloadKindAndNameFromResourceAttributesMap(sourceIdentity)
+	namespace, container := sourceIdentity[semconv.K8SNamespaceName], sourceIdentity[semconv.K8SContainerName]
+	if namespace == "" || kind == "" || name == "" || container == "" {
+		return "", false
+	}
+	return redisCallTreeWorkloadPrefix(namespace, kind, name, container), true
+}
+
 func redisCallTreeKey(namespace, kind, name, container, sampleType, txID string) string {
 	return redisCallTreeWorkloadPrefix(namespace, kind, name, container) + "\x1f" + sampleType + "\x1f" + txID
 }
 
-// mergeCallTree asks Redis to expand matching profile stacks into
-// structure-only call tree Hashes (one key per sample type). Returns newly inserted nodes.
-func (r *tracesRedis) mergeCallTree(ctx context.Context, tx TraceTransaction, traceID []byte) (int64, error) {
-	if r == nil || r.rdb == nil || len(traceID) == 0 || tx.TransactionID == "" {
+// redisInvocation is one service invocation as mergeCallTreesScript reads it.
+type redisInvocation struct {
+	KeyPrefix     string   `json:"k"`
+	TransactionID string   `json:"t"`
+	SpanIDs       []string `json:"s"`
+}
+
+// mergeCallTrees asks Redis to expand the trace's matching profile stacks into
+// structure-only call tree Hashes (one key per invocation and sample type), in
+// one script call for all the trace's invocations. traceID and the span ids are
+// hex, as the profiles exporter keys them. Invocations without a transaction
+// id, a complete k8s source identity or span ids are skipped. Returns newly
+// inserted nodes.
+func (r *tracesRedis) mergeCallTrees(ctx context.Context, traceID string, invocations []ServiceInvocation) (int64, error) {
+	if r == nil || r.rdb == nil || traceID == "" {
 		return 0, nil
 	}
-	spanHexes := make([]any, 0, len(tx.SpanIDs))
-	for _, sid := range tx.SpanIDs {
-		if sid == "" {
+	payload := make([]redisInvocation, 0, len(invocations))
+	for _, inv := range invocations {
+		if inv.TransactionID == "" {
 			continue
 		}
-		spanHexes = append(spanHexes, hex.EncodeToString([]byte(sid)))
+		keyPrefix, ok := redisCallTreeSourcePrefix(inv.SourceIdentity)
+		if !ok {
+			continue
+		}
+		spanIDs := make([]string, 0, len(inv.SpanIDs))
+		for _, sid := range inv.SpanIDs {
+			if sid != "" {
+				spanIDs = append(spanIDs, sid)
+			}
+		}
+		if len(spanIDs) == 0 {
+			continue
+		}
+		payload = append(payload, redisInvocation{KeyPrefix: keyPrefix, TransactionID: inv.TransactionID, SpanIDs: spanIDs})
 	}
-	if len(spanHexes) == 0 {
+	if len(payload) == 0 {
 		return 0, nil
 	}
+	invocationsJSON, err := json.Marshal(payload)
+	if err != nil {
+		return 0, fmt.Errorf("encode service invocations: %w", err)
+	}
 
-	args := make([]any, 0, 4+len(spanHexes))
-	args = append(args,
-		redisCallTreeWorkloadPrefix(tx.Namespace, tx.WorkloadKind, tx.WorkloadName, tx.ContainerName),
-		tx.TransactionID,
+	n, err := mergeCallTreesScript.Run(ctx, r.rdb, nil,
 		redisProfileKey(traceID),
 		int(redisCallTreeKeyTTL/time.Second),
-	)
-	args = append(args, spanHexes...)
-
-	n, err := mergeCallTreeScript.Run(ctx, r.rdb, nil, args...).Int64()
+		string(invocationsJSON),
+	).Int64()
 	if err != nil {
-		return 0, fmt.Errorf("redis merge call tree: %w", err)
+		return 0, fmt.Errorf("redis merge call trees: %w", err)
 	}
 	return n, nil
 }

@@ -1,6 +1,6 @@
 module github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor
 
-go 1.26.2
+go 1.27.0
 
 require (
 	github.com/odigos-io/go-rtml v0.0.1

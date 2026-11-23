@@ -79,6 +79,12 @@ const (
 	// For Deployments this will be the deployment name, for StatefulSets the statefulset name, etc'
 	// See Source CRD workload field for more details.
 	OdigosWorkloadNameAttribute = "odigos.workload.name"
+
+	// Tag of the container image, a string. Semantic conventions renamed it to the array
+	// container.image.tags in v1.22, but OTEL_RESOURCE_ATTRIBUTES can only carry strings,
+	// so every Odigos agent reports the singular key to keep one type.
+	// https://github.com/open-telemetry/opentelemetry-specification/blob/v1.40.0/specification/resource/sdk.md#specifying-resource-information-via-an-environment-variable
+	ContainerImageTagAttribute = "container.image.tag"
 )
 
 // Odigos config properties

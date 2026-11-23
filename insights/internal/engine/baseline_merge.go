@@ -87,12 +87,7 @@ func mergeD5Values(a, b json.RawMessage) (json.RawMessage, error) {
 	for l := range set {
 		merged = append(merged, l)
 	}
-	sort.Slice(merged, func(i, j int) bool {
-		if merged[i].Ns != merged[j].Ns {
-			return merged[i].Ns < merged[j].Ns
-		}
-		return merged[i].Ver < merged[j].Ver
-	})
+	sort.Slice(merged, func(i, j int) bool { return lessLib(merged[i], merged[j]) })
 	return json.Marshal(d5Data{Libs: merged})
 }
 

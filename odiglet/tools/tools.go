@@ -1,7 +1,7 @@
 //go:build tools
 
 // Package tools pins module dependencies for binaries built in the odiglet image
-// but not imported by enterprise odiglet source (e.g. odigos-csi-driver, deviceplugin).
+// but not imported by odiglet source (e.g. odigos-csi-driver, deviceplugin).
 package tools
 
 import (

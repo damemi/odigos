@@ -10,22 +10,22 @@ The Go command can use a **module file index** to avoid re-reading every source 
 
 ## Docker / CI build (same **`Makefile`** as local)
 
-OBI lives in **`odiglet/obi.mk`**, which **`odiglet/enterprise/Makefile`** includes. **`materialize-obi`** dispatches to one of two methods via **`OBI_SETUP`** (`pin` | `release`, default `pin`). Neither touches **`go.mod`**:
+OBI lives in **`odiglet/obi.mk`**, which **`odiglet/Makefile`** includes. **`materialize-obi`** dispatches to one of two methods via **`OBI_SETUP`** (`pin` | `release`, default `pin`). Neither touches **`go.mod`**:
 
 - **`materialize-obi-pin`** (`OBI_SETUP=pin`): clones the pinned OBI commit (**`OBI_COMMIT`**) into **`.obi/`** and runs OBI's **bpf2go** codegen in the clone — **`generate/all`** in-tree when docker is unavailable (e.g. inside a docker build), or **`docker-generate`** on the host. Keep **`OBI_COMMIT`** in sync with the **`go.opentelemetry.io/obi`** pseudo-version in **`go.mod`** **`require`**.
 - **`materialize-obi-release`** (`OBI_SETUP=release`): downloads and verifies OBI's published **`obi-<tag>-source-generated.tar.gz`** (**`OBI_VERSION`**) and extracts it under **`.obi/`**. Keep **`OBI_VERSION`** in sync with the **`go.opentelemetry.io/obi`** release tag in **`go.mod`** **`require`**.
 
 **`go-mod-replace`** adds the transient local-path **`go.mod`** replace; **`generate`** and **`ensure-generated`** run it (through **`go-mod`**) before downloading modules.
 
-The **`builder`** stage of **`odiglet/enterprise/Dockerfile`** splits the build into cached layers:
+The **`builder`** stage of **`odiglet/Dockerfile`** splits the build into cached layers:
 
 1. **OBI** — copies only **`odiglet/obi.mk`** and runs **`materialize-obi`**. Rebuilt only when **`obi.mk`** changes.
-2. **Generate** — copies only the **`go.mod`** / **`go.sum`** files of odiglet/enterprise and its local replaces, plus the Makefile, and runs **`generate`** (each library's upstream **`make generate`**, in parallel). Rebuilt only when module metadata or the Makefile changes.
+2. **Generate** — copies only the **`go.mod`** / **`go.sum`** files of odiglet and its local replaces, plus the Makefile, and runs **`generate`** (each library's upstream **`make generate`**, in parallel). Rebuilt only when module metadata or the Makefile changes.
 3. **Compile** — copies the full sources and runs **`ensure-generated`** (re-applies the OBI replace, which the source **`COPY`** overwrote, and regenerates any library whose **`*_bpfel.o`** is missing from the **`/go/pkg`** cache mount), then **`compile-odiglet`**.
 
 The image build uses the default method in **`obi.mk`**; when switching methods, update both that default and the **`go.opentelemetry.io/obi`** version in **`go.mod`** to match.
 
-Locally: **`make materialize-obi generate compile-odiglet`** from **`odiglet/enterprise`**, optional **`OBI_SETUP=release`** (with **`OBI_VERSION=v…`**) or **`OBI_COMMIT=<sha>`**.
+Locally: **`make materialize-obi generate compile-odiglet`** from **`odiglet`**, optional **`OBI_SETUP=release`** (with **`OBI_VERSION=v…`**) or **`OBI_COMMIT=<sha>`**.
 
 **Related ideas**
 
