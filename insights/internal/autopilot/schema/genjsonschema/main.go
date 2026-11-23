@@ -1,5 +1,6 @@
 // Command genjsonschema generates analysis_response.schema.json and
-// response_schema_gen.go from the AnalysisResponse Go types.
+// response_schema_gen.go from the AnalysisResponse Go types, or with -type the
+// JSON schema of another model reply.
 package main
 
 import (
@@ -14,12 +15,26 @@ import (
 	"github.com/invopop/jsonschema"
 
 	"github.com/odigos-io/odigos/insights/internal/autopilot/schema"
+	"github.com/odigos-io/odigos/insights/internal/interrogation"
 )
+
+// roots are the model replies a schema can be generated for.
+var roots = map[string]any{
+	"AnalysisResponse":    &schema.AnalysisResponse{},
+	"interrogation.Reply": &interrogation.Reply{},
+}
 
 func main() {
 	outJSON := flag.String("json", "analysis_response.schema.json", "output JSON Schema path")
-	outGo := flag.String("go", "response_schema_gen.go", "output Go embed path")
+	outGo := flag.String("go", "response_schema_gen.go", "output Go embed path; empty writes none")
+	typ := flag.String("type", "AnalysisResponse", "Go type of the reply")
 	flag.Parse()
+
+	v, ok := roots[*typ]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "unknown type %q\n", *typ)
+		os.Exit(1)
+	}
 
 	r := &jsonschema.Reflector{
 		RequiredFromJSONSchemaTags: true,
@@ -27,7 +42,7 @@ func main() {
 		DoNotReference:             false,
 	}
 
-	root := flattenRootSchema(r.Reflect(&schema.AnalysisResponse{}))
+	root := flattenRootSchema(r.Reflect(v))
 	root.Version = ""
 	root.ID = ""
 
@@ -43,6 +58,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	if *outGo == "" {
+		return
+	}
 	goSrc := renderEmbedGo(filepath.Base(*outJSON))
 	if err := os.WriteFile(*outGo, goSrc, 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "write %s: %v\n", *outGo, err)
@@ -50,7 +68,7 @@ func main() {
 	}
 }
 
-// flattenRootSchema inlines #/$defs/AnalysisResponse for OpenAI json_schema (root must be an object schema).
+// flattenRootSchema inlines the root type's $defs entry for OpenAI json_schema (root must be an object schema).
 func flattenRootSchema(root *jsonschema.Schema) *jsonschema.Schema {
 	if root == nil || root.Ref == "" || root.Definitions == nil {
 		return root

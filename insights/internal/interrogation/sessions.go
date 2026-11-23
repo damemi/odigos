@@ -365,6 +365,19 @@ WHERE interrogation_id = ? AND state = 'approved' AND expires_at > ?`,
 	return nil
 }
 
+// Control reads the stop and extension a run's control session holds now.
+func (s *Sessions) Control(ctx context.Context, id string) (Control, error) {
+	sess, err := getSession(ctx, s.svc, ControlAppName, id)
+	if err != nil {
+		return Control{}, fmt.Errorf("read control of interrogation %s: %w", id, err)
+	}
+	var cur control
+	if err := decodeState(sess, &cur); err != nil {
+		return Control{}, fmt.Errorf("read control of interrogation %s: %w", id, err)
+	}
+	return Control{Stop: cur.Stop, ExtendedSeconds: cur.ExtendSeconds}, nil
+}
+
 // CloseOverdue closes an open run the workflow could not close: one event
 // that clears open and records c. A closed run is left as it is. When ADK
 // cannot load the session any more, nothing can be appended to it, and the

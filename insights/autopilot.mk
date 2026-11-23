@@ -1,7 +1,8 @@
 # Autopilot feature developer targets (included from Makefile).
 #
 # Response JSON Schema for LiteLLM strict mode is generated from AnalysisResponse
-# Go types (jsonschema struct tags). Regenerate after changing analysis.go types.
+# Go types (jsonschema struct tags), and the on-demand interrogation's from its
+# Reply type. Regenerate after changing analysis.go or interrogation/reply.go types.
 #
 # Bundled vLLM image (llm/Dockerfile) bakes model weights so cluster installs do
 # not need Hugging Face at runtime.
@@ -9,6 +10,8 @@
 SCHEMA_DIR := internal/autopilot/schema
 SCHEMA_JSON := $(SCHEMA_DIR)/analysis_response.schema.json
 SCHEMA_GO := $(SCHEMA_DIR)/response_schema_gen.go
+REPLY_DIR := internal/interrogation
+REPLY_SCHEMA_JSON := $(REPLY_DIR)/reply.schema.json
 
 # --- bundled vLLM / LLM image ---
 VLLM_VERSION ?= v0.8.5
@@ -29,13 +32,14 @@ endif
 
 .PHONY: schema-gen schema-verify llm-build llm-push llm-print-image
 
-## schema-gen: regenerate analysis_response.schema.json and response_schema_gen.go.
+## schema-gen: regenerate analysis_response.schema.json, response_schema_gen.go and reply.schema.json.
 schema-gen:
 	cd $(SCHEMA_DIR) && GOWORK=off go generate .
+	cd $(REPLY_DIR) && GOWORK=off go generate .
 
-## schema-verify: fail if committed schema artifacts drift from analysis.go (CI guard).
+## schema-verify: fail if committed schema artifacts drift from their Go types (CI guard).
 schema-verify: schema-gen
-	git diff --exit-code -- $(SCHEMA_JSON) $(SCHEMA_GO)
+	git diff --exit-code -- $(SCHEMA_JSON) $(SCHEMA_GO) $(REPLY_SCHEMA_JSON)
 
 ## llm-print-image: print the fully-qualified image name that llm-build produces.
 llm-print-image:

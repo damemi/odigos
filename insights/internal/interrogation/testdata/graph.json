@@ -1,0 +1,30 @@
+{
+  "graph_version": 1,
+  "nodes": [
+    "analyze",
+    "apply",
+    "closed",
+    "conclude",
+    "confirm",
+    "entry",
+    "gate",
+    "gather",
+    "observe",
+    "prepare",
+    "record",
+    "wait_apply",
+    "wait_baseline",
+    "wait_model",
+    "wait_observe"
+  ],
+  "steps": [
+    "apply",
+    "baseline",
+    "closed",
+    "conclude",
+    "confirm",
+    "gate",
+    "observe",
+    "prepare"
+  ]
+}

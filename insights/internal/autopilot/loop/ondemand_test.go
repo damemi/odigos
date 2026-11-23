@@ -44,7 +44,8 @@ func TestManager_OnDemandPauseDefersTick(t *testing.T) {
 
 func TestNoteModelSuccess_WhilePaused(t *testing.T) {
 	m := &Manager{}
-	t0 := time.Date(2026, 11, 18, 10, 0, 0, 0, time.UTC)
+	// The tick reads the wall clock, so the pause has to cover it.
+	t0 := time.Now()
 	until := m.NoteModelError(&model.HTTPError{StatusCode: http.StatusTooManyRequests, RetryAfter: 5 * time.Minute}, t0)
 
 	m.NoteModelSuccess(t0.Add(time.Second))

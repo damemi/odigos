@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -378,6 +379,46 @@ func TestStart(t *testing.T) {
 	}
 	if err := s.Start(ctx, "run-3", testRequest("other", 3600)); err != nil {
 		t.Errorf("start on another workload: %v", err)
+	}
+}
+
+// ADK reads session state back into map[string]any, so a transaction id
+// stored as a JSON number comes back as a float64 and loses its low digits.
+func TestStart_TransactionIDsRoundTrip(t *testing.T) {
+	db := newTestDB(t)
+	s := db.replica(t)
+	ctx := context.Background()
+
+	ids := []int64{1996000381824215347, math.MaxInt64}
+	req := testRequest("app", 3600)
+	req.TransactionIDs = ids
+	if err := s.Start(ctx, "run", req); err != nil {
+		t.Fatal(err)
+	}
+	scope := []ScopeTransaction{{TransactionID: repo.TransactionID(ids[0])}, {TransactionID: repo.TransactionID(ids[1])}}
+	if err := runnerAppend(ctx, s.Service(), "run", map[string]any{"run": &State{V: StateVersion, Scope: scope}}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Service().Get(ctx, &session.GetRequest{AppName: AppName, UserID: "run", SessionID: "run"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _, err := load(got.Session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(st.Request.TransactionIDs, ids) {
+		t.Errorf("request transaction ids = %v, want %v", st.Request.TransactionIDs, ids)
+	}
+	if !reflect.DeepEqual(st.Scope, scope) {
+		t.Errorf("scope = %+v, want %+v", st.Scope, scope)
+	}
+
+	// Runs stored before hold the ids as numbers.
+	var old repo.InterrogationRequest
+	if err := json.Unmarshal([]byte(`{"transaction_ids":[4211]}`), &old); err != nil || !slices.Equal(old.TransactionIDs, []int64{4211}) {
+		t.Errorf("numeric ids read as %v, %v", old.TransactionIDs, err)
 	}
 }
 
