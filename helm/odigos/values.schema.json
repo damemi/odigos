@@ -1138,7 +1138,7 @@
             },
             "external": {
               "additionalProperties": false,
-              "description": "Used when provider=external. The database must exist and the user must\nbe able to create tables in it; the migration Job creates the schema.",
+              "description": "Used when provider=external. The database must exist and the user must\nbe able to create tables and schemas in it (CREATE on the database); the\nmigration Job creates the tables and the adk schema.",
               "properties": {
                 "dsn": {
                   "default": "",

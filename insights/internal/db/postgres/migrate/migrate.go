@@ -39,22 +39,29 @@ func Apply(dsn string) error {
 	}
 	defer db.Close()
 
+	m, err := newMigrator(db)
+	if err != nil {
+		return err
+	}
+	return up(m)
+}
+
+func newMigrator(db *sql.DB) (*migratelib.Migrate, error) {
 	driver, err := migratepgx.WithInstance(db, &migratepgx.Config{})
 	if err != nil {
-		return fmt.Errorf("postgres migrate driver: %w", err)
+		return nil, fmt.Errorf("postgres migrate driver: %w", err)
 	}
 
 	src, err := iofs.New(migrationFiles, "migrations")
 	if err != nil {
-		return fmt.Errorf("load embedded migrations: %w", err)
+		return nil, fmt.Errorf("load embedded migrations: %w", err)
 	}
 
 	m, err := migratelib.NewWithInstance("iofs", src, "pgx5", driver)
 	if err != nil {
-		return fmt.Errorf("init migrator: %w", err)
+		return nil, fmt.Errorf("init migrator: %w", err)
 	}
-
-	return up(m)
+	return m, nil
 }
 
 // up applies pending migrations, self-healing a dirty database once.

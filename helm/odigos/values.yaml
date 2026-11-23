@@ -1759,7 +1759,8 @@ insights:
     # @schema
     # description: |-
     #   Used when provider=external. The database must exist and the user must
-    #   be able to create tables in it; the migration Job creates the schema.
+    #   be able to create tables and schemas in it (CREATE on the database); the
+    #   migration Job creates the tables and the adk schema.
     # @schema
     external:
       # @schema

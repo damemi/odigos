@@ -16,6 +16,10 @@ const (
 	callTreeNodesTable   = "autopilot_call_tree_nodes"
 	runsTable            = "autopilot_runs"
 	recommendationsTable = "autopilot_recommendations"
+	// requestedProbesTable holds the probes on-demand interrogations asked for.
+	requestedProbesTable = "interrogation_requested_probes"
+	// adkSessionsTable is ADK's session table, where an interrogation run lives.
+	adkSessionsTable = "adk.sessions"
 
 	// callTreeRootParent is the parent of a root call-tree node.
 	callTreeRootParent = "root"
@@ -50,22 +54,23 @@ func (c *Client) Ping(ctx context.Context) error {
 	return c.pool.Ping(ctx)
 }
 
-// SchemaReady reports whether the migrate Job has created the autopilot
-// tables. The loop waits on this the same way insights waits on learning_policies.
+// SchemaReady reports whether the migrate Job has created the autopilot and
+// interrogation tables. The loop waits on this the same way insights waits on
+// learning_policies.
 func (c *Client) SchemaReady(ctx context.Context) error {
 	if c == nil || c.pool == nil {
 		return fmt.Errorf("autopilot store: nil pool")
 	}
-	var n int
+	var missing []string
 	if err := c.pool.QueryRow(ctx, `
-SELECT count(*)
-FROM pg_tables
-WHERE schemaname = current_schema() AND tablename = ANY($1)
-`, []string{callTreeNodesTable, runsTable, recommendationsTable}).Scan(&n); err != nil {
+SELECT coalesce(array_agg(t), '{}')
+FROM unnest($1::text[]) AS t
+WHERE to_regclass(t) IS NULL
+`, []string{callTreeNodesTable, runsTable, recommendationsTable, requestedProbesTable, adkSessionsTable}).Scan(&missing); err != nil {
 		return fmt.Errorf("schema not ready: %w", err)
 	}
-	if n < 3 {
-		return fmt.Errorf("schema not ready: autopilot tables missing")
+	if len(missing) > 0 {
+		return fmt.Errorf("schema not ready: tables missing: %v", missing)
 	}
 	return nil
 }
