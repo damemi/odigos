@@ -173,17 +173,37 @@ true
 {{- end -}}
 
 {{/*
-  LiteLLM upstream model provider (e.g. openai, gemini).
+  Bundled vLLM (odigos-vllm) for in-cluster inference. Requires autopilot.
 */}}
-{{- define "odigos.autopilotModelProvider" -}}
-{{- .Values.insights.autopilot.model.provider | default "openai" -}}
+{{- define "odigos.vllmEnabled" -}}
+{{- if and (include "odigos.autopilotEnabled" .) .Values.insights.autopilot.vllm.enabled -}}
+true
+{{- end -}}
 {{- end -}}
 
 {{/*
-  LiteLLM upstream model name (e.g. gpt-4o-mini).
+  LiteLLM upstream model provider.
+  Bundled vLLM: hosted_vllm. Otherwise: model.provider (e.g. openai).
+*/}}
+{{- define "odigos.autopilotModelProvider" -}}
+{{- if (include "odigos.vllmEnabled" .) -}}
+hosted_vllm
+{{- else -}}
+{{- .Values.insights.autopilot.model.provider | default "openai" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  LiteLLM upstream model name.
+  Bundled vLLM: servedModelName (weights baked into odigos-enterprise-vllm).
+  Otherwise: model.name (e.g. gpt-4o-mini).
 */}}
 {{- define "odigos.autopilotModelName" -}}
+{{- if (include "odigos.vllmEnabled" .) -}}
+{{- .Values.insights.autopilot.vllm.servedModelName | default "autopilot" -}}
+{{- else -}}
 {{- .Values.insights.autopilot.model.name | default "gpt-4o-mini" -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -194,10 +214,12 @@ true
 {{- end -}}
 
 {{/*
-  Optional LiteLLM api_base for BYO inference (model.apiBase).
+  Optional LiteLLM api_base. Bundled vLLM wins; else model.apiBase (BYO).
 */}}
 {{- define "odigos.autopilotApiBase" -}}
-{{- if .Values.insights.autopilot.model.apiBase -}}
+{{- if (include "odigos.vllmEnabled" .) -}}
+http://odigos-vllm:8000/v1
+{{- else if .Values.insights.autopilot.model.apiBase -}}
 {{- .Values.insights.autopilot.model.apiBase | trimSuffix "/" -}}
 {{- end -}}
 {{- end -}}

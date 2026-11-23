@@ -1,0 +1,94 @@
+{{- if and (include "odigos.vllmEnabled" .) (include "odigos.secretExists" .) }}
+{{- $imageTag := required "insights.autopilot.vllm.image.tag is required when insights.autopilot.vllm.enabled=true" .Values.insights.autopilot.vllm.image.tag }}
+{{- $modelPath := .Values.insights.autopilot.vllm.modelPath | default "/models/autopilot" }}
+{{- $servedModelName := .Values.insights.autopilot.vllm.servedModelName | default "autopilot" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: odigos-vllm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: odigos-vllm
+    odigos.io/system-object: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: odigos-vllm
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: odigos-vllm
+    spec:
+      {{- /* Do not inherit the global chart nodeSelector. Pin with
+           insights.autopilot.vllm.nodeSelector when needed (prefer -f / --set-json
+           for dotted label keys). */}}
+      {{- with .Values.insights.autopilot.vllm.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.insights.autopilot.vllm.priorityClassName }}
+      priorityClassName: {{ .Values.insights.autopilot.vllm.priorityClassName }}
+      {{- end }}
+      {{ include "odigos.renderPullSecrets" . | nindent 6 }}
+      containers:
+        - name: vllm
+          {{- if .Values.insights.autopilot.vllm.image.repository }}
+          image: "{{ .Values.insights.autopilot.vllm.image.repository }}:{{ $imageTag }}"
+          {{- else }}
+          image: {{ template "utils.imageName" (dict "Values" .Values "Release" .Release "Component" "enterprise-vllm" "Tag" $imageTag) }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.insights.autopilot.vllm.image.pullPolicy | default "IfNotPresent" }}
+          args:
+            - --model
+            - {{ $modelPath | quote }}
+            - --served-model-name
+            - {{ $servedModelName | quote }}
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+            - --max-model-len
+            - {{ .Values.insights.autopilot.vllm.maxModelLen | default 8192 | quote }}
+            - --gpu-memory-utilization
+            - {{ .Values.insights.autopilot.vllm.gpuMemoryUtilization | default "0.90" | quote }}
+            - --dtype
+            - auto
+          ports:
+            - name: http
+              containerPort: 8000
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            failureThreshold: 60
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.insights.autopilot.vllm.resources | nindent 12 }}
+      {{- with .Values.insights.autopilot.vllm.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.insights.autopilot.vllm.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+{{- end }}

@@ -30,7 +30,7 @@ imagePrefix:
 #       enterprise-instrumentor: registry.connect.redhat.com/odigos/odigos-enterprise-instrumentor-ubi9:v1.0.0
 #       enterprise-collector: registry.connect.redhat.com/odigos/odigos-enterprise-collector-ubi9:v1.0.0
 #   Supported component names: enterprise-collector, enterprise-ui, enterprise-instrumentor,
-#     enterprise-odiglet, enterprise-agents, enterprise-insights, victoria-metrics, cache
+#     enterprise-odiglet, enterprise-agents, enterprise-insights, enterprise-vllm, victoria-metrics, cache
 # additionalProperties: true
 # @schema
 images: {}
@@ -1569,8 +1569,10 @@ insights:
   #   holding the leader lease analyzes), so it shares insights resources and
   #   scheduling. When enabled, the gateway taps traces for autopilot and the
   #   chart deploys bundled LiteLLM (odigos-litellm) and the shared cache
-  #   (cacheDb). Configure a cloud provider under model, or
-  #   set model.apiBase to point LiteLLM at a BYO inference endpoint.
+  #   (cacheDb). Configure a cloud provider under model, or enable vllm for
+  #   odigos-enterprise-vllm (weights baked into the image; no Hugging Face at
+  #   runtime). Optionally set model.apiBase to point LiteLLM at a BYO
+  #   inference endpoint.
   # @schema
   autopilot:
     # @schema
@@ -1597,25 +1599,27 @@ insights:
     #   User-facing LLM config (provider credentials and upstream model id for LiteLLM).
     #   The worker always calls in-cluster odigos-litellm with the fixed alias
     #   "autopilot" (see enterprise autopilot model client).
+    #   When vllm.enabled is true, LiteLLM ignores provider/name/apiKey and
+    #   routes to the bundled odigos-vllm Service instead.
     # @schema
     model:
       # @schema
-      # description: LiteLLM provider prefix (openai, gemini, anthropic, etc.).
+      # description: LiteLLM provider prefix (openai, gemini, anthropic, hosted_vllm, etc.). Ignored when vllm.enabled.
       # @schema
       provider: openai
       # @schema
-      # description: Model name at that provider (e.g. gpt-4o-mini).
+      # description: Model name at that provider (e.g. gpt-4o-mini). Ignored when vllm.enabled (uses vllm.servedModelName).
       # @schema
       name: gpt-4o-mini
       # @schema
-      # description: Provider API key. Stored in Secret odigos-litellm (upstream-api-key).
+      # description: Provider API key. Stored in Secret odigos-litellm (upstream-api-key). Not required when vllm.enabled.
       # @schema
       apiKey: ""
       # @schema
       # description: |-
-      #   Optional OpenAI-compatible api_base for LiteLLM (BYO inference). When set,
-      #   LiteLLM uses this endpoint with model.provider/name.
-      #   Example: http://my-llm.ml.svc:8000/v1
+      #   Optional OpenAI-compatible api_base for LiteLLM (BYO inference). When set and
+      #   vllm.enabled is false, LiteLLM uses this endpoint with model.provider/name.
+      #   Example: http://my-vllm.ml.svc:8000/v1
       # @schema
       apiBase: ""
       # @schema
@@ -1654,6 +1658,83 @@ insights:
           memory: 512Mi
       tolerations: []
       affinity: {}
+
+    # @schema
+    # description: Bundled in-cluster vLLM (off by default). Uses odigos-enterprise-vllm with baked-in weights. Defaults request a GPU via resources; override resources and scheduling as needed.
+    # @schema
+    vllm:
+      # @schema
+      # description: When true, deploys odigos-vllm and points LiteLLM at it (hosted_vllm).
+      # @schema
+      enabled: false
+      # @schema
+      # description: |-
+      #   Image for odigos-enterprise-vllm. Empty repository uses the same registry
+      #   resolution as other enterprise components (odigos-enterprise-vllm).
+      #   Override repository for local/dev pulls (e.g. depot or a private registry).
+      # @schema
+      image:
+        repository: ""
+        # @schema
+        # description: |-
+        #   Image tag. odigos-enterprise-vllm is built on demand
+        #   (.github/workflows/release-vllm.yml), not per Odigos release, so this is
+        #   the vLLM + model tag rather than the chart version.
+        # @schema
+        tag: "v0.8.5-qwen2.5-coder-7b-awq"
+        pullPolicy: IfNotPresent
+      # @schema
+      # description: Path to baked-in weights inside the image (must match MODEL_DIR in insights/llm/Dockerfile).
+      # @schema
+      modelPath: /models/autopilot
+      # @schema
+      # description: OpenAI model id vLLM serves (--served-model-name). LiteLLM routes hosted_vllm/<name>.
+      # @schema
+      servedModelName: autopilot
+      # @schema
+      # description: vLLM --max-model-len.
+      # @schema
+      maxModelLen: 8192
+      # @schema
+      # description: vLLM --gpu-memory-utilization (0–1).
+      # @schema
+      gpuMemoryUtilization: "0.90"
+      # @schema
+      # description: Pod resources for odigos-vllm (cpu, memory, and optional nvidia.com/gpu). Override via values file or --set-json.
+      # additionalProperties: true
+      # @schema
+      resources:
+        # @schema
+        # additionalProperties: true
+        # @schema
+        requests:
+          cpu: "2"
+          memory: 8Gi
+          "nvidia.com/gpu": "1"
+        # @schema
+        # additionalProperties: true
+        # @schema
+        limits:
+          cpu: "7"
+          memory: 16Gi
+          "nvidia.com/gpu": "1"
+      # @schema
+      # additionalProperties: true
+      # description: Optional GPU-pool nodeSelector (does not inherit the global chart selector).
+      # @schema
+      nodeSelector: {}
+      # @schema
+      # description: Tolerations for GPU node taints (commonly Exists NoSchedule on the GPU resource).
+      # @schema
+      tolerations: []
+      # @schema
+      # additionalProperties: true
+      # @schema
+      affinity: {}
+      # @schema
+      # description: Priority class name for the vLLM pod.
+      # @schema
+      # priorityClassName: ''
 
   # @schema
   # description: |-

@@ -768,7 +768,7 @@
     },
     "images": {
       "additionalProperties": true,
-      "description": "Per-component image overrides. When set, these full image URLs take precedence over\nthe constructed image name (imagePrefix + component + tag).\nThis is primarily used by the OpenShift operator with RELATED_IMAGE_* env vars.\nExample:\n  images:\n    enterprise-instrumentor: registry.connect.redhat.com/odigos/odigos-enterprise-instrumentor-ubi9:v1.0.0\n    enterprise-collector: registry.connect.redhat.com/odigos/odigos-enterprise-collector-ubi9:v1.0.0\nSupported component names: enterprise-collector, enterprise-ui, enterprise-instrumentor,\n  enterprise-odiglet, enterprise-agents, enterprise-insights, victoria-metrics, cache",
+      "description": "Per-component image overrides. When set, these full image URLs take precedence over\nthe constructed image name (imagePrefix + component + tag).\nThis is primarily used by the OpenShift operator with RELATED_IMAGE_* env vars.\nExample:\n  images:\n    enterprise-instrumentor: registry.connect.redhat.com/odigos/odigos-enterprise-instrumentor-ubi9:v1.0.0\n    enterprise-collector: registry.connect.redhat.com/odigos/odigos-enterprise-collector-ubi9:v1.0.0\nSupported component names: enterprise-collector, enterprise-ui, enterprise-instrumentor,\n  enterprise-odiglet, enterprise-agents, enterprise-insights, enterprise-vllm, victoria-metrics, cache",
       "required": [],
       "title": "images"
     },
@@ -783,7 +783,7 @@
         },
         "autopilot": {
           "additionalProperties": false,
-          "description": "Autopilot (off by default): an insights feature that correlates traces\nand profiles, analyzes per-transaction call trees with an LLM, and\nsuggests function probes as InstrumentationRules. The cluster gateway\nwrites profile stacks linked to traces into the shared cache (cacheDb),\nand insights stores the call trees and analyses in its Postgres. Requires\ninsights.enabled=true; the install fails otherwise. Enabling it also\nadds the insights profile when profiles is unset; profiling is not\nenabled automatically. A profiles list that omits \"insights\" fails the\ninstall. The loop runs inside the insights pods (only the replica\nholding the leader lease analyzes), so it shares insights resources and\nscheduling. When enabled, the gateway taps traces for autopilot and the\nchart deploys bundled LiteLLM (odigos-litellm) and the shared cache\n(cacheDb). Configure a cloud provider under model, or\nset model.apiBase to point LiteLLM at a BYO inference endpoint.",
+          "description": "Autopilot (off by default): an insights feature that correlates traces\nand profiles, analyzes per-transaction call trees with an LLM, and\nsuggests function probes as InstrumentationRules. The cluster gateway\nwrites profile stacks linked to traces into the shared cache (cacheDb),\nand insights stores the call trees and analyses in its Postgres. Requires\ninsights.enabled=true; the install fails otherwise. Enabling it also\nadds the insights profile when profiles is unset; profiling is not\nenabled automatically. A profiles list that omits \"insights\" fails the\ninstall. The loop runs inside the insights pods (only the replica\nholding the leader lease analyzes), so it shares insights resources and\nscheduling. When enabled, the gateway taps traces for autopilot and the\nchart deploys bundled LiteLLM (odigos-litellm) and the shared cache\n(cacheDb). Configure a cloud provider under model, or enable vllm for\nodigos-enterprise-vllm (weights baked into the image; no Hugging Face at\nruntime). Optionally set model.apiBase to point LiteLLM at a BYO\ninference endpoint.",
           "properties": {
             "enabled": {
               "default": "false",
@@ -898,17 +898,17 @@
             },
             "model": {
               "additionalProperties": false,
-              "description": "User-facing LLM config (provider credentials and upstream model id for LiteLLM).\nThe worker always calls in-cluster odigos-litellm with the fixed alias\n\"autopilot\" (see enterprise autopilot model client).",
+              "description": "User-facing LLM config (provider credentials and upstream model id for LiteLLM).\nThe worker always calls in-cluster odigos-litellm with the fixed alias\n\"autopilot\" (see enterprise autopilot model client).\nWhen vllm.enabled is true, LiteLLM ignores provider/name/apiKey and\nroutes to the bundled odigos-vllm Service instead.",
               "properties": {
                 "apiBase": {
                   "default": "",
-                  "description": "Optional OpenAI-compatible api_base for LiteLLM (BYO inference). When set,\nLiteLLM uses this endpoint with model.provider/name.\nExample: http://my-llm.ml.svc:8000/v1",
+                  "description": "Optional OpenAI-compatible api_base for LiteLLM (BYO inference). When set and\nvllm.enabled is false, LiteLLM uses this endpoint with model.provider/name.\nExample: http://my-vllm.ml.svc:8000/v1",
                   "required": [],
                   "title": "apiBase"
                 },
                 "apiKey": {
                   "default": "",
-                  "description": "Provider API key. Stored in Secret odigos-litellm (upstream-api-key).",
+                  "description": "Provider API key. Stored in Secret odigos-litellm (upstream-api-key). Not required when vllm.enabled.",
                   "required": [],
                   "title": "apiKey"
                 },
@@ -920,19 +920,158 @@
                 },
                 "name": {
                   "default": "gpt-4o-mini",
-                  "description": "Model name at that provider (e.g. gpt-4o-mini).",
+                  "description": "Model name at that provider (e.g. gpt-4o-mini). Ignored when vllm.enabled (uses vllm.servedModelName).",
                   "required": [],
                   "title": "name"
                 },
                 "provider": {
                   "default": "openai",
-                  "description": "LiteLLM provider prefix (openai, gemini, anthropic, etc.).",
+                  "description": "LiteLLM provider prefix (openai, gemini, anthropic, hosted_vllm, etc.). Ignored when vllm.enabled.",
                   "required": [],
                   "title": "provider"
                 }
               },
               "required": [],
               "title": "model"
+            },
+            "vllm": {
+              "additionalProperties": false,
+              "description": "Bundled in-cluster vLLM (off by default). Uses odigos-enterprise-vllm with baked-in weights. Defaults request a GPU via resources; override resources and scheduling as needed.",
+              "properties": {
+                "affinity": {
+                  "additionalProperties": true,
+                  "required": [],
+                  "title": "affinity"
+                },
+                "enabled": {
+                  "default": "false",
+                  "description": "When true, deploys odigos-vllm and points LiteLLM at it (hosted_vllm).",
+                  "required": [],
+                  "title": "enabled"
+                },
+                "gpuMemoryUtilization": {
+                  "default": "0.90",
+                  "description": "vLLM --gpu-memory-utilization (0–1).",
+                  "required": [],
+                  "title": "gpuMemoryUtilization"
+                },
+                "image": {
+                  "additionalProperties": false,
+                  "description": "Image for odigos-enterprise-vllm. Empty repository uses the same registry\nresolution as other enterprise components (odigos-enterprise-vllm).\nOverride repository for local/dev pulls (e.g. depot or a private registry).",
+                  "properties": {
+                    "pullPolicy": {
+                      "default": "IfNotPresent",
+                      "title": "pullPolicy",
+                      "type": "string"
+                    },
+                    "repository": {
+                      "default": "",
+                      "title": "repository",
+                      "type": "string"
+                    },
+                    "tag": {
+                      "default": "v0.8.5-qwen2.5-coder-7b-awq",
+                      "description": "Image tag. odigos-enterprise-vllm is built on demand\n(.github/workflows/release-vllm.yml), not per Odigos release, so this is\nthe vLLM + model tag rather than the chart version.",
+                      "required": [],
+                      "title": "tag"
+                    }
+                  },
+                  "required": [],
+                  "title": "image"
+                },
+                "maxModelLen": {
+                  "default": "8192",
+                  "description": "vLLM --max-model-len.",
+                  "required": [],
+                  "title": "maxModelLen"
+                },
+                "modelPath": {
+                  "default": "/models/autopilot",
+                  "description": "Path to baked-in weights inside the image (must match MODEL_DIR in insights/llm/Dockerfile).",
+                  "required": [],
+                  "title": "modelPath"
+                },
+                "nodeSelector": {
+                  "additionalProperties": true,
+                  "description": "Optional GPU-pool nodeSelector (does not inherit the global chart selector).",
+                  "required": [],
+                  "title": "nodeSelector"
+                },
+                "priorityClassName": {
+                  "default": "",
+                  "description": "Priority class name for the vLLM pod.",
+                  "required": [],
+                  "title": "priorityClassName"
+                },
+                "resources": {
+                  "additionalProperties": true,
+                  "description": "Pod resources for odigos-vllm (cpu, memory, and optional nvidia.com/gpu). Override via values file or --set-json.",
+                  "properties": {
+                    "limits": {
+                      "additionalProperties": true,
+                      "properties": {
+                        "cpu": {
+                          "default": "7",
+                          "title": "cpu",
+                          "type": "string"
+                        },
+                        "memory": {
+                          "default": "16Gi",
+                          "title": "memory",
+                          "type": "string"
+                        },
+                        "nvidia.com/gpu": {
+                          "default": "1",
+                          "title": "nvidia.com/gpu",
+                          "type": "string"
+                        }
+                      },
+                      "required": [],
+                      "title": "limits"
+                    },
+                    "requests": {
+                      "additionalProperties": true,
+                      "properties": {
+                        "cpu": {
+                          "default": "2",
+                          "title": "cpu",
+                          "type": "string"
+                        },
+                        "memory": {
+                          "default": "8Gi",
+                          "title": "memory",
+                          "type": "string"
+                        },
+                        "nvidia.com/gpu": {
+                          "default": "1",
+                          "title": "nvidia.com/gpu",
+                          "type": "string"
+                        }
+                      },
+                      "required": [],
+                      "title": "requests"
+                    }
+                  },
+                  "required": [],
+                  "title": "resources"
+                },
+                "servedModelName": {
+                  "default": "autopilot",
+                  "description": "OpenAI model id vLLM serves (--served-model-name). LiteLLM routes hosted_vllm/\u003cname\u003e.",
+                  "required": [],
+                  "title": "servedModelName"
+                },
+                "tolerations": {
+                  "description": "Tolerations for GPU node taints (commonly Exists NoSchedule on the GPU resource).",
+                  "items": {
+                    "required": []
+                  },
+                  "required": [],
+                  "title": "tolerations"
+                }
+              },
+              "required": [],
+              "title": "vllm"
             }
           },
           "required": [],
