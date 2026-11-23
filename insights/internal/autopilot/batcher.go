@@ -18,7 +18,7 @@ const (
 // a trace id: its entry span and the spans of its own invocation.
 type ServiceInvocation struct {
 	// SourceIdentity is the transaction's k8s source identity (resource
-	// attributes); the call tree key's workload segments come from it.
+	// attributes); the call tree key's source id is its repo.HashSourceID.
 	SourceIdentity map[string]string
 	TransactionID  string
 	SpanIDs        []string // hex span ids

@@ -30,18 +30,3 @@ type CallTreeNode struct {
 	FrameType  string
 	SampleType string
 }
-
-// FlushedCallTreeNode is one call-tree node read from Redis, as the call tree flusher
-// stores it. Parent is "root" for roots.
-type FlushedCallTreeNode struct {
-	Namespace     string
-	WorkloadKind  string
-	WorkloadName  string
-	ContainerName string
-	TransactionID string
-	NodeID        string
-	Parent        string
-	FunctionName  string
-	FrameType     string
-	SampleType    string
-}

@@ -6,144 +6,40 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
-
-	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 )
 
-func TestParseRedisCallTreeKey(t *testing.T) {
-	key := redisCallTreeKey("default", "Deployment", "checkout", "app", "samples", "nethttp@1.0 SERVER GET /buy")
-	got, ok := parseRedisCallTreeKey(key)
-	if !ok {
-		t.Fatal("expected parse ok")
-	}
-	if got.Namespace != "default" || got.WorkloadKind != "Deployment" || got.WorkloadName != "checkout" ||
-		got.ContainerName != "app" || got.SampleType != "samples" || got.TransactionID != "nethttp@1.0 SERVER GET /buy" {
-		t.Fatalf("unexpected meta: %+v", got)
-	}
-
-	if _, ok := parseRedisCallTreeKey("odigos:autopilot:profile:abc"); ok {
-		t.Fatal("profile key must not parse as call tree key")
-	}
-	if _, ok := parseRedisCallTreeKey(redisCallTreeKeyPrefix + "a\x1fb\x1fc"); ok {
-		t.Fatal("short key must not parse")
-	}
-	if _, ok := parseRedisCallTreeKey(redisCallTreeKeyPrefix + "a\x1fb\x1fc\x1f\x1fsamples\x1ftx"); ok {
-		t.Fatal("empty segment must not parse")
-	}
-}
-
-func TestParseCallTreeHashValue(t *testing.T) {
-	parent, ft, name, ok := parseCallTreeHashValue("root\x00jvm\x00com.app.Root.run")
-	if !ok || parent != "root" || ft != "jvm" || name != "com.app.Root.run" {
-		t.Fatalf("got parent=%q ft=%q name=%q ok=%v", parent, ft, name, ok)
-	}
-	if _, _, _, ok := parseCallTreeHashValue("root\x00native\x00com.app.X"); ok {
-		t.Fatal("non jvm/hotspot frame type must be rejected")
-	}
-	if _, _, _, ok := parseCallTreeHashValue("root\x00jvm"); ok {
-		t.Fatal("short value must be rejected")
-	}
-}
-
-func TestScanAndLoadCallTreeStructureNodes(t *testing.T) {
+// The flush copies every call tree of a stored sample type, in one insert.
+func TestFlushCopiesAllCallTrees(t *testing.T) {
+	commonlogger.Init("error", "insights-test")
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
+	ctx := context.Background()
 
-	tr := &tracesRedis{rdb: rdb}
-	key := redisCallTreeKey("ns", "Deployment", "svc", "c", "samples", "tx-1")
-	rootPayload := "root\x00jvm\x00com.app.Root"
-	rootID := sha1Hex(rootPayload)
-	leafPayload := rootID + "\x00jvm\x00com.app.Leaf"
-	leafID := sha1Hex(leafPayload)
-	if err := rdb.HSet(context.Background(), key, rootID, rootPayload, leafID, leafPayload).Err(); err != nil {
-		t.Fatal(err)
-	}
-	// Noise key that must be ignored by SCAN match... actually SCAN match is prefix*;
-	// add a malformed call tree key and a bad hash value to exercise skips.
-	badKey := redisCallTreeKeyPrefix + "only\x1ftwo"
-	_ = rdb.HSet(context.Background(), badKey, "x", "bad").Err()
-	_ = rdb.HSet(context.Background(), key, "badnode", "not-a-payload").Err()
-
-	keys, err := tr.scanCallTreeKeys(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(keys) < 1 {
-		t.Fatalf("scan keys = %d, want at least 1", len(keys))
+	samplesKey := redisCallTreeKey(42, "samples", "1")
+	eventsKey := redisCallTreeKey(42, "events", "2")
+	cpuKey := redisCallTreeKey(42, "cpu", "3")
+	for _, key := range []string{samplesKey, eventsKey, cpuKey} {
+		if err := rdb.HSet(ctx, key, sha1Hex("root\x00jvm\x00com.app.A"), "root\x00jvm\x00com.app.A").Err(); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	meta, ok := parseRedisCallTreeKey(key)
-	if !ok {
-		t.Fatal("expected parse ok")
-	}
-	nodes, err := tr.loadCallTreeStructureNodes(context.Background(), key, meta)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(nodes) != 2 {
-		t.Fatalf("nodes = %d, want 2 (malformed field skipped); got %#v", len(nodes), nodes)
-	}
+	st := &fakeCallTreeNodeStore{}
+	f := &callTreeFlusher{redis: &tracesRedis{rdb: rdb}, store: st, logger: commonlogger.LoggerCompat()}
+	f.Flush(ctx)
 
-	byID := make(map[string]store.FlushedCallTreeNode, len(nodes))
-	for _, n := range nodes {
-		byID[n.NodeID] = n
+	inserts := st.snapshot()
+	if len(inserts) != 1 {
+		t.Fatalf("inserts = %d, want 1", len(inserts))
 	}
-	root := byID[rootID]
-	if root.Parent != "root" || root.FunctionName != "com.app.Root" || root.FrameType != "jvm" ||
-		root.SampleType != "samples" || root.Namespace != "ns" || root.TransactionID != "tx-1" {
-		t.Fatalf("root node unexpected: %+v", root)
+	got := map[string]bool{}
+	for _, n := range inserts[0] {
+		got[n.SampleType] = true
 	}
-	leaf := byID[leafID]
-	if leaf.Parent != rootID || leaf.FunctionName != "com.app.Leaf" {
-		t.Fatalf("leaf node unexpected: %+v", leaf)
-	}
-
-	if _, ok := parseRedisCallTreeKey(badKey); ok {
-		t.Fatal("malformed key must be rejected by the caller before load")
-	}
-}
-
-func TestFlushSkipsWorkloadWithoutInstrumentationConfig(t *testing.T) {
-	mr := miniredis.RunT(t)
-	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
-	t.Cleanup(func() { _ = rdb.Close() })
-
-	key := redisCallTreeKey("shop", "Deployment", "checkout", "app", "samples", "tx-1")
-	if err := rdb.HSet(context.Background(), key, "node", "root\x00jvm\x00com.app.Root").Err(); err != nil {
-		t.Fatal(err)
-	}
-	scheme := runtime.NewScheme()
-	if err := odigosv1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-	f := &callTreeFlusher{
-		redis: &tracesRedis{rdb: rdb},
-		kube:  fake.NewClientBuilder().WithScheme(scheme).Build(),
-	}
-	f.Flush(context.Background())
-	n, err := rdb.Exists(context.Background(), key).Result()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 0 {
-		t.Fatal("missing instrumentation config must delete the redis key")
-	}
-
-	f.kube = fake.NewClientBuilder().WithScheme(scheme).WithObjects(&odigosv1.InstrumentationConfig{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "deployment-checkout"},
-	}).Build()
-	meta, ok := parseRedisCallTreeKey(key)
-	if !ok {
-		t.Fatal("expected parse ok")
-	}
-	present, err := f.workloadInstrumented(context.Background(), meta)
-	if err != nil || !present {
-		t.Fatalf("present=%v err=%v", present, err)
+	if len(inserts[0]) != 2 || !got["samples"] || !got["events"] {
+		t.Fatalf("flushed nodes = %+v, want one samples and one events node", inserts[0])
 	}
 }

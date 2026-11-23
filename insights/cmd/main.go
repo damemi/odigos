@@ -183,7 +183,7 @@ func main() {
 
 	if _, ok := os.LookupEnv(envAutopilotEnabled); ok {
 		redisEndpoint := k8sconsts.OdigosCacheEndpoint(env.GetCurrentNamespace())
-		ic, err := autopilot.Open(redisEndpoint, log)
+		ic, err := autopilot.Open(redisEndpoint, pg, log)
 		if err != nil {
 			log.Warn("autopilot call-tree writer unavailable; java-ebpf profile correlation disabled",
 				"redis_endpoint", redisEndpoint, "error", err)
@@ -553,6 +553,7 @@ func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.R
 			Log:                  log,
 			PostgresDSN:          dsn,
 			RedisEndpoint:        k8sconsts.OdigosCacheEndpoint(env.GetCurrentNamespace()),
+			CallTreeStore:        pg,
 			LiteLLMMasterKey:     os.Getenv(envAutopilotLiteLLMMasterKey),
 			AutoApply:            envTruthy(os.Getenv(envAutopilotAutoApply)),
 			MaxProbesPerWorkload: envPositiveInt(os.Getenv(envAutopilotMaxProbesPerWorkload)),

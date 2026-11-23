@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
@@ -33,6 +32,9 @@ type Options struct {
 	// RedisEndpoint is the cacheDb Redis address (host:port) the loop flushes
 	// call trees from (logical DB 1). When empty the flush is skipped.
 	RedisEndpoint string
+	// CallTreeStore is the insights Postgres repo the flush writes call trees
+	// through. When nil the flush is skipped.
+	CallTreeStore CallTreeStore
 	// LiteLLMMasterKey authenticates to odigos-litellm. When empty the loop
 	// still runs but skips model calls.
 	LiteLLMMasterKey string
@@ -116,8 +118,8 @@ func Run(ctx context.Context, opts Options) error {
 		}
 		log.Info("starting autopilot loop")
 		waitForStore(groupCtx, log, st)
-		if opts.RedisEndpoint != "" {
-			flusher := newCallTreeFlusher(opts.RedisEndpoint, st, log, mgr.GetClient())
+		if opts.RedisEndpoint != "" && opts.CallTreeStore != nil {
+			flusher := newCallTreeFlusher(opts.RedisEndpoint, opts.CallTreeStore, log)
 			defer func() {
 				if err := flusher.Close(); err != nil {
 					log.Warn("autopilot call tree flusher close failed", "error", err)
@@ -125,7 +127,7 @@ func Run(ctx context.Context, opts Options) error {
 			}()
 			loopMgr.CallTreeFlusher = flusher
 		} else {
-			log.Warn("autopilot redis endpoint unset; call tree flusher disabled")
+			log.Warn("autopilot redis endpoint or call tree store unset; call tree flusher disabled")
 		}
 		loopMgr.Run(groupCtx)
 		return nil
@@ -137,8 +139,8 @@ func Run(ctx context.Context, opts Options) error {
 // newCallTreeFlusher builds the Redis client for the structure-only dump without
 // dialing: an unreachable Redis at startup only fails the current tick's Flush
 // (logged), and the next tick retries.
-func newCallTreeFlusher(redisEndpoint string, st *store.Client, log *commonlogger.OdigosLogger, kube client.Client) *callTreeFlusher {
-	return &callTreeFlusher{redis: newTracesRedis(redisEndpoint, log), store: st, logger: log, kube: kube}
+func newCallTreeFlusher(redisEndpoint string, st CallTreeStore, log *commonlogger.OdigosLogger) *callTreeFlusher {
+	return &callTreeFlusher{redis: newTracesRedis(redisEndpoint, log), store: st, logger: log}
 }
 
 const (

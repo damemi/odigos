@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
 	"math/rand"
 	"os"
 	"strconv"
@@ -61,18 +62,34 @@ func (c *Client) insertInventory(t *testing.T, id int64, operation string) {
 	}
 }
 
-func callTreeNode(s SourceKey, txID int64, nodeID, parent, function string) FlushedCallTreeNode {
-	return FlushedCallTreeNode{
-		Namespace:     s.Namespace,
-		WorkloadKind:  s.WorkloadKind,
-		WorkloadName:  s.WorkloadName,
-		ContainerName: s.ContainerName,
-		TransactionID: strconv.FormatInt(txID, 10),
-		NodeID:        nodeID,
-		Parent:        parent,
-		FunctionName:  function,
-		FrameType:     "jvm",
-		SampleType:    "samples",
+// callTreeNode is one node to store with insertCallTree: {nodeID, parent, function}.
+type callTreeNode [3]string
+
+// insertCallTree stores a call tree for the k8s source s, as the call tree
+// syncer and the baseline flush would: the source's sources and
+// k8s_source_identity rows, and the nodes keyed by its source_id.
+func (c *Client) insertCallTree(t *testing.T, s SourceKey, txID int64, nodes ...callTreeNode) {
+	t.Helper()
+	ctx := context.Background()
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(s.Namespace + "\x00" + s.WorkloadKind + "\x00" + s.WorkloadName + "\x00" + s.ContainerName))
+	sourceID := int64(h.Sum64() >> 1)
+	if _, err := c.pool.Exec(ctx, `INSERT INTO sources (source_id, platform) VALUES ($1, 'k8s') ON CONFLICT DO NOTHING`, sourceID); err != nil {
+		t.Fatalf("insert source: %v", err)
+	}
+	if _, err := c.pool.Exec(ctx,
+		`INSERT INTO k8s_source_identity (source_id, namespace, workload_kind, workload_name, container_name)
+		 VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+		sourceID, s.Namespace, s.WorkloadKind, s.WorkloadName, s.ContainerName); err != nil {
+		t.Fatalf("insert k8s source identity: %v", err)
+	}
+	for _, n := range nodes {
+		if _, err := c.pool.Exec(ctx,
+			`INSERT INTO autopilot_call_tree_nodes (source_id, transaction_id, sample_type, node_id, parent, function_name, frame_type)
+			 VALUES ($1, $2, 'samples', $3, $4, $5, 'jvm') ON CONFLICT DO NOTHING`,
+			sourceID, txID, n[0], n[1], n[2]); err != nil {
+			t.Fatalf("insert call tree node: %v", err)
+		}
 	}
 }
 
@@ -98,12 +115,8 @@ func TestSourcesComeFromCallTree(t *testing.T) {
 
 	c.insertInventory(t, shared, "GET /shared")
 	c.insertInventory(t, inventoryOnly, "GET /plain")
-	if _, err := c.InsertCallTreeNodes(ctx, []FlushedCallTreeNode{
-		callTreeNode(withCallTree, shared, "n1", "root", "main"),
-		callTreeNode(sharer, shared, "n1", "root", "main"),
-	}); err != nil {
-		t.Fatal(err)
-	}
+	c.insertCallTree(t, withCallTree, shared, callTreeNode{"n1", "root", "main"})
+	c.insertCallTree(t, sharer, shared, callTreeNode{"n1", "root", "main"})
 
 	sources, err := c.ListSourcesWithTransactions(ctx)
 	if err != nil {
@@ -141,30 +154,14 @@ func TestSourcesComeFromCallTree(t *testing.T) {
 	}
 }
 
-// TestCallTreeReflushIsNoOp checks that re-flushing a call tree stores each node
-// once, that roots read back without a parent, and that nodes with a
-// malformed transaction id are skipped.
-func TestCallTreeReflushIsNoOp(t *testing.T) {
+// TestGetCallTree checks that a call tree reads back by its workload, with
+// roots read back without a parent.
+func TestGetCallTree(t *testing.T) {
 	c := testClient(t)
 	ctx := context.Background()
-	s := testSource("reflush")
+	s := testSource("get-call-tree")
 	txID := rand.Int63()
-	nodes := []FlushedCallTreeNode{
-		callTreeNode(s, txID, "n1", "root", "main"),
-		callTreeNode(s, txID, "n2", "n1", "handle"),
-	}
-	bad := callTreeNode(s, txID, "n3", "n1", "other")
-	bad.TransactionID = "not-a-number"
-
-	for i := 0; i < 2; i++ {
-		skipped, err := c.InsertCallTreeNodes(ctx, append(nodes, nodes[0], bad))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if skipped != 1 {
-			t.Fatalf("skipped = %d, want 1", skipped)
-		}
-	}
+	c.insertCallTree(t, s, txID, callTreeNode{"n1", "root", "main"}, callTreeNode{"n2", "n1", "handle"})
 
 	got, err := c.GetCallTree(ctx, s, strconv.FormatInt(txID, 10))
 	if err != nil {

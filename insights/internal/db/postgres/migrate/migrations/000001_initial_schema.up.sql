@@ -366,27 +366,9 @@ CREATE TABLE IF NOT EXISTS maintenance_runs (
     deleted_rows jsonb NOT NULL DEFAULT '{}'
 );
 
--- Autopilot tables. The leader's autopilot loop writes them, and the UI reads
--- the call trees. transaction_id is the insights transactions.transaction_id.
-
--- One row per call-path node flushed from Redis. Every flush re-sends the
--- whole call tree, and a node already stored is skipped. node_id already covers
--- the parent, frame type, and function name. A root node's parent is 'root'.
-CREATE TABLE IF NOT EXISTS autopilot_call_tree_nodes (
-    namespace      text NOT NULL,
-    workload_kind  text NOT NULL,
-    workload_name  text NOT NULL,
-    container_name text NOT NULL,
-    transaction_id bigint NOT NULL,
-    -- 'events' or 'samples'.
-    sample_type    text NOT NULL,
-    node_id        text NOT NULL,
-    parent         text NOT NULL,
-    function_name  text NOT NULL,
-    -- 'jvm' or 'hotspot'.
-    frame_type     text NOT NULL,
-    PRIMARY KEY (namespace, workload_kind, workload_name, container_name, transaction_id, sample_type, node_id)
-);
+-- Autopilot analysis tables. The leader's autopilot loop writes them.
+-- transaction_id is the insights transactions.transaction_id. The call trees
+-- they analyze are in autopilot_call_tree_nodes.
 
 -- One row per analysis attempt for a transaction. Only succeeded runs at the
 -- current analysis_revision are read back as the evidence the model has
@@ -479,3 +461,23 @@ INSERT INTO system_settings (
     true
 )
 ON CONFLICT DO NOTHING;
+
+-- One row per call-path node of an autopilot call tree, synced from Redis.
+-- source_id and transaction_id are the sources and transactions ids. No
+-- foreign keys: a call tree is synced within seconds, usually before the
+-- baseline flush writes its source and transaction. Every sync re-sends the
+-- whole call tree, and a node already stored is skipped. node_id already
+-- covers the parent, frame type, and function name. A root node's parent is
+-- 'root'.
+CREATE TABLE IF NOT EXISTS autopilot_call_tree_nodes (
+    source_id      bigint NOT NULL,
+    transaction_id bigint NOT NULL,
+    -- 'events' or 'samples'.
+    sample_type    text NOT NULL,
+    node_id        text NOT NULL,
+    parent         text NOT NULL,
+    function_name  text NOT NULL,
+    -- 'jvm' or 'hotspot'.
+    frame_type     text NOT NULL,
+    PRIMARY KEY (source_id, transaction_id, sample_type, node_id)
+);

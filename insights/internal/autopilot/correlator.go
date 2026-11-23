@@ -7,14 +7,23 @@ import (
 )
 
 // callTreeCorrelator merges profile stacks into structure-only Redis call tree
-// hashes. Transaction inventory is the insights transactions table.
+// hashes and hands the call trees that gained nodes to the syncer. Transaction
+// inventory is the insights transactions table.
 type callTreeCorrelator struct {
 	redis  *tracesRedis
+	syncer *callTreeSyncer
 	logger *commonlogger.OdigosLogger
 }
 
 func (c *callTreeCorrelator) Close() error {
-	if c == nil || c.redis == nil {
+	if c == nil {
+		return nil
+	}
+	if c.syncer != nil {
+		c.syncer.stop()
+		c.syncer = nil
+	}
+	if c.redis == nil {
 		return nil
 	}
 	err := c.redis.Close()
@@ -27,22 +36,24 @@ func (c *callTreeCorrelator) correlate(ctx context.Context, traces []TraceBatch)
 		return nil
 	}
 
-	var invocationsN int
-	var redisNodes int64
+	var invocationsN, changedN int
 	for i := range traces {
 		tb := &traces[i]
 		invocationsN += len(tb.ServiceInvocations)
-		n, err := c.redis.mergeCallTrees(ctx, tb.TraceID, tb.ServiceInvocations)
+		changed, err := c.redis.mergeCallTrees(ctx, tb.TraceID, tb.ServiceInvocations)
 		if err != nil {
 			return err
 		}
-		redisNodes += n
+		changedN += len(changed)
+		if c.syncer != nil {
+			c.syncer.changed(changed)
+		}
 	}
-	if redisNodes > 0 {
+	if changedN > 0 {
 		c.logger.Debug("merged call tree nodes into redis",
 			"traces", len(traces),
 			"service_invocations", invocationsN,
-			"new_nodes", redisNodes,
+			"changed_call_trees", changedN,
 		)
 	}
 	return nil

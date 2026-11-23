@@ -1,3 +1,8 @@
+// Package autopilot builds per-transaction call trees for the insights
+// autopilot feature. For each java-ebpf transaction the engine admits, it asks
+// Redis to merge the profile stacks of the transaction's spans, written by the
+// gateway's odigos_autopilot_profiles exporter, into a structure-only call
+// tree, and syncs the call trees that gained nodes into Postgres.
 package autopilot
 
 import (
@@ -9,9 +14,10 @@ import (
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 )
 
-// Client correlates java-ebpf traces with Redis profile stacks and merges a
-// structure-only call tree into Redis (DB 1). Transaction inventory is the
-// insights transactions table, written on the engine flush.
+// Client correlates java-ebpf traces with Redis profile stacks, merges a
+// structure-only call tree into Redis (DB 1), and syncs the call trees that
+// gained nodes into Postgres. Transaction inventory is the insights
+// transactions table, written on the engine flush.
 type Client struct {
 	batcher *invocationBatcher
 	logger  *commonlogger.OdigosLogger
@@ -21,13 +27,17 @@ type Client struct {
 const startupPingTimeout = 2 * time.Second
 
 // Open builds the cacheDb Redis client (logical DB 1) and starts the flush
-// loop. It fails only on invalid configuration: go-redis redials on every
-// command, so a Redis that is unreachable at startup (e.g. cacheDb still
-// rolling out) is picked up on a later flush instead of disabling
+// loop. Call trees that gain nodes are synced into st, the insights Postgres
+// repo. It fails only on invalid configuration: go-redis and pgx both connect
+// lazily, so a Redis or Postgres that is unreachable at startup (e.g. still
+// rolling out) is picked up on a later flush or sync instead of disabling
 // correlation for the life of the pod.
-func Open(redisEndpoint string, logger *commonlogger.OdigosLogger) (*Client, error) {
+func Open(redisEndpoint string, st CallTreeStore, logger *commonlogger.OdigosLogger) (*Client, error) {
 	if redisEndpoint == "" {
 		return nil, fmt.Errorf("redis endpoint is required")
+	}
+	if st == nil {
+		return nil, fmt.Errorf("call tree store is required")
 	}
 	if logger == nil {
 		return nil, fmt.Errorf("logger is required")
@@ -39,7 +49,9 @@ func Open(redisEndpoint string, logger *commonlogger.OdigosLogger) (*Client, err
 	}
 	cancel()
 	batcher := newInvocationBatcher(defaultFlushInterval, defaultFlushThreshold, logger)
-	batcher.start(&callTreeCorrelator{redis: rdb, logger: logger})
+	syncer := newCallTreeSyncer(rdb, st, logger, callTreeSyncDelay, callTreeSyncRetryDelay)
+	syncer.start()
+	batcher.start(&callTreeCorrelator{redis: rdb, syncer: syncer, logger: logger})
 	logger.Info("autopilot call-tree writer ready",
 		"redis_endpoint", redisEndpoint,
 		"redis_db", consts.RedisDBAutopilotProfilesTransactionsCorrelation,
@@ -47,6 +59,7 @@ func Open(redisEndpoint string, logger *commonlogger.OdigosLogger) (*Client, err
 		"redis_call_tree_ttl", redisCallTreeKeyTTL.String(),
 		"flush_interval", defaultFlushInterval.String(),
 		"flush_threshold", defaultFlushThreshold,
+		"sync_delay", callTreeSyncDelay.String(),
 	)
 	return &Client{batcher: batcher, logger: logger}, nil
 }

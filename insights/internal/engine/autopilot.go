@@ -47,7 +47,7 @@ func autopilotServiceInvocation(sub *Trace, tx repo.Transaction) (autopilot.Serv
 	if !isJavaEbpfInstrumentation(entry) {
 		return autopilot.ServiceInvocation{}, false
 	}
-	// The call tree is keyed by the k8s workload container in the source identity.
+	// Autopilot instruments k8s workload containers only.
 	if _, err := sourceidentity.K8sSourceKeyFromResourceAttributesMap(tx.SourceIdentity); err != nil {
 		return autopilot.ServiceInvocation{}, false
 	}
