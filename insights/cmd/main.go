@@ -141,11 +141,23 @@ func main() {
 	integrationRegistry := sinks.NewRegistry(notify.DefaultDeps())
 	apiHandle.SetIntegrationRegistry(integrationRegistry)
 
-	// Interrogations follow autopilot. The session store opens in the
-	// background; the leader's supervisor waits for it.
+	// Interrogations follow autopilot. Any replica takes a start, stop or
+	// extend, so every replica opens the session store; the writes answer
+	// 503 until it is open. The leader's supervisor uses the same store, and
+	// it is closed on shutdown after the HTTP server.
 	var sessions atomic.Pointer[interrogation.Sessions]
 	if _, ok := os.LookupEnv(envAutopilotEnabled); ok {
-		go openInterrogationSessions(rootCtx, log, dsn, &sessions)
+		cfg := apihttp.InterrogationsConfig{
+			Enabled:              true,
+			MaxProbesPerWorkload: envPositiveInt(os.Getenv(envAutopilotMaxProbesPerWorkload)),
+		}
+		apiHandle.SetInterrogations(cfg)
+		go openInterrogationSessions(rootCtx, log, dsn, &sessions, func(s *interrogation.Sessions) {
+			cfg.Sessions = s
+			apiHandle.SetInterrogations(cfg)
+		})
+	} else {
+		apiHandle.SetInterrogations(apihttp.InterrogationsConfig{})
 	}
 
 	httpSrv := &stdhttp.Server{
@@ -415,8 +427,9 @@ func waitForSchemaReady(
 }
 
 // openInterrogationSessions opens the interrogation session store, retrying
-// with the repository's backoff, and stores it in sessions.
-func openInterrogationSessions(ctx context.Context, log *commonlogger.OdigosLogger, dsn string, sessions *atomic.Pointer[interrogation.Sessions]) {
+// with the repository's backoff, stores it in sessions and passes it to
+// opened.
+func openInterrogationSessions(ctx context.Context, log *commonlogger.OdigosLogger, dsn string, sessions *atomic.Pointer[interrogation.Sessions], opened func(*interrogation.Sessions)) {
 	delay := dbRetryInitial
 	var lastLog time.Time
 	for {
@@ -425,6 +438,7 @@ func openInterrogationSessions(ctx context.Context, log *commonlogger.OdigosLogg
 		cancel()
 		if err == nil {
 			sessions.Store(s)
+			opened(s)
 			return
 		}
 		if now := time.Now(); lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {

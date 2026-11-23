@@ -28,6 +28,9 @@ type API struct {
 	// registry is the integrations backend catalog (SetIntegrationRegistry);
 	// integration endpoints return 503 until it is wired.
 	registry atomic.Pointer[notify.Registry]
+	// interrogations is set by SetInterrogations; interrogation endpoints
+	// return 503 until it is.
+	interrogations atomic.Pointer[InterrogationsConfig]
 }
 
 // parseTransactionID reads `:transaction_id` from the URL. On a parse error it
@@ -140,6 +143,8 @@ func errorCode(status int) apitypes.ErrorBodyCode {
 		return apitypes.ErrorBodyCodeNotFound
 	case http.StatusConflict:
 		return apitypes.ErrorBodyCodeConflict
+	case http.StatusRequestEntityTooLarge:
+		return apitypes.ErrorBodyCodePayloadTooLarge
 	case http.StatusUnprocessableEntity:
 		return apitypes.ErrorBodyCodeUnprocessableEntity
 	case http.StatusServiceUnavailable:

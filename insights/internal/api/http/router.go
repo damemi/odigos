@@ -137,6 +137,19 @@ func NewRouter(r repo.Repository, log *commonlogger.OdigosLogger) (*gin.Engine, 
 		v1.POST("/integrations/:integration_id/deliveries/retry", api.retryIntegrationDeliveries)
 		v1.GET("/integrations/:integration_id/attempts", api.listIntegrationAttempts)
 		v1.GET("/findings/deliveries", api.getFindingDeliveries)
+
+		// On-demand interrogations: start a run on a source, follow it, stop
+		// or extend it.
+		v1.GET("/interrogations", api.listInterrogations)
+		v1.POST("/interrogations", limitInterrogationBody, api.startInterrogation)
+		v1.GET("/interrogations/summary", api.getInterrogationSummary)
+		v1.GET("/interrogations/options", api.getInterrogationOptions)
+		v1.GET("/interrogations/sources", api.listInterrogationSources)
+		v1.GET("/interrogations/sources/transactions", api.listInterrogationSourceTransactions)
+		v1.GET("/interrogations/:interrogation_id", api.getInterrogation)
+		v1.GET("/interrogations/:interrogation_id/events", api.listInterrogationEvents)
+		v1.POST("/interrogations/:interrogation_id/stop", limitInterrogationBody, api.stopInterrogation)
+		v1.POST("/interrogations/:interrogation_id/extend", limitInterrogationBody, api.extendInterrogation)
 	}
 
 	return engine, api
