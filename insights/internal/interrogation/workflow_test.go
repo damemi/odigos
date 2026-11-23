@@ -24,6 +24,7 @@ import (
 
 	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/loop"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/measure"
 	apmodel "github.com/odigos-io/odigos/insights/internal/autopilot/model"
 	apschema "github.com/odigos-io/odigos/insights/internal/autopilot/schema"
 	apstore "github.com/odigos-io/odigos/insights/internal/autopilot/store"
@@ -74,6 +75,14 @@ type fakeLoop struct {
 	deny       map[string]*loop.ProbeDeniedError
 	requestErr error
 	requests   []loop.ProbeRequest
+	// timings is what ProbeTimings reads; nil reads none.
+	timings measure.Timings
+}
+
+func (l *fakeLoop) ProbeTimings(context.Context, apstore.SourceKey, time.Time) (measure.Timings, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.timings, nil
 }
 
 func (l *fakeLoop) Instrumented(context.Context, apstore.SourceKey) (bool, error) {
@@ -845,6 +854,66 @@ func TestRun_TwoRounds(t *testing.T) {
 	golden(t, "run_two_rounds.json", []byte("{\"events\": [\n"+strings.Join(lines, ",\n")+"\n]}\n"))
 }
 
+// probeTimings is n spans of the probe in transaction 8841, each in a request
+// of 3 spans.
+func probeTimings(n int) measure.Timings {
+	var site, entry measure.Measure
+	for range n {
+		site.Add(measure.Sample{DurUs: 4000, SelfUs: 3000})
+		entry.Add(measure.Sample{DurUs: 10000, SelfUs: 2000, Spans: 3})
+	}
+	return measure.Timings{"8841": {Entry: entry, Sites: map[string]*measure.Measure{"com.claims.IntakeService.validate": &site}}}
+}
+
+// observe ends once the probe has observeSpans spans, and after observeTimeout
+// with what there is; either way the next round is sent what was measured.
+func TestRun_ObserveMeasures(t *testing.T) {
+	tests := []struct {
+		name    string
+		spans   int
+		wait    time.Duration
+		outcome string
+	}{
+		{name: "enough spans", spans: observeSpans, wait: observeMin, outcome: WaitSatisfied},
+		{name: "too few", spans: 5, wait: observeTimeout, outcome: WaitTimedOut},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.loop.timings = probeTimings(tt.spans)
+			h.reply(replyJSON(t, nil), replyJSON(t, done(70)))
+			st := h.runUntil(parkedIn("wait_observe"))
+			started := st.ObserveStarted
+			st = h.run()
+			h.checkEnded(st, StatusCompleted, EndDone)
+			w := h.eventsOf(EventWaitFinished)
+			last := w[len(w)-1]
+			if last.Payload["reason"] != string(WaitObserve) || last.Payload["outcome"] != tt.outcome || !last.Time.Equal(started.Add(tt.wait)) {
+				t.Errorf("observe wait finished %+v at %v, want %s after %v", last.Payload, last.Time, tt.outcome, tt.wait)
+			}
+			if m := h.eventsOf(EventChangeMeasured); len(m) != 1 || m[0].ChangeID != probeID || m[0].Payload["spans"] != float64(tt.spans) {
+				t.Errorf("change.measured %+v, want one with %d spans", m, tt.spans)
+			}
+			if got := st.Probes[0].Measured; got == nil || got.Spans != int64(tt.spans) || got.AvgMs != 4 || got.SelfAvgMs != 3 {
+				t.Errorf("measured %+v, want %d spans averaging 4 ms, 3 ms of it self", got, tt.spans)
+			}
+			if got := st.Rounds[0].Timings; len(got) != 1 || got[0].Requests != int64(tt.spans) || got[0].UncoveredAvgMs != 2 || got[0].AvgSpans != 3 {
+				t.Errorf("round timings %+v, want %d requests with 2 ms uncovered", got, tt.spans)
+			}
+			var second Request
+			if err := json.Unmarshal([]byte(h.model.calls()[1]), &second); err != nil {
+				t.Fatal(err)
+			}
+			if m := second.AddedProbes[0].Measured; m == nil || m.Spans != int64(tt.spans) {
+				t.Errorf("round 2 added probes %+v, want the probe measured", second.AddedProbes)
+			}
+			if tm := second.Transactions[0].Timings; tm == nil || len(tm.Probes) != 1 || tm.Probes[0].Spans != int64(tt.spans) {
+				t.Errorf("round 2 transactions %+v, want timings with the probe", second.Transactions)
+			}
+		})
+	}
+}
+
 // A probe whose source goes while the run observes is reported reverted in
 // the next round's request.
 func TestRun_RevertedBetweenRounds(t *testing.T) {
@@ -1362,8 +1431,8 @@ func TestStop_DuringApply(t *testing.T) {
 // An extension delivered twice moves the deadline once, and a wait the old
 // deadline cut short parks again until its own end.
 func TestExtend_Idempotent(t *testing.T) {
-	// The observe window starts 60 s in and would end 120 s in.
-	h := newHarness(t, withLimit(100))
+	// The observe wait starts 60 s in and would end 80 s in.
+	h := newHarness(t, withLimit(70))
 	h.reply(replyJSON(t, nil), replyJSON(t, done(60)))
 	st := h.runUntil(parkedIn("wait_observe"))
 	if !st.Wait.Until.Equal(st.DeadlineAt) {
@@ -1376,7 +1445,7 @@ func TestExtend_Idempotent(t *testing.T) {
 		h.failed(h.deliver())
 	}
 	st, _ = h.state()
-	if want := testStart.Add(700 * time.Second); !st.DeadlineAt.Equal(want) {
+	if want := testStart.Add(670 * time.Second); !st.DeadlineAt.Equal(want) {
 		t.Fatalf("deadline %v, want %v", st.DeadlineAt, want)
 	}
 	if st.Wait == nil || st.Wait.InterruptID == first || !st.Wait.Until.Equal(st.WakeAt) || !st.Wait.Since.Equal(since) {
@@ -1438,7 +1507,7 @@ func TestRun_TimeLimitWhileParked(t *testing.T) {
 		calls int
 	}{
 		{name: "baseline", limit: 20, node: "wait_baseline", calls: 0},
-		{name: "observe", limit: 100, node: "wait_observe", calls: 1},
+		{name: "observe", limit: 70, node: "wait_observe", calls: 1},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

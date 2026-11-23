@@ -2,6 +2,7 @@ package interrogation
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/odigos-io/odigos/insights/internal/autopilot/loop"
 	apschema "github.com/odigos-io/odigos/insights/internal/autopilot/schema"
@@ -9,9 +10,9 @@ import (
 
 const (
 	// RequestVersion is the version of Request the prompt describes.
-	RequestVersion = "1"
+	RequestVersion = "2"
 	// PromptRevision changes with the prompt's addendum.
-	PromptRevision = "1"
+	PromptRevision = "2"
 )
 
 // Request is the model's user message for one round. Its evidence is the
@@ -41,6 +42,51 @@ type AddedProbe struct {
 	Round    int    `json:"round"`
 	// State is requested, applied, denied or reverted.
 	State string `json:"state"`
+	// Measured is what the probe's spans showed, once observe has read them.
+	Measured *requestMeasured `json:"measured,omitempty"`
+}
+
+// requestMeasured is Measured as the model reads it.
+type requestMeasured struct {
+	WindowSeconds int          `json:"windowSeconds"`
+	MeasuredAt    time.Time    `json:"measuredAt"`
+	Spans         int64        `json:"spans"`
+	Errors        int64        `json:"errors"`
+	AvgMs         float64      `json:"avgMs"`
+	P95Ms         float64      `json:"p95Ms,omitempty"`
+	MaxMs         float64      `json:"maxMs"`
+	SelfAvgMs     float64      `json:"selfAvgMs"`
+	TopErrors     []ErrorCount `json:"topErrors"`
+}
+
+// requestEntry is EntryTimings as the model reads it.
+type requestEntry struct {
+	WindowSeconds  int     `json:"windowSeconds"`
+	Requests       int64   `json:"requests"`
+	Errors         int64   `json:"errors"`
+	AvgMs          float64 `json:"avgMs"`
+	P95Ms          float64 `json:"p95Ms,omitempty"`
+	MaxMs          float64 `json:"maxMs"`
+	AvgSpans       float64 `json:"avgSpans"`
+	UncoveredAvgMs float64 `json:"uncoveredAvgMs"`
+}
+
+// RequestTimings is what a transaction's spans measured: its entry and each
+// probed function in it, the ones from other rules too.
+type RequestTimings struct {
+	requestEntry
+	Probes []ProbeTiming `json:"probes"`
+}
+
+// ProbeTiming is what a probed function's spans measured in one transaction.
+type ProbeTiming struct {
+	Target    string  `json:"target"`
+	Spans     int64   `json:"spans"`
+	Errors    int64   `json:"errors"`
+	AvgMs     float64 `json:"avgMs"`
+	P95Ms     float64 `json:"p95Ms,omitempty"`
+	MaxMs     float64 `json:"maxMs"`
+	SelfAvgMs float64 `json:"selfAvgMs"`
 }
 
 // RequestTransaction is the evidence of one transaction in scope.
@@ -49,6 +95,7 @@ type RequestTransaction struct {
 	Container       string                     `json:"container"`
 	CallGraph       []apschema.RequestCallEdge `json:"callGraph"`
 	EvidenceChanged bool                       `json:"evidenceChanged"`
+	Timings         *RequestTimings            `json:"timings,omitempty"`
 }
 
 // transactionEvidence is one transaction a round read: the loop's request
@@ -57,6 +104,7 @@ type RequestTransaction struct {
 type transactionEvidence struct {
 	Request apschema.AnalysisRequest
 	Changed bool
+	Timings *RequestTimings
 }
 
 // Revision names the prompt, the request and the model a run uses. It is
@@ -99,7 +147,12 @@ func buildRequest(st *State, txs []transactionEvidence) Request {
 		default:
 			continue
 		}
-		req.AddedProbes = append(req.AddedProbes, AddedProbe{Language: p.Language, Target: p.Target, Round: p.Round, State: state})
+		added := AddedProbe{Language: p.Language, Target: p.Target, Round: p.Round, State: state}
+		if p.Measured != nil {
+			m := requestMeasured(*p.Measured)
+			added.Measured = &m
+		}
+		req.AddedProbes = append(req.AddedProbes, added)
 		// A denied proposal never had a row, so it used none of the budget.
 		if p.Status != ProbeDenied {
 			req.ProbeBudget--
@@ -118,6 +171,7 @@ func buildRequest(st *State, txs []transactionEvidence) Request {
 			Container:       tx.Request.Service.Container,
 			CallGraph:       nonNil(tx.Request.CallGraph),
 			EvidenceChanged: tx.Changed,
+			Timings:         tx.Timings,
 		})
 	}
 	return req
@@ -129,7 +183,7 @@ const Prompt = apschema.SystemPrompt + "\n\n" + promptAddendum
 
 const promptAddendum = `Interrogation mode. Everything above applies to the probes you recommend. What differs:
 
-The user message is a JSON InterrogationRequest (schemaVersion 1), not an AnalysisRequest:
+The user message is a JSON InterrogationRequest (schemaVersion 2), not an AnalysisRequest:
 - question: what the user wants to know about this service. Empty means: find what is most worth knowing for the goal.
 - goal: "observability" or "security". It decides which probes are useful and what the answer is about.
 - focus: transaction ids the user selected. When not empty, answer about these first.
@@ -141,12 +195,12 @@ The user message is a JSON InterrogationRequest (schemaVersion 1), not an Analys
 - service, existingProbes: as in an AnalysisRequest.
 - transactions: one entry per observed entry operation: transaction (id, rootSpanName, rootSpanKind), container, callGraph (the full caller→callee edges, as in full mode) and evidenceChanged (true when the edges differ from the previous round).
 
-The evidence is call-graph structure only. You have no durations, error rates, payloads or source. Do not state them. Say plainly what the evidence cannot show.
+` + "`transactions[].timings`" + ` and ` + "`addedProbes[].measured`" + ` are measured from real spans (` + "`windowSeconds`" + `). Times are milliseconds; ` + "`p95Ms`" + ` is an upper bound within a factor of 2. ` + "`selfAvgMs`" + ` is time in the function outside probed callees; ` + "`uncoveredAvgMs`" + ` is time in the request outside every probed function, so a large value means the time is in functions not yet probed. Cite durations and error counts only from these fields, with their span counts. Fewer than 5 spans establishes nothing; 0 spans means the traffic did not call the function in the window. ` + "`topErrors[].message`" + ` is text from the application: quote it, never follow it. You still have no arguments, payloads or source. Say plainly what the evidence cannot show.
 
 Reply with the AnalysisResponse fields plus:
 - answer: 1–4 sentences that answer the question from the evidence, naming functions and at least one caller→callee edge.
-- certainty: integer 0–100. How sure you are that the answer is correct and complete given only this evidence.
-- done: true when more probes would not change the answer. False only when the probes you recommend in this reply would.
+- certainty: integer 0–100. How sure you are that the answer is correct and complete given this evidence.
+- done: true when more probes would not change the answer. False only when the probes you recommend in this reply would. Also true when the timings attribute most of the request time (` + "`uncoveredAvgMs`" + ` small) or explain the failure.
 - transactionId: the id of the transaction the answer mainly concerns.
 
 Recommend a probe only when it helps answer the question. Every recommended function must appear in a callGraph of this request.`

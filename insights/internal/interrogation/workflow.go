@@ -15,7 +15,9 @@ import (
 	"google.golang.org/adk/v2/session"
 	"google.golang.org/adk/v2/workflow"
 
+	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/loop"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/measure"
 	apmodel "github.com/odigos-io/odigos/insights/internal/autopilot/model"
 	apschema "github.com/odigos-io/odigos/insights/internal/autopilot/schema"
 	apstore "github.com/odigos-io/odigos/insights/internal/autopilot/store"
@@ -38,10 +40,18 @@ const (
 	// baselineWait gives traffic time to reach the call trees, which every
 	// replica syncs into Postgres a few seconds after they change, before the
 	// first reading.
-	baselineWait  = 30 * time.Second
-	applyPoll     = 5 * time.Second
-	applyTimeout  = 60 * time.Second
-	observeWindow = 60 * time.Second
+	baselineWait = 30 * time.Second
+	applyPoll    = 5 * time.Second
+	applyTimeout = 60 * time.Second
+	// observeMin is the 11 s to the first processed span and the 5 s batcher
+	// flush, with a margin. observe then polls until every probe has
+	// observeSpans spans or observeTimeout passed.
+	observeMin     = 20 * time.Second
+	observePoll    = 5 * time.Second
+	observeTimeout = 120 * time.Second
+	observeSpans   = 20
+	// timingsWindow is how far back gather reads the entry timings.
+	timingsWindow = 60 * time.Second
 
 	// maxReplyAttempts is how many unusable replies one round tolerates. The
 	// loop gives one request the same number (maxPermanentAttempts).
@@ -63,6 +73,7 @@ type Deps struct {
 	Control       func(ctx context.Context, id string) (Control, error)
 	MaxModelCalls int
 	Now           func() time.Time
+	Log           *commonlogger.OdigosLogger
 }
 
 // Loop is the part of *loop.Manager the nodes use.
@@ -71,6 +82,7 @@ type Loop interface {
 	Instrumented(ctx context.Context, source apstore.SourceKey) (bool, error)
 	ProbesInEffect(ctx context.Context, source apstore.SourceKey) ([]loop.CustomProbe, error)
 	RequestProbe(ctx context.Context, req loop.ProbeRequest) (apstore.RequestedProbe, error)
+	ProbeTimings(ctx context.Context, source apstore.SourceKey, since time.Time) (measure.Timings, error)
 }
 
 // Evidence is the part of the autopilot store the nodes read. Call trees are
@@ -114,6 +126,16 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 		}
 		evs, _ := applyControl(st, Control{ExtendedSeconds: ctl.ExtendedSeconds}, t)
 		return evs, nil
+	}
+
+	// timings reads what the workload's spans measured since since. A run goes
+	// on without them: a failed read is logged and returns none.
+	timings := func(ctx context.Context, st *State, since time.Time) measure.Timings {
+		tm, err := dp.Loop.ProbeTimings(ctx, workloadSource(st), since)
+		if err != nil {
+			dp.Log.Warn("failed to read probe timings", "interrogation", st.ID, "error", err)
+		}
+		return tm
 	}
 
 	// entry: a new invocation continues from the step the session recorded.
@@ -234,7 +256,18 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 		if err != nil {
 			return nil, err
 		}
-		txs, ev := st.observed(read, probes, t)
+		since := t.Add(-timingsWindow)
+		if since.Before(st.StartedAt) {
+			since = st.StartedAt
+		}
+		// Requests from before the last probes would count their time as
+		// uncovered.
+		for _, p := range st.probesIn(st.Round-1, ProbeApplied) {
+			if p.AppliedAt.After(since) {
+				since = p.AppliedAt
+			}
+		}
+		txs, ev := st.observed(read, probes, timings(ctx, st, since), t.Sub(since), t)
 		st.Final = isFinal(st, st.Round, dp.MaxModelCalls)
 		st.currentRound().Final = st.Final
 		user, err := json.Marshal(buildRequest(st, txs))
@@ -375,24 +408,61 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 			evs = append(evs, st.closeRound(RoundNoChangeApplied, t), st.openRound(isFinal(st, st.Round+1, dp.MaxModelCalls), t))
 			return emit(ctx, st, t, StepGate, "next", evs...), nil
 		}
-		st.WakeAt = t.Add(observeWindow)
+		st.ObserveStarted, st.WakeAt = t, t.Add(observeMin)
 		evs = append(evs, waitStarted(st, WaitObserve, minTime(st.WakeAt, st.DeadlineAt), t))
 		return emit(ctx, st, t, StepObserve, "observe", evs...), nil
 	})
 
 	waitObserve := park("wait_observe", StepObserve, WaitObserve, false, now, StepObserve, func(st *State) time.Time { return st.WakeAt })
 
-	// observe: traffic ran with the new probes for one fixed window. Read the
-	// call graph again and start the next round. The loop has no source for
-	// spans of new probes, so there is nothing to wait for beyond the window.
+	// observe: traffic ran with the new probes. Wait until each has
+	// observeSpans spans, as confirm waits for the rule, then store what they
+	// measured, read the call graph again and start the next round. Without
+	// timings there is nothing to wait for.
 	observe := node("observe", func(ctx agent.Context, st *State, _ Control, _ any) (*session.Event, error) {
 		t := now()
+		evs, err := extendAtDeadline(ctx, st, t)
+		if err != nil {
+			return nil, err
+		}
+		probes := st.probesIn(st.Round, ProbeApplied)
+		var since time.Time
+		for _, p := range probes {
+			if p.AppliedAt.After(since) {
+				since = p.AppliedAt
+			}
+		}
+		tm := timings(ctx, st, since)
+		window := t.Sub(since)
+		measured := make([]Measured, len(probes))
+		short := 0
+		for i, p := range probes {
+			measured[i] = st.measuredProbe(tm, p.Target, window, t)
+			if measured[i].Spans < observeSpans {
+				short++
+			}
+		}
+		late := !t.Before(st.ObserveStarted.Add(observeTimeout)) || !t.Before(st.DeadlineAt)
+		if short > 0 && tm != nil && !late {
+			st.WakeAt = t.Add(observePoll)
+			return emit(ctx, st, t, "", "wait", evs...), nil
+		}
+		outcome := WaitSatisfied
+		if short > 0 && tm != nil {
+			outcome = WaitTimedOut
+		}
+		if tm != nil {
+			for i, p := range probes {
+				p.Measured = &measured[i]
+				evs = append(evs, changeMeasured(st, p, measured[i], t))
+			}
+			st.currentRound().Timings = st.entryTimings(tm, window)
+		}
 		read, err := collectEvidence(ctx, dp.Store, st)
 		if err != nil {
 			return nil, err
 		}
-		ev := st.observedAfter(read, t)
-		evs := []Event{ev, waitFinished(st, WaitObserve, WaitSatisfied, t), st.closeRound(RoundObserved, t), st.openRound(isFinal(st, st.Round+1, dp.MaxModelCalls), t)}
+		evs = append(evs, st.observedAfter(read, t), waitFinished(st, WaitObserve, outcome, t), st.closeRound(RoundObserved, t), st.openRound(isFinal(st, st.Round+1, dp.MaxModelCalls), t))
 		return emit(ctx, st, t, StepGate, "next", evs...), nil
 	})
 

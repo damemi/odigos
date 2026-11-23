@@ -176,8 +176,11 @@ type State struct {
 	BaselineUntil time.Time `json:"baseline_until"`
 	PausedUntil   time.Time `json:"paused_until"`
 	ApplyStarted  time.Time `json:"apply_started"`
-	WakeAt        time.Time `json:"wake_at"`
-	ModelCallAt   time.Time `json:"model_call_at"`
+	// ObserveStarted is when the observe wait began; its timeout counts from
+	// here.
+	ObserveStarted time.Time `json:"observe_started"`
+	WakeAt         time.Time `json:"wake_at"`
+	ModelCallAt    time.Time `json:"model_call_at"`
 
 	Transactions []TransactionSummary `json:"transactions"`
 	// Previous is Transactions as the round before this one left them: every
@@ -243,6 +246,46 @@ type Round struct {
 	Proposed      []string        `json:"proposed"`
 	Applied       []string        `json:"applied"`
 	ObservedAfter *EvidenceCounts `json:"observed_after,omitempty"`
+	// Timings are the entry timings of the scope as the round last read them.
+	Timings []TxTiming `json:"timings,omitempty"`
+}
+
+// EntryTimings are what a transaction's entry spans measured in a window.
+type EntryTimings struct {
+	WindowSeconds  int     `json:"window_seconds"`
+	Requests       int64   `json:"requests"`
+	Errors         int64   `json:"errors"`
+	AvgMs          float64 `json:"avg_ms"`
+	P95Ms          float64 `json:"p95_ms,omitempty"`
+	MaxMs          float64 `json:"max_ms"`
+	AvgSpans       float64 `json:"avg_spans"`
+	UncoveredAvgMs float64 `json:"uncovered_avg_ms"`
+}
+
+// TxTiming is the entry timings of one transaction, with its id stored as a
+// string.
+type TxTiming struct {
+	TransactionID repo.TransactionID `json:"transaction_id"`
+	EntryTimings
+}
+
+// ErrorCount is a status message of a probe's spans and how many carried it.
+type ErrorCount struct {
+	Message string `json:"message"`
+	Count   int64  `json:"count"`
+}
+
+// Measured is what a probe's spans showed over the window observe read.
+type Measured struct {
+	WindowSeconds int          `json:"window_seconds"`
+	MeasuredAt    time.Time    `json:"measured_at"`
+	Spans         int64        `json:"spans"`
+	Errors        int64        `json:"errors"`
+	AvgMs         float64      `json:"avg_ms"`
+	P95Ms         float64      `json:"p95_ms,omitempty"`
+	MaxMs         float64      `json:"max_ms"`
+	SelfAvgMs     float64      `json:"self_avg_ms"`
+	TopErrors     []ErrorCount `json:"top_errors"`
 }
 
 // NodeRun is one graph node in one round, in the API's shape
@@ -299,6 +342,8 @@ type Probe struct {
 	AppliedAt   time.Time               `json:"applied_at"`
 	EndedAt     time.Time               `json:"ended_at"`
 	ExpiresAt   time.Time               `json:"expires_at"`
+	// Measured is nil until observe has read the probe's spans.
+	Measured *Measured `json:"measured,omitempty"`
 }
 
 // load reads a run's state from its session, and the control the supervisor

@@ -127,6 +127,9 @@ func NewSupervisor(cfg SupervisorConfig) (*Supervisor, error) {
 	if cfg.Deps.Control == nil {
 		cfg.Deps.Control = cfg.Sessions.Control
 	}
+	if cfg.Deps.Log == nil {
+		cfg.Deps.Log = cfg.Log
+	}
 	wf, err := BuildWorkflow(cfg.Deps)
 	if err != nil {
 		return nil, fmt.Errorf("build interrogation workflow: %w", err)

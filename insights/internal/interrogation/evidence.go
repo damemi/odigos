@@ -4,11 +4,14 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
+	"math"
 	"slices"
 	"strconv"
 	"time"
 
 	"github.com/odigos-io/odigos/insights/internal/autopilot/loop"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/measure"
 	apschema "github.com/odigos-io/odigos/insights/internal/autopilot/schema"
 	apstore "github.com/odigos-io/odigos/insights/internal/autopilot/store"
 	"github.com/odigos-io/odigos/insights/internal/repo"
@@ -148,7 +151,7 @@ func compareIDs(a, b string) int {
 // transaction's summary and the round's counts. It returns the request's
 // evidence, each transaction marked changed when its graph differs from the
 // previous round's, and the evidence event.
-func (st *State) observed(read []txEvidence, probes []loop.CustomProbe, t time.Time) ([]transactionEvidence, Event) {
+func (st *State) observed(read []txEvidence, probes []loop.CustomProbe, timings measure.Timings, window time.Duration, t time.Time) ([]transactionEvidence, Event) {
 	counts := evidenceCounts(read, st.edgeCount())
 	prev := map[string]string{}
 	for _, s := range st.Previous {
@@ -163,6 +166,7 @@ func (st *State) observed(read []txEvidence, probes []loop.CustomProbe, t time.T
 		txs = append(txs, transactionEvidence{
 			Request: loop.BuildFullAnalysisRequest(e.Source, probes, loop.TransactionCallTree{Transaction: e.Tx, Nodes: e.Nodes}, e.requestGraph()),
 			Changed: seen && before != hash,
+			Timings: requestTimings(timings[e.Tx.ID], window),
 		})
 		st.Transactions = append(st.Transactions, TransactionSummary{
 			ID: e.Tx.ID, Container: e.Source.ContainerName, Name: e.Tx.RootSpanName, Kind: e.Tx.RootSpanKind,
@@ -178,6 +182,7 @@ func (st *State) observed(read []txEvidence, probes []loop.CustomProbe, t time.T
 		}
 	}
 	st.currentRound().Observed = &counts
+	st.currentRound().Timings = st.entryTimings(timings, window)
 	return txs, evidenceCollected(st, counts, sampleEdges(read), truncated(read), t)
 }
 
@@ -193,6 +198,78 @@ func (st *State) observedAfter(read []txEvidence, t time.Time) Event {
 	counts := evidenceCounts(read, before)
 	r.ObservedAfter = &counts
 	return evidenceCollected(st, counts, sampleEdges(read), truncated(read), t)
+}
+
+// entryTimings is the entry timings of the transactions in scope that had
+// requests in the window.
+func (st *State) entryTimings(timings measure.Timings, window time.Duration) []TxTiming {
+	var out []TxTiming
+	for _, s := range st.Transactions {
+		id, _ := strconv.ParseInt(s.ID, 10, 64)
+		if e, ok := entryTimings(timings[s.ID], window); ok {
+			out = append(out, TxTiming{TransactionID: repo.TransactionID(id), EntryTimings: e})
+		}
+	}
+	return out
+}
+
+// measuredProbe is what the spans of target in the scope's transactions
+// showed.
+func (st *State) measuredProbe(timings measure.Timings, target string, window time.Duration, t time.Time) Measured {
+	var sum measure.Measure
+	for _, s := range st.Transactions {
+		if tx := timings[s.ID]; tx != nil && tx.Sites[target] != nil {
+			sum.Merge(tx.Sites[target])
+		}
+	}
+	sum.SortErrors()
+	errs := make([]ErrorCount, len(sum.Errors))
+	for i, e := range sum.Errors {
+		errs[i] = ErrorCount{Message: e.Message, Count: e.Count}
+	}
+	return Measured{
+		WindowSeconds: int(window.Seconds()), MeasuredAt: t, Spans: sum.N, Errors: sum.Err,
+		AvgMs: roundMs(sum.AvgMs()), P95Ms: roundMs(sum.P95Ms()), MaxMs: roundMs(maxMs(&sum)), SelfAvgMs: roundMs(sum.SelfAvgMs()),
+		TopErrors: errs,
+	}
+}
+
+func entryTimings(tx *measure.Transaction, window time.Duration) (EntryTimings, bool) {
+	if tx == nil || tx.Entry.N == 0 {
+		return EntryTimings{}, false
+	}
+	e := &tx.Entry
+	return EntryTimings{
+		WindowSeconds: int(window.Seconds()), Requests: e.N, Errors: e.Err,
+		AvgMs: roundMs(e.AvgMs()), P95Ms: roundMs(e.P95Ms()), MaxMs: roundMs(maxMs(e)),
+		AvgSpans: roundMs(float64(e.Spans) / float64(e.N)), UncoveredAvgMs: roundMs(e.SelfAvgMs()),
+	}, true
+}
+
+// requestTimings is the model's view of a transaction's timings, nil when it
+// had no requests in the window.
+func requestTimings(tx *measure.Transaction, window time.Duration) *RequestTimings {
+	e, ok := entryTimings(tx, window)
+	if !ok {
+		return nil
+	}
+	out := &RequestTimings{requestEntry: requestEntry(e), Probes: []ProbeTiming{}}
+	for _, site := range slices.Sorted(maps.Keys(tx.Sites)) {
+		m := tx.Sites[site]
+		out.Probes = append(out.Probes, ProbeTiming{
+			Target: site, Spans: m.N, Errors: m.Err,
+			AvgMs: roundMs(m.AvgMs()), P95Ms: roundMs(m.P95Ms()), MaxMs: roundMs(maxMs(m)), SelfAvgMs: roundMs(m.SelfAvgMs()),
+		})
+	}
+	return out
+}
+
+func maxMs(m *measure.Measure) float64 {
+	return float64(m.MaxUs) / float64(time.Millisecond/time.Microsecond)
+}
+
+func roundMs(v float64) float64 {
+	return math.Round(v*100) / 100
 }
 
 // edgeCount is how many edges the previous round's reading had.

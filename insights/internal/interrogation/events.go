@@ -44,6 +44,7 @@ const (
 	EventChangeDenied    = "change.denied"
 	EventChangeRequested = "change.requested"
 	EventChangeApplied   = "change.applied"
+	EventChangeMeasured  = "change.measured"
 	EventChangeFailed    = "change.failed"
 	EventChangeReverted  = "change.reverted"
 	EventErrorRaised     = "error.raised"
@@ -102,7 +103,7 @@ var routes = map[string]map[string]string{
 	"wait_apply":    {"ok": "confirm", "conclude": "conclude"},
 	"confirm":       {"wait": "wait_apply", "observe": "wait_observe", "next": "gate"},
 	"wait_observe":  {"ok": "observe", "conclude": "conclude"},
-	"observe":       {"next": "gate"},
+	"observe":       {"wait": "wait_observe", "next": "gate"},
 }
 
 const (
@@ -444,6 +445,23 @@ func changeApplied(st *State, p *Probe, ruleName string, t time.Time) Event {
 		"rule_name":  ruleName,
 		"expires_at": p.ExpiresAt,
 	})
+}
+
+func changeMeasured(st *State, p *Probe, m Measured, t time.Time) Event {
+	payload := map[string]any{
+		"window_seconds": m.WindowSeconds,
+		"measured_at":    m.MeasuredAt,
+		"spans":          m.Spans,
+		"errors":         m.Errors,
+		"avg_ms":         m.AvgMs,
+		"max_ms":         m.MaxMs,
+		"self_avg_ms":    m.SelfAvgMs,
+		"top_errors":     m.TopErrors,
+	}
+	if m.P95Ms > 0 {
+		payload["p95_ms"] = m.P95Ms
+	}
+	return changeEvent(st, EventChangeMeasured, p, t, fmt.Sprintf("Probe on %s: %d spans", p.Target, m.Spans), payload)
 }
 
 func changeFailed(st *State, p *Probe, t time.Time) Event {

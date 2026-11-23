@@ -78,7 +78,7 @@ func TestCollectEvidence_Scope(t *testing.T) {
 			if got := scopeIDs(read); !slices.Equal(got, tt.want) {
 				t.Fatalf("scope %v, want %v", got, tt.want)
 			}
-			st.observed(read, nil, testStart)
+			st.observed(read, nil, nil, 0, testStart)
 			for i, s := range st.Scope {
 				if fmt.Sprint(s.TransactionID) != read[i].Tx.ID || s.SelectedBy != tt.wantBy || s.Operation != read[i].Tx.RootSpanName || s.Kind != "server" {
 					t.Errorf("scope[%d] = %+v", i, s)
@@ -106,7 +106,7 @@ func TestCollectEvidence_Truncates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txs, ev := st.observed(read, nil, testStart)
+	txs, ev := st.observed(read, nil, nil, 0, testStart)
 	if n := len(txs[0].Request.CallGraph); n != maxEdgesPerTransaction {
 		t.Fatalf("request has %d edges, want %d", n, maxEdgesPerTransaction)
 	}
@@ -134,7 +134,7 @@ func TestObserved_Changes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		txs, _ := st.observed(r, nil, testStart)
+		txs, _ := st.observed(r, nil, nil, 0, testStart)
 		return txs
 	}
 	next := func() {

@@ -150,14 +150,15 @@ func (r *tracesRedis) mergeMeasures(ctx context.Context, set measureSet) error {
 	return firstErr
 }
 
-// probeTimings sums the workload's buckets from since to now.
+// probeTimings sums the workload's buckets that start at or after since. A
+// bucket straddling since would mix in requests from before a probe existed.
 func (r *tracesRedis) probeTimings(ctx context.Context, namespace, kind, name string, since, now time.Time) (measure.Timings, error) {
 	if floor := now.Add(-maxMeasureWindow); since.Before(floor) {
 		since = floor
 	}
 	pipe := r.rdb.Pipeline()
 	var cmds []*redis.MapStringStringCmd
-	for b := since.Unix() / measure.BucketSeconds * measure.BucketSeconds; b <= now.Unix(); b += measure.BucketSeconds {
+	for b := (since.Unix() + measure.BucketSeconds - 1) / measure.BucketSeconds * measure.BucketSeconds; b <= now.Unix(); b += measure.BucketSeconds {
 		cmds = append(cmds, pipe.HGetAll(ctx, redisMeasureKey(measureBucket{namespace, kind, name, b})))
 	}
 	if _, err := pipe.Exec(ctx); err != nil {
