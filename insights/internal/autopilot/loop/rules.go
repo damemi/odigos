@@ -3,6 +3,8 @@ package loop
 import (
 	"context"
 	"fmt"
+	"slices"
+	"time"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,11 +33,19 @@ func (m *Manager) recommendationStore() recommendationStore {
 }
 
 // reconcileRules converges each workload's autopilot InstrumentationRule
-// to the probes stored in autopilot_recommendations. It covers every workload with
-// stored recommendations plus every rule the loop manages, so a deleted rule
-// is recreated and a rule for a removed workload is deleted.
+// to the probes stored in autopilot_recommendations plus the live probes
+// interrogations requested. It covers every workload with stored
+// recommendations or requested probes plus every rule the loop manages, so a
+// deleted rule is recreated and a rule for a removed workload is deleted.
 func (m *Manager) reconcileRules(ctx context.Context, mode string) {
 	if m.Client == nil {
+		return
+	}
+	now := time.Now()
+	requested, err := m.listRequestedProbes(ctx, now)
+	if err != nil {
+		// Reconciling without them would take every requested probe out of its rule.
+		m.logWarn("failed to list requested probes for rule reconcile", "error", err)
 		return
 	}
 	workloads, err := m.ruleWorkloads(ctx)
@@ -43,8 +53,14 @@ func (m *Manager) reconcileRules(ctx context.Context, mode string) {
 		m.logWarn("failed to list workloads for rule reconcile", "error", err)
 		return
 	}
+	byWorkload, requestedWorkloads := requestedByWorkload(requested)
+	for _, k := range requestedWorkloads {
+		if !slices.ContainsFunc(workloads, func(w store.SourceKey) bool { return workloadKeyOf(w) == k }) {
+			workloads = append(workloads, k.source())
+		}
+	}
 	for _, w := range workloads {
-		if err := m.reconcileRule(ctx, w, mode); err != nil {
+		if err := m.reconcileRule(ctx, w, mode, byWorkload[workloadKeyOf(w)], now); err != nil {
 			m.logWarn("failed to reconcile autopilot rule",
 				"namespace", w.Namespace,
 				"kind", w.WorkloadKind,
@@ -102,7 +118,11 @@ func ruleWorkload(rule *odigosv1.InstrumentationRule) (store.SourceKey, bool) {
 	return store.SourceKey{Namespace: s.Namespace, WorkloadKind: string(s.Kind), WorkloadName: s.Name}, true
 }
 
-func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode string) error {
+// reconcileRule writes one workload's rule. requested are the workload's
+// requested probes that are live or still in the rule; they go into the rule
+// even in dry-run and mode off, and each path that settles the rule records
+// which of them it holds.
+func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode string, requested []store.RequestedProbe, now time.Time) error {
 	key := client.ObjectKey{Namespace: env.GetCurrentNamespace(), Name: autopilotRuleObjectName(w)}
 	var rule odigosv1.InstrumentationRule
 	found := true
@@ -115,11 +135,11 @@ func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode str
 	if found {
 		if rule.Labels[k8sconsts.OdigosProfilesManagedByLabel] != k8sconsts.OdigosAutopilotLoopManagedByValue {
 			// Same name, but not ours. Leave it alone.
-			return nil
+			return m.leaveRule(ctx, w, requested, BlockRuleNotManaged, now)
 		}
 		if rule.Spec.Disabled {
 			// Disabling the rule is how a user opts a workload out.
-			return nil
+			return m.leaveRule(ctx, w, requested, BlockRuleDisabled, now)
 		}
 	}
 
@@ -128,19 +148,30 @@ func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode str
 			return err
 		}
 		// The workload is no longer instrumented.
-		return m.deleteRule(ctx, &rule, found)
+		requested, err = m.endRequested(ctx, w, requested, now)
+		if err != nil {
+			return err
+		}
+		if err := m.deleteRule(ctx, &rule, found); err != nil {
+			return err
+		}
+		return m.settleRequested(ctx, requested, nil, nil, now)
 	}
-	if !m.AutoApply || mode == autopilotModeOff {
+	loopApplies := m.AutoApply && mode != autopilotModeOff
+	if !loopApplies && len(requested) == 0 {
 		// Dry-run and off only record recommendations. Existing rules stay.
 		return nil
 	}
 
-	desired, err := m.desiredProbes(ctx, w, key.Name)
+	desired, others, err := m.desiredProbes(ctx, w, key.Name, &rule, found, requested, loopApplies, now)
 	if err != nil {
 		return err
 	}
 	if desired == nil {
-		return m.deleteRule(ctx, &rule, found)
+		if err := m.deleteRule(ctx, &rule, found); err != nil {
+			return err
+		}
+		return m.settleRequested(ctx, requested, nil, others, now)
 	}
 
 	if !found {
@@ -156,6 +187,9 @@ func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode str
 				Scopes:                 workloadScopes(w),
 			},
 		}
+		if ok, err := m.markBeingPlaced(ctx, requested, desired); !ok || err != nil {
+			return err
+		}
 		if err := m.Client.Create(ctx, &rule); err != nil {
 			if apierrors.IsAlreadyExists(err) {
 				// The cache has not seen our earlier create yet. Its event
@@ -165,7 +199,7 @@ func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode str
 			return fmt.Errorf("create instrumentation rule: %w", err)
 		}
 		m.logInfo("created autopilot rule", "rule", rule.Name, "probes", probeCount(desired))
-		return nil
+		return m.settleRequested(ctx, requested, desired, others, now)
 	}
 
 	updated := rule.DeepCopy()
@@ -179,7 +213,10 @@ func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode str
 		updated.Labels[k] = v
 	}
 	if apiequality.Semantic.DeepEqual(rule.Spec, updated.Spec) && apiequality.Semantic.DeepEqual(rule.Labels, updated.Labels) {
-		return nil
+		return m.settleRequested(ctx, requested, desired, others, now)
+	}
+	if ok, err := m.markBeingPlaced(ctx, requested, desired); !ok || err != nil {
+		return err
 	}
 	if err := m.Client.Update(ctx, updated); err != nil {
 		if apierrors.IsConflict(err) {
@@ -189,7 +226,7 @@ func (m *Manager) reconcileRule(ctx context.Context, w store.SourceKey, mode str
 		return fmt.Errorf("update instrumentation rule: %w", err)
 	}
 	m.logInfo("updated autopilot rule", "rule", updated.Name, "probes", probeCount(desired))
-	return nil
+	return m.settleRequested(ctx, requested, desired, others, now)
 }
 
 func (m *Manager) deleteRule(ctx context.Context, rule *odigosv1.InstrumentationRule, found bool) error {
@@ -203,19 +240,26 @@ func (m *Manager) deleteRule(ctx context.Context, rule *odigosv1.Instrumentation
 	return nil
 }
 
-// desiredProbes builds the rule's probes from stored recommendations, oldest
-// first, leaving out probes another enabled rule already provides and keeping
-// the workload within maxProbes. It returns nil when nothing is left.
-func (m *Manager) desiredProbes(ctx context.Context, w store.SourceKey, ruleObject string) (*instrumentationrules.CustomInstrumentationsWithMetadata, error) {
+// desiredProbes builds the rule's probes from stored recommendations and live
+// requested probes, oldest first, leaving out probes another enabled rule
+// already provides and keeping the workload within maxProbes. When the loop
+// does not apply its recommendations, only those already in the rule stay.
+// It returns nil when nothing is left, and the probes other rules provide.
+func (m *Manager) desiredProbes(ctx context.Context, w store.SourceKey, ruleObject string, rule *odigosv1.InstrumentationRule, found bool,
+	requested []store.RequestedProbe, loopApplies bool, now time.Time) (*instrumentationrules.CustomInstrumentationsWithMetadata, []customProbe, error) {
 	stored, err := m.recommendationStore().ListRecommendations(ctx, w)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if !loopApplies {
+		stored = frozenRecommendations(stored, rule, found, requested)
 	}
 	others, err := listCustomProbesForSource(ctx, m.Client, w, ruleObject)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return buildDesiredProbes(stored, others, m.maxProbes())
+	desired, err := buildDesiredProbes(mergeByFirstSeen(stored, liveRecommendations(requested, now)), others, m.maxProbes())
+	return desired, others, err
 }
 
 // buildDesiredProbes fills the slots other rules leave under maxProbes with

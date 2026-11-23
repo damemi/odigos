@@ -37,8 +37,10 @@ func Open(dsn string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse postgres dsn: %w", err)
 	}
-	// Only the leader's loop and call tree flusher use the pool.
-	cfg.MaxConns = 4
+	// Only the leader uses the pool: the loop's tick, the rule reconciler,
+	// which has a goroutine of its own, and the running interrogations, which
+	// request probes and read call trees. Each makes one query at a time.
+	cfg.MaxConns = 8
 	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)

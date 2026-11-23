@@ -168,11 +168,16 @@ func (t *retryTracker) recordFailure(k retryKey, inputHash string, class failure
 	}
 }
 
-// recordSuccess clears k's backoff and any global pause.
-func (t *retryTracker) recordSuccess(k retryKey) {
+// recordSuccess clears k's backoff and the global pause backoff. A pause in
+// force at now was recorded after the call was sent, by another caller of the
+// shared model, and stays.
+func (t *retryTracker) recordSuccess(k retryKey, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.entries, k)
+	if now.Before(t.pausedUntil) {
+		return
+	}
 	t.globalFailures = 0
 	t.pausedUntil = time.Time{}
 }

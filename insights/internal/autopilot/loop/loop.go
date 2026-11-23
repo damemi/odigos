@@ -30,6 +30,11 @@ const tickInterval = time.Minute
 // sequentially and the ticker drops ticks missed while one is running.
 const tickTimeout = 10 * time.Minute
 
+// probePollInterval is how often the reconciler looks for requested probes
+// whose rule membership is out of date. Requests, reverts and expiry come
+// from other goroutines, other replicas and the clock, so nothing signals them.
+const probePollInterval = 2 * time.Second
+
 // CallTreeFlusher copies call trees buffered in Redis into the autopilot store.
 type CallTreeFlusher interface {
 	Flush(ctx context.Context)
@@ -58,6 +63,10 @@ type Manager struct {
 	retry     *retryTracker
 	// recommendations overrides Store as the recommendation store in tests.
 	recommendations recommendationStore
+	// requested overrides the database as the requested-probe store in tests.
+	requested requestedProbeStore
+	// reconcileNow asks the reconcile goroutine for a full pass. Run creates it.
+	reconcileNow chan struct{}
 }
 
 // Run blocks until ctx is cancelled. Every minute it discovers sources that
@@ -73,6 +82,13 @@ func (m *Manager) Run(ctx context.Context) {
 		"max_probes_per_workload", m.maxProbes(),
 	)
 
+	// A tick can hold this goroutine for minutes of model calls, and a probe
+	// an interrogation requested cannot wait that long for its rule.
+	m.reconcileNow = make(chan struct{}, 1)
+	var wg sync.WaitGroup
+	wg.Go(func() { m.runReconciler(ctx) })
+	defer wg.Wait()
+
 	m.tick(ctx)
 
 	ticker := time.NewTicker(tickInterval)
@@ -84,8 +100,27 @@ func (m *Manager) Run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			m.tick(ctx)
+		}
+	}
+}
+
+// runReconciler is the only goroutine that writes InstrumentationRules: a
+// full pass after each tick and on rule events, and in between a poll of the
+// workloads whose requested probes are not yet in or out of their rule.
+func (m *Manager) runReconciler(ctx context.Context) {
+	poll := time.NewTicker(probePollInterval)
+	defer poll.Stop()
+	backoff := map[workloadKey]probeRetry{}
+	for {
+		select {
+		case <-ctx.Done():
+			return
 		case <-m.RuleEvents:
 			m.reconcileRulesNow(ctx)
+		case <-m.reconcileNow:
+			m.reconcileRulesNow(ctx)
+		case <-poll.C:
+			m.reconcilePendingProbes(ctx, backoff, time.Now())
 		}
 	}
 }
@@ -138,14 +173,19 @@ func (m *Manager) tick(ctx context.Context) {
 		}
 	}
 	tickSummary.log(m)
-	m.reconcileRules(tickCtx, mode)
+	// Rules are written by the reconcile goroutine. A pass already asked for
+	// covers this tick's recommendations too.
+	select {
+	case m.reconcileNow <- struct{}{}:
+	default:
+	}
 	if until := m.retries().pausedUntilTime(time.Now()); !until.IsZero() {
 		m.logWarn("llm calls paused after quota or auth failure", "until", until.UTC().Format(time.RFC3339))
 	}
 }
 
-// reconcileRulesNow runs only the rule reconcile, outside a tick. It shares
-// the loop goroutine with tick, so rule writes stay single-writer.
+// reconcileRulesNow runs a full rule reconcile. Only the reconcile goroutine
+// calls it, so rule writes stay single-writer.
 func (m *Manager) reconcileRulesNow(ctx context.Context) {
 	if m.Store == nil {
 		return
@@ -466,7 +506,7 @@ func (m *Manager) analyzeTransaction(ctx context.Context, source store.SourceKey
 	if err := m.Store.InsertRun(ctx, run); err != nil {
 		return analyzeLLM, reason, err
 	}
-	m.retries().recordSuccess(key)
+	m.retries().recordSuccess(key, time.Now())
 	return analyzeLLM, reason, nil
 }
 

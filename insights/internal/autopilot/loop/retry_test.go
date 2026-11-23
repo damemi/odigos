@@ -74,7 +74,7 @@ func TestRetryTrackerBackoff(t *testing.T) {
 	if !tr.backingOff(testKey, now.Add(2*time.Hour)) {
 		t.Fatal("retry-after longer than backoff should win")
 	}
-	tr.recordSuccess(testKey)
+	tr.recordSuccess(testKey, now)
 	if tr.backingOff(testKey, now) {
 		t.Fatal("success clears backoff")
 	}
@@ -118,9 +118,11 @@ func TestRetryTrackerGlobalPause(t *testing.T) {
 	if tr.pausedUntilTime(now.Add(2*retryBaseDelay - time.Second)).IsZero() {
 		t.Fatal("repeated global failures should double the pause")
 	}
-	tr.recordSuccess(testKey)
-	if !tr.pausedUntilTime(now).IsZero() {
-		t.Fatal("success clears the pause")
+	later := now.Add(2 * retryBaseDelay)
+	tr.recordSuccess(testKey, later)
+	tr.recordFailure(testKey, "h", failureGlobal, 0, later)
+	if !tr.pausedUntilTime(later.Add(retryBaseDelay)).IsZero() {
+		t.Fatal("success resets the pause backoff")
 	}
 }
 
