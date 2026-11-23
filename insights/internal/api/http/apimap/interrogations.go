@@ -142,6 +142,32 @@ func fromInterrogationRound(r interrogation.Round) apitypes.InterrogationRound {
 		Proposed:      nonNil(r.Proposed),
 		Applied:       nonNil(r.Applied),
 		ObservedAfter: r.ObservedAfter,
+		Timings:       fromTimings(r.Timings),
+	}
+}
+
+func fromTimings(timings []interrogation.TxTiming) []apitypes.InterrogationTransactionTimings {
+	var out []apitypes.InterrogationTransactionTimings
+	for _, t := range timings {
+		out = append(out, apitypes.InterrogationTransactionTimings{
+			TransactionId: int64(t.TransactionID), WindowSeconds: t.WindowSeconds, Requests: t.Requests, Errors: t.Errors,
+			AvgMs: float32(t.AvgMs), P95Ms: float32(t.P95Ms), MaxMs: float32(t.MaxMs), AvgSpans: float32(t.AvgSpans), UncoveredAvgMs: float32(t.UncoveredAvgMs),
+		})
+	}
+	return out
+}
+
+func fromMeasured(m *interrogation.Measured) *apitypes.InterrogationChangeMeasured {
+	if m == nil {
+		return nil
+	}
+	errs := make([]apitypes.InterrogationErrorCount, len(m.TopErrors))
+	for i, e := range m.TopErrors {
+		errs[i] = apitypes.InterrogationErrorCount{Message: e.Message, Count: e.Count}
+	}
+	return &apitypes.InterrogationChangeMeasured{
+		WindowSeconds: m.WindowSeconds, MeasuredAt: m.MeasuredAt, Spans: m.Spans, Errors: m.Errors,
+		AvgMs: float32(m.AvgMs), P95Ms: float32(m.P95Ms), MaxMs: float32(m.MaxMs), SelfAvgMs: float32(m.SelfAvgMs), TopErrors: errs,
 	}
 }
 
@@ -255,9 +281,15 @@ func InterrogationEventList(page repo.InterrogationEvents) (apitypes.Interrogati
 // runChanges lists every change of a run at now, oldest first: its stored
 // changes and the proposals it denied, which exist only in its state.
 func runChanges(st interrogation.State, stored []repo.InterrogationChange, now time.Time) []apitypes.InterrogationChange {
+	measured := map[string]*interrogation.Measured{}
+	for _, p := range st.Probes {
+		measured[p.ChangeID] = p.Measured
+	}
 	out := make([]apitypes.InterrogationChange, 0, len(stored))
 	for _, c := range stored {
-		out = append(out, fromChange(c, now))
+		ch := fromChange(c, now)
+		ch.Measured = fromMeasured(measured[c.ChangeID])
+		out = append(out, ch)
 	}
 	for _, p := range st.Probes {
 		if deniedOnly(p) {

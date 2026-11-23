@@ -4841,6 +4841,7 @@ components:
         | `change.denied` | `InterrogationEventChangeDeniedPayload` | validation refused it |
         | `change.requested` | `InterrogationEventChangeRequestedPayload` | validation passed, stored |
         | `change.applied` | `InterrogationEventChangeAppliedPayload` | the rule carries it |
+        | `change.measured` | `InterrogationEventChangeMeasuredPayload` | `observe` read what the change's spans measured |
         | `change.failed` | `InterrogationEventChangeFailedPayload` | not in the rule in time, or blocked |
         | `change.reverted` | `InterrogationEventChangeRevertedPayload` | ended while the run was open |
         | `answer.updated` | `InterrogationAnswer` | the running answer changed |
@@ -4861,6 +4862,7 @@ components:
         - change.denied
         - change.requested
         - change.applied
+        - change.measured
         - change.reverted
         - change.failed
         - answer.updated
@@ -5083,6 +5085,46 @@ components:
         new_edges: { type: integer, description: "Edges that were not there at the previous reading; all of them at the first." }
       required: [transactions, functions, edges, new_edges]
 
+    InterrogationTransactionTimings:
+      type: object
+      description: What the entry spans of a transaction measured in a window. Times are milliseconds.
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        window_seconds: { type: integer }
+        requests: { type: integer, format: int64 }
+        errors: { type: integer, format: int64, description: "Requests whose entry span errored or answered 5xx." }
+        avg_ms: { type: number }
+        p95_ms: { type: number, description: "Upper bound within a factor of 2. Absent below 20 requests." }
+        max_ms: { type: number }
+        avg_spans: { type: number, description: "Mean spans of the application in a request." }
+        uncovered_avg_ms: { type: number, description: "Mean time in a request outside every probed function." }
+      required: [transaction_id, window_seconds, requests, errors, avg_ms, max_ms, avg_spans, uncovered_avg_ms]
+
+    InterrogationErrorCount:
+      type: object
+      properties:
+        message: { type: string }
+        count: { type: integer, format: int64 }
+      required: [message, count]
+
+    InterrogationChangeMeasured:
+      type: object
+      description: What the spans of a probe measured in the transactions in scope. Times are milliseconds.
+      properties:
+        window_seconds: { type: integer, description: "From the round's first applied probe to `measured_at`." }
+        measured_at: { type: string, format: date-time }
+        spans: { type: integer, format: int64, description: "0 when the traffic did not call the function in the window." }
+        errors: { type: integer, format: int64, description: "Spans with status error." }
+        avg_ms: { type: number }
+        p95_ms: { type: number, description: "Upper bound within a factor of 2. Absent below 20 spans." }
+        max_ms: { type: number }
+        self_avg_ms: { type: number, description: "Mean time outside probed callees." }
+        top_errors:
+          type: array
+          description: Up to 3 status messages of the errored spans. Text from the application.
+          items: { $ref: "#/components/schemas/InterrogationErrorCount" }
+      required: [window_seconds, measured_at, spans, errors, avg_ms, max_ms, self_avg_ms, top_errors]
+
     InterrogationRoundReply:
       type: object
       description: What the model replied in the round.
@@ -5132,6 +5174,14 @@ components:
           allOf: [{ $ref: "#/components/schemas/InterrogationEvidenceCounts" }]
           description: The call graphs `observe` read after the changes ran with traffic.
           x-go-type-skip-optional-pointer: false
+        timings:
+          type: array
+          description: >
+            Entry timings of the transactions in scope that had requests. Read
+            by `gather` before the model call; `observe` replaces them with
+            its reading after the changes ran. Absent when nothing was
+            measured.
+          items: { $ref: "#/components/schemas/InterrogationTransactionTimings" }
       required: [round, state, final, started_at, nodes, proposed, applied]
 
     Interrogation:
@@ -5288,6 +5338,7 @@ components:
             - $ref: "#/components/schemas/InterrogationEventChangeDeniedPayload"
             - $ref: "#/components/schemas/InterrogationEventChangeRequestedPayload"
             - $ref: "#/components/schemas/InterrogationEventChangeAppliedPayload"
+            - $ref: "#/components/schemas/InterrogationEventChangeMeasuredPayload"
             - $ref: "#/components/schemas/InterrogationEventChangeFailedPayload"
             - $ref: "#/components/schemas/InterrogationEventChangeRevertedPayload"
             - $ref: "#/components/schemas/InterrogationAnswer"
@@ -5460,6 +5511,15 @@ components:
         expires_at: { type: string, format: date-time }
       required: [kind, target]
 
+    InterrogationEventChangeMeasuredPayload:
+      allOf:
+        - $ref: "#/components/schemas/InterrogationChangeMeasured"
+        - type: object
+          properties:
+            kind: { $ref: "#/components/schemas/InterrogationChangeKind" }
+            target: { type: string }
+          required: [kind, target]
+
     InterrogationEventChangeFailedPayload:
       type: object
       properties:
@@ -5553,6 +5613,10 @@ components:
         end_reason:
           $ref: "#/components/schemas/InterrogationChangeEndReason"
           description: Set once the change is ending or ended. For `failed` it is why the change never took effect.
+        measured:
+          allOf: [{ $ref: "#/components/schemas/InterrogationChangeMeasured" }]
+          description: Absent until `observe` has read the change's spans, and when none could be read.
+          x-go-type-skip-optional-pointer: false
       required: [id, round, language, target, state, checks, requested_at]
       examples:
         - id: "chg_3f9a1c07b2d44e6a8c51"

@@ -640,6 +640,29 @@ func TestRunChanges_DeniedAgain(t *testing.T) {
 	}
 }
 
+// What observe measured is served on the change it belongs to and on its
+// round, from the state as the workflow stores it.
+func TestFromInterrogation_Measured(t *testing.T) {
+	st := runningState(t)
+	st.Probes = []interrogation.Probe{{ChangeID: "chg_3f9a1c07b2d44e6a8c51", Measured: &interrogation.Measured{
+		WindowSeconds: 30, MeasuredAt: at(t, "2026-11-17T09:41:40Z"), Spans: 41, Errors: 2, AvgMs: 12.5, MaxMs: 48.25, SelfAvgMs: 9.1,
+		TopErrors: []interrogation.ErrorCount{{Message: "claim rejected", Count: 2}},
+	}}}
+	st.Rounds[0].Timings = []interrogation.TxTiming{{TransactionID: 8841, EntryTimings: interrogation.EntryTimings{
+		WindowSeconds: 30, Requests: 40, Errors: 1, AvgMs: 20, MaxMs: 90, AvgSpans: 4, UncoveredAvgMs: 2,
+	}}}
+	in := storedRun(t, &st, claimsRequest())
+	rows := []repo.InterrogationChange{
+		storedChange(t, "chg_3f9a1c07b2d44e6a8c51", 1, "com.claims.intake.ClaimValidator", "validate", "2026-11-17T09:41:02Z", "2026-11-17T09:41:07Z"),
+	}
+	got, err := FromInterrogation(in, rows, true, at(t, "2026-11-17T09:50:00Z"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sameJSON(t, got.Changes[0].Measured, `{"window_seconds":30,"measured_at":"2026-11-17T09:41:40Z","spans":41,"errors":2,"avg_ms":12.5,"max_ms":48.25,"self_avg_ms":9.1,"top_errors":[{"message":"claim rejected","count":2}]}`)
+	sameJSON(t, got.Rounds[0].Timings, `[{"transaction_id":8841,"window_seconds":30,"requests":40,"errors":1,"avg_ms":20,"max_ms":90,"avg_spans":4,"uncovered_avg_ms":2}]`)
+}
+
 func TestFromInterrogationSummary(t *testing.T) {
 	src := repo.InterrogationSource{Namespace: "claims-demo", Kind: "Deployment", Name: "claims-intake"}
 	got := FromInterrogationSummary(

@@ -3223,6 +3223,7 @@ export interface components {
          *     | `change.denied` | `InterrogationEventChangeDeniedPayload` | validation refused it |
          *     | `change.requested` | `InterrogationEventChangeRequestedPayload` | validation passed, stored |
          *     | `change.applied` | `InterrogationEventChangeAppliedPayload` | the rule carries it |
+         *     | `change.measured` | `InterrogationEventChangeMeasuredPayload` | `observe` read what the change's spans measured |
          *     | `change.failed` | `InterrogationEventChangeFailedPayload` | not in the rule in time, or blocked |
          *     | `change.reverted` | `InterrogationEventChangeRevertedPayload` | ended while the run was open |
          *     | `answer.updated` | `InterrogationAnswer` | the running answer changed |
@@ -3425,6 +3426,57 @@ export interface components {
             /** @description Edges that were not there at the previous reading; all of them at the first. */
             new_edges: number;
         };
+        /** @description What the entry spans of a transaction measured in a window. Times are milliseconds. */
+        InterrogationTransactionTimings: {
+            /** Format: int64 */
+            transaction_id: number;
+            window_seconds: number;
+            /** Format: int64 */
+            requests: number;
+            /**
+             * Format: int64
+             * @description Requests whose entry span errored or answered 5xx.
+             */
+            errors: number;
+            avg_ms: number;
+            /** @description Upper bound within a factor of 2. Absent below 20 requests. */
+            p95_ms?: number;
+            max_ms: number;
+            /** @description Mean spans of the application in a request. */
+            avg_spans: number;
+            /** @description Mean time in a request outside every probed function. */
+            uncovered_avg_ms: number;
+        };
+        InterrogationErrorCount: {
+            message: string;
+            /** Format: int64 */
+            count: number;
+        };
+        /** @description What the spans of a probe measured in the transactions in scope. Times are milliseconds. */
+        InterrogationChangeMeasured: {
+            /** @description From the round's first applied probe to `measured_at`. */
+            window_seconds: number;
+            /** Format: date-time */
+            measured_at: string;
+            /**
+             * Format: int64
+             * @description 0 when the traffic did not call the function in the window.
+             */
+            spans: number;
+            /**
+             * Format: int64
+             * @description Spans with status error.
+             */
+            errors: number;
+            avg_ms: number;
+            /** @description Upper bound within a factor of 2. Absent below 20 spans. */
+            p95_ms?: number;
+            max_ms: number;
+            /** @description Mean time outside probed callees. */
+            self_avg_ms: number;
+            /** @description Up to 3 status messages of the errored spans. Text from the application. */
+            top_errors: components["schemas"]["InterrogationErrorCount"][];
+        };
         /** @description What the model replied in the round. */
         InterrogationRoundReply: {
             /** @description Its answer on the evidence of this round. */
@@ -3456,6 +3508,8 @@ export interface components {
             applied: string[];
             /** @description The call graphs `observe` read after the changes ran with traffic. */
             observed_after?: components["schemas"]["InterrogationEvidenceCounts"];
+            /** @description Entry timings of the transactions in scope that had requests. Read by `gather` before the model call; `observe` replaces them with its reading after the changes ran. Absent when nothing was measured. */
+            timings?: components["schemas"]["InterrogationTransactionTimings"][];
         };
         /**
          * @example {
@@ -3605,7 +3659,7 @@ export interface components {
             /** @description One human-readable line for a plain timeline. */
             message: string;
             /** @description Per-type data. `InterrogationEventType` names the schema for each `type`; a type this list does not know yet carries a plain object. */
-            payload: components["schemas"]["InterrogationEventStartedPayload"] | components["schemas"]["InterrogationEventStopRequestedPayload"] | components["schemas"]["InterrogationEventExtendedPayload"] | components["schemas"]["InterrogationEventEndedPayload"] | components["schemas"]["InterrogationEventRoundStartedPayload"] | components["schemas"]["InterrogationEventRoundFinishedPayload"] | components["schemas"]["InterrogationEventNodeFinishedPayload"] | components["schemas"]["InterrogationEventWaitStartedPayload"] | components["schemas"]["InterrogationEventWaitFinishedPayload"] | components["schemas"]["InterrogationEventEvidencePayload"] | components["schemas"]["InterrogationEventModelCalledPayload"] | components["schemas"]["InterrogationEventChangeProposedPayload"] | components["schemas"]["InterrogationEventChangeDeniedPayload"] | components["schemas"]["InterrogationEventChangeRequestedPayload"] | components["schemas"]["InterrogationEventChangeAppliedPayload"] | components["schemas"]["InterrogationEventChangeFailedPayload"] | components["schemas"]["InterrogationEventChangeRevertedPayload"] | components["schemas"]["InterrogationAnswer"] | components["schemas"]["InterrogationEventErrorRaisedPayload"] | {
+            payload: components["schemas"]["InterrogationEventStartedPayload"] | components["schemas"]["InterrogationEventStopRequestedPayload"] | components["schemas"]["InterrogationEventExtendedPayload"] | components["schemas"]["InterrogationEventEndedPayload"] | components["schemas"]["InterrogationEventRoundStartedPayload"] | components["schemas"]["InterrogationEventRoundFinishedPayload"] | components["schemas"]["InterrogationEventNodeFinishedPayload"] | components["schemas"]["InterrogationEventWaitStartedPayload"] | components["schemas"]["InterrogationEventWaitFinishedPayload"] | components["schemas"]["InterrogationEventEvidencePayload"] | components["schemas"]["InterrogationEventModelCalledPayload"] | components["schemas"]["InterrogationEventChangeProposedPayload"] | components["schemas"]["InterrogationEventChangeDeniedPayload"] | components["schemas"]["InterrogationEventChangeRequestedPayload"] | components["schemas"]["InterrogationEventChangeAppliedPayload"] | components["schemas"]["InterrogationEventChangeMeasuredPayload"] | components["schemas"]["InterrogationEventChangeFailedPayload"] | components["schemas"]["InterrogationEventChangeRevertedPayload"] | components["schemas"]["InterrogationAnswer"] | components["schemas"]["InterrogationEventErrorRaisedPayload"] | {
                 [key: string]: unknown;
             };
         };
@@ -3719,6 +3773,10 @@ export interface components {
             /** Format: date-time */
             expires_at?: string;
         };
+        InterrogationEventChangeMeasuredPayload: components["schemas"]["InterrogationChangeMeasured"] & {
+            kind: components["schemas"]["InterrogationChangeKind"];
+            target: string;
+        };
         InterrogationEventChangeFailedPayload: {
             kind: components["schemas"]["InterrogationChangeKind"];
             target: string;
@@ -3825,6 +3883,8 @@ export interface components {
             ended_at?: string;
             /** @description Set once the change is ending or ended. For `failed` it is why the change never took effect. */
             end_reason?: components["schemas"]["InterrogationChangeEndReason"];
+            /** @description Absent until `observe` has read the change's spans, and when none could be read. */
+            measured?: components["schemas"]["InterrogationChangeMeasured"];
         };
         InterrogationChangesBySource: {
             source: components["schemas"]["InterrogationSource"];

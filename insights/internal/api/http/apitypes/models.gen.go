@@ -1625,6 +1625,9 @@ type InterrogationChange struct {
 	// Language `java` today.
 	Language string `json:"language"`
 
+	// Measured Absent until `observe` has read the change's spans, and when none could be read.
+	Measured *InterrogationChangeMeasured `json:"measured,omitempty"`
+
 	// RequestedAt When the model proposed it.
 	RequestedAt time.Time `json:"requested_at"`
 
@@ -1682,6 +1685,31 @@ type InterrogationChangeEndReason = string
 // InterrogationChangeKind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
 type InterrogationChangeKind = string
 
+// InterrogationChangeMeasured What the spans of a probe measured in the transactions in scope. Times are milliseconds.
+type InterrogationChangeMeasured struct {
+	AvgMs float32 `json:"avg_ms"`
+
+	// Errors Spans with status error.
+	Errors     int64     `json:"errors"`
+	MaxMs      float32   `json:"max_ms"`
+	MeasuredAt time.Time `json:"measured_at"`
+
+	// P95Ms Upper bound within a factor of 2. Absent below 20 spans.
+	P95Ms float32 `json:"p95_ms,omitempty"`
+
+	// SelfAvgMs Mean time outside probed callees.
+	SelfAvgMs float32 `json:"self_avg_ms"`
+
+	// Spans 0 when the traffic did not call the function in the window.
+	Spans int64 `json:"spans"`
+
+	// TopErrors Up to 3 status messages of the errored spans. Text from the application.
+	TopErrors []InterrogationErrorCount `json:"top_errors"`
+
+	// WindowSeconds From the round's first applied probe to `measured_at`.
+	WindowSeconds int `json:"window_seconds"`
+}
+
 // InterrogationChangeState `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by stop-and-revert or because the source is gone (`end_reason`). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. Open set.
 type InterrogationChangeState = string
 
@@ -1723,6 +1751,12 @@ type InterrogationChangesSummary struct {
 
 // InterrogationEndReason Why the run ended; empty while open. `done`: the model decided it has the answer. `max_rounds`, `max_model_calls`, `time_limit`, `probe_budget`: a limit was reached. `changes_denied`: the model was not done and every probe it asked for was refused. `no_evidence`: no call graph was found for the transactions in scope. `stopped_by_user`. `source_gone`: the source is no longer instrumented. `model_unavailable`: the gateway kept refusing until the deadline. `interrupted`: the run was written by another version of the server and could not be continued. `error`: anything else. Status by reason: `completed` for the first seven, `stopped` for `stopped_by_user`, `failed` for the rest. Open set.
 type InterrogationEndReason = string
+
+// InterrogationErrorCount defines model for InterrogationErrorCount.
+type InterrogationErrorCount struct {
+	Count   int64  `json:"count"`
+	Message string `json:"message"`
+}
 
 // InterrogationErrorDetails defines model for InterrogationErrorDetails.
 type InterrogationErrorDetails struct {
@@ -1794,6 +1828,7 @@ type InterrogationEvent struct {
 	// | `change.denied` | `InterrogationEventChangeDeniedPayload` | validation refused it |
 	// | `change.requested` | `InterrogationEventChangeRequestedPayload` | validation passed, stored |
 	// | `change.applied` | `InterrogationEventChangeAppliedPayload` | the rule carries it |
+	// | `change.measured` | `InterrogationEventChangeMeasuredPayload` | `observe` read what the change's spans measured |
 	// | `change.failed` | `InterrogationEventChangeFailedPayload` | not in the rule in time, or blocked |
 	// | `change.reverted` | `InterrogationEventChangeRevertedPayload` | ended while the run was open |
 	// | `answer.updated` | `InterrogationAnswer` | the running answer changed |
@@ -1833,6 +1868,35 @@ type InterrogationEventChangeFailedPayload struct {
 	// Reason Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
 	Reason InterrogationChangeEndReason `json:"reason"`
 	Target string                       `json:"target"`
+}
+
+// InterrogationEventChangeMeasuredPayload defines model for InterrogationEventChangeMeasuredPayload.
+type InterrogationEventChangeMeasuredPayload struct {
+	AvgMs float32 `json:"avg_ms"`
+
+	// Errors Spans with status error.
+	Errors int64 `json:"errors"`
+
+	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
+	Kind       InterrogationChangeKind `json:"kind"`
+	MaxMs      float32                 `json:"max_ms"`
+	MeasuredAt time.Time               `json:"measured_at"`
+
+	// P95Ms Upper bound within a factor of 2. Absent below 20 spans.
+	P95Ms float32 `json:"p95_ms,omitempty"`
+
+	// SelfAvgMs Mean time outside probed callees.
+	SelfAvgMs float32 `json:"self_avg_ms"`
+
+	// Spans 0 when the traffic did not call the function in the window.
+	Spans  int64  `json:"spans"`
+	Target string `json:"target"`
+
+	// TopErrors Up to 3 status messages of the errored spans. Text from the application.
+	TopErrors []InterrogationErrorCount `json:"top_errors"`
+
+	// WindowSeconds From the round's first applied probe to `measured_at`.
+	WindowSeconds int `json:"window_seconds"`
 }
 
 // InterrogationEventChangeProposedPayload defines model for InterrogationEventChangeProposedPayload.
@@ -2007,6 +2071,7 @@ type InterrogationEventStopRequestedPayloadChanges string
 // | `change.denied` | `InterrogationEventChangeDeniedPayload` | validation refused it |
 // | `change.requested` | `InterrogationEventChangeRequestedPayload` | validation passed, stored |
 // | `change.applied` | `InterrogationEventChangeAppliedPayload` | the rule carries it |
+// | `change.measured` | `InterrogationEventChangeMeasuredPayload` | `observe` read what the change's spans measured |
 // | `change.failed` | `InterrogationEventChangeFailedPayload` | not in the rule in time, or blocked |
 // | `change.reverted` | `InterrogationEventChangeRevertedPayload` | ended while the run was open |
 // | `answer.updated` | `InterrogationAnswer` | the running answer changed |
@@ -2218,6 +2283,9 @@ type InterrogationRound struct {
 
 	// State Open set.
 	State InterrogationRoundState `json:"state"`
+
+	// Timings Entry timings of the transactions in scope that had requests. Read by `gather` before the model call; `observe` replaces them with its reading after the changes ran. Absent when nothing was measured.
+	Timings []InterrogationTransactionTimings `json:"timings,omitempty"`
 }
 
 // InterrogationRoundOutcome How a completed round ended. `observed`: it ran to the end. `no_change_applied`: nothing it requested reached the rule. `ended`: the run stopped, failed or hit a limit inside the round; nodes it did not reach are not listed and it may have no `reply`. Open set.
@@ -2357,6 +2425,27 @@ type InterrogationSummary struct {
 
 	// Total Interrogations the server has (30 days). The tab count.
 	Total int `json:"total"`
+}
+
+// InterrogationTransactionTimings What the entry spans of a transaction measured in a window. Times are milliseconds.
+type InterrogationTransactionTimings struct {
+	AvgMs float32 `json:"avg_ms"`
+
+	// AvgSpans Mean spans of the application in a request.
+	AvgSpans float32 `json:"avg_spans"`
+
+	// Errors Requests whose entry span errored or answered 5xx.
+	Errors int64   `json:"errors"`
+	MaxMs  float32 `json:"max_ms"`
+
+	// P95Ms Upper bound within a factor of 2. Absent below 20 requests.
+	P95Ms         float32 `json:"p95_ms,omitempty"`
+	Requests      int64   `json:"requests"`
+	TransactionId int64   `json:"transaction_id"`
+
+	// UncoveredAvgMs Mean time in a request outside every probed function.
+	UncoveredAvgMs float32 `json:"uncovered_avg_ms"`
+	WindowSeconds  int     `json:"window_seconds"`
 }
 
 // InterrogationTrigger defines model for InterrogationTrigger.
