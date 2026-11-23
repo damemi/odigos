@@ -676,8 +676,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      # The collector has no root go.mod; take the Go version from the module
-      # that builds the collector binary.
+      # Take the Go version from the module that builds the collector binary.
       - uses: actions/setup-go@v7
         with:
           go-version-file: collector/odigosotelcol/go.mod

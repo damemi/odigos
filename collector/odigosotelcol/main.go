@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	envprovider "go.opentelemetry.io/collector/confmap/provider/envprovider"
-	odigosk8scmprovider "odigosk8scmprovider"
+	odigosk8scmprovider "github.com/odigos-io/odigos/collector/providers/odigosk8scmprovider"
 	fileprovider "go.opentelemetry.io/collector/confmap/provider/fileprovider"
 	"go.opentelemetry.io/collector/otelcol"
 )
@@ -35,7 +35,7 @@ func main() {
 		},
 		ProviderModules: map[string]string{
 			envprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/envprovider v1.65.0",
-			odigosk8scmprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "odigosk8scmprovider v0.159.0",
+			odigosk8scmprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
 			fileprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/fileprovider v1.65.0",
 		},
 		ConverterModules: []string{

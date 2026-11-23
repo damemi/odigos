@@ -3,10 +3,11 @@ package googlecloudstorageexporter
 import (
 	"context"
 
-	"github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter/internal/metadata"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter"
+
+	"github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter/internal/metadata"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"

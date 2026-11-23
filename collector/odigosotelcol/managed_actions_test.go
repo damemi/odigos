@@ -14,8 +14,8 @@ import (
 	"go.opentelemetry.io/collector/processor/processortest"
 
 	managed "github.com/odigos-io/odigos/collector/extension/odigosconfigconnectorextension"
-	sqlprocessor "github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor"
-	urlprocessor "github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor"
+	sqlprocessor "github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor"
+	urlprocessor "github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor"
 )
 
 type managedActionsHost struct {
