@@ -8,12 +8,9 @@ import (
 
 const (
 	signalfxRealm              = "SIGNALFX_REALM"
+	signalfxUseCustomCa        = "SIGNALFX_USE_CUSTOM_CA"
 	signalfxCaPem              = "SIGNALFX_CA_PEM"
 	signalfxInsecureSkipVerify = "SIGNALFX_INSECURE_SKIP_VERIFY"
-
-	// SignalfxCaMountPath is the path where the CA certificate is mounted in the collector pod
-	SignalfxCaMountPath        = "/etc/signalfx/certs"
-	SignalfxCaSecretVolumeName = "signalfx-ca-cert"
 )
 
 type SignalFx struct{}
@@ -36,7 +33,7 @@ func (s *SignalFx) ModifyConfig(dest ExporterConfigurer, currentConfig *Config) 
 			"api_url":      fmt.Sprintf("https://api.%s.signalfx.com", realm),
 			"ingest_url":   fmt.Sprintf("https://ingest.%s.signalfx.com", realm),
 		}
-		if tlsConfig := signalfxTLSConfig(config); tlsConfig != nil {
+		if tlsConfig := signalfxTLSConfig(dest); tlsConfig != nil {
 			exporterConfig["tls"] = tlsConfig
 		}
 		currentConfig.Exporters[exporterName] = exporterConfig
@@ -58,7 +55,7 @@ func (s *SignalFx) ModifyConfig(dest ExporterConfigurer, currentConfig *Config) 
 				"X-SF-Token": SecretEnvPlaceholder("SIGNALFX_ACCESS_TOKEN", dest),
 			},
 		}
-		if tlsConfig := signalfxTLSConfig(config); tlsConfig != nil {
+		if tlsConfig := signalfxTLSConfig(dest); tlsConfig != nil {
 			exporterConfig["tls"] = tlsConfig
 		}
 		currentConfig.Exporters[exporterName] = exporterConfig
@@ -75,17 +72,23 @@ func (s *SignalFx) ModifyConfig(dest ExporterConfigurer, currentConfig *Config) 
 
 // signalfxTLSConfig returns the exporter tls block when the destination customizes TLS, and nil
 // otherwise. A fresh map is returned on every call so exporters never share one.
-func signalfxTLSConfig(config map[string]string) GenericMap {
-	caPem := config[signalfxCaPem]
+//
+// SIGNALFX_CA_PEM is a secret field, so it is kept in the Destination Secret and never reaches
+// GetConfig. The non-secret SIGNALFX_USE_CUSTOM_CA is what tells us a CA was supplied, and the
+// certificate itself is read through the destination-scoped env var the gateway mounts from that
+// Secret - the same shape as the Cassandra destination.
+func signalfxTLSConfig(dest ExporterConfigurer) GenericMap {
+	config := dest.GetConfig()
+	useCustomCa := config[signalfxUseCustomCa] == "true"
 	insecureSkipVerify := config[signalfxInsecureSkipVerify] == "true"
 
-	if caPem == "" && !insecureSkipVerify {
+	if !useCustomCa && !insecureSkipVerify {
 		return nil
 	}
 
 	tlsConfig := GenericMap{"insecure_skip_verify": insecureSkipVerify}
-	if caPem != "" {
-		tlsConfig["ca_file"] = SignalfxCaMountPath + "/" + signalfxCaPem
+	if useCustomCa {
+		tlsConfig["ca_pem"] = SecretEnvPlaceholder(signalfxCaPem, dest)
 	}
 	return tlsConfig
 }
