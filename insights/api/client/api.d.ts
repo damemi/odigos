@@ -1077,6 +1077,226 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/interrogations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List interrogations
+         * @description Newest first. Summaries only: no `rounds`. There are no filters: the
+         *     server keeps 30 days of runs, and the page sorts and filters what it
+         *     has loaded. For the next page repeat the request with `before` = the
+         *     `id` of the last item; a page shorter than `limit` is the last.
+         *
+         *     **Use for:** the list page.
+         *
+         *     **Not for:** following one run (use `GET /interrogations/{id}`), or
+         *     the cards and badges (use `GET /interrogations/summary`).
+         */
+        get: operations["listInterrogations"];
+        put?: never;
+        /**
+         * Start an interrogation
+         * @description Records the request durably and returns the new run in status `queued`; the leader replica picks it up within a few seconds. One open run per source. The run changes the cluster only for the kinds listed in `allow_changes`; an empty list is a read-only run. An option that is in the contract but has no behaviour yet is rejected with 422, `details.reason` `not_supported_yet` and `details.option` naming it; `GET /interrogations/options` says in advance which those are.
+         */
+        post: operations["startInterrogation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Counters for the list page
+         * @description Backs the summary cards, the nav badge (`running`) and the tab counts. `queued`, `running` and `changes` are as of now. Every other figure covers the runs the server still has (30 days).
+         */
+        get: operations["getInterrogationSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Option sets, defaults and limits for the start form
+         * @description Render the start form from this: which goals, change kinds and budget fields exist, which are supported by this build, their defaults and bounds. Always 200; `enabled: false` means every other endpoint in this tag answers 503.
+         */
+        get: operations["getInterrogationOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sources that can be interrogated
+         * @description Workloads that have call-graph evidence (today: Java sources with profiled traffic), with whether one is already being interrogated. Backs the source picker, which searches the list it loaded. To know whether one given source can be interrogated, look for it here by `namespace`, `kind` and `name`.
+         */
+        get: operations["listInterrogationSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/sources/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Transactions of one source, with statistics
+         * @description The endpoints of a source that have call-graph evidence, busiest first. Backs the Focus multi-select.
+         */
+        get: operations["listInterrogationSourceTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/{interrogation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get one interrogation
+         * @description Everything the detail page draws: request, state, progress, running
+         *     answer, usage, `rounds` and `changes`. Safe to poll every 2-3 s while
+         *     the run is open.
+         *
+         *     **Use for:** the detail page; this one call carries the stepper, the
+         *     wait, the answer, the rounds and the run's changes.
+         *
+         *     **Not for:** a timeline (use `GET /interrogations/{id}/events`).
+         */
+        get: operations["getInterrogation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/{interrogation_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the event log
+         * @description Append-only, ordered by `sequence` ascending; events are never
+         *     rewritten. Pass `after` = the highest sequence seen (0 or absent for
+         *     the start). When `count` equals `limit`, call again at once. Stop
+         *     polling when `complete` is true. The same items are the frames of a
+         *     future SSE stream (`id` = sequence).
+         *
+         *     **Use for:** a timeline or activity log.
+         *
+         *     **Not for:** the run's current state: nothing the detail page draws
+         *     needs the log (use `GET /interrogations/{id}`).
+         */
+        get: operations["listInterrogationEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/{interrogation_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop an interrogation
+         * @description No more rounds, model calls or new changes. `changes` says what happens to the changes already made: `keep` (default) leaves them until each expires, `revert` removes them now. Idempotent. On a run that has already ended, `revert` still reverts its remaining live changes. A later `revert` overrides an earlier `keep`, never the reverse. 202 = recorded, the run is `stopping`. 200 = the run has ended: it already had, or it was still `queued` and this call ended it as `stopped`. A run that had finished its last node when the stop arrived keeps the status it ended with.
+         */
+        post: operations["stopInterrogation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/{interrogation_id}/extend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Give an interrogation more time
+         * @description Moves `deadline_at` and the expiry of the run's live changes later by `seconds`, together; the run records `interrogation.extended` within seconds. `extended_seconds` on the run is the sum of extensions; `budget.time_limit_seconds` stays as requested. Only while the run is `queued` or `running` and its deadline has not passed (409 `not_running` otherwise). `budget.time_limit_seconds` + `extended_seconds` cannot pass `options.extend.max_total_seconds` (422 `invalid_argument`).
+         */
+        post: operations["extendInterrogation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1094,7 +1314,7 @@ export interface components {
              * @description Stable machine-readable code.
              * @enum {string}
              */
-            code: "bad_request" | "not_found" | "conflict" | "unprocessable_entity" | "unavailable" | "internal_error";
+            code: "bad_request" | "not_found" | "conflict" | "payload_too_large" | "unprocessable_entity" | "unavailable" | "internal_error";
             message: string;
             details?: {
                 [key: string]: unknown;
@@ -2916,6 +3136,922 @@ export interface components {
             count: number;
             items: components["schemas"]["DeliveryAttempt"][];
         };
+        /** @description The standard `ErrorResponse` envelope with `error.details` typed: the existing `ErrorBody.details` is an untyped object, and this schema says what this tag puts in it. `code` keeps the existing closed set; the typed reason is in `details.reason`. The server writes the one `ErrorResponse` type (`x-go-type`). */
+        InterrogationErrorResponse: {
+            error: {
+                /** @enum {string} */
+                code: "bad_request" | "not_found" | "conflict" | "unprocessable_entity" | "unavailable" | "internal_error";
+                message: string;
+                details?: components["schemas"]["InterrogationErrorDetails"];
+            };
+        };
+        /** @description `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. Open set. */
+        InterrogationErrorReason: string;
+        InterrogationErrorDetails: {
+            reason: components["schemas"]["InterrogationErrorReason"];
+            /** @description With `not_supported_yet`: `<field>=<value>` for an option value (`goal=security`, `allow_changes=kernel_spans`), or the field path for a field (`budget.max_added_spans_per_min`). */
+            option?: string;
+            /** @description With `invalid_argument`: path of the field in the REST body or query, snake_case (`budget.max_probes`, `transaction_ids`). A GraphQL client maps it to its own input field. */
+            field?: string;
+            /** @description With `invalid_argument` on a list: the element at fault, e.g. the unknown id in `transaction_ids`. */
+            value?: string;
+            interrogation_id?: string;
+            display_id?: string;
+            requires?: string;
+            open?: number;
+            max_open?: number;
+            max_per_day?: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** @description `queued`: recorded, waiting for the leader. `running`: rounds in progress. `stopping`: a stop was recorded, the run is winding down. `completed`: ended on its own (`end_reason` says why). `stopped`: ended by a person. `failed`: ended on an error (`error` has the text). Terminal: `completed`, `stopped`, `failed`. Open set: treat an unknown value as non-terminal and keep polling. `queued` normally lasts about 2 s, up to about 20 s after a leader change, and `stopping` a few seconds; past 30 s (from `created_at`, or from `stop.requested_at`) show that it is taking longer than expected. A run that cannot finish is closed as `failed` (`interrupted`) 5 minutes after its deadline. A run that has been `queued` for 5 minutes is ended the same way by the next start on its source. */
+        InterrogationStatus: string;
+        /** @description Why the run ended; empty while open. `done`: the model decided it has the answer. `max_rounds`, `max_model_calls`, `time_limit`, `probe_budget`: a limit was reached. `changes_denied`: the model was not done and every probe it asked for was refused. `no_evidence`: no call graph was found for the transactions in scope. `stopped_by_user`. `source_gone`: the source is no longer instrumented. `model_unavailable`: the gateway kept refusing until the deadline. `interrupted`: the run was written by another version of the server and could not be continued. `error`: anything else. Status by reason: `completed` for the first seven, `stopped` for `stopped_by_user`, `failed` for the rest. Open set. */
+        InterrogationEndReason: string;
+        /** @description Open set. `security` is in the contract and not supported yet. */
+        InterrogationGoal: string;
+        /** @description What started the run. This API creates only `manual`. Open set. */
+        InterrogationTriggerKind: string;
+        /** @description `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set. */
+        InterrogationChangeKind: string;
+        /** @description `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by stop-and-revert or because the source is gone (`end_reason`). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. Open set. */
+        InterrogationChangeState: string;
+        /** @description Open set. */
+        InterrogationChangeDenyReason: string;
+        /** @description A node of the run's workflow graph. `prepare`: check the source is instrumented and open round 1. `wait_baseline`: wait for traffic before the first reading. `gate`: check the run's limits and the model gateway before paying for a call. `wait_model`: the gateway is paused; wait. `gather`: flush and read the call graphs and build the model request. `analyze`: the model call. `record`: validate the reply, record the answer and the changes it proposes. `apply`: validate each proposed change and store the accepted ones. `wait_apply`, `confirm`: wait until the accepted changes are in the instrumentation rule. `wait_observe`, `observe`: let traffic run with them, then read the call graph again. `conclude`: end the run. A round runs `gate` to `observe`; round 1 also holds `prepare` and `wait_baseline`, and the last round `conclude`. Open set: the graph can gain nodes; show an unknown name as it is. */
+        InterrogationNodeName: string;
+        /** @description `running`: the run is in the node. `waiting`: the node is a wait and the run is parked in it. `done`: the run left it. `failed`: the last attempt at it failed; the run retries from its last recorded point. Open set. */
+        InterrogationNodeState: string;
+        /** @description `traffic`: the baseline before round 1. `model_paused`: the model gateway is rate limiting or refusing. `rule_applied`: a requested change is not in the rule yet. `observe`: traffic is running with the new changes. Open set. */
+        InterrogationWaitReason: string;
+        /** @description Open set. */
+        InterrogationWaitOutcome: string;
+        /** @description Open set. */
+        InterrogationRoundState: string;
+        /** @description How a completed round ended. `observed`: it ran to the end. `no_change_applied`: nothing it requested reached the rule. `ended`: the run stopped, failed or hit a limit inside the round; nodes it did not reach are not listed and it may have no `reply`. Open set. */
+        InterrogationRoundOutcome: string;
+        /** @description `user`: from `transaction_ids`. `auto`: picked by the run, by call-graph size. Open set. */
+        InterrogationScopeSelection: string;
+        /** @description Open set. */
+        InterrogationModelCallOutcome: string;
+        /** @description A guardrail a change passed. Open set. */
+        InterrogationChangeCheck: string;
+        /** @description Open set. */
+        InterrogationChangeCategory: string;
+        /** @description Why an accepted change is not in the rule. `covered_by_rule`: another rule already provides the probe. Open set. */
+        InterrogationChangeBlockReason: string;
+        /** @description Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set. */
+        InterrogationChangeEndReason: string;
+        /**
+         * @description Open set: ignore types you do not know. The schema of `payload` for
+         *     each type:
+         *
+         *     | Type | Payload schema | When |
+         *     |---|---|---|
+         *     | `interrogation.started` | `InterrogationEventStartedPayload` | the run's first node, after the leader picked it up |
+         *     | `interrogation.stop_requested` | `InterrogationEventStopRequestedPayload` | the run saw the stop |
+         *     | `interrogation.extended` | `InterrogationEventExtendedPayload` | the run saw a later deadline |
+         *     | `interrogation.ended` | `InterrogationEventEndedPayload` | the run's last event. Absent when the server had to close an overdue run; rely on `complete` |
+         *     | `round.started` | `InterrogationEventRoundStartedPayload` | |
+         *     | `round.finished` | `InterrogationEventRoundFinishedPayload` | |
+         *     | `node.finished` | `InterrogationEventNodeFinishedPayload` | the run left a node |
+         *     | `wait.started` | `InterrogationEventWaitStartedPayload` | the run parked in a wait node |
+         *     | `wait.finished` | `InterrogationEventWaitFinishedPayload` | |
+         *     | `evidence.collected` | `InterrogationEventEvidencePayload` | `gather` and `observe` read the call graphs |
+         *     | `model.called` | `InterrogationEventModelCalledPayload` | after every model call, success or not |
+         *     | `change.proposed` | `InterrogationEventChangeProposedPayload` | the model named a change |
+         *     | `change.denied` | `InterrogationEventChangeDeniedPayload` | validation refused it |
+         *     | `change.requested` | `InterrogationEventChangeRequestedPayload` | validation passed, stored |
+         *     | `change.applied` | `InterrogationEventChangeAppliedPayload` | the rule carries it |
+         *     | `change.failed` | `InterrogationEventChangeFailedPayload` | not in the rule in time, or blocked |
+         *     | `change.reverted` | `InterrogationEventChangeRevertedPayload` | ended while the run was open |
+         *     | `answer.updated` | `InterrogationAnswer` | the running answer changed |
+         *     | `error.raised` | `InterrogationEventErrorRaisedPayload` | an attempt at a node failed and is retried |
+         */
+        InterrogationEventType: string;
+        /** @description The workload a run targets. All containers of the workload. */
+        InterrogationSource: {
+            namespace: string;
+            /** @description Workload kind: Deployment, StatefulSet, DaemonSet, ... */
+            kind: string;
+            name: string;
+        };
+        InterrogationBudget: {
+            /** @description Most probes the run may add. Default 5. */
+            max_probes?: number;
+            /** @description Cap on span volume the run may add. Not supported yet; omit it. */
+            max_added_spans_per_min?: number;
+            /** @description Wall-clock limit from `started_at`, as requested at start. Default 3600. Extensions are not added here; see `Interrogation.extended_seconds`. */
+            time_limit_seconds?: number;
+            /** @description Read-only, from server configuration. Ignored on start. */
+            readonly max_rounds?: number;
+        };
+        /**
+         * @example {
+         *       "source": {
+         *         "namespace": "claims-demo",
+         *         "kind": "Deployment",
+         *         "name": "claims-intake"
+         *       },
+         *       "goal": "observability",
+         *       "question": "Why is claim submission slow for some users?",
+         *       "transaction_ids": [
+         *         4211,
+         *         4215
+         *       ],
+         *       "allow_changes": [
+         *         "custom_instrumentation"
+         *       ],
+         *       "budget": {
+         *         "max_probes": 5,
+         *         "time_limit_seconds": 3600
+         *       },
+         *       "actor": "alon"
+         *     }
+         * @example {
+         *       "source": {
+         *         "namespace": "claims-demo",
+         *         "kind": "Deployment",
+         *         "name": "claims-intake"
+         *       }
+         *     }
+         */
+        InterrogationStart: {
+            source: components["schemas"]["InterrogationSource"];
+            /** @description Default `observability`. */
+            goal?: components["schemas"]["InterrogationGoal"];
+            /** @description Optional. Empty means the goal's default question. */
+            question?: string;
+            /** @description Endpoints to focus on, from `GET /interrogations/sources/transactions`. Empty or absent: the run picks. */
+            transaction_ids?: number[];
+            /** @description Kinds of change the run may make. Empty or absent: read-only, the run proposes and applies nothing. */
+            allow_changes?: components["schemas"]["InterrogationChangeKind"][];
+            budget?: components["schemas"]["InterrogationBudget"];
+            /** @description Free text naming who started it; stored for display only. */
+            actor?: string;
+        };
+        /**
+         * @example {
+         *       "changes": "revert",
+         *       "actor": "alon"
+         *     }
+         */
+        InterrogationStop: {
+            /**
+             * @description `keep` (default): leave changes until they expire. `revert`: remove them now.
+             * @enum {string}
+             */
+            changes?: "keep" | "revert";
+            actor?: string;
+        };
+        /**
+         * @example {
+         *       "seconds": 1800,
+         *       "actor": "alon"
+         *     }
+         */
+        InterrogationExtend: {
+            seconds: number;
+            actor?: string;
+        };
+        InterrogationTrigger: {
+            kind: components["schemas"]["InterrogationTriggerKind"];
+            actor?: string;
+        };
+        /** @description Present once a stop was recorded. */
+        InterrogationStopRequest: {
+            /** Format: date-time */
+            requested_at: string;
+            /** @enum {string} */
+            changes: "keep" | "revert";
+            actor?: string;
+        };
+        InterrogationScopeTransaction: {
+            /** Format: int64 */
+            transaction_id: number;
+            operation: string;
+            kind: string;
+            selected_by: components["schemas"]["InterrogationScopeSelection"];
+        };
+        /** @description One node of the graph in one round, as the run went through it. */
+        InterrogationNode: {
+            name: components["schemas"]["InterrogationNodeName"];
+            state: components["schemas"]["InterrogationNodeState"];
+            /** @description Times the run entered the node in this round. More than 1 for the nodes of a poll (`wait_apply`, `confirm`), for a retried model call, and after a failed attempt. */
+            visits: number;
+            /**
+             * Format: date-time
+             * @description First entry in this round.
+             */
+            entered_at: string;
+            /**
+             * Format: date-time
+             * @description Last exit; absent while the run is in it.
+             */
+            left_at?: string;
+        };
+        /** @description What the run is waiting for right now. */
+        InterrogationWait: {
+            reason: components["schemas"]["InterrogationWaitReason"];
+            /** Format: date-time */
+            since: string;
+            /**
+             * Format: date-time
+             * @description When the wait gives up or is checked again.
+             */
+            deadline_at?: string;
+        };
+        InterrogationProgress: {
+            /** @description Current round, 1-based; 0 before the first. */
+            round: number;
+            max_rounds: number;
+            /** @description The node the run is in; absent before the leader picked the run up and after the end. */
+            node?: components["schemas"]["InterrogationNodeName"];
+            /** @description Present while the run is parked in a wait node. */
+            wait?: components["schemas"]["InterrogationWait"];
+        };
+        /** @description The running answer; replaced as rounds finish, final once the run ends. */
+        InterrogationAnswer: {
+            text: string;
+            /** @description The model's own number, 0..100. Shown only; nothing stops on it. */
+            certainty: number;
+            final: boolean;
+            /** @description Round that produced this version. */
+            round: number;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        InterrogationChangeCounts: {
+            /** @description Every change of the run: `live` + `reverting` + `reverted` + `expired` + `failed` + `denied`. */
+            total: number;
+            /** @description `requested` + `blocked` + `active`. */
+            live: number;
+            /** @description Ended, still in the rule until the next reconcile. */
+            reverting: number;
+            /** @description Ended by stop-and-revert, or because the source is gone. */
+            reverted: number;
+            /** @description Left when their time ran out. The normal end of a run's changes. */
+            expired: number;
+            /** @description Accepted, never took effect. */
+            failed: number;
+            denied: number;
+            /**
+             * Format: date-time
+             * @description Soonest expiry among live changes. The list's "Ends" column.
+             */
+            next_expiry_at?: string;
+        };
+        InterrogationUsage: {
+            rounds: number;
+            duration_seconds: number;
+            probes_used: number;
+            max_probes: number;
+            model_calls: number;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            /** @description Model that served the calls, as the gateway reported it. */
+            model?: string;
+        };
+        /** @description What a reading of the call graphs in scope found. */
+        InterrogationEvidenceCounts: {
+            /** @description Transactions with evidence in scope. */
+            transactions: number;
+            /** @description Application functions in the call graphs. */
+            functions: number;
+            /** @description Caller-callee edges in the call graphs. */
+            edges: number;
+            /** @description Edges that were not there at the previous reading; all of them at the first. */
+            new_edges: number;
+        };
+        /** @description What the model replied in the round. */
+        InterrogationRoundReply: {
+            /** @description Its answer on the evidence of this round. */
+            text: string;
+            certainty: number;
+            /** @description The model decided more probes would not change the answer. */
+            done: boolean;
+        };
+        /** @description One round, as the workflow recorded it. A field that is absent has not happened yet. */
+        InterrogationRound: {
+            round: number;
+            state: components["schemas"]["InterrogationRoundState"];
+            /** @description Present once the round is `completed`. */
+            outcome?: components["schemas"]["InterrogationRoundOutcome"];
+            /** @description No probe can be added in this round. */
+            final: boolean;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            ended_at?: string;
+            /** @description The nodes the run went through in this round, in the order it first entered them. */
+            nodes: components["schemas"]["InterrogationNode"][];
+            /** @description The call graphs `gather` read before the model call. */
+            observed?: components["schemas"]["InterrogationEvidenceCounts"];
+            reply?: components["schemas"]["InterrogationRoundReply"];
+            /** @description Ids of every change the model proposed this round, accepted or denied. They are the ids of `Interrogation.changes`, which also lists the denied ones with their reason. */
+            proposed: string[];
+            /** @description Ids of the changes that reached the cluster this round. */
+            applied: string[];
+            /** @description The call graphs `observe` read after the changes ran with traffic. */
+            observed_after?: components["schemas"]["InterrogationEvidenceCounts"];
+        };
+        /**
+         * @example {
+         *       "id": "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21",
+         *       "display_id": "INT-0B6F6C1E",
+         *       "title": "Why is claim submission slow for some users?",
+         *       "source": {
+         *         "namespace": "claims-demo",
+         *         "kind": "Deployment",
+         *         "name": "claims-intake"
+         *       },
+         *       "goal": "observability",
+         *       "question": "Why is claim submission slow for some users?",
+         *       "transaction_ids": [],
+         *       "allow_changes": [
+         *         "custom_instrumentation"
+         *       ],
+         *       "budget": {
+         *         "max_probes": 5,
+         *         "time_limit_seconds": 3600,
+         *         "max_rounds": 5
+         *       },
+         *       "trigger": {
+         *         "kind": "manual",
+         *         "actor": "alon"
+         *       },
+         *       "status": "queued",
+         *       "end_reason": "",
+         *       "created_at": "2026-11-17T09:38:00Z",
+         *       "scope": [],
+         *       "progress": {
+         *         "round": 0,
+         *         "max_rounds": 5
+         *       },
+         *       "change_counts": {
+         *         "total": 0,
+         *         "live": 0,
+         *         "reverting": 0,
+         *         "reverted": 0,
+         *         "expired": 0,
+         *         "failed": 0,
+         *         "denied": 0
+         *       },
+         *       "usage": {
+         *         "rounds": 0,
+         *         "duration_seconds": 0,
+         *         "probes_used": 0,
+         *         "max_probes": 5,
+         *         "model_calls": 0,
+         *         "input_tokens": 0,
+         *         "output_tokens": 0
+         *       },
+         *       "last_sequence": 0
+         *     }
+         */
+        Interrogation: {
+            id: string;
+            /** @description Short human label, `INT-` + the first 8 hex characters of `id` in upper case. Not a key; two runs can share one. Use `id` to address a run. */
+            display_id: string;
+            /** @description The question, or the goal's default question when none was given. */
+            title: string;
+            source: components["schemas"]["InterrogationSource"];
+            goal: components["schemas"]["InterrogationGoal"];
+            question: string;
+            /** @description As requested. What the run actually looked at is in `scope`. */
+            transaction_ids: number[];
+            allow_changes: components["schemas"]["InterrogationChangeKind"][];
+            budget: components["schemas"]["InterrogationBudget"];
+            trigger: components["schemas"]["InterrogationTrigger"];
+            /** @description Changes to a terminal value only when the run is closed: the source is free and `complete` is true on the events from the same moment. */
+            status: components["schemas"]["InterrogationStatus"];
+            end_reason: components["schemas"]["InterrogationEndReason"];
+            /** @description Failure text when `status` is `failed`. */
+            error?: string;
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description When the leader picked it up; absent while queued.
+             */
+            started_at?: string;
+            /**
+             * Format: date-time
+             * @description When the time limit ends the run, extensions included; absent while queued.
+             */
+            deadline_at?: string;
+            /** @description Seconds added by extends, in total. Absent when the run was never extended. `budget.time_limit_seconds` + this is the run's whole allowance. */
+            extended_seconds?: number;
+            /** Format: date-time */
+            ended_at?: string;
+            stop?: components["schemas"]["InterrogationStopRequest"];
+            /** @description Transactions the run is looking at; filled in by the run when none were requested. */
+            scope: components["schemas"]["InterrogationScopeTransaction"][];
+            progress: components["schemas"]["InterrogationProgress"];
+            /** @description Latest certainty, 0..100; absent until the first answer. */
+            certainty?: number;
+            answer?: components["schemas"]["InterrogationAnswer"];
+            change_counts: components["schemas"]["InterrogationChangeCounts"];
+            /** @description Detail only; absent on the list. The run's changes, denied proposals included, oldest `requested_at` first. */
+            changes?: components["schemas"]["InterrogationChange"][];
+            usage: components["schemas"]["InterrogationUsage"];
+            /**
+             * Format: int64
+             * @description Highest event sequence written so far.
+             */
+            last_sequence: number;
+            /** @description Detail only; absent on the list. */
+            rounds?: components["schemas"]["InterrogationRound"][];
+        };
+        InterrogationList: {
+            /** @description Items in this page. Fewer than `limit` means there is no older page. */
+            count: number;
+            items: components["schemas"]["Interrogation"][];
+        };
+        /**
+         * @example {
+         *       "sequence": 14,
+         *       "type": "change.applied",
+         *       "time": "2026-11-17T09:41:07Z",
+         *       "round": 1,
+         *       "node": "confirm",
+         *       "change_id": "chg_3f9a1c07b2d44e6a8c51",
+         *       "message": "Applied a probe on com.claims.intake.ClaimValidator.validate",
+         *       "payload": {
+         *         "kind": "custom_instrumentation",
+         *         "target": "com.claims.intake.ClaimValidator.validate",
+         *         "rule_name": "odig-int-claims-demo-claims-intake",
+         *         "expires_at": "2026-11-17T10:38:00Z"
+         *       }
+         *     }
+         */
+        InterrogationEvent: {
+            /**
+             * Format: int64
+             * @description Strictly increasing within one interrogation, starting at 1. Do not rely on the absence of gaps.
+             */
+            sequence: number;
+            type: components["schemas"]["InterrogationEventType"];
+            /** Format: date-time */
+            time: string;
+            /** @description 0 for events outside a round. */
+            round: number;
+            /** @description The node that wrote the event. */
+            node?: components["schemas"]["InterrogationNodeName"];
+            /** @description On `change.*` events. */
+            change_id?: string;
+            /** @description One human-readable line for a plain timeline. */
+            message: string;
+            /** @description Per-type data. `InterrogationEventType` names the schema for each `type`; a type this list does not know yet carries a plain object. */
+            payload: components["schemas"]["InterrogationEventStartedPayload"] | components["schemas"]["InterrogationEventStopRequestedPayload"] | components["schemas"]["InterrogationEventExtendedPayload"] | components["schemas"]["InterrogationEventEndedPayload"] | components["schemas"]["InterrogationEventRoundStartedPayload"] | components["schemas"]["InterrogationEventRoundFinishedPayload"] | components["schemas"]["InterrogationEventNodeFinishedPayload"] | components["schemas"]["InterrogationEventWaitStartedPayload"] | components["schemas"]["InterrogationEventWaitFinishedPayload"] | components["schemas"]["InterrogationEventEvidencePayload"] | components["schemas"]["InterrogationEventModelCalledPayload"] | components["schemas"]["InterrogationEventChangeProposedPayload"] | components["schemas"]["InterrogationEventChangeDeniedPayload"] | components["schemas"]["InterrogationEventChangeRequestedPayload"] | components["schemas"]["InterrogationEventChangeAppliedPayload"] | components["schemas"]["InterrogationEventChangeFailedPayload"] | components["schemas"]["InterrogationEventChangeRevertedPayload"] | components["schemas"]["InterrogationAnswer"] | components["schemas"]["InterrogationEventErrorRaisedPayload"] | {
+                [key: string]: unknown;
+            };
+        };
+        InterrogationEventStartedPayload: {
+            /** Format: date-time */
+            deadline_at: string;
+            max_rounds: number;
+            max_probes: number;
+            allow_changes: components["schemas"]["InterrogationChangeKind"][];
+            /** @description Prompt, request and model revision the run uses. */
+            revision: string;
+        };
+        InterrogationEventStopRequestedPayload: {
+            /** @enum {string} */
+            changes: "keep" | "revert";
+            actor?: string;
+        };
+        InterrogationEventExtendedPayload: {
+            /**
+             * Format: date-time
+             * @description The new deadline.
+             */
+            deadline_at: string;
+            /** @description How much later than the deadline the run had. */
+            seconds: number;
+        };
+        InterrogationEventEndedPayload: {
+            status: components["schemas"]["InterrogationStatus"];
+            end_reason: components["schemas"]["InterrogationEndReason"];
+            error?: string;
+            /** @description Absent when the run produced no answer. */
+            certainty?: number;
+        };
+        InterrogationEventRoundStartedPayload: {
+            round: number;
+            /** @description No probe can be added in this round. */
+            final: boolean;
+        };
+        InterrogationEventRoundFinishedPayload: {
+            round: number;
+            outcome: components["schemas"]["InterrogationRoundOutcome"];
+        };
+        InterrogationEventNodeFinishedPayload: {
+            node: components["schemas"]["InterrogationNodeName"];
+            /** @description The node the run goes to; absent after `conclude`. */
+            next?: components["schemas"]["InterrogationNodeName"];
+        };
+        InterrogationEventWaitStartedPayload: {
+            reason: components["schemas"]["InterrogationWaitReason"];
+            /** Format: date-time */
+            deadline_at?: string;
+        };
+        InterrogationEventWaitFinishedPayload: {
+            reason: components["schemas"]["InterrogationWaitReason"];
+            outcome: components["schemas"]["InterrogationWaitOutcome"];
+        };
+        InterrogationCallEdge: {
+            caller: string;
+            callee: string;
+        };
+        /** @description What `gather` or `observe` read. Today `kind` is always `call_graph`. */
+        InterrogationEventEvidencePayload: {
+            /** @description Open set: `call_graph`; planned `traces`, `profile`. */
+            kind: string;
+            transactions?: number;
+            functions?: number;
+            edges?: number;
+            new_edges?: number;
+            /** @description At most 50. */
+            sample_edges?: components["schemas"]["InterrogationCallEdge"][];
+            /** @description A call graph was larger than the request allows and was cut. */
+            truncated?: boolean;
+        };
+        InterrogationEventModelCalledPayload: {
+            model?: string;
+            /** Format: int64 */
+            input_tokens?: number;
+            /** Format: int64 */
+            output_tokens?: number;
+            /** Format: int64 */
+            duration_ms?: number;
+            outcome: components["schemas"]["InterrogationModelCallOutcome"];
+            error?: string;
+            /** @description 1 for the round's first call. */
+            attempt?: number;
+        };
+        InterrogationEventChangeProposedPayload: {
+            kind: components["schemas"]["InterrogationChangeKind"];
+            target: string;
+            probe?: components["schemas"]["InterrogationProbe"];
+            category?: components["schemas"]["InterrogationChangeCategory"];
+            reason?: string;
+        };
+        InterrogationEventChangeDeniedPayload: {
+            kind: components["schemas"]["InterrogationChangeKind"];
+            target: string;
+            deny_reason: components["schemas"]["InterrogationChangeDenyReason"];
+            detail?: string;
+            /** @description The checks passed before the one that refused it. */
+            checks: components["schemas"]["InterrogationChangeCheck"][];
+        };
+        InterrogationEventChangeRequestedPayload: {
+            kind: components["schemas"]["InterrogationChangeKind"];
+            target: string;
+            checks: components["schemas"]["InterrogationChangeCheck"][];
+        };
+        InterrogationEventChangeAppliedPayload: {
+            kind: components["schemas"]["InterrogationChangeKind"];
+            target: string;
+            rule_name?: string;
+            /** Format: date-time */
+            expires_at?: string;
+        };
+        InterrogationEventChangeFailedPayload: {
+            kind: components["schemas"]["InterrogationChangeKind"];
+            target: string;
+            reason: components["schemas"]["InterrogationChangeEndReason"];
+        };
+        InterrogationEventChangeRevertedPayload: {
+            kind: components["schemas"]["InterrogationChangeKind"];
+            target: string;
+            end_reason: components["schemas"]["InterrogationChangeEndReason"];
+            /** @description Actor of the stop, when it named one. */
+            by?: string;
+        };
+        InterrogationEventErrorRaisedPayload: {
+            node: components["schemas"]["InterrogationNodeName"];
+            error: string;
+            retry_in_seconds?: number;
+        };
+        InterrogationEventList: {
+            count: number;
+            items: components["schemas"]["InterrogationEvent"][];
+            /**
+             * Format: int64
+             * @description Highest sequence in `items`, or the `after` given when the page is empty. Pass it as the next `after`.
+             */
+            last_sequence: number;
+            /** @description True when the run has ended and no event follows `last_sequence`. Stop polling. */
+            complete: boolean;
+        };
+        /** @description The probe of a `custom_instrumentation` change. Fields used depend on `language`. */
+        InterrogationProbe: {
+            /** @description Open set: `java`, `go`, `php`, `cpp`. */
+            language: string;
+            class_name?: string;
+            method_name?: string;
+            package_name?: string;
+            function_name?: string;
+            receiver_name?: string;
+            receiver_method_name?: string;
+            signature?: string;
+        };
+        /** @description The function a probe instruments. Only the fields its language uses are set. */
+        InterrogationChangeTarget: {
+            class_name?: string;
+            method_name?: string;
+            package_name?: string;
+            function_name?: string;
+            receiver_name?: string;
+            receiver_method_name?: string;
+            signature?: string;
+        };
+        /**
+         * @description One change of a run, or a proposal it denied.
+         * @example {
+         *       "id": "chg_3f9a1c07b2d44e6a8c51",
+         *       "round": 1,
+         *       "language": "java",
+         *       "target": {
+         *         "class_name": "com.claims.intake.ClaimValidator",
+         *         "method_name": "validate"
+         *       },
+         *       "state": "active",
+         *       "checks": [
+         *         "changes_allowed",
+         *         "in_call_graph",
+         *         "application_code",
+         *         "not_already_probed",
+         *         "within_workload_cap",
+         *         "within_run_budget"
+         *       ],
+         *       "requested_at": "2026-11-17T09:41:02Z",
+         *       "applied_at": "2026-11-17T09:41:07Z",
+         *       "expires_at": "2026-11-17T10:38:03Z"
+         *     }
+         */
+        InterrogationChange: {
+            /** @description `chg_` + 20 hex characters; the id in `rounds[].proposed`, `rounds[].applied` and `change_id` on events. */
+            id: string;
+            /** @description Round that proposed it. */
+            round: number;
+            /** @description `java` today. */
+            language: string;
+            target: components["schemas"]["InterrogationChangeTarget"];
+            state: components["schemas"]["InterrogationChangeState"];
+            deny_reason?: components["schemas"]["InterrogationChangeDenyReason"];
+            block_reason?: components["schemas"]["InterrogationChangeBlockReason"];
+            /** @description Checks passed, in order. All six for a stored change; those before the failing one for a denied proposal. */
+            checks: components["schemas"]["InterrogationChangeCheck"][];
+            /**
+             * Format: date-time
+             * @description When the model proposed it.
+             */
+            requested_at: string;
+            /** Format: date-time */
+            applied_at?: string;
+            /**
+             * Format: date-time
+             * @description Stored changes only. Never later than the run's `deadline_at`; moved by extend.
+             */
+            expires_at?: string;
+            /**
+             * Format: date-time
+             * @description When it left the cluster.
+             */
+            ended_at?: string;
+            /** @description Set once the change is ending or ended. For `failed` it is why the change never took effect. */
+            end_reason?: components["schemas"]["InterrogationChangeEndReason"];
+        };
+        InterrogationChangesBySource: {
+            source: components["schemas"]["InterrogationSource"];
+            language?: string;
+            live: number;
+            /** @description Live interrogation changes on the workload; probes from other rules are not counted. */
+            probes: number;
+            /** @description The per-workload cap over every rule, enforced when a probe is requested. */
+            max_probes: number;
+        };
+        /**
+         * @example {
+         *       "live": 3,
+         *       "by_kind": {
+         *         "custom_instrumentation": 3
+         *       },
+         *       "next_expiry_at": "2026-11-17T10:38:00Z",
+         *       "next_expiry_change_id": "chg_3f9a1c07b2d44e6a8c51",
+         *       "by_source": [
+         *         {
+         *           "source": {
+         *             "namespace": "claims-demo",
+         *             "kind": "Deployment",
+         *             "name": "claims-intake"
+         *           },
+         *           "language": "java",
+         *           "live": 3,
+         *           "probes": 3,
+         *           "max_probes": 20
+         *         }
+         *       ]
+         *     }
+         */
+        InterrogationChangesSummary: {
+            live: number;
+            /** @description Live changes per `InterrogationChangeKind`. */
+            by_kind: {
+                [key: string]: number;
+            };
+            /** Format: date-time */
+            next_expiry_at?: string;
+            next_expiry_change_id?: string;
+            by_source: components["schemas"]["InterrogationChangesBySource"][];
+        };
+        /** @description Model calls made by the interrogations the server has (30 days). The background loop's calls are not counted. */
+        InterrogationModelUsage: {
+            calls: number;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            /** @description Model of the most recent call; empty when there were none. */
+            model: string;
+            /** @description `litellm`. */
+            gateway: string;
+        };
+        InterrogationSummary: {
+            queued: number;
+            /** @description `running` + `stopping`. The nav badge. */
+            running: number;
+            running_sources: components["schemas"]["InterrogationSource"][];
+            /** @description Interrogations the server has (30 days). The tab count. */
+            total: number;
+            /** @description Of those, the ended ones, any terminal status. */
+            concluded: number;
+            /** @description Mean rounds of the runs counted in `concluded`. Absent when there are none. */
+            avg_rounds?: number;
+            /** @description Mean `ended_at` - `started_at` of the runs counted in `concluded`. Absent when there are none. */
+            avg_duration_seconds?: number;
+            changes: components["schemas"]["InterrogationChangesSummary"];
+            model_usage: components["schemas"]["InterrogationModelUsage"];
+        };
+        InterrogationOptionValue: {
+            value: string;
+            /** @description False: sending it is rejected with `not_supported_yet`. Show it disabled. */
+            supported: boolean;
+            /** @description Preselect it in the form. */
+            default: boolean;
+        };
+        InterrogationBudgetOption: {
+            supported: boolean;
+            default?: number;
+            min?: number;
+            max?: number;
+            /** @description Values the mockup offers as a select. Any value within min..max is accepted. */
+            choices: number[];
+        };
+        /**
+         * @example {
+         *       "enabled": true,
+         *       "goals": [
+         *         {
+         *           "value": "observability",
+         *           "supported": true,
+         *           "default": true
+         *         },
+         *         {
+         *           "value": "security",
+         *           "supported": false,
+         *           "default": false
+         *         }
+         *       ],
+         *       "change_kinds": [
+         *         {
+         *           "value": "custom_instrumentation",
+         *           "supported": true,
+         *           "default": true
+         *         },
+         *         {
+         *           "value": "head_sampling",
+         *           "supported": false,
+         *           "default": false
+         *         },
+         *         {
+         *           "value": "payload_collection",
+         *           "supported": false,
+         *           "default": false
+         *         },
+         *         {
+         *           "value": "kernel_spans",
+         *           "supported": false,
+         *           "default": false
+         *         }
+         *       ],
+         *       "budget": {
+         *         "max_probes": {
+         *           "supported": true,
+         *           "default": 5,
+         *           "min": 1,
+         *           "max": 20,
+         *           "choices": []
+         *         },
+         *         "max_added_spans_per_min": {
+         *           "supported": false,
+         *           "choices": [
+         *             500,
+         *             1000,
+         *             5000
+         *           ]
+         *         },
+         *         "time_limit_seconds": {
+         *           "supported": true,
+         *           "default": 3600,
+         *           "min": 300,
+         *           "max": 14400,
+         *           "choices": [
+         *             900,
+         *             3600,
+         *             14400
+         *           ]
+         *         }
+         *       },
+         *       "max_rounds": 5,
+         *       "extend": {
+         *         "default_seconds": 1800,
+         *         "max_total_seconds": 28800
+         *       },
+         *       "max_open": 10,
+         *       "max_transaction_ids": 20
+         *     }
+         */
+        InterrogationOptions: {
+            enabled: boolean;
+            goals: components["schemas"]["InterrogationOptionValue"][];
+            change_kinds: components["schemas"]["InterrogationOptionValue"][];
+            budget: {
+                max_probes: components["schemas"]["InterrogationBudgetOption"];
+                max_added_spans_per_min: components["schemas"]["InterrogationBudgetOption"];
+                time_limit_seconds: components["schemas"]["InterrogationBudgetOption"];
+            };
+            max_rounds: number;
+            extend: {
+                default_seconds: number;
+                /** @description Ceiling for the time limit after extensions. */
+                max_total_seconds: number;
+            };
+            /** @description Open runs (queued + running) the cluster accepts. */
+            max_open: number;
+            max_transaction_ids: number;
+        };
+        InterrogationPickerSource: {
+            namespace: string;
+            kind: string;
+            name: string;
+            /** @description `java` today. */
+            language: string;
+            /** @description Transactions with call-graph evidence. */
+            transactions: number;
+            /**
+             * Format: date-time
+             * @description Latest traffic on any of them.
+             */
+            last_seen?: string;
+            /** @description An interrogation is open on it; starting another answers 409. */
+            busy: boolean;
+            active_interrogation_id?: string;
+            active_display_id?: string;
+            /** @description Live interrogation changes on the workload; probes from other rules are not counted. */
+            probes?: number;
+            /** @description The per-workload cap over every rule, enforced when a probe is requested. */
+            max_probes?: number;
+        };
+        InterrogationSourceList: {
+            count: number;
+            items: components["schemas"]["InterrogationPickerSource"][];
+        };
+        InterrogationSourceTransaction: {
+            /** Format: int64 */
+            transaction_id: number;
+            /** @description E.g. `POST /api/claims`. */
+            operation: string;
+            /** @description Transaction kind: HTTP, GRPC, ... */
+            kind: string;
+            /**
+             * Format: int64
+             * @description Requests seen since the transaction was first learned.
+             */
+            volume: number;
+            /** Format: date-time */
+            last_seen?: string;
+            /** @description Application functions in its call graph. */
+            functions: number;
+        };
+        InterrogationSourceTransactionList: {
+            count: number;
+            items: components["schemas"]["InterrogationSourceTransaction"][];
+        };
     };
     responses: {
         /** @description Error envelope. */
@@ -2943,6 +4079,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description Error envelope. `error.details.reason` carries the typed reason; see `InterrogationErrorDetails`. */
+        InterrogationError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["InterrogationErrorResponse"];
+            };
+        };
     };
     parameters: {
         /** @description The transaction's numeric id. */
@@ -2965,6 +4110,8 @@ export interface components {
         StatusFilter: string;
         /** @description The integration's server-assigned id. */
         IntegrationId: string;
+        /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+        InterrogationId: string;
     };
     requestBodies: never;
     headers: never;
@@ -4512,6 +5659,319 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             500: components["responses"]["Error"];
+        };
+    };
+    listInterrogations: {
+        parameters: {
+            query?: {
+                /** @description Default 50; the server clamps to 200. */
+                limit?: number;
+                /** @description The `id` of an interrogation: return only rows older than it. An id that no longer exists gives an empty page. */
+                before?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Interrogations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationList"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    startInterrogation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterrogationStart"];
+            };
+        };
+        responses: {
+            /** @description Queued. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interrogation"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            /** @description The source already has an open interrogation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationErrorResponse"];
+                };
+            };
+            413: components["responses"]["Error"];
+            /** @description Validation failed, the option is not supported yet, or the source has no evidence. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationErrorResponse"];
+                };
+            };
+            500: components["responses"]["InterrogationError"];
+            /** @description Not enabled, at capacity, or the store is not ready. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationErrorResponse"];
+                };
+            };
+        };
+    };
+    getInterrogationSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationSummary"];
+                };
+            };
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    getInterrogationOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Options. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationOptions"];
+                };
+            };
+        };
+    };
+    listInterrogationSources: {
+        parameters: {
+            query?: {
+                /** @description Default 200; the server clamps to 1000. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sources. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationSourceList"];
+                };
+            };
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    listInterrogationSourceTransactions: {
+        parameters: {
+            query: {
+                namespace: string;
+                /** @description Workload kind, e.g. Deployment. */
+                kind: string;
+                name: string;
+                /** @description Default 200; the server clamps to 1000. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Transactions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationSourceTransactionList"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    getInterrogation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The interrogation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interrogation"];
+                };
+            };
+            404: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    listInterrogationEvents: {
+        parameters: {
+            query?: {
+                /** @description Return events with `sequence` greater than this. */
+                after?: number;
+                /** @description Default 200; the server clamps to 1000. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Events. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationEventList"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            404: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    stopInterrogation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterrogationStop"];
+            };
+        };
+        responses: {
+            /** @description The run has ended (it already had, or it was queued and is now `stopped`). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interrogation"];
+                };
+            };
+            /** @description Stop recorded. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interrogation"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            404: components["responses"]["InterrogationError"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    extendInterrogation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InterrogationExtend"];
+            };
+        };
+        responses: {
+            /** @description Extended. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Interrogation"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            404: components["responses"]["InterrogationError"];
+            409: components["responses"]["InterrogationError"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
         };
     };
 }

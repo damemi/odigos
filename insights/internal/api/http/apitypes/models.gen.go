@@ -5,6 +5,7 @@ package apitypes
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -224,6 +225,7 @@ const (
 	ErrorBodyCodeConflict            ErrorBodyCode = "conflict"
 	ErrorBodyCodeInternalError       ErrorBodyCode = "internal_error"
 	ErrorBodyCodeNotFound            ErrorBodyCode = "not_found"
+	ErrorBodyCodePayloadTooLarge     ErrorBodyCode = "payload_too_large"
 	ErrorBodyCodeUnavailable         ErrorBodyCode = "unavailable"
 	ErrorBodyCodeUnprocessableEntity ErrorBodyCode = "unprocessable_entity"
 )
@@ -238,6 +240,8 @@ func (e ErrorBodyCode) Valid() bool {
 	case ErrorBodyCodeInternalError:
 		return true
 	case ErrorBodyCodeNotFound:
+		return true
+	case ErrorBodyCodePayloadTooLarge:
 		return true
 	case ErrorBodyCodeUnavailable:
 		return true
@@ -290,6 +294,60 @@ func (e IntegrationFieldType) Valid() bool {
 	case String:
 		return true
 	case Url:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InterrogationEventStopRequestedPayloadChanges.
+const (
+	InterrogationEventStopRequestedPayloadChangesKeep   InterrogationEventStopRequestedPayloadChanges = "keep"
+	InterrogationEventStopRequestedPayloadChangesRevert InterrogationEventStopRequestedPayloadChanges = "revert"
+)
+
+// Valid indicates whether the value is a known member of the InterrogationEventStopRequestedPayloadChanges enum.
+func (e InterrogationEventStopRequestedPayloadChanges) Valid() bool {
+	switch e {
+	case InterrogationEventStopRequestedPayloadChangesKeep:
+		return true
+	case InterrogationEventStopRequestedPayloadChangesRevert:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InterrogationStopChanges.
+const (
+	InterrogationStopChangesKeep   InterrogationStopChanges = "keep"
+	InterrogationStopChangesRevert InterrogationStopChanges = "revert"
+)
+
+// Valid indicates whether the value is a known member of the InterrogationStopChanges enum.
+func (e InterrogationStopChanges) Valid() bool {
+	switch e {
+	case InterrogationStopChangesKeep:
+		return true
+	case InterrogationStopChangesRevert:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for InterrogationStopRequestChanges.
+const (
+	InterrogationStopRequestChangesKeep   InterrogationStopRequestChanges = "keep"
+	InterrogationStopRequestChangesRevert InterrogationStopRequestChanges = "revert"
+)
+
+// Valid indicates whether the value is a known member of the InterrogationStopRequestChanges enum.
+func (e InterrogationStopRequestChanges) Valid() bool {
+	switch e {
+	case InterrogationStopRequestChangesKeep:
+		return true
+	case InterrogationStopRequestChangesRevert:
 		return true
 	default:
 		return false
@@ -1430,6 +1488,918 @@ type IntegrationWrite struct {
 	Type string `json:"type"`
 }
 
+// Interrogation Examples: {"allow_changes":["custom_instrumentation"],"budget":{"max_probes":5,"max_rounds":5,"time_limit_seconds":3600},"change_counts":{"denied":0,"expired":0,"failed":0,"live":0,"reverted":0,"reverting":0,"total":0},"created_at":"2026-11-17T09:38:00Z","display_id":"INT-0B6F6C1E","end_reason":"","goal":"observability","id":"0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21","last_sequence":0,"progress":{"max_rounds":5,"round":0},"question":"Why is claim submission slow for some users?","scope":[],"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"},"status":"queued","title":"Why is claim submission slow for some users?","transaction_ids":[],"trigger":{"actor":"alon","kind":"manual"},"usage":{"duration_seconds":0,"input_tokens":0,"max_probes":5,"model_calls":0,"output_tokens":0,"probes_used":0,"rounds":0}}
+type Interrogation struct {
+	AllowChanges []InterrogationChangeKind `json:"allow_changes"`
+	Answer       *InterrogationAnswer      `json:"answer,omitempty"`
+	Budget       InterrogationBudget       `json:"budget"`
+
+	// Certainty Latest certainty, 0..100; absent until the first answer.
+	Certainty    *int                      `json:"certainty,omitempty"`
+	ChangeCounts InterrogationChangeCounts `json:"change_counts"`
+
+	// Changes Detail only; absent on the list. The run's changes, denied proposals included, oldest `requested_at` first.
+	Changes   []InterrogationChange `json:"changes,omitempty"`
+	CreatedAt time.Time             `json:"created_at"`
+
+	// DeadlineAt When the time limit ends the run, extensions included; absent while queued.
+	DeadlineAt *time.Time `json:"deadline_at,omitempty"`
+
+	// DisplayId Short human label, `INT-` + the first 8 hex characters of `id` in upper case. Not a key; two runs can share one. Use `id` to address a run.
+	DisplayId string `json:"display_id"`
+
+	// EndReason Why the run ended; empty while open. `done`: the model decided it has the answer. `max_rounds`, `max_model_calls`, `time_limit`, `probe_budget`: a limit was reached. `changes_denied`: the model was not done and every probe it asked for was refused. `no_evidence`: no call graph was found for the transactions in scope. `stopped_by_user`. `source_gone`: the source is no longer instrumented. `model_unavailable`: the gateway kept refusing until the deadline. `interrupted`: the run was written by another version of the server and could not be continued. `error`: anything else. Status by reason: `completed` for the first seven, `stopped` for `stopped_by_user`, `failed` for the rest. Open set.
+	EndReason InterrogationEndReason `json:"end_reason"`
+	EndedAt   *time.Time             `json:"ended_at,omitempty"`
+
+	// Error Failure text when `status` is `failed`.
+	Error string `json:"error,omitempty"`
+
+	// ExtendedSeconds Seconds added by extends, in total. Absent when the run was never extended. `budget.time_limit_seconds` + this is the run's whole allowance.
+	ExtendedSeconds int `json:"extended_seconds,omitempty"`
+
+	// Goal Open set. `security` is in the contract and not supported yet.
+	Goal InterrogationGoal `json:"goal"`
+	Id   string            `json:"id"`
+
+	// LastSequence Highest event sequence written so far.
+	LastSequence int64                 `json:"last_sequence"`
+	Progress     InterrogationProgress `json:"progress"`
+	Question     string                `json:"question"`
+
+	// Rounds Detail only; absent on the list.
+	Rounds []InterrogationRound `json:"rounds,omitempty"`
+
+	// Scope Transactions the run is looking at; filled in by the run when none were requested.
+	Scope []InterrogationScopeTransaction `json:"scope"`
+
+	// Source The workload a run targets. All containers of the workload.
+	Source InterrogationSource `json:"source"`
+
+	// StartedAt When the leader picked it up; absent while queued.
+	StartedAt *time.Time `json:"started_at,omitempty"`
+
+	// Status Changes to a terminal value only when the run is closed: the source is free and `complete` is true on the events from the same moment.
+	Status InterrogationStatus       `json:"status"`
+	Stop   *InterrogationStopRequest `json:"stop,omitempty"`
+
+	// Title The question, or the goal's default question when none was given.
+	Title string `json:"title"`
+
+	// TransactionIds As requested. What the run actually looked at is in `scope`.
+	TransactionIds []int64              `json:"transaction_ids"`
+	Trigger        InterrogationTrigger `json:"trigger"`
+	Usage          InterrogationUsage   `json:"usage"`
+}
+
+// InterrogationAnswer The running answer; replaced as rounds finish, final once the run ends.
+type InterrogationAnswer struct {
+	// Certainty The model's own number, 0..100. Shown only; nothing stops on it.
+	Certainty int  `json:"certainty"`
+	Final     bool `json:"final"`
+
+	// Round Round that produced this version.
+	Round     int       `json:"round"`
+	Text      string    `json:"text"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// InterrogationBudget defines model for InterrogationBudget.
+type InterrogationBudget struct {
+	// MaxAddedSpansPerMin Cap on span volume the run may add. Not supported yet; omit it.
+	MaxAddedSpansPerMin *int `json:"max_added_spans_per_min,omitempty"`
+
+	// MaxProbes Most probes the run may add. Default 5.
+	MaxProbes int `json:"max_probes,omitempty"`
+
+	// MaxRounds Read-only, from server configuration. Ignored on start.
+	MaxRounds int `json:"max_rounds,omitempty"`
+
+	// TimeLimitSeconds Wall-clock limit from `started_at`, as requested at start. Default 3600. Extensions are not added here; see `Interrogation.extended_seconds`.
+	TimeLimitSeconds int `json:"time_limit_seconds,omitempty"`
+}
+
+// InterrogationBudgetOption defines model for InterrogationBudgetOption.
+type InterrogationBudgetOption struct {
+	// Choices Values the mockup offers as a select. Any value within min..max is accepted.
+	Choices   []int `json:"choices"`
+	Default   *int  `json:"default,omitempty"`
+	Max       *int  `json:"max,omitempty"`
+	Min       *int  `json:"min,omitempty"`
+	Supported bool  `json:"supported"`
+}
+
+// InterrogationCallEdge defines model for InterrogationCallEdge.
+type InterrogationCallEdge struct {
+	Callee string `json:"callee"`
+	Caller string `json:"caller"`
+}
+
+// InterrogationChange One change of a run, or a proposal it denied.
+//
+// Examples: {"applied_at":"2026-11-17T09:41:07Z","checks":["changes_allowed","in_call_graph","application_code","not_already_probed","within_workload_cap","within_run_budget"],"expires_at":"2026-11-17T10:38:03Z","id":"chg_3f9a1c07b2d44e6a8c51","language":"java","requested_at":"2026-11-17T09:41:02Z","round":1,"state":"active","target":{"class_name":"com.claims.intake.ClaimValidator","method_name":"validate"}}
+type InterrogationChange struct {
+	AppliedAt *time.Time `json:"applied_at,omitempty"`
+
+	// BlockReason Why an accepted change is not in the rule. `covered_by_rule`: another rule already provides the probe. Open set.
+	BlockReason InterrogationChangeBlockReason `json:"block_reason,omitempty"`
+
+	// Checks Checks passed, in order. All six for a stored change; those before the failing one for a denied proposal.
+	Checks []InterrogationChangeCheck `json:"checks"`
+
+	// DenyReason Open set.
+	DenyReason InterrogationChangeDenyReason `json:"deny_reason,omitempty"`
+
+	// EndReason Set once the change is ending or ended. For `failed` it is why the change never took effect.
+	EndReason InterrogationChangeEndReason `json:"end_reason,omitempty"`
+
+	// EndedAt When it left the cluster.
+	EndedAt *time.Time `json:"ended_at,omitempty"`
+
+	// ExpiresAt Stored changes only. Never later than the run's `deadline_at`; moved by extend.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// Id `chg_` + 20 hex characters; the id in `rounds[].proposed`, `rounds[].applied` and `change_id` on events.
+	Id string `json:"id"`
+
+	// Language `java` today.
+	Language string `json:"language"`
+
+	// RequestedAt When the model proposed it.
+	RequestedAt time.Time `json:"requested_at"`
+
+	// Round Round that proposed it.
+	Round int `json:"round"`
+
+	// State `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by stop-and-revert or because the source is gone (`end_reason`). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. Open set.
+	State InterrogationChangeState `json:"state"`
+
+	// Target The function a probe instruments. Only the fields its language uses are set.
+	Target InterrogationChangeTarget `json:"target"`
+}
+
+// InterrogationChangeBlockReason Why an accepted change is not in the rule. `covered_by_rule`: another rule already provides the probe. Open set.
+type InterrogationChangeBlockReason = string
+
+// InterrogationChangeCategory Open set.
+type InterrogationChangeCategory = string
+
+// InterrogationChangeCheck A guardrail a change passed. Open set.
+type InterrogationChangeCheck = string
+
+// InterrogationChangeCounts defines model for InterrogationChangeCounts.
+type InterrogationChangeCounts struct {
+	Denied int `json:"denied"`
+
+	// Expired Left when their time ran out. The normal end of a run's changes.
+	Expired int `json:"expired"`
+
+	// Failed Accepted, never took effect.
+	Failed int `json:"failed"`
+
+	// Live `requested` + `blocked` + `active`.
+	Live int `json:"live"`
+
+	// NextExpiryAt Soonest expiry among live changes. The list's "Ends" column.
+	NextExpiryAt *time.Time `json:"next_expiry_at,omitempty"`
+
+	// Reverted Ended by stop-and-revert, or because the source is gone.
+	Reverted int `json:"reverted"`
+
+	// Reverting Ended, still in the rule until the next reconcile.
+	Reverting int `json:"reverting"`
+
+	// Total Every change of the run: `live` + `reverting` + `reverted` + `expired` + `failed` + `denied`.
+	Total int `json:"total"`
+}
+
+// InterrogationChangeDenyReason Open set.
+type InterrogationChangeDenyReason = string
+
+// InterrogationChangeEndReason Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
+type InterrogationChangeEndReason = string
+
+// InterrogationChangeKind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
+type InterrogationChangeKind = string
+
+// InterrogationChangeState `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by stop-and-revert or because the source is gone (`end_reason`). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. Open set.
+type InterrogationChangeState = string
+
+// InterrogationChangeTarget The function a probe instruments. Only the fields its language uses are set.
+type InterrogationChangeTarget struct {
+	ClassName          string `json:"class_name,omitempty"`
+	FunctionName       string `json:"function_name,omitempty"`
+	MethodName         string `json:"method_name,omitempty"`
+	PackageName        string `json:"package_name,omitempty"`
+	ReceiverMethodName string `json:"receiver_method_name,omitempty"`
+	ReceiverName       string `json:"receiver_name,omitempty"`
+	Signature          string `json:"signature,omitempty"`
+}
+
+// InterrogationChangesBySource defines model for InterrogationChangesBySource.
+type InterrogationChangesBySource struct {
+	Language string `json:"language,omitempty"`
+	Live     int    `json:"live"`
+
+	// MaxProbes The per-workload cap over every rule, enforced when a probe is requested.
+	MaxProbes int `json:"max_probes"`
+
+	// Probes Live interrogation changes on the workload; probes from other rules are not counted.
+	Probes int `json:"probes"`
+
+	// Source The workload a run targets. All containers of the workload.
+	Source InterrogationSource `json:"source"`
+}
+
+// InterrogationChangesSummary Examples: {"by_kind":{"custom_instrumentation":3},"by_source":[{"language":"java","live":3,"max_probes":20,"probes":3,"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"}}],"live":3,"next_expiry_at":"2026-11-17T10:38:00Z","next_expiry_change_id":"chg_3f9a1c07b2d44e6a8c51"}
+type InterrogationChangesSummary struct {
+	// ByKind Live changes per `InterrogationChangeKind`.
+	ByKind             map[string]int                 `json:"by_kind"`
+	BySource           []InterrogationChangesBySource `json:"by_source"`
+	Live               int                            `json:"live"`
+	NextExpiryAt       *time.Time                     `json:"next_expiry_at,omitempty"`
+	NextExpiryChangeId string                         `json:"next_expiry_change_id,omitempty"`
+}
+
+// InterrogationEndReason Why the run ended; empty while open. `done`: the model decided it has the answer. `max_rounds`, `max_model_calls`, `time_limit`, `probe_budget`: a limit was reached. `changes_denied`: the model was not done and every probe it asked for was refused. `no_evidence`: no call graph was found for the transactions in scope. `stopped_by_user`. `source_gone`: the source is no longer instrumented. `model_unavailable`: the gateway kept refusing until the deadline. `interrupted`: the run was written by another version of the server and could not be continued. `error`: anything else. Status by reason: `completed` for the first seven, `stopped` for `stopped_by_user`, `failed` for the rest. Open set.
+type InterrogationEndReason = string
+
+// InterrogationErrorDetails defines model for InterrogationErrorDetails.
+type InterrogationErrorDetails struct {
+	DisplayId string `json:"display_id,omitempty"`
+
+	// Field With `invalid_argument`: path of the field in the REST body or query, snake_case (`budget.max_probes`, `transaction_ids`). A GraphQL client maps it to its own input field.
+	Field           string `json:"field,omitempty"`
+	InterrogationId string `json:"interrogation_id,omitempty"`
+	MaxOpen         int    `json:"max_open,omitempty"`
+	MaxPerDay       int    `json:"max_per_day,omitempty"`
+	Open            int    `json:"open,omitempty"`
+
+	// Option With `not_supported_yet`: `<field>=<value>` for an option value (`goal=security`, `allow_changes=kernel_spans`), or the field path for a field (`budget.max_added_spans_per_min`).
+	Option string `json:"option,omitempty"`
+
+	// Reason `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. Open set.
+	Reason   InterrogationErrorReason `json:"reason"`
+	Requires string                   `json:"requires,omitempty"`
+
+	// Value With `invalid_argument` on a list: the element at fault, e.g. the unknown id in `transaction_ids`.
+	Value                string                 `json:"value,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// InterrogationErrorReason `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. Open set.
+type InterrogationErrorReason = string
+
+// InterrogationErrorResponse The standard `ErrorResponse` envelope with `error.details` typed: the existing `ErrorBody.details` is an untyped object, and this schema says what this tag puts in it. `code` keeps the existing closed set; the typed reason is in `details.reason`. The server writes the one `ErrorResponse` type (`x-go-type`).
+type InterrogationErrorResponse = ErrorResponse
+
+// InterrogationEvent Examples: {"change_id":"chg_3f9a1c07b2d44e6a8c51","message":"Applied a probe on com.claims.intake.ClaimValidator.validate","node":"confirm","payload":{"expires_at":"2026-11-17T10:38:00Z","kind":"custom_instrumentation","rule_name":"odig-int-claims-demo-claims-intake","target":"com.claims.intake.ClaimValidator.validate"},"round":1,"sequence":14,"time":"2026-11-17T09:41:07Z","type":"change.applied"}
+type InterrogationEvent struct {
+	// ChangeId On `change.*` events.
+	ChangeId string `json:"change_id,omitempty"`
+
+	// Message One human-readable line for a plain timeline.
+	Message string `json:"message"`
+
+	// Node The node that wrote the event.
+	Node InterrogationNodeName `json:"node,omitempty"`
+
+	// Payload Per-type data. `InterrogationEventType` names the schema for each `type`; a type this list does not know yet carries a plain object.
+	Payload json.RawMessage `json:"payload"`
+
+	// Round 0 for events outside a round.
+	Round int `json:"round"`
+
+	// Sequence Strictly increasing within one interrogation, starting at 1. Do not rely on the absence of gaps.
+	Sequence int64     `json:"sequence"`
+	Time     time.Time `json:"time"`
+
+	// Type Open set: ignore types you do not know. The schema of `payload` for
+	// each type:
+	//
+	// | Type | Payload schema | When |
+	// |---|---|---|
+	// | `interrogation.started` | `InterrogationEventStartedPayload` | the run's first node, after the leader picked it up |
+	// | `interrogation.stop_requested` | `InterrogationEventStopRequestedPayload` | the run saw the stop |
+	// | `interrogation.extended` | `InterrogationEventExtendedPayload` | the run saw a later deadline |
+	// | `interrogation.ended` | `InterrogationEventEndedPayload` | the run's last event. Absent when the server had to close an overdue run; rely on `complete` |
+	// | `round.started` | `InterrogationEventRoundStartedPayload` | |
+	// | `round.finished` | `InterrogationEventRoundFinishedPayload` | |
+	// | `node.finished` | `InterrogationEventNodeFinishedPayload` | the run left a node |
+	// | `wait.started` | `InterrogationEventWaitStartedPayload` | the run parked in a wait node |
+	// | `wait.finished` | `InterrogationEventWaitFinishedPayload` | |
+	// | `evidence.collected` | `InterrogationEventEvidencePayload` | `gather` and `observe` read the call graphs |
+	// | `model.called` | `InterrogationEventModelCalledPayload` | after every model call, success or not |
+	// | `change.proposed` | `InterrogationEventChangeProposedPayload` | the model named a change |
+	// | `change.denied` | `InterrogationEventChangeDeniedPayload` | validation refused it |
+	// | `change.requested` | `InterrogationEventChangeRequestedPayload` | validation passed, stored |
+	// | `change.applied` | `InterrogationEventChangeAppliedPayload` | the rule carries it |
+	// | `change.failed` | `InterrogationEventChangeFailedPayload` | not in the rule in time, or blocked |
+	// | `change.reverted` | `InterrogationEventChangeRevertedPayload` | ended while the run was open |
+	// | `answer.updated` | `InterrogationAnswer` | the running answer changed |
+	// | `error.raised` | `InterrogationEventErrorRaisedPayload` | an attempt at a node failed and is retried |
+	Type InterrogationEventType `json:"type"`
+}
+
+// InterrogationEventChangeAppliedPayload defines model for InterrogationEventChangeAppliedPayload.
+type InterrogationEventChangeAppliedPayload struct {
+	ExpiresAt time.Time `json:"expires_at,omitempty"`
+
+	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
+	Kind     InterrogationChangeKind `json:"kind"`
+	RuleName string                  `json:"rule_name,omitempty"`
+	Target   string                  `json:"target"`
+}
+
+// InterrogationEventChangeDeniedPayload defines model for InterrogationEventChangeDeniedPayload.
+type InterrogationEventChangeDeniedPayload struct {
+	// Checks The checks passed before the one that refused it.
+	Checks []InterrogationChangeCheck `json:"checks"`
+
+	// DenyReason Open set.
+	DenyReason InterrogationChangeDenyReason `json:"deny_reason"`
+	Detail     string                        `json:"detail,omitempty"`
+
+	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
+	Kind   InterrogationChangeKind `json:"kind"`
+	Target string                  `json:"target"`
+}
+
+// InterrogationEventChangeFailedPayload defines model for InterrogationEventChangeFailedPayload.
+type InterrogationEventChangeFailedPayload struct {
+	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
+	Kind InterrogationChangeKind `json:"kind"`
+
+	// Reason Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
+	Reason InterrogationChangeEndReason `json:"reason"`
+	Target string                       `json:"target"`
+}
+
+// InterrogationEventChangeProposedPayload defines model for InterrogationEventChangeProposedPayload.
+type InterrogationEventChangeProposedPayload struct {
+	// Category Open set.
+	Category InterrogationChangeCategory `json:"category,omitempty"`
+
+	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
+	Kind InterrogationChangeKind `json:"kind"`
+
+	// Probe The probe of a `custom_instrumentation` change. Fields used depend on `language`.
+	Probe  InterrogationProbe `json:"probe,omitempty"`
+	Reason string             `json:"reason,omitempty"`
+	Target string             `json:"target"`
+}
+
+// InterrogationEventChangeRequestedPayload defines model for InterrogationEventChangeRequestedPayload.
+type InterrogationEventChangeRequestedPayload struct {
+	Checks []InterrogationChangeCheck `json:"checks"`
+
+	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
+	Kind   InterrogationChangeKind `json:"kind"`
+	Target string                  `json:"target"`
+}
+
+// InterrogationEventChangeRevertedPayload defines model for InterrogationEventChangeRevertedPayload.
+type InterrogationEventChangeRevertedPayload struct {
+	// By Actor of the stop, when it named one.
+	By string `json:"by,omitempty"`
+
+	// EndReason Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
+	EndReason InterrogationChangeEndReason `json:"end_reason"`
+
+	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
+	Kind   InterrogationChangeKind `json:"kind"`
+	Target string                  `json:"target"`
+}
+
+// InterrogationEventEndedPayload defines model for InterrogationEventEndedPayload.
+type InterrogationEventEndedPayload struct {
+	// Certainty Absent when the run produced no answer.
+	Certainty *int `json:"certainty,omitempty"`
+
+	// EndReason Why the run ended; empty while open. `done`: the model decided it has the answer. `max_rounds`, `max_model_calls`, `time_limit`, `probe_budget`: a limit was reached. `changes_denied`: the model was not done and every probe it asked for was refused. `no_evidence`: no call graph was found for the transactions in scope. `stopped_by_user`. `source_gone`: the source is no longer instrumented. `model_unavailable`: the gateway kept refusing until the deadline. `interrupted`: the run was written by another version of the server and could not be continued. `error`: anything else. Status by reason: `completed` for the first seven, `stopped` for `stopped_by_user`, `failed` for the rest. Open set.
+	EndReason InterrogationEndReason `json:"end_reason"`
+	Error     string                 `json:"error,omitempty"`
+
+	// Status `queued`: recorded, waiting for the leader. `running`: rounds in progress. `stopping`: a stop was recorded, the run is winding down. `completed`: ended on its own (`end_reason` says why). `stopped`: ended by a person. `failed`: ended on an error (`error` has the text). Terminal: `completed`, `stopped`, `failed`. Open set: treat an unknown value as non-terminal and keep polling. `queued` normally lasts about 2 s, up to about 20 s after a leader change, and `stopping` a few seconds; past 30 s (from `created_at`, or from `stop.requested_at`) show that it is taking longer than expected. A run that cannot finish is closed as `failed` (`interrupted`) 5 minutes after its deadline. A run that has been `queued` for 5 minutes is ended the same way by the next start on its source.
+	Status InterrogationStatus `json:"status"`
+}
+
+// InterrogationEventErrorRaisedPayload defines model for InterrogationEventErrorRaisedPayload.
+type InterrogationEventErrorRaisedPayload struct {
+	Error string `json:"error"`
+
+	// Node A node of the run's workflow graph. `prepare`: check the source is instrumented and open round 1. `wait_baseline`: wait for traffic before the first reading. `gate`: check the run's limits and the model gateway before paying for a call. `wait_model`: the gateway is paused; wait. `gather`: flush and read the call graphs and build the model request. `analyze`: the model call. `record`: validate the reply, record the answer and the changes it proposes. `apply`: validate each proposed change and store the accepted ones. `wait_apply`, `confirm`: wait until the accepted changes are in the instrumentation rule. `wait_observe`, `observe`: let traffic run with them, then read the call graph again. `conclude`: end the run. A round runs `gate` to `observe`; round 1 also holds `prepare` and `wait_baseline`, and the last round `conclude`. Open set: the graph can gain nodes; show an unknown name as it is.
+	Node           InterrogationNodeName `json:"node"`
+	RetryInSeconds int                   `json:"retry_in_seconds,omitempty"`
+}
+
+// InterrogationEventEvidencePayload What `gather` or `observe` read. Today `kind` is always `call_graph`.
+type InterrogationEventEvidencePayload struct {
+	Edges     int `json:"edges,omitempty"`
+	Functions int `json:"functions,omitempty"`
+
+	// Kind Open set: `call_graph`; planned `traces`, `profile`.
+	Kind     string `json:"kind"`
+	NewEdges int    `json:"new_edges,omitempty"`
+
+	// SampleEdges At most 50.
+	SampleEdges  []InterrogationCallEdge `json:"sample_edges,omitempty"`
+	Transactions int                     `json:"transactions,omitempty"`
+
+	// Truncated A call graph was larger than the request allows and was cut.
+	Truncated bool `json:"truncated,omitempty"`
+}
+
+// InterrogationEventExtendedPayload defines model for InterrogationEventExtendedPayload.
+type InterrogationEventExtendedPayload struct {
+	// DeadlineAt The new deadline.
+	DeadlineAt time.Time `json:"deadline_at"`
+
+	// Seconds How much later than the deadline the run had.
+	Seconds int `json:"seconds"`
+}
+
+// InterrogationEventList defines model for InterrogationEventList.
+type InterrogationEventList struct {
+	// Complete True when the run has ended and no event follows `last_sequence`. Stop polling.
+	Complete bool                 `json:"complete"`
+	Count    int                  `json:"count"`
+	Items    []InterrogationEvent `json:"items"`
+
+	// LastSequence Highest sequence in `items`, or the `after` given when the page is empty. Pass it as the next `after`.
+	LastSequence int64 `json:"last_sequence"`
+}
+
+// InterrogationEventModelCalledPayload defines model for InterrogationEventModelCalledPayload.
+type InterrogationEventModelCalledPayload struct {
+	// Attempt 1 for the round's first call.
+	Attempt     int    `json:"attempt,omitempty"`
+	DurationMs  int64  `json:"duration_ms,omitempty"`
+	Error       string `json:"error,omitempty"`
+	InputTokens int64  `json:"input_tokens,omitempty"`
+	Model       string `json:"model,omitempty"`
+
+	// Outcome Open set.
+	Outcome      InterrogationModelCallOutcome `json:"outcome"`
+	OutputTokens int64                         `json:"output_tokens,omitempty"`
+}
+
+// InterrogationEventNodeFinishedPayload defines model for InterrogationEventNodeFinishedPayload.
+type InterrogationEventNodeFinishedPayload struct {
+	// Next The node the run goes to; absent after `conclude`.
+	Next InterrogationNodeName `json:"next,omitempty"`
+
+	// Node A node of the run's workflow graph. `prepare`: check the source is instrumented and open round 1. `wait_baseline`: wait for traffic before the first reading. `gate`: check the run's limits and the model gateway before paying for a call. `wait_model`: the gateway is paused; wait. `gather`: flush and read the call graphs and build the model request. `analyze`: the model call. `record`: validate the reply, record the answer and the changes it proposes. `apply`: validate each proposed change and store the accepted ones. `wait_apply`, `confirm`: wait until the accepted changes are in the instrumentation rule. `wait_observe`, `observe`: let traffic run with them, then read the call graph again. `conclude`: end the run. A round runs `gate` to `observe`; round 1 also holds `prepare` and `wait_baseline`, and the last round `conclude`. Open set: the graph can gain nodes; show an unknown name as it is.
+	Node InterrogationNodeName `json:"node"`
+}
+
+// InterrogationEventRoundFinishedPayload defines model for InterrogationEventRoundFinishedPayload.
+type InterrogationEventRoundFinishedPayload struct {
+	// Outcome How a completed round ended. `observed`: it ran to the end. `no_change_applied`: nothing it requested reached the rule. `ended`: the run stopped, failed or hit a limit inside the round; nodes it did not reach are not listed and it may have no `reply`. Open set.
+	Outcome InterrogationRoundOutcome `json:"outcome"`
+	Round   int                       `json:"round"`
+}
+
+// InterrogationEventRoundStartedPayload defines model for InterrogationEventRoundStartedPayload.
+type InterrogationEventRoundStartedPayload struct {
+	// Final No probe can be added in this round.
+	Final bool `json:"final"`
+	Round int  `json:"round"`
+}
+
+// InterrogationEventStartedPayload defines model for InterrogationEventStartedPayload.
+type InterrogationEventStartedPayload struct {
+	AllowChanges []InterrogationChangeKind `json:"allow_changes"`
+	DeadlineAt   time.Time                 `json:"deadline_at"`
+	MaxProbes    int                       `json:"max_probes"`
+	MaxRounds    int                       `json:"max_rounds"`
+
+	// Revision Prompt, request and model revision the run uses.
+	Revision string `json:"revision"`
+}
+
+// InterrogationEventStopRequestedPayload defines model for InterrogationEventStopRequestedPayload.
+type InterrogationEventStopRequestedPayload struct {
+	Actor   string                                        `json:"actor,omitempty"`
+	Changes InterrogationEventStopRequestedPayloadChanges `json:"changes"`
+}
+
+// InterrogationEventStopRequestedPayloadChanges defines model for InterrogationEventStopRequestedPayload.Changes.
+type InterrogationEventStopRequestedPayloadChanges string
+
+// InterrogationEventType Open set: ignore types you do not know. The schema of `payload` for
+// each type:
+//
+// | Type | Payload schema | When |
+// |---|---|---|
+// | `interrogation.started` | `InterrogationEventStartedPayload` | the run's first node, after the leader picked it up |
+// | `interrogation.stop_requested` | `InterrogationEventStopRequestedPayload` | the run saw the stop |
+// | `interrogation.extended` | `InterrogationEventExtendedPayload` | the run saw a later deadline |
+// | `interrogation.ended` | `InterrogationEventEndedPayload` | the run's last event. Absent when the server had to close an overdue run; rely on `complete` |
+// | `round.started` | `InterrogationEventRoundStartedPayload` | |
+// | `round.finished` | `InterrogationEventRoundFinishedPayload` | |
+// | `node.finished` | `InterrogationEventNodeFinishedPayload` | the run left a node |
+// | `wait.started` | `InterrogationEventWaitStartedPayload` | the run parked in a wait node |
+// | `wait.finished` | `InterrogationEventWaitFinishedPayload` | |
+// | `evidence.collected` | `InterrogationEventEvidencePayload` | `gather` and `observe` read the call graphs |
+// | `model.called` | `InterrogationEventModelCalledPayload` | after every model call, success or not |
+// | `change.proposed` | `InterrogationEventChangeProposedPayload` | the model named a change |
+// | `change.denied` | `InterrogationEventChangeDeniedPayload` | validation refused it |
+// | `change.requested` | `InterrogationEventChangeRequestedPayload` | validation passed, stored |
+// | `change.applied` | `InterrogationEventChangeAppliedPayload` | the rule carries it |
+// | `change.failed` | `InterrogationEventChangeFailedPayload` | not in the rule in time, or blocked |
+// | `change.reverted` | `InterrogationEventChangeRevertedPayload` | ended while the run was open |
+// | `answer.updated` | `InterrogationAnswer` | the running answer changed |
+// | `error.raised` | `InterrogationEventErrorRaisedPayload` | an attempt at a node failed and is retried |
+type InterrogationEventType = string
+
+// InterrogationEventWaitFinishedPayload defines model for InterrogationEventWaitFinishedPayload.
+type InterrogationEventWaitFinishedPayload struct {
+	// Outcome Open set.
+	Outcome InterrogationWaitOutcome `json:"outcome"`
+
+	// Reason `traffic`: the baseline before round 1. `model_paused`: the model gateway is rate limiting or refusing. `rule_applied`: a requested change is not in the rule yet. `observe`: traffic is running with the new changes. Open set.
+	Reason InterrogationWaitReason `json:"reason"`
+}
+
+// InterrogationEventWaitStartedPayload defines model for InterrogationEventWaitStartedPayload.
+type InterrogationEventWaitStartedPayload struct {
+	DeadlineAt time.Time `json:"deadline_at,omitempty"`
+
+	// Reason `traffic`: the baseline before round 1. `model_paused`: the model gateway is rate limiting or refusing. `rule_applied`: a requested change is not in the rule yet. `observe`: traffic is running with the new changes. Open set.
+	Reason InterrogationWaitReason `json:"reason"`
+}
+
+// InterrogationEvidenceCounts What a reading of the call graphs in scope found.
+type InterrogationEvidenceCounts struct {
+	// Edges Caller-callee edges in the call graphs.
+	Edges int `json:"edges"`
+
+	// Functions Application functions in the call graphs.
+	Functions int `json:"functions"`
+
+	// NewEdges Edges that were not there at the previous reading; all of them at the first.
+	NewEdges int `json:"new_edges"`
+
+	// Transactions Transactions with evidence in scope.
+	Transactions int `json:"transactions"`
+}
+
+// InterrogationExtend Examples: {"actor":"alon","seconds":1800}
+type InterrogationExtend struct {
+	Actor   string `json:"actor,omitempty"`
+	Seconds int    `json:"seconds"`
+}
+
+// InterrogationGoal Open set. `security` is in the contract and not supported yet.
+type InterrogationGoal = string
+
+// InterrogationList defines model for InterrogationList.
+type InterrogationList struct {
+	// Count Items in this page. Fewer than `limit` means there is no older page.
+	Count int             `json:"count"`
+	Items []Interrogation `json:"items"`
+}
+
+// InterrogationModelCallOutcome Open set.
+type InterrogationModelCallOutcome = string
+
+// InterrogationModelUsage Model calls made by the interrogations the server has (30 days). The background loop's calls are not counted.
+type InterrogationModelUsage struct {
+	Calls int `json:"calls"`
+
+	// Gateway `litellm`.
+	Gateway     string `json:"gateway"`
+	InputTokens int64  `json:"input_tokens"`
+
+	// Model Model of the most recent call; empty when there were none.
+	Model        string `json:"model"`
+	OutputTokens int64  `json:"output_tokens"`
+}
+
+// InterrogationNode One node of the graph in one round, as the run went through it.
+type InterrogationNode struct {
+	// EnteredAt First entry in this round.
+	EnteredAt time.Time `json:"entered_at"`
+
+	// LeftAt Last exit; absent while the run is in it.
+	LeftAt *time.Time `json:"left_at,omitempty"`
+
+	// Name A node of the run's workflow graph. `prepare`: check the source is instrumented and open round 1. `wait_baseline`: wait for traffic before the first reading. `gate`: check the run's limits and the model gateway before paying for a call. `wait_model`: the gateway is paused; wait. `gather`: flush and read the call graphs and build the model request. `analyze`: the model call. `record`: validate the reply, record the answer and the changes it proposes. `apply`: validate each proposed change and store the accepted ones. `wait_apply`, `confirm`: wait until the accepted changes are in the instrumentation rule. `wait_observe`, `observe`: let traffic run with them, then read the call graph again. `conclude`: end the run. A round runs `gate` to `observe`; round 1 also holds `prepare` and `wait_baseline`, and the last round `conclude`. Open set: the graph can gain nodes; show an unknown name as it is.
+	Name InterrogationNodeName `json:"name"`
+
+	// State `running`: the run is in the node. `waiting`: the node is a wait and the run is parked in it. `done`: the run left it. `failed`: the last attempt at it failed; the run retries from its last recorded point. Open set.
+	State InterrogationNodeState `json:"state"`
+
+	// Visits Times the run entered the node in this round. More than 1 for the nodes of a poll (`wait_apply`, `confirm`), for a retried model call, and after a failed attempt.
+	Visits int `json:"visits"`
+}
+
+// InterrogationNodeName A node of the run's workflow graph. `prepare`: check the source is instrumented and open round 1. `wait_baseline`: wait for traffic before the first reading. `gate`: check the run's limits and the model gateway before paying for a call. `wait_model`: the gateway is paused; wait. `gather`: flush and read the call graphs and build the model request. `analyze`: the model call. `record`: validate the reply, record the answer and the changes it proposes. `apply`: validate each proposed change and store the accepted ones. `wait_apply`, `confirm`: wait until the accepted changes are in the instrumentation rule. `wait_observe`, `observe`: let traffic run with them, then read the call graph again. `conclude`: end the run. A round runs `gate` to `observe`; round 1 also holds `prepare` and `wait_baseline`, and the last round `conclude`. Open set: the graph can gain nodes; show an unknown name as it is.
+type InterrogationNodeName = string
+
+// InterrogationNodeState `running`: the run is in the node. `waiting`: the node is a wait and the run is parked in it. `done`: the run left it. `failed`: the last attempt at it failed; the run retries from its last recorded point. Open set.
+type InterrogationNodeState = string
+
+// InterrogationOptionValue defines model for InterrogationOptionValue.
+type InterrogationOptionValue struct {
+	// Default Preselect it in the form.
+	Default bool `json:"default"`
+
+	// Supported False: sending it is rejected with `not_supported_yet`. Show it disabled.
+	Supported bool   `json:"supported"`
+	Value     string `json:"value"`
+}
+
+// InterrogationOptions Examples: {"budget":{"max_added_spans_per_min":{"choices":[500,1000,5000],"supported":false},"max_probes":{"choices":[],"default":5,"max":20,"min":1,"supported":true},"time_limit_seconds":{"choices":[900,3600,14400],"default":3600,"max":14400,"min":300,"supported":true}},"change_kinds":[{"default":true,"supported":true,"value":"custom_instrumentation"},{"default":false,"supported":false,"value":"head_sampling"},{"default":false,"supported":false,"value":"payload_collection"},{"default":false,"supported":false,"value":"kernel_spans"}],"enabled":true,"extend":{"default_seconds":1800,"max_total_seconds":28800},"goals":[{"default":true,"supported":true,"value":"observability"},{"default":false,"supported":false,"value":"security"}],"max_open":10,"max_rounds":5,"max_transaction_ids":20}
+type InterrogationOptions struct {
+	Budget struct {
+		MaxAddedSpansPerMin InterrogationBudgetOption `json:"max_added_spans_per_min"`
+		MaxProbes           InterrogationBudgetOption `json:"max_probes"`
+		TimeLimitSeconds    InterrogationBudgetOption `json:"time_limit_seconds"`
+	} `json:"budget"`
+	ChangeKinds []InterrogationOptionValue `json:"change_kinds"`
+	Enabled     bool                       `json:"enabled"`
+	Extend      struct {
+		DefaultSeconds int `json:"default_seconds"`
+
+		// MaxTotalSeconds Ceiling for the time limit after extensions.
+		MaxTotalSeconds int `json:"max_total_seconds"`
+	} `json:"extend"`
+	Goals []InterrogationOptionValue `json:"goals"`
+
+	// MaxOpen Open runs (queued + running) the cluster accepts.
+	MaxOpen           int `json:"max_open"`
+	MaxRounds         int `json:"max_rounds"`
+	MaxTransactionIds int `json:"max_transaction_ids"`
+}
+
+// InterrogationPickerSource defines model for InterrogationPickerSource.
+type InterrogationPickerSource struct {
+	ActiveDisplayId       string `json:"active_display_id,omitempty"`
+	ActiveInterrogationId string `json:"active_interrogation_id,omitempty"`
+
+	// Busy An interrogation is open on it; starting another answers 409.
+	Busy bool   `json:"busy"`
+	Kind string `json:"kind"`
+
+	// Language `java` today.
+	Language string `json:"language"`
+
+	// LastSeen Latest traffic on any of them.
+	LastSeen *time.Time `json:"last_seen,omitempty"`
+
+	// MaxProbes The per-workload cap over every rule, enforced when a probe is requested.
+	MaxProbes int    `json:"max_probes,omitempty"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+
+	// Probes Live interrogation changes on the workload; probes from other rules are not counted.
+	Probes int `json:"probes,omitempty"`
+
+	// Transactions Transactions with call-graph evidence.
+	Transactions int `json:"transactions"`
+}
+
+// InterrogationProbe The probe of a `custom_instrumentation` change. Fields used depend on `language`.
+type InterrogationProbe struct {
+	ClassName    string `json:"class_name,omitempty"`
+	FunctionName string `json:"function_name,omitempty"`
+
+	// Language Open set: `java`, `go`, `php`, `cpp`.
+	Language           string `json:"language"`
+	MethodName         string `json:"method_name,omitempty"`
+	PackageName        string `json:"package_name,omitempty"`
+	ReceiverMethodName string `json:"receiver_method_name,omitempty"`
+	ReceiverName       string `json:"receiver_name,omitempty"`
+	Signature          string `json:"signature,omitempty"`
+}
+
+// InterrogationProgress defines model for InterrogationProgress.
+type InterrogationProgress struct {
+	MaxRounds int `json:"max_rounds"`
+
+	// Node The node the run is in; absent before the leader picked the run up and after the end.
+	Node InterrogationNodeName `json:"node,omitempty"`
+
+	// Round Current round, 1-based; 0 before the first.
+	Round int `json:"round"`
+
+	// Wait Present while the run is parked in a wait node.
+	Wait *InterrogationWait `json:"wait,omitempty"`
+}
+
+// InterrogationRound One round, as the workflow recorded it. A field that is absent has not happened yet.
+type InterrogationRound struct {
+	// Applied Ids of the changes that reached the cluster this round.
+	Applied []string   `json:"applied"`
+	EndedAt *time.Time `json:"ended_at,omitempty"`
+
+	// Final No probe can be added in this round.
+	Final bool `json:"final"`
+
+	// Nodes The nodes the run went through in this round, in the order it first entered them.
+	Nodes []InterrogationNode `json:"nodes"`
+
+	// Observed The call graphs `gather` read before the model call.
+	Observed *InterrogationEvidenceCounts `json:"observed,omitempty"`
+
+	// ObservedAfter The call graphs `observe` read after the changes ran with traffic.
+	ObservedAfter *InterrogationEvidenceCounts `json:"observed_after,omitempty"`
+
+	// Outcome Present once the round is `completed`.
+	Outcome InterrogationRoundOutcome `json:"outcome,omitempty"`
+
+	// Proposed Ids of every change the model proposed this round, accepted or denied. They are the ids of `Interrogation.changes`, which also lists the denied ones with their reason.
+	Proposed  []string                 `json:"proposed"`
+	Reply     *InterrogationRoundReply `json:"reply,omitempty"`
+	Round     int                      `json:"round"`
+	StartedAt time.Time                `json:"started_at"`
+
+	// State Open set.
+	State InterrogationRoundState `json:"state"`
+}
+
+// InterrogationRoundOutcome How a completed round ended. `observed`: it ran to the end. `no_change_applied`: nothing it requested reached the rule. `ended`: the run stopped, failed or hit a limit inside the round; nodes it did not reach are not listed and it may have no `reply`. Open set.
+type InterrogationRoundOutcome = string
+
+// InterrogationRoundReply What the model replied in the round.
+type InterrogationRoundReply struct {
+	Certainty int `json:"certainty"`
+
+	// Done The model decided more probes would not change the answer.
+	Done bool `json:"done"`
+
+	// Text Its answer on the evidence of this round.
+	Text string `json:"text"`
+}
+
+// InterrogationRoundState Open set.
+type InterrogationRoundState = string
+
+// InterrogationScopeSelection `user`: from `transaction_ids`. `auto`: picked by the run, by call-graph size. Open set.
+type InterrogationScopeSelection = string
+
+// InterrogationScopeTransaction defines model for InterrogationScopeTransaction.
+type InterrogationScopeTransaction struct {
+	Kind      string `json:"kind"`
+	Operation string `json:"operation"`
+
+	// SelectedBy `user`: from `transaction_ids`. `auto`: picked by the run, by call-graph size. Open set.
+	SelectedBy    InterrogationScopeSelection `json:"selected_by"`
+	TransactionId int64                       `json:"transaction_id"`
+}
+
+// InterrogationSource The workload a run targets. All containers of the workload.
+type InterrogationSource struct {
+	// Kind Workload kind: Deployment, StatefulSet, DaemonSet, ...
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
+// InterrogationSourceList defines model for InterrogationSourceList.
+type InterrogationSourceList struct {
+	Count int                         `json:"count"`
+	Items []InterrogationPickerSource `json:"items"`
+}
+
+// InterrogationSourceTransaction defines model for InterrogationSourceTransaction.
+type InterrogationSourceTransaction struct {
+	// Functions Application functions in its call graph.
+	Functions int `json:"functions"`
+
+	// Kind Transaction kind: HTTP, GRPC, ...
+	Kind     string     `json:"kind"`
+	LastSeen *time.Time `json:"last_seen,omitempty"`
+
+	// Operation E.g. `POST /api/claims`.
+	Operation     string `json:"operation"`
+	TransactionId int64  `json:"transaction_id"`
+
+	// Volume Requests seen since the transaction was first learned.
+	Volume int64 `json:"volume"`
+}
+
+// InterrogationSourceTransactionList defines model for InterrogationSourceTransactionList.
+type InterrogationSourceTransactionList struct {
+	Count int                              `json:"count"`
+	Items []InterrogationSourceTransaction `json:"items"`
+}
+
+// InterrogationStart Examples: {"actor":"alon","allow_changes":["custom_instrumentation"],"budget":{"max_probes":5,"time_limit_seconds":3600},"goal":"observability","question":"Why is claim submission slow for some users?","source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"},"transaction_ids":[4211,4215]}, {"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"}}
+type InterrogationStart struct {
+	// Actor Free text naming who started it; stored for display only.
+	Actor string `json:"actor,omitempty"`
+
+	// AllowChanges Kinds of change the run may make. Empty or absent: read-only, the run proposes and applies nothing.
+	AllowChanges []InterrogationChangeKind `json:"allow_changes,omitempty"`
+	Budget       InterrogationBudget       `json:"budget,omitempty"`
+
+	// Goal Default `observability`.
+	Goal InterrogationGoal `json:"goal,omitempty"`
+
+	// Question Optional. Empty means the goal's default question.
+	Question string `json:"question,omitempty"`
+
+	// Source The workload a run targets. All containers of the workload.
+	Source InterrogationSource `json:"source"`
+
+	// TransactionIds Endpoints to focus on, from `GET /interrogations/sources/transactions`. Empty or absent: the run picks.
+	TransactionIds []int64 `json:"transaction_ids,omitempty"`
+}
+
+// InterrogationStatus `queued`: recorded, waiting for the leader. `running`: rounds in progress. `stopping`: a stop was recorded, the run is winding down. `completed`: ended on its own (`end_reason` says why). `stopped`: ended by a person. `failed`: ended on an error (`error` has the text). Terminal: `completed`, `stopped`, `failed`. Open set: treat an unknown value as non-terminal and keep polling. `queued` normally lasts about 2 s, up to about 20 s after a leader change, and `stopping` a few seconds; past 30 s (from `created_at`, or from `stop.requested_at`) show that it is taking longer than expected. A run that cannot finish is closed as `failed` (`interrupted`) 5 minutes after its deadline. A run that has been `queued` for 5 minutes is ended the same way by the next start on its source.
+type InterrogationStatus = string
+
+// InterrogationStop Examples: {"actor":"alon","changes":"revert"}
+type InterrogationStop struct {
+	Actor string `json:"actor,omitempty"`
+
+	// Changes `keep` (default): leave changes until they expire. `revert`: remove them now.
+	Changes InterrogationStopChanges `json:"changes,omitempty"`
+}
+
+// InterrogationStopChanges `keep` (default): leave changes until they expire. `revert`: remove them now.
+type InterrogationStopChanges string
+
+// InterrogationStopRequest Present once a stop was recorded.
+type InterrogationStopRequest struct {
+	Actor       string                          `json:"actor,omitempty"`
+	Changes     InterrogationStopRequestChanges `json:"changes"`
+	RequestedAt time.Time                       `json:"requested_at"`
+}
+
+// InterrogationStopRequestChanges defines model for InterrogationStopRequest.Changes.
+type InterrogationStopRequestChanges string
+
+// InterrogationSummary defines model for InterrogationSummary.
+type InterrogationSummary struct {
+	// AvgDurationSeconds Mean `ended_at` - `started_at` of the runs counted in `concluded`. Absent when there are none.
+	AvgDurationSeconds *int `json:"avg_duration_seconds,omitempty"`
+
+	// AvgRounds Mean rounds of the runs counted in `concluded`. Absent when there are none.
+	AvgRounds *float32 `json:"avg_rounds,omitempty"`
+
+	// Changes Examples: {"by_kind":{"custom_instrumentation":3},"by_source":[{"language":"java","live":3,"max_probes":20,"probes":3,"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"}}],"live":3,"next_expiry_at":"2026-11-17T10:38:00Z","next_expiry_change_id":"chg_3f9a1c07b2d44e6a8c51"}
+	Changes InterrogationChangesSummary `json:"changes"`
+
+	// Concluded Of those, the ended ones, any terminal status.
+	Concluded int `json:"concluded"`
+
+	// ModelUsage Model calls made by the interrogations the server has (30 days). The background loop's calls are not counted.
+	ModelUsage InterrogationModelUsage `json:"model_usage"`
+	Queued     int                     `json:"queued"`
+
+	// Running `running` + `stopping`. The nav badge.
+	Running        int                   `json:"running"`
+	RunningSources []InterrogationSource `json:"running_sources"`
+
+	// Total Interrogations the server has (30 days). The tab count.
+	Total int `json:"total"`
+}
+
+// InterrogationTrigger defines model for InterrogationTrigger.
+type InterrogationTrigger struct {
+	Actor string `json:"actor,omitempty"`
+
+	// Kind What started the run. This API creates only `manual`. Open set.
+	Kind InterrogationTriggerKind `json:"kind"`
+}
+
+// InterrogationTriggerKind What started the run. This API creates only `manual`. Open set.
+type InterrogationTriggerKind = string
+
+// InterrogationUsage defines model for InterrogationUsage.
+type InterrogationUsage struct {
+	DurationSeconds int   `json:"duration_seconds"`
+	InputTokens     int64 `json:"input_tokens"`
+	MaxProbes       int   `json:"max_probes"`
+
+	// Model Model that served the calls, as the gateway reported it.
+	Model        string `json:"model,omitempty"`
+	ModelCalls   int    `json:"model_calls"`
+	OutputTokens int64  `json:"output_tokens"`
+	ProbesUsed   int    `json:"probes_used"`
+	Rounds       int    `json:"rounds"`
+}
+
+// InterrogationWait What the run is waiting for right now.
+type InterrogationWait struct {
+	// DeadlineAt When the wait gives up or is checked again.
+	DeadlineAt *time.Time `json:"deadline_at,omitempty"`
+
+	// Reason `traffic`: the baseline before round 1. `model_paused`: the model gateway is rate limiting or refusing. `rule_applied`: a requested change is not in the rule yet. `observe`: traffic is running with the new changes. Open set.
+	Reason InterrogationWaitReason `json:"reason"`
+	Since  time.Time               `json:"since"`
+}
+
+// InterrogationWaitOutcome Open set.
+type InterrogationWaitOutcome = string
+
+// InterrogationWaitReason `traffic`: the baseline before round 1. `model_paused`: the model gateway is rate limiting or refusing. `rule_applied`: a requested change is not in the rule yet. `observe`: traffic is running with the new changes. Open set.
+type InterrogationWaitReason = string
+
 // LearningCondition defines model for LearningCondition.
 type LearningCondition struct {
 	MinDurationMinutes int64                 `json:"minDurationMinutes,omitempty"`
@@ -2186,6 +3156,9 @@ type FromTime = string
 // IntegrationId defines model for IntegrationId.
 type IntegrationId = string
 
+// InterrogationId defines model for InterrogationId.
+type InterrogationId = string
+
 // NamespaceFilter defines model for NamespaceFilter.
 type NamespaceFilter = string
 
@@ -2206,6 +3179,9 @@ type WindowHours = int
 
 // Error defines model for Error.
 type Error = ErrorResponse
+
+// InterrogationError The standard `ErrorResponse` envelope with `error.details` typed: the existing `ErrorBody.details` is an untyped object, and this schema says what this tag puts in it. `code` keeps the existing closed set; the typed reason is in `details.reason`. The server writes the one `ErrorResponse` type (`x-go-type`).
+type InterrogationError = InterrogationErrorResponse
 
 // Unavailable defines model for Unavailable.
 type Unavailable = ErrorResponse
@@ -2319,6 +3295,42 @@ type ListIntegrationAttemptsParams struct {
 type ListIntegrationDeliveriesParams struct {
 	State DeliveryState `form:"state,omitempty" json:"state,omitempty"`
 	Limit int           `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListInterrogationsParams defines parameters for ListInterrogations.
+type ListInterrogationsParams struct {
+	// Limit Default 50; the server clamps to 200.
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Before The `id` of an interrogation: return only rows older than it. An id that no longer exists gives an empty page.
+	Before string `form:"before,omitempty" json:"before,omitempty"`
+}
+
+// ListInterrogationSourcesParams defines parameters for ListInterrogationSources.
+type ListInterrogationSourcesParams struct {
+	// Limit Default 200; the server clamps to 1000.
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListInterrogationSourceTransactionsParams defines parameters for ListInterrogationSourceTransactions.
+type ListInterrogationSourceTransactionsParams struct {
+	Namespace string `form:"namespace" json:"namespace"`
+
+	// Kind Workload kind, e.g. Deployment.
+	Kind string `form:"kind" json:"kind"`
+	Name string `form:"name" json:"name"`
+
+	// Limit Default 200; the server clamps to 1000.
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListInterrogationEventsParams defines parameters for ListInterrogationEvents.
+type ListInterrogationEventsParams struct {
+	// After Return events with `sequence` greater than this.
+	After int64 `form:"after,omitempty" json:"after,omitempty"`
+
+	// Limit Default 200; the server clamps to 1000.
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // DeleteLearningPolicyParams defines parameters for DeleteLearningPolicy.
@@ -2453,6 +3465,15 @@ type UpdateIntegrationJSONRequestBody = IntegrationWrite
 // RetryIntegrationDeliveriesJSONRequestBody defines body for RetryIntegrationDeliveries for application/json ContentType.
 type RetryIntegrationDeliveriesJSONRequestBody = DeliveryRetryRequest
 
+// StartInterrogationJSONRequestBody defines body for StartInterrogation for application/json ContentType.
+type StartInterrogationJSONRequestBody = InterrogationStart
+
+// ExtendInterrogationJSONRequestBody defines body for ExtendInterrogation for application/json ContentType.
+type ExtendInterrogationJSONRequestBody = InterrogationExtend
+
+// StopInterrogationJSONRequestBody defines body for StopInterrogation for application/json ContentType.
+type StopInterrogationJSONRequestBody = InterrogationStop
+
 // UpsertLearningPolicyJSONRequestBody defines body for UpsertLearningPolicy for application/json ContentType.
 type UpsertLearningPolicyJSONRequestBody = LearningPolicy
 
@@ -2485,3 +3506,186 @@ type BulkDeleteTransactionsJSONRequestBody = BulkDeleteTransactionsRequest
 
 // BulkPromoteTransactionsJSONRequestBody defines body for BulkPromoteTransactions for application/json ContentType.
 type BulkPromoteTransactionsJSONRequestBody = BulkPromoteTransactionsRequest
+
+// Getter for additional properties for InterrogationErrorDetails. Returns the specified
+// element and whether it was found
+func (a InterrogationErrorDetails) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for InterrogationErrorDetails
+func (a *InterrogationErrorDetails) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for InterrogationErrorDetails to handle AdditionalProperties
+func (a *InterrogationErrorDetails) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["display_id"]; found {
+		err = json.Unmarshal(raw, &a.DisplayId)
+		if err != nil {
+			return fmt.Errorf("error reading 'display_id': %w", err)
+		}
+		delete(object, "display_id")
+	}
+
+	if raw, found := object["field"]; found {
+		err = json.Unmarshal(raw, &a.Field)
+		if err != nil {
+			return fmt.Errorf("error reading 'field': %w", err)
+		}
+		delete(object, "field")
+	}
+
+	if raw, found := object["interrogation_id"]; found {
+		err = json.Unmarshal(raw, &a.InterrogationId)
+		if err != nil {
+			return fmt.Errorf("error reading 'interrogation_id': %w", err)
+		}
+		delete(object, "interrogation_id")
+	}
+
+	if raw, found := object["max_open"]; found {
+		err = json.Unmarshal(raw, &a.MaxOpen)
+		if err != nil {
+			return fmt.Errorf("error reading 'max_open': %w", err)
+		}
+		delete(object, "max_open")
+	}
+
+	if raw, found := object["max_per_day"]; found {
+		err = json.Unmarshal(raw, &a.MaxPerDay)
+		if err != nil {
+			return fmt.Errorf("error reading 'max_per_day': %w", err)
+		}
+		delete(object, "max_per_day")
+	}
+
+	if raw, found := object["open"]; found {
+		err = json.Unmarshal(raw, &a.Open)
+		if err != nil {
+			return fmt.Errorf("error reading 'open': %w", err)
+		}
+		delete(object, "open")
+	}
+
+	if raw, found := object["option"]; found {
+		err = json.Unmarshal(raw, &a.Option)
+		if err != nil {
+			return fmt.Errorf("error reading 'option': %w", err)
+		}
+		delete(object, "option")
+	}
+
+	if raw, found := object["reason"]; found {
+		err = json.Unmarshal(raw, &a.Reason)
+		if err != nil {
+			return fmt.Errorf("error reading 'reason': %w", err)
+		}
+		delete(object, "reason")
+	}
+
+	if raw, found := object["requires"]; found {
+		err = json.Unmarshal(raw, &a.Requires)
+		if err != nil {
+			return fmt.Errorf("error reading 'requires': %w", err)
+		}
+		delete(object, "requires")
+	}
+
+	if raw, found := object["value"]; found {
+		err = json.Unmarshal(raw, &a.Value)
+		if err != nil {
+			return fmt.Errorf("error reading 'value': %w", err)
+		}
+		delete(object, "value")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for InterrogationErrorDetails to handle AdditionalProperties
+func (a InterrogationErrorDetails) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["display_id"], err = json.Marshal(a.DisplayId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'display_id': %w", err)
+	}
+
+	object["field"], err = json.Marshal(a.Field)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'field': %w", err)
+	}
+
+	object["interrogation_id"], err = json.Marshal(a.InterrogationId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'interrogation_id': %w", err)
+	}
+
+	object["max_open"], err = json.Marshal(a.MaxOpen)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'max_open': %w", err)
+	}
+
+	object["max_per_day"], err = json.Marshal(a.MaxPerDay)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'max_per_day': %w", err)
+	}
+
+	object["open"], err = json.Marshal(a.Open)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'open': %w", err)
+	}
+
+	object["option"], err = json.Marshal(a.Option)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'option': %w", err)
+	}
+
+	object["reason"], err = json.Marshal(a.Reason)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'reason': %w", err)
+	}
+
+	object["requires"], err = json.Marshal(a.Requires)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'requires': %w", err)
+	}
+
+	object["value"], err = json.Marshal(a.Value)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'value': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}

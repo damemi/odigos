@@ -54,6 +54,15 @@ func TestOpenAPISpecValid(t *testing.T) {
 		"/api/v1/catalog",
 		"/api/v1/system-settings",
 		"/api/v1/storage-health",
+		"/api/v1/interrogations",
+		"/api/v1/interrogations/summary",
+		"/api/v1/interrogations/options",
+		"/api/v1/interrogations/sources",
+		"/api/v1/interrogations/sources/transactions",
+		"/api/v1/interrogations/{interrogation_id}",
+		"/api/v1/interrogations/{interrogation_id}/events",
+		"/api/v1/interrogations/{interrogation_id}/stop",
+		"/api/v1/interrogations/{interrogation_id}/extend",
 	}
 	for _, p := range wantPaths {
 		if _, ok := doc.Paths[p]; !ok {

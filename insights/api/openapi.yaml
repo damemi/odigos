@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Odigos Insights Service API
-  version: 11.0.0
+  version: 11.1.0
   description: >
     HTTP API for the Odigos Insights (security) service. This spec is the source
     of truth for the contract: the Go server wire types (internal/api/http/apitypes)
@@ -84,6 +84,18 @@ tags:
       (violations) opts out through its `delivery`: `muted` sends it nowhere,
       `excluded_integration_ids` skips specific integrations. Delivery state
       per finding and the attempt audit are exposed per integration.
+  - name: interrogations
+    description: >
+      On-demand interrogations: a bounded run that reads the call-graph
+      evidence of one source, asks the model what to instrument, applies
+      probes within a budget, observes, and reports an answer with a
+      certainty. The run is a workflow graph; the API reports its nodes and
+      their states as they are. `POST /interrogations` returns at once with a `queued` run;
+      follow it with `GET /interrogations/{id}` (state, rounds, answer) and
+      `GET /interrogations/{id}/events?after=` (append-only log). All
+      enumerations in this tag are open sets. Every endpoint except
+      `GET /interrogations/options` answers 503 with `details.reason`
+      `not_enabled` unless `insights.autopilot.enabled` is true.
 
 paths:
   /healthz:
@@ -1510,6 +1522,360 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
 
+  /api/v1/interrogations:
+    get:
+      tags: [interrogations]
+      summary: List interrogations
+      description: |
+        Newest first. Summaries only: no `rounds`. There are no filters: the
+        server keeps 30 days of runs, and the page sorts and filters what it
+        has loaded. For the next page repeat the request with `before` = the
+        `id` of the last item; a page shorter than `limit` is the last.
+
+        **Use for:** the list page.
+
+        **Not for:** following one run (use `GET /interrogations/{id}`), or
+        the cards and badges (use `GET /interrogations/summary`).
+      operationId: listInterrogations
+      parameters:
+        - name: limit
+          in: query
+          description: Default 50; the server clamps to 200.
+          schema: { type: integer, minimum: 1, maximum: 200 }
+        - name: before
+          in: query
+          description: >
+            The `id` of an interrogation: return only rows older than it. An
+            id that no longer exists gives an empty page.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Interrogations.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationList" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+    post:
+      tags: [interrogations]
+      summary: Start an interrogation
+      description: >
+        Records the request durably and returns the new run in status
+        `queued`; the leader replica picks it up within a few seconds. One
+        open run per source. The run changes the cluster only for the kinds
+        listed in `allow_changes`; an empty list is a read-only run. An option
+        that is in the contract but has no behaviour yet is rejected with 422,
+        `details.reason` `not_supported_yet` and `details.option` naming it;
+        `GET /interrogations/options` says in advance which those are.
+      operationId: startInterrogation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterrogationStart" }
+      responses:
+        "201":
+          description: Queued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Interrogation" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "413": { $ref: "#/components/responses/Error" }
+        "409":
+          description: The source already has an open interrogation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationErrorResponse" }
+              examples:
+                source_busy:
+                  value:
+                    error:
+                      code: conflict
+                      message: "claims-demo/Deployment/claims-intake already has an open interrogation (INT-0B6F6C1E)"
+                      details:
+                        reason: source_busy
+                        interrogation_id: "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21"
+                        display_id: INT-0B6F6C1E
+        "422":
+          description: Validation failed, the option is not supported yet, or the source has no evidence.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationErrorResponse" }
+              examples:
+                not_supported_yet:
+                  value:
+                    error:
+                      code: unprocessable_entity
+                      message: "allow_changes: head_sampling is not supported yet"
+                      details:
+                        reason: not_supported_yet
+                        option: "allow_changes=head_sampling"
+                no_evidence:
+                  value:
+                    error:
+                      code: unprocessable_entity
+                      message: "no call-graph evidence for claims-demo/Deployment/billing; only Java sources with profiled traffic can be interrogated"
+                      details:
+                        reason: no_evidence
+                invalid_argument:
+                  value:
+                    error:
+                      code: unprocessable_entity
+                      message: "budget.max_probes must be between 1 and 20"
+                      details:
+                        reason: invalid_argument
+                        field: budget.max_probes
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503":
+          description: Not enabled, at capacity, or the store is not ready.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationErrorResponse" }
+              examples:
+                at_capacity:
+                  value:
+                    error:
+                      code: unavailable
+                      message: "10 interrogations are already open; try again when one ends"
+                      details:
+                        reason: at_capacity
+                        open: 10
+                        max_open: 10
+                not_enabled:
+                  value:
+                    error:
+                      code: unavailable
+                      message: "interrogations need insights.autopilot.enabled=true"
+                      details:
+                        reason: not_enabled
+                        requires: insights.autopilot.enabled
+
+  /api/v1/interrogations/summary:
+    get:
+      tags: [interrogations]
+      summary: Counters for the list page
+      description: >
+        Backs the summary cards, the nav badge (`running`) and the tab counts.
+        `queued`, `running` and `changes` are as of now. Every other figure
+        covers the runs the server still has (30 days).
+      operationId: getInterrogationSummary
+      responses:
+        "200":
+          description: Summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationSummary" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogations/options:
+    get:
+      tags: [interrogations]
+      summary: Option sets, defaults and limits for the start form
+      description: >
+        Render the start form from this: which goals, change kinds and budget
+        fields exist, which are supported by this build, their defaults and
+        bounds. Always 200; `enabled: false` means every other
+        endpoint in this tag answers 503.
+      operationId: getInterrogationOptions
+      responses:
+        "200":
+          description: Options.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationOptions" }
+
+  /api/v1/interrogations/sources:
+    get:
+      tags: [interrogations]
+      summary: Sources that can be interrogated
+      description: >
+        Workloads that have call-graph evidence (today: Java sources with
+        profiled traffic), with whether one is already being interrogated.
+        Backs the source picker, which searches the list it loaded. To know
+        whether one given source can be interrogated, look for it here by
+        `namespace`, `kind` and `name`.
+      operationId: listInterrogationSources
+      parameters:
+        - name: limit
+          in: query
+          description: Default 200; the server clamps to 1000.
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: Sources.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationSourceList" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogations/sources/transactions:
+    get:
+      tags: [interrogations]
+      summary: Transactions of one source, with statistics
+      description: >
+        The endpoints of a source that have call-graph evidence, busiest
+        first. Backs the Focus multi-select.
+      operationId: listInterrogationSourceTransactions
+      parameters:
+        - { name: namespace, in: query, required: true, schema: { type: string } }
+        - { name: kind, in: query, required: true, description: "Workload kind, e.g. Deployment.", schema: { type: string } }
+        - { name: name, in: query, required: true, schema: { type: string } }
+        - name: limit
+          in: query
+          description: Default 200; the server clamps to 1000.
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: Transactions.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationSourceTransactionList" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogations/{interrogation_id}:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationId"
+    get:
+      tags: [interrogations]
+      summary: Get one interrogation
+      description: |
+        Everything the detail page draws: request, state, progress, running
+        answer, usage, `rounds` and `changes`. Safe to poll every 2-3 s while
+        the run is open.
+
+        **Use for:** the detail page; this one call carries the stepper, the
+        wait, the answer, the rounds and the run's changes.
+
+        **Not for:** a timeline (use `GET /interrogations/{id}/events`).
+      operationId: getInterrogation
+      responses:
+        "200":
+          description: The interrogation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Interrogation" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogations/{interrogation_id}/events:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationId"
+    get:
+      tags: [interrogations]
+      summary: Read the event log
+      description: |
+        Append-only, ordered by `sequence` ascending; events are never
+        rewritten. Pass `after` = the highest sequence seen (0 or absent for
+        the start). When `count` equals `limit`, call again at once. Stop
+        polling when `complete` is true. The same items are the frames of a
+        future SSE stream (`id` = sequence).
+
+        **Use for:** a timeline or activity log.
+
+        **Not for:** the run's current state: nothing the detail page draws
+        needs the log (use `GET /interrogations/{id}`).
+      operationId: listInterrogationEvents
+      parameters:
+        - name: after
+          in: query
+          description: Return events with `sequence` greater than this.
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: limit
+          in: query
+          description: Default 200; the server clamps to 1000.
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: Events.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationEventList" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogations/{interrogation_id}/stop:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationId"
+    post:
+      tags: [interrogations]
+      summary: Stop an interrogation
+      description: >
+        No more rounds, model calls or new changes. `changes` says what
+        happens to the changes already made: `keep` (default) leaves them
+        until each expires, `revert` removes them now. Idempotent. On a run
+        that has already ended, `revert` still reverts its remaining live
+        changes. A later `revert` overrides an earlier `keep`, never the
+        reverse. 202 = recorded, the run is `stopping`. 200 = the run has
+        ended: it already had, or it was still `queued` and this call ended
+        it as `stopped`. A run that had finished its last node when the stop
+        arrived keeps the status it ended with.
+      operationId: stopInterrogation
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterrogationStop" }
+      responses:
+        "200":
+          description: The run has ended (it already had, or it was queued and is now `stopped`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Interrogation" }
+        "202":
+          description: Stop recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Interrogation" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "413": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "422": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogations/{interrogation_id}/extend:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationId"
+    post:
+      tags: [interrogations]
+      summary: Give an interrogation more time
+      description: >
+        Moves `deadline_at` and the expiry of the run's live changes
+        later by `seconds`, together; the run records
+        `interrogation.extended` within seconds. `extended_seconds` on the
+        run is the sum of extensions; `budget.time_limit_seconds` stays as
+        requested. Only while the run is `queued` or `running` and its
+        deadline has not passed (409 `not_running` otherwise).
+        `budget.time_limit_seconds` + `extended_seconds` cannot pass
+        `options.extend.max_total_seconds` (422 `invalid_argument`).
+      operationId: extendInterrogation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterrogationExtend" }
+      responses:
+        "200":
+          description: Extended.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Interrogation" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "413": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "409": { $ref: "#/components/responses/InterrogationError" }
+        "422": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
 components:
   parameters:
     TransactionId:
@@ -1586,6 +1952,12 @@ components:
       description: The integration's server-assigned id.
       schema: { type: string }
 
+    InterrogationId:
+      name: interrogation_id
+      in: path
+      required: true
+      description: The interrogation's server-assigned id (a UUID), not the display id.
+      schema: { type: string }
   responses:
     Error:
       description: Error envelope.
@@ -1599,6 +1971,14 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+    InterrogationError:
+      description: >
+        Error envelope. `error.details.reason` carries the typed reason; see
+        `InterrogationErrorDetails`.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/InterrogationErrorResponse" }
 
   schemas:
     HealthStatus:
@@ -1620,7 +2000,7 @@ components:
         code:
           type: string
           description: Stable machine-readable code.
-          enum: [bad_request, not_found, conflict, unprocessable_entity, unavailable, internal_error]
+          enum: [bad_request, not_found, conflict, payload_too_large, unprocessable_entity, unavailable, internal_error]
         message: { type: string }
         details:
           type: object
@@ -4150,4 +4530,1218 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/DeliveryAttempt" }
+      required: [count, items]
+
+    InterrogationErrorResponse:
+      type: object
+      description: >
+        The standard `ErrorResponse` envelope with `error.details` typed:
+        the existing `ErrorBody.details` is an untyped object, and this
+        schema says what this tag puts in it. `code` keeps the existing
+        closed set; the typed reason is in `details.reason`. The server
+        writes the one `ErrorResponse` type (`x-go-type`).
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              enum: [bad_request, not_found, conflict, unprocessable_entity, unavailable, internal_error]
+            message: { type: string }
+            details: { $ref: "#/components/schemas/InterrogationErrorDetails" }
+          required: [code, message]
+      required: [error]
+      x-go-type: ErrorResponse
+
+    InterrogationErrorReason:
+      type: string
+      description: >
+        `source_busy` (409): the source has an open run; `interrogation_id`
+        and `display_id` name it. `at_capacity` (503): too many open runs,
+        `open` and `max_open`; or too many runs started in the last 24 hours,
+        `max_per_day`. `not_enabled` (503): autopilot is off; `requires`.
+        `not_ready` (503): tables or the runner are not available yet; retry.
+        `not_supported_yet` (422): the option named in `option` is in the
+        contract but not built. `no_evidence` (422): the source has
+        no call-graph evidence. `invalid_argument` (422): `field` names the
+        bad field. `not_running` (409): the run is not open, is stopping, or
+        is past its deadline. Open set.
+      x-extensible-enum:
+        - source_busy
+        - at_capacity
+        - not_enabled
+        - not_ready
+        - not_supported_yet
+        - no_evidence
+        - invalid_argument
+        - not_running
+
+    InterrogationErrorDetails:
+      type: object
+      additionalProperties: true
+      properties:
+        reason: { $ref: "#/components/schemas/InterrogationErrorReason" }
+        option:
+          type: string
+          description: >
+            With `not_supported_yet`: `<field>=<value>` for an option value
+            (`goal=security`, `allow_changes=kernel_spans`), or the field path
+            for a field (`budget.max_added_spans_per_min`).
+        field:
+          type: string
+          description: >
+            With `invalid_argument`: path of the field in the REST body or
+            query, snake_case (`budget.max_probes`, `transaction_ids`). A
+            GraphQL client maps it to its own input field.
+        value:
+          type: string
+          description: "With `invalid_argument` on a list: the element at fault, e.g. the unknown id in `transaction_ids`."
+        interrogation_id: { type: string }
+        display_id: { type: string }
+        requires: { type: string }
+        open: { type: integer }
+        max_open: { type: integer }
+        max_per_day: { type: integer }
+      required: [reason]
+
+    InterrogationStatus:
+      type: string
+      description: >
+        `queued`: recorded, waiting for the leader. `running`: rounds in
+        progress. `stopping`: a stop was recorded, the run is winding down.
+        `completed`: ended on its own (`end_reason` says why). `stopped`:
+        ended by a person. `failed`: ended on an error (`error` has the
+        text). Terminal: `completed`, `stopped`, `failed`. Open set: treat an
+        unknown value as non-terminal and keep polling. `queued` normally
+        lasts about 2 s, up to about 20 s after a leader change, and
+        `stopping` a few seconds; past 30 s (from `created_at`, or from
+        `stop.requested_at`) show that it is taking longer than expected. A
+        run that cannot finish is closed as `failed` (`interrupted`) 5
+        minutes after its deadline. A run that has been `queued` for 5
+        minutes is ended the same way by the next start on its source.
+      x-extensible-enum: [queued, running, stopping, completed, stopped, failed]
+
+    InterrogationEndReason:
+      type: string
+      description: >
+        Why the run ended; empty while open. `done`: the model decided it has
+        the answer. `max_rounds`, `max_model_calls`, `time_limit`,
+        `probe_budget`: a limit was reached. `changes_denied`: the model was
+        not done and every probe it asked for was refused. `no_evidence`: no
+        call graph was found for the transactions in scope.
+        `stopped_by_user`. `source_gone`: the source is no longer
+        instrumented. `model_unavailable`: the gateway kept refusing until
+        the deadline. `interrupted`: the run was written by another version
+        of the server and could not be continued. `error`: anything else.
+        Status by reason: `completed` for the first seven, `stopped` for
+        `stopped_by_user`, `failed` for the rest. Open set.
+      x-extensible-enum:
+        - done
+        - max_rounds
+        - max_model_calls
+        - time_limit
+        - probe_budget
+        - changes_denied
+        - no_evidence
+        - stopped_by_user
+        - source_gone
+        - model_unavailable
+        - interrupted
+        - error
+
+    InterrogationGoal:
+      type: string
+      description: Open set. `security` is in the contract and not supported yet.
+      x-extensible-enum: [observability, security]
+
+    InterrogationTriggerKind:
+      type: string
+      description: >
+        What started the run. This API creates only `manual`. Open set.
+      x-extensible-enum: [manual, alertmanager, insights, red_metrics, runtime_metrics, proactive]
+
+    InterrogationChangeKind:
+      type: string
+      description: >
+        `custom_instrumentation` is supported; the others are in the contract
+        and rejected at start. Open set.
+      x-extensible-enum: [custom_instrumentation, head_sampling, payload_collection, kernel_spans]
+
+    InterrogationChangeState:
+      type: string
+      description: >
+        `denied`: proposed by the model, refused by validation
+        (`deny_reason`); not a stored change.
+        `requested`: accepted, waiting to be written to the instrumentation
+        rule. `blocked`: accepted, but it cannot be placed in the rule
+        (`block_reason`). `active`: in the rule. `reverting`: ended, still in
+        the rule until the next reconcile. `reverted`: ended by
+        stop-and-revert or because the source is gone (`end_reason`).
+        `expired`: its time ran out (`end_reason` `expired`). `failed`: given
+        up before it took effect (`end_reason` says why). Live = `requested`,
+        `blocked`, `active`. Open set.
+      x-extensible-enum: [denied, requested, blocked, active, reverting, reverted, expired, failed]
+
+    InterrogationChangeDenyReason:
+      type: string
+      description: Open set.
+      x-extensible-enum:
+        - changes_not_allowed
+        - final_round
+        - unsupported_language
+        - invalid_probe
+        - not_in_call_graph
+        - not_application_code
+        - source_not_instrumented
+        - rule_disabled
+        - rule_not_managed
+        - already_probed
+        - already_requested
+        - workload_cap_reached
+        - run_budget_exceeded
+
+    InterrogationNodeName:
+      type: string
+      description: >
+        A node of the run's workflow graph. `prepare`: check the source is
+        instrumented and open round 1. `wait_baseline`: wait for traffic
+        before the first reading. `gate`: check the run's limits and the
+        model gateway before paying for a call. `wait_model`: the gateway is
+        paused; wait. `gather`: flush and read the call graphs and build the
+        model request. `analyze`: the model call. `record`: validate the
+        reply, record the answer and the changes it proposes. `apply`:
+        validate each proposed change and store the accepted ones.
+        `wait_apply`, `confirm`: wait until the accepted changes are in the
+        instrumentation rule. `wait_observe`, `observe`: let traffic run with
+        them, then read the call graph again. `conclude`: end the run. A
+        round runs `gate` to `observe`; round 1 also holds `prepare` and
+        `wait_baseline`, and the last round `conclude`. Open set: the graph
+        can gain nodes; show an unknown name as it is.
+      x-extensible-enum:
+        - prepare
+        - wait_baseline
+        - gate
+        - wait_model
+        - gather
+        - analyze
+        - record
+        - apply
+        - wait_apply
+        - confirm
+        - wait_observe
+        - observe
+        - conclude
+
+    InterrogationNodeState:
+      type: string
+      description: >
+        `running`: the run is in the node. `waiting`: the node is a wait and
+        the run is parked in it. `done`: the run left it. `failed`: the last
+        attempt at it failed; the run retries from its last recorded point.
+        Open set.
+      x-extensible-enum: [running, waiting, done, failed]
+
+    InterrogationWaitReason:
+      type: string
+      description: >
+        `traffic`: the baseline before round 1. `model_paused`: the model
+        gateway is rate limiting or refusing. `rule_applied`: a requested
+        change is not in the rule yet. `observe`: traffic is running with the
+        new changes. Open set.
+      x-extensible-enum: [traffic, model_paused, rule_applied, observe]
+
+    InterrogationWaitOutcome:
+      type: string
+      description: Open set.
+      x-extensible-enum: [satisfied, timed_out, stopped]
+
+    InterrogationRoundState:
+      type: string
+      description: Open set.
+      x-extensible-enum: [in_progress, completed]
+
+    InterrogationRoundOutcome:
+      type: string
+      description: >
+        How a completed round ended. `observed`: it ran to the end.
+        `no_change_applied`: nothing it requested reached the rule. `ended`:
+        the run stopped, failed or hit a limit inside the round; nodes it
+        did not reach are not listed and it may have no `reply`. Open set.
+      x-extensible-enum: [observed, no_change_applied, ended]
+
+    InterrogationScopeSelection:
+      type: string
+      description: "`user`: from `transaction_ids`. `auto`: picked by the run, by call-graph size. Open set."
+      x-extensible-enum: [user, auto]
+
+    InterrogationModelCallOutcome:
+      type: string
+      description: Open set.
+      x-extensible-enum: [ok, invalid_reply, error]
+
+    InterrogationChangeCheck:
+      type: string
+      description: A guardrail a change passed. Open set.
+      x-extensible-enum:
+        - changes_allowed
+        - in_call_graph
+        - application_code
+        - not_already_probed
+        - within_workload_cap
+        - within_run_budget
+
+    InterrogationChangeCategory:
+      type: string
+      description: Open set.
+      x-extensible-enum: [observability, security, performance]
+
+    InterrogationChangeBlockReason:
+      type: string
+      description: >
+        Why an accepted change is not in the rule. `covered_by_rule`: another
+        rule already provides the probe. Open set.
+      x-extensible-enum: [rule_disabled, rule_not_managed, workload_cap_reached, covered_by_rule]
+
+    InterrogationChangeEndReason:
+      type: string
+      description: >
+        Why a change ended. `stop`: stop with revert. `expired`: its time
+        ran out. `source_gone`: the source is no longer instrumented.
+        `not_applied_in_time` and the block reasons: the change never took
+        effect (`state` `failed`). Open set.
+      x-extensible-enum:
+        - stop
+        - expired
+        - source_gone
+        - not_applied_in_time
+        - rule_disabled
+        - rule_not_managed
+        - workload_cap_reached
+
+    InterrogationEventType:
+      type: string
+      description: |
+        Open set: ignore types you do not know. The schema of `payload` for
+        each type:
+
+        | Type | Payload schema | When |
+        |---|---|---|
+        | `interrogation.started` | `InterrogationEventStartedPayload` | the run's first node, after the leader picked it up |
+        | `interrogation.stop_requested` | `InterrogationEventStopRequestedPayload` | the run saw the stop |
+        | `interrogation.extended` | `InterrogationEventExtendedPayload` | the run saw a later deadline |
+        | `interrogation.ended` | `InterrogationEventEndedPayload` | the run's last event. Absent when the server had to close an overdue run; rely on `complete` |
+        | `round.started` | `InterrogationEventRoundStartedPayload` | |
+        | `round.finished` | `InterrogationEventRoundFinishedPayload` | |
+        | `node.finished` | `InterrogationEventNodeFinishedPayload` | the run left a node |
+        | `wait.started` | `InterrogationEventWaitStartedPayload` | the run parked in a wait node |
+        | `wait.finished` | `InterrogationEventWaitFinishedPayload` | |
+        | `evidence.collected` | `InterrogationEventEvidencePayload` | `gather` and `observe` read the call graphs |
+        | `model.called` | `InterrogationEventModelCalledPayload` | after every model call, success or not |
+        | `change.proposed` | `InterrogationEventChangeProposedPayload` | the model named a change |
+        | `change.denied` | `InterrogationEventChangeDeniedPayload` | validation refused it |
+        | `change.requested` | `InterrogationEventChangeRequestedPayload` | validation passed, stored |
+        | `change.applied` | `InterrogationEventChangeAppliedPayload` | the rule carries it |
+        | `change.failed` | `InterrogationEventChangeFailedPayload` | not in the rule in time, or blocked |
+        | `change.reverted` | `InterrogationEventChangeRevertedPayload` | ended while the run was open |
+        | `answer.updated` | `InterrogationAnswer` | the running answer changed |
+        | `error.raised` | `InterrogationEventErrorRaisedPayload` | an attempt at a node failed and is retried |
+      x-extensible-enum:
+        - interrogation.started
+        - interrogation.stop_requested
+        - interrogation.extended
+        - interrogation.ended
+        - round.started
+        - round.finished
+        - node.finished
+        - wait.started
+        - wait.finished
+        - evidence.collected
+        - model.called
+        - change.proposed
+        - change.denied
+        - change.requested
+        - change.applied
+        - change.reverted
+        - change.failed
+        - answer.updated
+        - error.raised
+
+    InterrogationSource:
+      type: object
+      description: The workload a run targets. All containers of the workload.
+      properties:
+        namespace: { type: string }
+        kind: { type: string, description: "Workload kind: Deployment, StatefulSet, DaemonSet, ..." }
+        name: { type: string }
+      required: [namespace, kind, name]
+
+    InterrogationBudget:
+      type: object
+      properties:
+        max_probes:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: Most probes the run may add. Default 5.
+        max_added_spans_per_min:
+          type: integer
+          minimum: 1
+          description: Cap on span volume the run may add. Not supported yet; omit it.
+          x-go-type-skip-optional-pointer: false
+        time_limit_seconds:
+          type: integer
+          minimum: 300
+          maximum: 14400
+          description: >
+            Wall-clock limit from `started_at`, as requested at start.
+            Default 3600. Extensions are not added here; see
+            `Interrogation.extended_seconds`.
+        max_rounds:
+          type: integer
+          description: Read-only, from server configuration. Ignored on start.
+          readOnly: true
+
+    InterrogationStart:
+      type: object
+      properties:
+        source: { $ref: "#/components/schemas/InterrogationSource" }
+        goal:
+          $ref: "#/components/schemas/InterrogationGoal"
+          description: Default `observability`.
+        question:
+          type: string
+          maxLength: 2000
+          description: Optional. Empty means the goal's default question.
+        transaction_ids:
+          type: array
+          maxItems: 20
+          description: >
+            Endpoints to focus on, from `GET /interrogations/sources/transactions`.
+            Empty or absent: the run picks.
+          items: { type: integer, format: int64 }
+        allow_changes:
+          type: array
+          description: >
+            Kinds of change the run may make. Empty or absent: read-only, the
+            run proposes and applies nothing.
+          items: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        budget: { $ref: "#/components/schemas/InterrogationBudget" }
+        actor:
+          type: string
+          maxLength: 200
+          description: Free text naming who started it; stored for display only.
+      required: [source]
+      examples:
+        - source: { namespace: claims-demo, kind: Deployment, name: claims-intake }
+          goal: observability
+          question: "Why is claim submission slow for some users?"
+          transaction_ids: [4211, 4215]
+          allow_changes: [custom_instrumentation]
+          budget: { max_probes: 5, time_limit_seconds: 3600 }
+          actor: alon
+        - source: { namespace: claims-demo, kind: Deployment, name: claims-intake }
+
+    InterrogationStop:
+      type: object
+      properties:
+        changes:
+          type: string
+          description: "`keep` (default): leave changes until they expire. `revert`: remove them now."
+          enum: [keep, revert]
+        actor: { type: string, maxLength: 200 }
+      examples:
+        - { changes: revert, actor: alon }
+
+    InterrogationExtend:
+      type: object
+      properties:
+        seconds:
+          type: integer
+          minimum: 60
+          maximum: 14400
+        actor: { type: string, maxLength: 200 }
+      required: [seconds]
+      examples:
+        - { seconds: 1800, actor: alon }
+
+    InterrogationTrigger:
+      type: object
+      properties:
+        kind: { $ref: "#/components/schemas/InterrogationTriggerKind" }
+        actor: { type: string }
+      required: [kind]
+
+    InterrogationStopRequest:
+      type: object
+      description: Present once a stop was recorded.
+      properties:
+        requested_at: { type: string, format: date-time }
+        changes: { type: string, enum: [keep, revert] }
+        actor: { type: string }
+      required: [requested_at, changes]
+
+    InterrogationScopeTransaction:
+      type: object
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        operation: { type: string }
+        kind: { type: string }
+        selected_by: { $ref: "#/components/schemas/InterrogationScopeSelection" }
+      required: [transaction_id, operation, kind, selected_by]
+
+    InterrogationNode:
+      type: object
+      description: One node of the graph in one round, as the run went through it.
+      properties:
+        name: { $ref: "#/components/schemas/InterrogationNodeName" }
+        state: { $ref: "#/components/schemas/InterrogationNodeState" }
+        visits:
+          type: integer
+          description: >
+            Times the run entered the node in this round. More than 1 for the
+            nodes of a poll (`wait_apply`, `confirm`), for a retried model
+            call, and after a failed attempt.
+        entered_at: { type: string, format: date-time, description: "First entry in this round." }
+        left_at: { type: string, format: date-time, description: "Last exit; absent while the run is in it.", x-go-type-skip-optional-pointer: false }
+      required: [name, state, visits, entered_at]
+
+    InterrogationWait:
+      type: object
+      description: What the run is waiting for right now.
+      properties:
+        reason: { $ref: "#/components/schemas/InterrogationWaitReason" }
+        since: { type: string, format: date-time }
+        deadline_at: { type: string, format: date-time, description: "When the wait gives up or is checked again.", x-go-type-skip-optional-pointer: false }
+      required: [reason, since]
+
+    InterrogationProgress:
+      type: object
+      properties:
+        round: { type: integer, description: "Current round, 1-based; 0 before the first." }
+        max_rounds: { type: integer }
+        node:
+          $ref: "#/components/schemas/InterrogationNodeName"
+          description: The node the run is in; absent before the leader picked the run up and after the end.
+        wait:
+          allOf: [{ $ref: "#/components/schemas/InterrogationWait" }]
+          description: Present while the run is parked in a wait node.
+          x-go-type-skip-optional-pointer: false
+      required: [round, max_rounds]
+
+    InterrogationAnswer:
+      type: object
+      description: The running answer; replaced as rounds finish, final once the run ends.
+      properties:
+        text: { type: string }
+        certainty:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: The model's own number, 0..100. Shown only; nothing stops on it.
+        final: { type: boolean }
+        round: { type: integer, description: "Round that produced this version." }
+        updated_at: { type: string, format: date-time }
+      required: [text, certainty, final, round, updated_at]
+
+    InterrogationChangeCounts:
+      type: object
+      properties:
+        total: { type: integer, description: "Every change of the run: `live` + `reverting` + `reverted` + `expired` + `failed` + `denied`." }
+        live: { type: integer, description: "`requested` + `blocked` + `active`." }
+        reverting: { type: integer, description: "Ended, still in the rule until the next reconcile." }
+        reverted: { type: integer, description: "Ended by stop-and-revert, or because the source is gone." }
+        expired: { type: integer, description: "Left when their time ran out. The normal end of a run's changes." }
+        failed: { type: integer, description: "Accepted, never took effect." }
+        denied: { type: integer }
+        next_expiry_at:
+          type: string
+          format: date-time
+          description: Soonest expiry among live changes. The list's "Ends" column.
+          x-go-type-skip-optional-pointer: false
+      required: [total, live, reverting, reverted, expired, failed, denied]
+
+    InterrogationUsage:
+      type: object
+      properties:
+        rounds: { type: integer }
+        duration_seconds: { type: integer }
+        probes_used: { type: integer }
+        max_probes: { type: integer }
+        model_calls: { type: integer }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        model: { type: string, description: "Model that served the calls, as the gateway reported it." }
+      required: [rounds, duration_seconds, probes_used, max_probes, model_calls, input_tokens, output_tokens]
+
+    InterrogationEvidenceCounts:
+      type: object
+      description: What a reading of the call graphs in scope found.
+      properties:
+        transactions: { type: integer, description: "Transactions with evidence in scope." }
+        functions: { type: integer, description: "Application functions in the call graphs." }
+        edges: { type: integer, description: "Caller-callee edges in the call graphs." }
+        new_edges: { type: integer, description: "Edges that were not there at the previous reading; all of them at the first." }
+      required: [transactions, functions, edges, new_edges]
+
+    InterrogationRoundReply:
+      type: object
+      description: What the model replied in the round.
+      properties:
+        text: { type: string, description: "Its answer on the evidence of this round." }
+        certainty: { type: integer, minimum: 0, maximum: 100 }
+        done: { type: boolean, description: "The model decided more probes would not change the answer." }
+      required: [text, certainty, done]
+
+    InterrogationRound:
+      type: object
+      description: >
+        One round, as the workflow recorded it. A field that is absent has
+        not happened yet.
+      properties:
+        round: { type: integer }
+        state: { $ref: "#/components/schemas/InterrogationRoundState" }
+        outcome:
+          $ref: "#/components/schemas/InterrogationRoundOutcome"
+          description: Present once the round is `completed`.
+        final: { type: boolean, description: "No probe can be added in this round." }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time, x-go-type-skip-optional-pointer: false }
+        nodes:
+          type: array
+          description: The nodes the run went through in this round, in the order it first entered them.
+          items: { $ref: "#/components/schemas/InterrogationNode" }
+        observed:
+          allOf: [{ $ref: "#/components/schemas/InterrogationEvidenceCounts" }]
+          description: The call graphs `gather` read before the model call.
+          x-go-type-skip-optional-pointer: false
+        reply:
+          allOf: [{ $ref: "#/components/schemas/InterrogationRoundReply" }]
+          x-go-type-skip-optional-pointer: false
+        proposed:
+          type: array
+          description: >
+            Ids of every change the model proposed this round, accepted or
+            denied. They are the ids of `Interrogation.changes`, which also
+            lists the denied ones with their reason.
+          items: { type: string }
+        applied:
+          type: array
+          description: Ids of the changes that reached the cluster this round.
+          items: { type: string }
+        observed_after:
+          allOf: [{ $ref: "#/components/schemas/InterrogationEvidenceCounts" }]
+          description: The call graphs `observe` read after the changes ran with traffic.
+          x-go-type-skip-optional-pointer: false
+      required: [round, state, final, started_at, nodes, proposed, applied]
+
+    Interrogation:
+      type: object
+      properties:
+        id: { type: string }
+        display_id:
+          type: string
+          description: Short human label, `INT-` + the first 8 hex characters of `id` in upper case. Not a key; two runs can share one. Use `id` to address a run.
+        title: { type: string, description: "The question, or the goal's default question when none was given." }
+        source: { $ref: "#/components/schemas/InterrogationSource" }
+        goal: { $ref: "#/components/schemas/InterrogationGoal" }
+        question: { type: string }
+        transaction_ids:
+          type: array
+          description: As requested. What the run actually looked at is in `scope`.
+          items: { type: integer, format: int64 }
+        allow_changes:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        budget: { $ref: "#/components/schemas/InterrogationBudget" }
+        trigger: { $ref: "#/components/schemas/InterrogationTrigger" }
+        status:
+          $ref: "#/components/schemas/InterrogationStatus"
+          description: >
+            Changes to a terminal value only when the run is closed: the
+            source is free and `complete` is true on the events from the
+            same moment.
+        end_reason: { $ref: "#/components/schemas/InterrogationEndReason" }
+        error: { type: string, description: "Failure text when `status` is `failed`." }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, description: "When the leader picked it up; absent while queued.", x-go-type-skip-optional-pointer: false }
+        deadline_at: { type: string, format: date-time, description: "When the time limit ends the run, extensions included; absent while queued.", x-go-type-skip-optional-pointer: false }
+        extended_seconds:
+          type: integer
+          description: >
+            Seconds added by extends, in total. Absent when the run was never
+            extended. `budget.time_limit_seconds` + this is the run's whole
+            allowance.
+        ended_at: { type: string, format: date-time, x-go-type-skip-optional-pointer: false }
+        stop:
+          allOf: [{ $ref: "#/components/schemas/InterrogationStopRequest" }]
+          x-go-type-skip-optional-pointer: false
+        scope:
+          type: array
+          description: Transactions the run is looking at; filled in by the run when none were requested.
+          items: { $ref: "#/components/schemas/InterrogationScopeTransaction" }
+        progress: { $ref: "#/components/schemas/InterrogationProgress" }
+        certainty:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Latest certainty, 0..100; absent until the first answer.
+          x-go-type-skip-optional-pointer: false
+        answer:
+          allOf: [{ $ref: "#/components/schemas/InterrogationAnswer" }]
+          x-go-type-skip-optional-pointer: false
+        change_counts: { $ref: "#/components/schemas/InterrogationChangeCounts" }
+        changes:
+          type: array
+          description: >
+            Detail only; absent on the list. The run's changes, denied
+            proposals included, oldest `requested_at` first.
+          items: { $ref: "#/components/schemas/InterrogationChange" }
+        usage: { $ref: "#/components/schemas/InterrogationUsage" }
+        last_sequence:
+          type: integer
+          format: int64
+          description: Highest event sequence written so far.
+        rounds:
+          type: array
+          description: Detail only; absent on the list.
+          items: { $ref: "#/components/schemas/InterrogationRound" }
+      required:
+        - id
+        - display_id
+        - title
+        - source
+        - goal
+        - question
+        - transaction_ids
+        - allow_changes
+        - budget
+        - trigger
+        - status
+        - end_reason
+        - created_at
+        - scope
+        - progress
+        - change_counts
+        - usage
+        - last_sequence
+      examples:
+        - id: "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21"
+          display_id: INT-0B6F6C1E
+          title: "Why is claim submission slow for some users?"
+          source: { namespace: claims-demo, kind: Deployment, name: claims-intake }
+          goal: observability
+          question: "Why is claim submission slow for some users?"
+          transaction_ids: []
+          allow_changes: [custom_instrumentation]
+          budget: { max_probes: 5, time_limit_seconds: 3600, max_rounds: 5 }
+          trigger: { kind: manual, actor: alon }
+          status: queued
+          end_reason: ""
+          created_at: "2026-11-17T09:38:00Z"
+          scope: []
+          progress: { round: 0, max_rounds: 5 }
+          change_counts: { total: 0, live: 0, reverting: 0, reverted: 0, expired: 0, failed: 0, denied: 0 }
+          usage: { rounds: 0, duration_seconds: 0, probes_used: 0, max_probes: 5, model_calls: 0, input_tokens: 0, output_tokens: 0 }
+          last_sequence: 0
+
+    InterrogationList:
+      type: object
+      properties:
+        count: { type: integer, description: "Items in this page. Fewer than `limit` means there is no older page." }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Interrogation" }
+      required: [count, items]
+
+    InterrogationEvent:
+      type: object
+      properties:
+        sequence:
+          type: integer
+          format: int64
+          description: Strictly increasing within one interrogation, starting at 1. Do not rely on the absence of gaps.
+        type: { $ref: "#/components/schemas/InterrogationEventType" }
+        time: { type: string, format: date-time }
+        round: { type: integer, description: "0 for events outside a round." }
+        node:
+          $ref: "#/components/schemas/InterrogationNodeName"
+          description: The node that wrote the event.
+        change_id: { type: string, description: "On `change.*` events." }
+        message: { type: string, description: "One human-readable line for a plain timeline." }
+        payload:
+          description: >
+            Per-type data. `InterrogationEventType` names the schema for each
+            `type`; a type this list does not know yet carries a plain object.
+          anyOf:
+            - $ref: "#/components/schemas/InterrogationEventStartedPayload"
+            - $ref: "#/components/schemas/InterrogationEventStopRequestedPayload"
+            - $ref: "#/components/schemas/InterrogationEventExtendedPayload"
+            - $ref: "#/components/schemas/InterrogationEventEndedPayload"
+            - $ref: "#/components/schemas/InterrogationEventRoundStartedPayload"
+            - $ref: "#/components/schemas/InterrogationEventRoundFinishedPayload"
+            - $ref: "#/components/schemas/InterrogationEventNodeFinishedPayload"
+            - $ref: "#/components/schemas/InterrogationEventWaitStartedPayload"
+            - $ref: "#/components/schemas/InterrogationEventWaitFinishedPayload"
+            - $ref: "#/components/schemas/InterrogationEventEvidencePayload"
+            - $ref: "#/components/schemas/InterrogationEventModelCalledPayload"
+            - $ref: "#/components/schemas/InterrogationEventChangeProposedPayload"
+            - $ref: "#/components/schemas/InterrogationEventChangeDeniedPayload"
+            - $ref: "#/components/schemas/InterrogationEventChangeRequestedPayload"
+            - $ref: "#/components/schemas/InterrogationEventChangeAppliedPayload"
+            - $ref: "#/components/schemas/InterrogationEventChangeFailedPayload"
+            - $ref: "#/components/schemas/InterrogationEventChangeRevertedPayload"
+            - $ref: "#/components/schemas/InterrogationAnswer"
+            - $ref: "#/components/schemas/InterrogationEventErrorRaisedPayload"
+            - type: object
+              additionalProperties: true
+          x-go-type: json.RawMessage
+          x-go-type-skip-optional-pointer: true
+      required: [sequence, type, time, round, message, payload]
+      examples:
+        - sequence: 14
+          type: change.applied
+          time: "2026-11-17T09:41:07Z"
+          round: 1
+          node: confirm
+          change_id: "chg_3f9a1c07b2d44e6a8c51"
+          message: "Applied a probe on com.claims.intake.ClaimValidator.validate"
+          payload:
+            kind: custom_instrumentation
+            target: com.claims.intake.ClaimValidator.validate
+            rule_name: odig-int-claims-demo-claims-intake
+            expires_at: "2026-11-17T10:38:00Z"
+
+    InterrogationEventStartedPayload:
+      type: object
+      properties:
+        deadline_at: { type: string, format: date-time }
+        max_rounds: { type: integer }
+        max_probes: { type: integer }
+        allow_changes:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        revision: { type: string, description: "Prompt, request and model revision the run uses." }
+      required: [deadline_at, max_rounds, max_probes, allow_changes, revision]
+
+    InterrogationEventStopRequestedPayload:
+      type: object
+      properties:
+        changes: { type: string, enum: [keep, revert] }
+        actor: { type: string }
+      required: [changes]
+
+    InterrogationEventExtendedPayload:
+      type: object
+      properties:
+        deadline_at: { type: string, format: date-time, description: "The new deadline." }
+        seconds: { type: integer, description: "How much later than the deadline the run had." }
+      required: [deadline_at, seconds]
+
+    InterrogationEventEndedPayload:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/InterrogationStatus" }
+        end_reason: { $ref: "#/components/schemas/InterrogationEndReason" }
+        error: { type: string }
+        certainty: { type: integer, minimum: 0, maximum: 100, description: "Absent when the run produced no answer.", x-go-type-skip-optional-pointer: false }
+      required: [status, end_reason]
+
+    InterrogationEventRoundStartedPayload:
+      type: object
+      properties:
+        round: { type: integer }
+        final: { type: boolean, description: "No probe can be added in this round." }
+      required: [round, final]
+
+    InterrogationEventRoundFinishedPayload:
+      type: object
+      properties:
+        round: { type: integer }
+        outcome: { $ref: "#/components/schemas/InterrogationRoundOutcome" }
+      required: [round, outcome]
+
+    InterrogationEventNodeFinishedPayload:
+      type: object
+      properties:
+        node: { $ref: "#/components/schemas/InterrogationNodeName" }
+        next:
+          $ref: "#/components/schemas/InterrogationNodeName"
+          description: The node the run goes to; absent after `conclude`.
+      required: [node]
+
+    InterrogationEventWaitStartedPayload:
+      type: object
+      properties:
+        reason: { $ref: "#/components/schemas/InterrogationWaitReason" }
+        deadline_at: { type: string, format: date-time }
+      required: [reason]
+
+    InterrogationEventWaitFinishedPayload:
+      type: object
+      properties:
+        reason: { $ref: "#/components/schemas/InterrogationWaitReason" }
+        outcome: { $ref: "#/components/schemas/InterrogationWaitOutcome" }
+      required: [reason, outcome]
+
+    InterrogationCallEdge:
+      type: object
+      properties:
+        caller: { type: string }
+        callee: { type: string }
+      required: [caller, callee]
+
+    InterrogationEventEvidencePayload:
+      type: object
+      description: What `gather` or `observe` read. Today `kind` is always `call_graph`.
+      properties:
+        kind: { type: string, description: "Open set: `call_graph`; planned `traces`, `profile`." }
+        transactions: { type: integer }
+        functions: { type: integer }
+        edges: { type: integer }
+        new_edges: { type: integer }
+        sample_edges:
+          type: array
+          description: At most 50.
+          items: { $ref: "#/components/schemas/InterrogationCallEdge" }
+        truncated: { type: boolean, description: "A call graph was larger than the request allows and was cut." }
+      required: [kind]
+
+    InterrogationEventModelCalledPayload:
+      type: object
+      properties:
+        model: { type: string }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        duration_ms: { type: integer, format: int64 }
+        outcome: { $ref: "#/components/schemas/InterrogationModelCallOutcome" }
+        error: { type: string }
+        attempt: { type: integer, description: "1 for the round's first call." }
+      required: [outcome]
+
+    InterrogationEventChangeProposedPayload:
+      type: object
+      properties:
+        kind: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        target: { type: string }
+        probe: { $ref: "#/components/schemas/InterrogationProbe" }
+        category: { $ref: "#/components/schemas/InterrogationChangeCategory" }
+        reason: { type: string }
+      required: [kind, target]
+
+    InterrogationEventChangeDeniedPayload:
+      type: object
+      properties:
+        kind: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        target: { type: string }
+        deny_reason: { $ref: "#/components/schemas/InterrogationChangeDenyReason" }
+        detail: { type: string }
+        checks:
+          type: array
+          description: The checks passed before the one that refused it.
+          items: { $ref: "#/components/schemas/InterrogationChangeCheck" }
+      required: [kind, target, deny_reason, checks]
+
+    InterrogationEventChangeRequestedPayload:
+      type: object
+      properties:
+        kind: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        target: { type: string }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationChangeCheck" }
+      required: [kind, target, checks]
+
+    InterrogationEventChangeAppliedPayload:
+      type: object
+      properties:
+        kind: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        target: { type: string }
+        rule_name: { type: string }
+        expires_at: { type: string, format: date-time }
+      required: [kind, target]
+
+    InterrogationEventChangeFailedPayload:
+      type: object
+      properties:
+        kind: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        target: { type: string }
+        reason: { $ref: "#/components/schemas/InterrogationChangeEndReason" }
+      required: [kind, target, reason]
+
+    InterrogationEventChangeRevertedPayload:
+      type: object
+      properties:
+        kind: { $ref: "#/components/schemas/InterrogationChangeKind" }
+        target: { type: string }
+        end_reason: { $ref: "#/components/schemas/InterrogationChangeEndReason" }
+        by: { type: string, description: "Actor of the stop, when it named one." }
+      required: [kind, target, end_reason]
+
+    InterrogationEventErrorRaisedPayload:
+      type: object
+      properties:
+        node: { $ref: "#/components/schemas/InterrogationNodeName" }
+        error: { type: string }
+        retry_in_seconds: { type: integer }
+      required: [node, error]
+
+    InterrogationEventList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationEvent" }
+        last_sequence:
+          type: integer
+          format: int64
+          description: Highest sequence in `items`, or the `after` given when the page is empty. Pass it as the next `after`.
+        complete:
+          type: boolean
+          description: True when the run has ended and no event follows `last_sequence`. Stop polling.
+      required: [count, items, last_sequence, complete]
+
+    InterrogationProbe:
+      type: object
+      description: The probe of a `custom_instrumentation` change. Fields used depend on `language`.
+      properties:
+        language: { type: string, description: "Open set: `java`, `go`, `php`, `cpp`." }
+        class_name: { type: string }
+        method_name: { type: string }
+        package_name: { type: string }
+        function_name: { type: string }
+        receiver_name: { type: string }
+        receiver_method_name: { type: string }
+        signature: { type: string }
+      required: [language]
+
+    InterrogationChangeTarget:
+      type: object
+      description: The function a probe instruments. Only the fields its language uses are set.
+      properties:
+        class_name: { type: string }
+        method_name: { type: string }
+        package_name: { type: string }
+        function_name: { type: string }
+        receiver_name: { type: string }
+        receiver_method_name: { type: string }
+        signature: { type: string }
+
+    InterrogationChange:
+      type: object
+      description: One change of a run, or a proposal it denied.
+      properties:
+        id: { type: string, description: "`chg_` + 20 hex characters; the id in `rounds[].proposed`, `rounds[].applied` and `change_id` on events." }
+        round: { type: integer, description: "Round that proposed it." }
+        language: { type: string, description: "`java` today." }
+        target: { $ref: "#/components/schemas/InterrogationChangeTarget" }
+        state: { $ref: "#/components/schemas/InterrogationChangeState" }
+        deny_reason: { $ref: "#/components/schemas/InterrogationChangeDenyReason" }
+        block_reason: { $ref: "#/components/schemas/InterrogationChangeBlockReason" }
+        checks:
+          type: array
+          description: Checks passed, in order. All six for a stored change; those before the failing one for a denied proposal.
+          items: { $ref: "#/components/schemas/InterrogationChangeCheck" }
+        requested_at: { type: string, format: date-time, description: "When the model proposed it." }
+        applied_at: { type: string, format: date-time, x-go-type-skip-optional-pointer: false }
+        expires_at:
+          type: string
+          format: date-time
+          description: Stored changes only. Never later than the run's `deadline_at`; moved by extend.
+          x-go-type-skip-optional-pointer: false
+        ended_at: { type: string, format: date-time, description: "When it left the cluster.", x-go-type-skip-optional-pointer: false }
+        end_reason:
+          $ref: "#/components/schemas/InterrogationChangeEndReason"
+          description: Set once the change is ending or ended. For `failed` it is why the change never took effect.
+      required: [id, round, language, target, state, checks, requested_at]
+      examples:
+        - id: "chg_3f9a1c07b2d44e6a8c51"
+          round: 1
+          language: java
+          target: { class_name: com.claims.intake.ClaimValidator, method_name: validate }
+          state: active
+          checks: [changes_allowed, in_call_graph, application_code, not_already_probed, within_workload_cap, within_run_budget]
+          requested_at: "2026-11-17T09:41:02Z"
+          applied_at: "2026-11-17T09:41:07Z"
+          expires_at: "2026-11-17T10:38:03Z"
+
+    InterrogationChangesBySource:
+      type: object
+      properties:
+        source: { $ref: "#/components/schemas/InterrogationSource" }
+        language: { type: string }
+        live: { type: integer }
+        probes: { type: integer, description: "Live interrogation changes on the workload; probes from other rules are not counted." }
+        max_probes: { type: integer, description: "The per-workload cap over every rule, enforced when a probe is requested." }
+      required: [source, live, probes, max_probes]
+
+    InterrogationChangesSummary:
+      type: object
+      properties:
+        live: { type: integer }
+        by_kind:
+          type: object
+          description: Live changes per `InterrogationChangeKind`.
+          additionalProperties: { type: integer }
+        next_expiry_at: { type: string, format: date-time, x-go-type-skip-optional-pointer: false }
+        next_expiry_change_id: { type: string }
+        by_source:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationChangesBySource" }
+      required: [live, by_kind, by_source]
+      examples:
+        - live: 3
+          by_kind: { custom_instrumentation: 3 }
+          next_expiry_at: "2026-11-17T10:38:00Z"
+          next_expiry_change_id: "chg_3f9a1c07b2d44e6a8c51"
+          by_source:
+            - source: { namespace: claims-demo, kind: Deployment, name: claims-intake }
+              language: java
+              live: 3
+              probes: 3
+              max_probes: 20
+
+    InterrogationModelUsage:
+      type: object
+      description: Model calls made by the interrogations the server has (30 days). The background loop's calls are not counted.
+      properties:
+        calls: { type: integer }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        model: { type: string, description: "Model of the most recent call; empty when there were none." }
+        gateway: { type: string, description: "`litellm`." }
+      required: [calls, input_tokens, output_tokens, model, gateway]
+
+    InterrogationSummary:
+      type: object
+      properties:
+        queued: { type: integer }
+        running: { type: integer, description: "`running` + `stopping`. The nav badge." }
+        running_sources:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationSource" }
+        total: { type: integer, description: "Interrogations the server has (30 days). The tab count." }
+        concluded: { type: integer, description: "Of those, the ended ones, any terminal status." }
+        avg_rounds:
+          type: number
+          description: Mean rounds of the runs counted in `concluded`. Absent when there are none.
+          x-go-type-skip-optional-pointer: false
+        avg_duration_seconds:
+          type: integer
+          description: Mean `ended_at` - `started_at` of the runs counted in `concluded`. Absent when there are none.
+          x-go-type-skip-optional-pointer: false
+        changes: { $ref: "#/components/schemas/InterrogationChangesSummary" }
+        model_usage: { $ref: "#/components/schemas/InterrogationModelUsage" }
+      required: [queued, running, running_sources, total, concluded, changes, model_usage]
+
+    InterrogationOptionValue:
+      type: object
+      properties:
+        value: { type: string }
+        supported: { type: boolean, description: "False: sending it is rejected with `not_supported_yet`. Show it disabled." }
+        default: { type: boolean, description: "Preselect it in the form." }
+      required: [value, supported, default]
+
+    InterrogationBudgetOption:
+      type: object
+      properties:
+        supported: { type: boolean }
+        default: { type: integer, x-go-type-skip-optional-pointer: false }
+        min: { type: integer, x-go-type-skip-optional-pointer: false }
+        max: { type: integer, x-go-type-skip-optional-pointer: false }
+        choices:
+          type: array
+          description: Values the mockup offers as a select. Any value within min..max is accepted.
+          items: { type: integer }
+      required: [supported, choices]
+
+    InterrogationOptions:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        goals:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationOptionValue" }
+        change_kinds:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationOptionValue" }
+        budget:
+          type: object
+          properties:
+            max_probes: { $ref: "#/components/schemas/InterrogationBudgetOption" }
+            max_added_spans_per_min: { $ref: "#/components/schemas/InterrogationBudgetOption" }
+            time_limit_seconds: { $ref: "#/components/schemas/InterrogationBudgetOption" }
+          required: [max_probes, max_added_spans_per_min, time_limit_seconds]
+        max_rounds: { type: integer }
+        extend:
+          type: object
+          properties:
+            default_seconds: { type: integer }
+            max_total_seconds: { type: integer, description: "Ceiling for the time limit after extensions." }
+          required: [default_seconds, max_total_seconds]
+        max_open: { type: integer, description: "Open runs (queued + running) the cluster accepts." }
+        max_transaction_ids: { type: integer }
+      required: [enabled, goals, change_kinds, budget, max_rounds, extend, max_open, max_transaction_ids]
+      examples:
+        - enabled: true
+          goals:
+            - { value: observability, supported: true, default: true }
+            - { value: security, supported: false, default: false }
+          change_kinds:
+            - { value: custom_instrumentation, supported: true, default: true }
+            - { value: head_sampling, supported: false, default: false }
+            - { value: payload_collection, supported: false, default: false }
+            - { value: kernel_spans, supported: false, default: false }
+          budget:
+            max_probes: { supported: true, default: 5, min: 1, max: 20, choices: [] }
+            max_added_spans_per_min: { supported: false, choices: [500, 1000, 5000] }
+            time_limit_seconds: { supported: true, default: 3600, min: 300, max: 14400, choices: [900, 3600, 14400] }
+          max_rounds: 5
+          extend: { default_seconds: 1800, max_total_seconds: 28800 }
+          max_open: 10
+          max_transaction_ids: 20
+
+    InterrogationPickerSource:
+      type: object
+      properties:
+        namespace: { type: string }
+        kind: { type: string }
+        name: { type: string }
+        language: { type: string, description: "`java` today." }
+        transactions: { type: integer, description: "Transactions with call-graph evidence." }
+        last_seen: { type: string, format: date-time, description: "Latest traffic on any of them.", x-go-type-skip-optional-pointer: false }
+        busy: { type: boolean, description: "An interrogation is open on it; starting another answers 409." }
+        active_interrogation_id: { type: string }
+        active_display_id: { type: string }
+        probes: { type: integer, description: "Live interrogation changes on the workload; probes from other rules are not counted." }
+        max_probes: { type: integer, description: "The per-workload cap over every rule, enforced when a probe is requested." }
+      required: [namespace, kind, name, language, transactions, busy]
+
+    InterrogationSourceList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationPickerSource" }
+      required: [count, items]
+
+    InterrogationSourceTransaction:
+      type: object
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        operation: { type: string, description: "E.g. `POST /api/claims`." }
+        kind: { type: string, description: "Transaction kind: HTTP, GRPC, ..." }
+        volume: { type: integer, format: int64, description: "Requests seen since the transaction was first learned." }
+        last_seen: { type: string, format: date-time, x-go-type-skip-optional-pointer: false }
+        functions: { type: integer, description: "Application functions in its call graph." }
+      required: [transaction_id, operation, kind, volume, functions]
+
+    InterrogationSourceTransactionList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationSourceTransaction" }
       required: [count, items]
