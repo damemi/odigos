@@ -16,13 +16,21 @@ const (
 	// notificationAttemptRetentionDays bounds the delivery audit trail so it
 	// cannot grow with traffic.
 	notificationAttemptRetentionDays = 30
+	// interrogationRetentionDays bounds how long an ended interrogation and
+	// its ended changes are kept.
+	interrogationRetentionDays = 30
+	// unstartedInterrogationRetention bounds how long a run closed before a
+	// leader picked it up is kept. It has no result, and a loop of start and
+	// stop would otherwise keep a day's worth of them for 30 days.
+	unstartedInterrogationRetention = time.Hour
 	// retentionChunk bounds one DELETE so a large backlog never holds row
 	// locks or bloats WAL in a single statement.
 	retentionChunk = 5000
 )
 
-// RunRetention deletes expired samples and delivery attempts every hour until
-// ctx is done. It runs as a leader job, so only one replica prunes at a time.
+// RunRetention deletes expired samples, delivery attempts and interrogations
+// every hour until ctx is done. It runs as a leader job, so only one replica
+// prunes at a time.
 func (r *Repo) RunRetention(ctx context.Context, log *slog.Logger) {
 	ticker := time.NewTicker(retentionInterval)
 	defer ticker.Stop()
@@ -58,7 +66,7 @@ func (r *Repo) PruneExpired(ctx context.Context, now time.Time) error {
 			return fmt.Errorf("prune notification attempts: %w", err)
 		}
 		deleted["notification_attempts"] = n
-		return nil
+		return r.pruneInterrogations(ctx, now.AddDate(0, 0, -interrogationRetentionDays), now.Add(-unstartedInterrogationRetention), deleted)
 	}()
 	if recErr := r.recordMaintenanceRun(ctx, retentionJob, now, err, deleted); recErr != nil && err == nil {
 		err = recErr

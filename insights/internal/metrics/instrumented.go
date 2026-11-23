@@ -627,6 +627,150 @@ func (m *instrumentedRepo) SetNotificationCursor(ctx context.Context, cursor rep
 	})
 }
 
+func (m *instrumentedRepo) GetInterrogation(ctx context.Context, id string, now time.Time) (repo.Interrogation, bool, error) {
+	var (
+		out repo.Interrogation
+		ok  bool
+	)
+	err := observe("GetInterrogation", func() error {
+		var e error
+		out, ok, e = m.inner.GetInterrogation(ctx, id, now)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) ListInterrogations(ctx context.Context, before string, limit int, now time.Time) ([]repo.Interrogation, error) {
+	var out []repo.Interrogation
+	err := observe("ListInterrogations", func() error {
+		var e error
+		out, e = m.inner.ListInterrogations(ctx, before, limit, now)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) InterrogationSummary(ctx context.Context) (repo.InterrogationSummary, error) {
+	var out repo.InterrogationSummary
+	err := observe("InterrogationSummary", func() error {
+		var e error
+		out, e = m.inner.InterrogationSummary(ctx)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) InterrogationWorkloadHolder(ctx context.Context, workload string) (repo.InterrogationHolder, bool, error) {
+	var (
+		out repo.InterrogationHolder
+		ok  bool
+	)
+	err := observe("InterrogationWorkloadHolder", func() error {
+		var e error
+		out, ok, e = m.inner.InterrogationWorkloadHolder(ctx, workload)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) ListOpenInterrogations(ctx context.Context) ([]repo.OpenInterrogation, error) {
+	var out []repo.OpenInterrogation
+	err := observe("ListOpenInterrogations", func() error {
+		var e error
+		out, e = m.inner.ListOpenInterrogations(ctx)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) ListInterrogationEvents(ctx context.Context, id string, after int64, limit int) (repo.InterrogationEvents, bool, error) {
+	var (
+		out repo.InterrogationEvents
+		ok  bool
+	)
+	err := observe("ListInterrogationEvents", func() error {
+		var e error
+		out, ok, e = m.inner.ListInterrogationEvents(ctx, id, after, limit)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) ListInterrogationSources(ctx context.Context, limit int, now time.Time) ([]repo.InterrogationSourceStat, error) {
+	var out []repo.InterrogationSourceStat
+	err := observe("ListInterrogationSources", func() error {
+		var e error
+		out, e = m.inner.ListInterrogationSources(ctx, limit, now)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) ListInterrogationSourceTransactions(ctx context.Context, source repo.InterrogationSource, limit int) ([]repo.InterrogationSourceTransaction, error) {
+	var out []repo.InterrogationSourceTransaction
+	err := observe("ListInterrogationSourceTransactions", func() error {
+		var e error
+		out, e = m.inner.ListInterrogationSourceTransactions(ctx, source, limit)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) GetInterrogationChange(ctx context.Context, changeID string) (repo.InterrogationChange, bool, error) {
+	var (
+		out repo.InterrogationChange
+		ok  bool
+	)
+	err := observe("GetInterrogationChange", func() error {
+		var e error
+		out, ok, e = m.inner.GetInterrogationChange(ctx, changeID)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) ListInterrogationChanges(ctx context.Context, interrogationID string) ([]repo.InterrogationChange, error) {
+	var out []repo.InterrogationChange
+	err := observe("ListInterrogationChanges", func() error {
+		var e error
+		out, e = m.inner.ListInterrogationChanges(ctx, interrogationID)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) InterrogationChangesSummary(ctx context.Context, now time.Time) (repo.InterrogationChangesSummary, error) {
+	var out repo.InterrogationChangesSummary
+	err := observe("InterrogationChangesSummary", func() error {
+		var e error
+		out, e = m.inner.InterrogationChangesSummary(ctx, now)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) EndInterrogationChange(ctx context.Context, changeID, reason string, now time.Time) error {
+	return observe("EndInterrogationChange", func() error {
+		return m.inner.EndInterrogationChange(ctx, changeID, reason, now)
+	})
+}
+
+func (m *instrumentedRepo) RevertInterrogationProbes(ctx context.Context, interrogationID string, now time.Time) error {
+	return observe("RevertInterrogationProbes", func() error {
+		return m.inner.RevertInterrogationProbes(ctx, interrogationID, now)
+	})
+}
+
+func (m *instrumentedRepo) RevertStoppedInterrogationProbes(ctx context.Context, now time.Time) (int64, error) {
+	var out int64
+	err := observe("RevertStoppedInterrogationProbes", func() error {
+		var e error
+		out, e = m.inner.RevertStoppedInterrogationProbes(ctx, now)
+		return e
+	})
+	return out, err
+}
+
 func (m *instrumentedRepo) GetStorageHealth(ctx context.Context) (repo.StorageHealth, error) {
 	var out repo.StorageHealth
 	err := observe("GetStorageHealth", func() error {

@@ -2197,5 +2197,48 @@ func (f *fakeRepo) SetNotificationCursor(_ context.Context, _ repo.NotificationC
 	return nil
 }
 
+func (f *fakeRepo) GetInterrogation(_ context.Context, _ string, _ time.Time) (repo.Interrogation, bool, error) {
+	return repo.Interrogation{}, false, nil
+}
+func (f *fakeRepo) ListInterrogations(_ context.Context, _ string, _ int, _ time.Time) ([]repo.Interrogation, error) {
+	return nil, nil
+}
+func (f *fakeRepo) InterrogationSummary(_ context.Context) (repo.InterrogationSummary, error) {
+	return repo.InterrogationSummary{}, nil
+}
+func (f *fakeRepo) InterrogationWorkloadHolder(_ context.Context, _ string) (repo.InterrogationHolder, bool, error) {
+	return repo.InterrogationHolder{}, false, nil
+}
+func (f *fakeRepo) ListOpenInterrogations(_ context.Context) ([]repo.OpenInterrogation, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListInterrogationEvents(_ context.Context, _ string, _ int64, _ int) (repo.InterrogationEvents, bool, error) {
+	return repo.InterrogationEvents{}, false, nil
+}
+func (f *fakeRepo) ListInterrogationSources(_ context.Context, _ int, _ time.Time) ([]repo.InterrogationSourceStat, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListInterrogationSourceTransactions(_ context.Context, _ repo.InterrogationSource, _ int) ([]repo.InterrogationSourceTransaction, error) {
+	return nil, nil
+}
+func (f *fakeRepo) GetInterrogationChange(_ context.Context, _ string) (repo.InterrogationChange, bool, error) {
+	return repo.InterrogationChange{}, false, nil
+}
+func (f *fakeRepo) ListInterrogationChanges(_ context.Context, _ string) ([]repo.InterrogationChange, error) {
+	return nil, nil
+}
+func (f *fakeRepo) InterrogationChangesSummary(_ context.Context, _ time.Time) (repo.InterrogationChangesSummary, error) {
+	return repo.InterrogationChangesSummary{}, nil
+}
+func (f *fakeRepo) EndInterrogationChange(_ context.Context, _, _ string, _ time.Time) error {
+	return nil
+}
+func (f *fakeRepo) RevertInterrogationProbes(_ context.Context, _ string, _ time.Time) error {
+	return nil
+}
+func (f *fakeRepo) RevertStoppedInterrogationProbes(_ context.Context, _ time.Time) (int64, error) {
+	return 0, nil
+}
+
 func (f *fakeRepo) Ping(_ context.Context) error { return nil }
 func (f *fakeRepo) Close() error                 { return nil }

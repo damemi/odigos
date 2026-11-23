@@ -369,6 +369,69 @@ type Repository interface {
 	// SetNotificationCursor records the notifier's progress. Leader only.
 	SetNotificationCursor(ctx context.Context, cursor NotificationCursor) error
 
+	// ---------- interrogations ----------
+	//
+	// A run is stored as ADK sessions, written by the session store in
+	// internal/interrogation; these are the reads of them and the writes of
+	// the probes a run requested. Any replica may call them unless noted.
+	// Methods that compare with the clock take now from the caller.
+
+	// GetInterrogation returns one run with its change counts at now; ok=false
+	// when unknown.
+	GetInterrogation(ctx context.Context, id string, now time.Time) (Interrogation, bool, error)
+
+	// ListInterrogations returns runs newest first, at most limit, starting
+	// after the run with id before when it is set. An unknown before gives an
+	// empty page.
+	ListInterrogations(ctx context.Context, before string, limit int, now time.Time) ([]Interrogation, error)
+
+	// InterrogationSummary counts the runs open now and sums up every run
+	// kept.
+	InterrogationSummary(ctx context.Context) (InterrogationSummary, error)
+
+	// InterrogationWorkloadHolder returns the open run of a workload
+	// (InterrogationSource.Workload); ok=false when it has none.
+	InterrogationWorkloadHolder(ctx context.Context, workload string) (InterrogationHolder, bool, error)
+
+	// ListOpenInterrogations returns every open run with its control session,
+	// oldest first. The leader's supervisor polls it.
+	ListOpenInterrogations(ctx context.Context) ([]OpenInterrogation, error)
+
+	// ListInterrogationEvents returns up to limit items of a run's event log
+	// with a sequence after after; ok=false when the run is unknown.
+	ListInterrogationEvents(ctx context.Context, id string, after int64, limit int) (InterrogationEvents, bool, error)
+
+	// ListInterrogationSources returns the workloads with call-graph evidence,
+	// with their open run and live changes at now.
+	ListInterrogationSources(ctx context.Context, limit int, now time.Time) ([]InterrogationSourceStat, error)
+
+	// ListInterrogationSourceTransactions returns a workload's transactions
+	// that have a call graph, busiest first.
+	ListInterrogationSourceTransactions(ctx context.Context, source InterrogationSource, limit int) ([]InterrogationSourceTransaction, error)
+
+	// GetInterrogationChange returns one stored change; ok=false when unknown.
+	GetInterrogationChange(ctx context.Context, changeID string) (InterrogationChange, bool, error)
+
+	// ListInterrogationChanges returns every stored change of one run, oldest
+	// first.
+	ListInterrogationChanges(ctx context.Context, interrogationID string) ([]InterrogationChange, error)
+
+	// InterrogationChangesSummary counts the changes live at now.
+	InterrogationChangesSummary(ctx context.Context, now time.Time) (InterrogationChangesSummary, error)
+
+	// EndInterrogationChange ends an approved change that never took effect,
+	// with reason as its end reason. An ended change is left as it is.
+	EndInterrogationChange(ctx context.Context, changeID, reason string, now time.Time) error
+
+	// RevertInterrogationProbes reverts one run's changes live at now: a stop
+	// with revert.
+	RevertInterrogationProbes(ctx context.Context, interrogationID string, now time.Time) error
+
+	// RevertStoppedInterrogationProbes reverts the changes live at now of
+	// every closed run whose stop asked for a revert. The leader runs it on
+	// every poll; a repeat changes nothing.
+	RevertStoppedInterrogationProbes(ctx context.Context, now time.Time) (int64, error)
+
 	// ---------- storage health ----------
 
 	// GetStorageHealth returns a point-in-time Postgres health snapshot for the
