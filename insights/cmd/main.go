@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/db/postgres"
 	"github.com/odigos-io/odigos/insights/internal/db/postgres/migrate"
 	"github.com/odigos-io/odigos/insights/internal/engine"
+	"github.com/odigos-io/odigos/insights/internal/interrogation"
 	"github.com/odigos-io/odigos/insights/internal/leader"
 	"github.com/odigos-io/odigos/insights/internal/metrics"
 	"github.com/odigos-io/odigos/insights/internal/notify"
@@ -138,6 +140,13 @@ func main() {
 	// (see runNotifier below, after the schema is ready).
 	integrationRegistry := sinks.NewRegistry(notify.DefaultDeps())
 	apiHandle.SetIntegrationRegistry(integrationRegistry)
+
+	// Interrogations follow autopilot. The session store opens in the
+	// background; the leader's supervisor waits for it.
+	var sessions atomic.Pointer[interrogation.Sessions]
+	if _, ok := os.LookupEnv(envAutopilotEnabled); ok {
+		go openInterrogationSessions(rootCtx, log, dsn, &sessions)
+	}
 
 	httpSrv := &stdhttp.Server{
 		Addr:              httpAddr,
@@ -248,7 +257,7 @@ func main() {
 	leaderDone := make(chan struct{})
 	go func() {
 		defer close(leaderDone)
-		runLeaderJobs(rootCtx, log, r, pg, dsn, integrationRegistry, eng)
+		runLeaderJobs(rootCtx, log, r, pg, dsn, integrationRegistry, eng, sessions.Load)
 	}()
 
 	otlpSrv := otlp.NewServer(otlpAddr, eng, log)
@@ -291,6 +300,9 @@ func main() {
 	<-sampleWriterDone
 	<-leaderDone
 	shutdownHTTP(httpSrv, log)
+	if s := sessions.Load(); s != nil {
+		s.Close()
+	}
 	log.Info("insights service exited")
 }
 
@@ -399,6 +411,32 @@ func waitForSchemaReady(
 				delay = dbRetryMax
 			}
 		}
+	}
+}
+
+// openInterrogationSessions opens the interrogation session store, retrying
+// with the repository's backoff, and stores it in sessions.
+func openInterrogationSessions(ctx context.Context, log *commonlogger.OdigosLogger, dsn string, sessions *atomic.Pointer[interrogation.Sessions]) {
+	delay := dbRetryInitial
+	var lastLog time.Time
+	for {
+		openCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		s, err := interrogation.OpenSessions(openCtx, dsn)
+		cancel()
+		if err == nil {
+			sessions.Store(s)
+			return
+		}
+		if now := time.Now(); lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {
+			log.Warn("interrogation session store unavailable", "retry_in", delay.String(), "error", err)
+			lastLog = now
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+		delay = min(delay+dbRetryStep, dbRetryMax)
 	}
 }
 
@@ -543,7 +581,7 @@ func runSystemSettingsReloader(
 // unconditionally, which is the local single-process case. Autopilot
 // joins the slice when AUTOPILOT_ENABLED is set. Its call trees, analysis
 // runs, and recommendations are stored in the same Postgres as insights.
-func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, pg *postgres.Repo, dsn string, reg *notify.Registry, eng *engine.Engine) {
+func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.Repository, pg *postgres.Repo, dsn string, reg *notify.Registry, eng *engine.Engine, sessions func() *interrogation.Sessions) {
 	dispatcher := notify.NewDispatcher(r, reg, slog.New(commonlogger.NewSlogHandler("notifier")), leader.Identity(), notify.PollInterval, notify.DefaultOverlap)
 	retentionLog := slog.New(commonlogger.NewSlogHandler("retention"))
 	retention := func(ctx context.Context) { pg.RunRetention(ctx, retentionLog) }
@@ -557,6 +595,8 @@ func runLeaderJobs(ctx context.Context, log *commonlogger.OdigosLogger, r repo.R
 			LiteLLMMasterKey:     os.Getenv(envAutopilotLiteLLMMasterKey),
 			AutoApply:            envTruthy(os.Getenv(envAutopilotAutoApply)),
 			MaxProbesPerWorkload: envPositiveInt(os.Getenv(envAutopilotMaxProbesPerWorkload)),
+			Repo:                 r,
+			Sessions:             sessions,
 		}
 		jobs = append(jobs, func(ctx context.Context) {
 			if err := autopilot.Run(ctx, opts); err != nil && ctx.Err() == nil {

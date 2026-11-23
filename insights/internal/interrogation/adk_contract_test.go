@@ -29,42 +29,13 @@ import (
 
 	apstore "github.com/odigos-io/odigos/insights/internal/autopilot/store"
 	"github.com/odigos-io/odigos/insights/internal/db/postgres"
-	"github.com/odigos-io/odigos/insights/internal/engine"
 )
 
-// testGraph is a three-node workflow in the shape of the interrogation's:
-// entry starts the run's clock, or ends the invocation when the run is
-// closed; prepare is the first step with an effect outside the session, and
-// can be held open; finish is the last step.
-type testGraph struct {
-	mu       sync.Mutex
-	prepared map[string]int
-	held     map[string]chan struct{}
-	entered  map[string]chan struct{}
-}
-
-func newTestGraph() *testGraph {
-	return &testGraph{prepared: map[string]int{}, held: map[string]chan struct{}{}, entered: map[string]chan struct{}{}}
-}
-
-// hold makes prepare wait for the returned release once it has signalled
-// entered.
-func (g *testGraph) hold(id string) (entered <-chan struct{}, release func()) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	h, e := make(chan struct{}), make(chan struct{})
-	g.held[id], g.entered[id] = h, e
-	return e, func() { close(h) }
-}
-
-func (g *testGraph) timesPrepared(id string) int {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	return g.prepared[id]
-}
-
-// runner builds a runner of this graph on s, as a leader would.
-func (g *testGraph) runner(t *testing.T, s *Sessions) *runner.Runner {
+// testRunner runs a three-node workflow in the shape of the interrogation's
+// on s, as a leader would: entry starts the run's clock, or ends the
+// invocation when the run is closed; prepare is the first step; finish is the
+// last step.
+func testRunner(t *testing.T, s *Sessions) *runner.Runner {
 	t.Helper()
 	runState := func(ctx agent.Context) map[string]any {
 		v, err := ctx.Session().State().Get("run")
@@ -98,21 +69,6 @@ func (g *testGraph) runner(t *testing.T, s *Sessions) *runner.Runner {
 	}, workflow.NodeConfig{})
 
 	prepare := workflow.NewEmittingFunctionNode("prepare", func(ctx agent.Context, _ any, emit func(*session.Event) error) (any, error) {
-		id := ctx.Session().ID()
-		g.mu.Lock()
-		held, entered := g.held[id], g.entered[id]
-		g.mu.Unlock()
-		if held != nil {
-			close(entered)
-			select {
-			case <-held:
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-		g.mu.Lock()
-		g.prepared[id]++
-		g.mu.Unlock()
 		run := runState(ctx)
 		run["step"] = "finish"
 		return nil, setRun(ctx, emit, run, "")
@@ -311,35 +267,33 @@ func TestADKContract_ControlWritesUnderSkew(t *testing.T) {
 // A stop on a queued run racing the leader's pickup, the replica that took the
 // start 2 s ahead of the others.
 func TestADKContract_QueuedCloseAgainstPickup(t *testing.T) {
-	db := newTestDB(t)
-	creator, leader, handler := db.replica(t), db.replica(t), db.replica(t)
-	g := newTestGraph()
-	r := g.runner(t, leader)
-	ctx := context.Background()
+	h := newPGHarness(t)
+	creator, handler := h.db.replica(t), h.db.replica(t)
+	leader := h.leader(nil)
 
 	var closedOnly, ranOnly int
 	for i := range 200 {
 		id := fmt.Sprintf("run-%d", i)
-		mustStart(t, replicaClock(ctx, 2*time.Second), creator, id, 3600)
+		mustStart(t, replicaClock(context.Background(), 2*time.Second), creator, id, 3600)
 		var closed bool
 		var closeErr error
 		var wg sync.WaitGroup
 		wg.Go(func() {
 			sleepUpTo(3 * time.Millisecond)
-			_ = invoke(ctx, r, id, "start")
+			h.step(h.ctx, leader)
 		})
 		wg.Go(func() {
 			sleepUpTo(6 * time.Millisecond)
-			closed, closeErr = handler.CloseQueued(ctx, id, Closed{Reason: "stopped_by_user"})
+			closed, closeErr = handler.CloseQueued(context.Background(), id, Closed{Reason: "stopped_by_user"})
 		})
 		wg.Wait()
 		if closeErr != nil {
 			t.Fatalf("race %d: %v", i, closeErr)
 		}
-		ran := g.timesPrepared(id) > 0
-		state := db.state(t, AppName, id)
+		state := h.db.state(t, AppName, id)
+		ran := state["run"] != nil
 		switch {
-		case closed && ran:
+		case closed && (ran || h.loop.instrumented(id) > 0):
 			t.Fatalf("race %d: closed as queued and also run: %v", i, state)
 		case closed:
 			closedOnly++
@@ -352,77 +306,102 @@ func TestADKContract_QueuedCloseAgainstPickup(t *testing.T) {
 	t.Logf("200 races: closed while queued %d, run %d", closedOnly, ranOnly)
 }
 
-// Two leaders send a queued run its first message at once.
+// Two leaders pick a queued run up at once. ADK stamps the events with the
+// wall clock here: its stale check needs times that move.
 func TestADKContract_TwoLeadersPickUp(t *testing.T) {
-	db := newTestDB(t)
-	a, b := db.replica(t), db.replica(t)
-	g := newTestGraph()
-	runners := []*runner.Runner{g.runner(t, a), g.runner(t, b)}
+	h := newPGHarness(t)
 	ctx := context.Background()
+	leaders := []*Supervisor{h.leader(nil), h.leader(nil)}
 
 	for i := range 60 {
 		id := fmt.Sprintf("run-%d", i)
-		mustStart(t, ctx, a, id, 3600)
-		var errs [2]error
+		mustStart(t, ctx, h.api, id, 3600)
 		var wg sync.WaitGroup
 		gate := make(chan struct{})
-		for j, r := range runners {
+		for _, s := range leaders {
 			wg.Go(func() {
 				<-gate
-				errs[j] = invoke(ctx, r, id, "start")
+				h.step(ctx, s)
 			})
 		}
 		close(gate)
 		wg.Wait()
-		if n := g.timesPrepared(id); n != 1 {
-			t.Fatalf("trial %d: prepare ran %d times (invocation errors %v)", i, n, errs)
+		var errs []string
+		for _, s := range leaders {
+			if rt := s.retries[id]; rt != nil && rt.lastErr != "" {
+				errs = append(errs, rt.lastErr)
+			}
 		}
-		if errs[0] != nil && errs[1] != nil {
+		if len(errs) == 2 {
 			t.Fatalf("trial %d: both invocations failed: %v", i, errs)
 		}
-		if n := db.count(t, `SELECT count(*) FROM adk.events WHERE app_name = $1 AND session_id = $2 AND author = 'user'`, AppName, id); n != 1 {
-			t.Fatalf("trial %d: %d start messages stored", i, n)
+		// Each leader reads the queue before it sends, so the second start can
+		// arrive after the first one's events: ADK stores it, and entry leaves
+		// the run as it is. The step it overtook is retried from state, prepare
+		// included, so prepare's stored event is counted, not its calls.
+		h.id = id
+		for _, s := range leaders {
+			if s.retries[id] != nil {
+				h.drive(ctx, s, parkedIn("wait_baseline"))
+				break
+			}
+		}
+		st, _ := h.state()
+		if st == nil {
+			t.Fatalf("trial %d: not picked up", i)
+		}
+		if n := len(h.apiEvents(EventStarted)); n != 1 || st.Wait == nil || st.Wait.InterruptID != "wait_baseline-1" {
+			t.Fatalf("trial %d: %d started events, wait %+v; want one start, parked once", i, n, st.Wait)
 		}
 	}
 }
 
 // Control written while the runner holds a step open does not make the
-// runner's next append fail.
+// runner's next append fail; the next poll delivers it.
 func TestADKContract_RunnerUndisturbedByControl(t *testing.T) {
-	db := newTestDB(t)
-	leader, api := db.replica(t), db.replica(t)
-	g := newTestGraph()
-	r := g.runner(t, leader)
-	ctx := context.Background()
-
-	mustStart(t, ctx, api, "run", 3600)
-	entered, release := g.hold("run")
-	done := make(chan error, 1)
-	go func() { done <- invoke(ctx, r, "run", "start") }()
+	h := newPGHarness(t)
+	leader := h.leader(nil)
+	entered, release := make(chan struct{}), make(chan struct{})
+	h.loop.onInstr = func(string, int) {
+		close(entered)
+		<-release
+	}
+	h.start()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.step(h.ctx, leader)
+	}()
 	select {
 	case <-entered:
-	case err := <-done:
-		t.Fatalf("invocation ended before prepare: %v", err)
+	case <-done:
+		t.Fatal("invocation ended before prepare")
 	}
-	if err := api.Extend(ctx, "run", 60, 28800, time.Now()); err != nil {
+	if err := h.api.Extend(h.ctx, h.id, 60, 28800, h.clock.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := api.Stop(ctx, "run", Stop{Changes: ChangesKeep, Actor: "alice", At: time.Now()}); err != nil {
+	if err := h.api.Stop(h.ctx, h.id, Stop{Changes: ChangesKeep, Actor: "alice", At: h.clock.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	release()
-	if err := <-done; err != nil {
-		t.Fatalf("invocation: %v", err)
+	close(release)
+	<-done
+	h.loop.onInstr = nil
+	if rt := leader.retries[h.id]; rt == nil || rt.lastErr != "" {
+		t.Fatalf("invocation: %+v", rt)
 	}
-	if n := g.timesPrepared("run"); n != 1 {
+	if n := h.loop.instrumented(testWorkload); n != 1 {
 		t.Errorf("prepare ran %d times", n)
 	}
-	run, _ := db.state(t, AppName, "run")["run"].(map[string]any)
-	if run["step"] != "done" {
-		t.Errorf("run = %v, want it at the end of the graph", run)
+	if st, _ := h.state(); st.Wait == nil || st.Wait.Node != "wait_baseline" || st.Stop != nil {
+		t.Errorf("run = %+v, want it parked at the baseline without the stop", st)
 	}
-	if c := db.control(t, "run"); c.ExtendSeconds != 60 || c.Stop == nil {
+	if c := h.db.control(t, h.id); c.ExtendSeconds != 60 || c.Stop == nil {
 		t.Errorf("control = %+v", c)
+	}
+
+	h.step(h.ctx, leader)
+	if st, open := h.state(); open || st.Status != StatusStopped || st.Stop == nil || st.Stop.Actor != "alice" {
+		t.Errorf("after the next poll: open %v, run %+v", open, st)
 	}
 }
 
@@ -634,8 +613,7 @@ func TestADKContract_CloseAgainstOldLeader(t *testing.T) {
 func TestADKContract_StateLayout(t *testing.T) {
 	db := newTestDB(t)
 	api, leader := db.replica(t), db.replica(t)
-	g := newTestGraph()
-	r := g.runner(t, leader)
+	r := testRunner(t, leader)
 	ctx := context.Background()
 
 	req := testRequest("app", 3600)
@@ -699,10 +677,11 @@ WHERE app_name = 'interrogation' AND id = 'run' AND state->>'workload' = 'ns/Dep
 }
 
 // openRepo opens the insights repo on the test's database, as every replica
-// does.
+// does. Nothing here reads baselines, so it has no codec: the engine, which
+// has it, imports autopilot, which imports this package.
 func openRepo(t *testing.T, dsn string) *postgres.Repo {
 	t.Helper()
-	r, err := postgres.Open(dsn, engine.NewBaselineCodec())
+	r, err := postgres.Open(dsn, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

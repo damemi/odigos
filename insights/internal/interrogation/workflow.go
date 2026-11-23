@@ -119,6 +119,14 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 	// entry: a new invocation continues from the step the session recorded.
 	entry := node(nodeEntry, func(ctx agent.Context, st *State, ctl Control, _ any) (*session.Event, error) {
 		t := now()
+		// Closed without the graph (a stop while queued, the leader's overdue
+		// close) or picked up by another leader after this one read the run
+		// queued: the message came too late and nothing may change.
+		if open, _ := ctx.Session().State().Get(openKey); open != true || !st.StartedAt.IsZero() && isStart(ctx.UserContent()) {
+			ev := session.NewEvent(ctx, ctx.InvocationID())
+			ev.Routes = []string{StepClosed}
+			return ev, nil
+		}
 		if st.Status.Terminal() {
 			return emit(ctx, st, t, "", StepClosed), nil
 		}
@@ -164,7 +172,7 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 			waitStarted(st, WaitBaseline, minTime(st.BaselineUntil, st.DeadlineAt), t)), nil
 	})
 
-	waitBaseline := park("wait_baseline", WaitBaseline, true, now, StepGate, func(st *State) time.Time { return st.BaselineUntil })
+	waitBaseline := park("wait_baseline", StepBaseline, WaitBaseline, true, now, StepGate, func(st *State) time.Time { return st.BaselineUntil })
 
 	// gate (tick step 9a, and the run's limits): decides before paying. No
 	// round past max_rounds gets here: the last round is final, and record
@@ -192,7 +200,7 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 		return emit(ctx, st, t, StepConclude, StepConclude, evs...), nil
 	})
 
-	waitModel := park("wait_model", WaitModelPaused, true, now, StepGate, func(st *State) time.Time { return st.PausedUntil })
+	waitModel := park("wait_model", StepGate, WaitModelPaused, true, now, StepGate, func(st *State) time.Time { return st.PausedUntil })
 
 	// gather (tick steps 2, 4, 5, 6, 8, 9e): flush tries, read the call graph
 	// of each transaction in scope, and build the request with the loop's
@@ -320,7 +328,7 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 		return emit(ctx, st, t, StepConfirm, "wait", evs...), nil
 	})
 
-	waitApply := park("wait_apply", WaitApply, false, now, StepConfirm, func(st *State) time.Time { return st.WakeAt })
+	waitApply := park("wait_apply", StepConfirm, WaitApply, false, now, StepConfirm, func(st *State) time.Time { return st.WakeAt })
 
 	// confirm (tick step 12, observed): the reconciler must report each probe
 	// in the loop's rule. A wait past the run's deadline does not park, so the
@@ -372,7 +380,7 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 		return emit(ctx, st, t, StepObserve, "observe", evs...), nil
 	})
 
-	waitObserve := park("wait_observe", WaitObserve, false, now, StepObserve, func(st *State) time.Time { return st.WakeAt })
+	waitObserve := park("wait_observe", StepObserve, WaitObserve, false, now, StepObserve, func(st *State) time.Time { return st.WakeAt })
 
 	// observe: traffic ran with the new probes for one fixed window. Read the
 	// call graph again and start the next round. The loop has no source for
@@ -478,15 +486,21 @@ func node(name string, fn step) workflow.Node {
 // park is a wait. It parks the run until min(until, deadline) and records the
 // open interrupt in state so the supervisor can answer it. Woken, it applies
 // the control that came with the answer: a stop concludes, a later deadline
-// parks again. finish says whether passing ends the wait (baseline, model
-// pause) or the next node does (confirm for the apply wait, observe for its
-// own).
-func park(name string, reason WaitReason, finish bool, now func() time.Time, then string, until func(*State) time.Time) workflow.Node {
+// parks again. step is the run's step while in this wait. finish says whether
+// passing ends the wait (baseline, model pause) or the next node does
+// (confirm for the apply wait, observe for its own).
+func park(name, step string, reason WaitReason, finish bool, now func() time.Time, then string, until func(*State) time.Time) workflow.Node {
 	rerun := true
 	return workflow.NewEmittingFunctionNode(name, func(ctx agent.Context, _ any, send func(*session.Event) error) (any, error) {
 		st, ctl, err := load(ctx.Session())
 		if err != nil {
 			return nil, err
+		}
+		// ADK runs a wait again for any answer to one of its interrupts, also
+		// one the run has left behind, as a leader that read the run before
+		// another moved it on would send. Such a wake changes nothing.
+		if st.Wait != nil && st.Wait.Node != name || st.Wait == nil && st.Step != step {
+			return nil, nil
 		}
 		st.at = name
 		t := now()

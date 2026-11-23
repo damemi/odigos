@@ -10,8 +10,6 @@ import (
 
 	"google.golang.org/adk/v2/session"
 
-	"github.com/odigos-io/odigos/insights/internal/db/postgres"
-	"github.com/odigos-io/odigos/insights/internal/engine"
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
@@ -42,11 +40,7 @@ func TestStoredRun_ReadByRepo(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 	sessions := openTestSessions(t, db.dsn)
-	r, err := postgres.Open(db.dsn, engine.NewBaselineCodec())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = r.Close() })
+	r := openRepo(t, db.dsn)
 
 	s := scriptedRun()
 	if err := sessions.Start(ctx, testRunID, s.st.Request); err != nil {

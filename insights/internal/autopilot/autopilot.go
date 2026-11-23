@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
+	"strings"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -21,6 +23,8 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/autopilot/loop"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/model"
 	"github.com/odigos-io/odigos/insights/internal/autopilot/store"
+	"github.com/odigos-io/odigos/insights/internal/interrogation"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 // Options configures the autopilot feature.
@@ -43,6 +47,12 @@ type Options struct {
 	// MaxProbesPerWorkload caps distinct custom probes per workload. Zero uses
 	// the loop default (20).
 	MaxProbesPerWorkload int
+	// Repo is the insights repository: the open interrogations, their probe
+	// rows and the revert sweep.
+	Repo repo.Repository
+	// Sessions returns the interrogation session store, nil until it is
+	// open. Interrogations do not run without it.
+	Sessions func() *interrogation.Sessions
 }
 
 // Run starts the InstrumentationRule cache and blocks in the analysis loop
@@ -129,6 +139,10 @@ func Run(ctx context.Context, opts Options) error {
 		} else {
 			log.Warn("autopilot redis endpoint or call tree store unset; call tree flusher disabled")
 		}
+		// Started once the store is ready: interrogations write requested probes.
+		g.Go(func() error {
+			return runInterrogations(groupCtx, log, opts.LiteLLMMasterKey, interrogationSetup(opts, loopMgr, st))
+		})
 		loopMgr.Run(groupCtx)
 		return nil
 	})
@@ -183,4 +197,83 @@ func waitForStore(ctx context.Context, log *commonlogger.OdigosLogger, st *store
 			}
 		}
 	}
+}
+
+// supervisor is the part of *interrogation.Supervisor runInterrogations uses.
+type supervisor interface {
+	Run(ctx context.Context)
+}
+
+// interrogationSetup builds the interrogation supervisor on the loop's
+// manager and store.
+func interrogationSetup(opts Options, loopMgr *loop.Manager, st *store.Client) func(context.Context) (supervisor, error) {
+	return func(ctx context.Context) (supervisor, error) {
+		var sessions *interrogation.Sessions
+		if opts.Sessions != nil {
+			sessions = opts.Sessions()
+		}
+		if sessions == nil || opts.Repo == nil {
+			return nil, errors.New("interrogation session store is not open")
+		}
+		llm, err := interrogation.NewModel(ctx, opts.LiteLLMMasterKey, loopMgr)
+		if err != nil {
+			return nil, err
+		}
+		return interrogation.NewSupervisor(interrogation.SupervisorConfig{ //nolint:contextcheck // the workflow's nodes take each invocation's context from ADK
+			Deps:     interrogation.Deps{Model: llm, Loop: loopMgr, Store: st, Changes: opts.Repo},
+			Runs:     opts.Repo,
+			Sessions: sessions,
+			Log:      opts.Log,
+		})
+	}
+}
+
+// runInterrogations runs the interrogation supervisor beside the loop until
+// ctx is cancelled. It returns nil on every path: an error in the errgroup
+// would stop the loop. A failed setup or a panic is logged and retried.
+func runInterrogations(ctx context.Context, log *commonlogger.OdigosLogger, apiKey string, setup func(context.Context) (supervisor, error)) error {
+	if strings.TrimSpace(apiKey) == "" {
+		log.Warn("autopilot litellm master key missing; interrogations will not run")
+		return nil
+	}
+	delay := dbRetryInitial
+	var lastLog time.Time
+	for attempt := 1; ; attempt++ {
+		ran, err := superviseOnce(ctx, log, setup)
+		if ctx.Err() != nil {
+			return nil //nolint:nilerr // an error in the errgroup would stop the loop
+		}
+		if ran {
+			delay = dbRetryInitial
+		}
+		now := time.Now()
+		if lastLog.IsZero() || now.Sub(lastLog) >= dbRetryLogEvery {
+			log.Warn("interrogations not running", "attempt", attempt, "retry_in", delay.String(), "error", err)
+			lastLog = now
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(delay):
+		}
+		delay = min(delay+dbRetryStep, dbRetryMax)
+	}
+}
+
+// superviseOnce sets the supervisor up and runs it. ran reports whether the
+// setup succeeded.
+func superviseOnce(ctx context.Context, log *commonlogger.OdigosLogger, setup func(context.Context) (supervisor, error)) (ran bool, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			log.Error("interrogation supervisor panicked", "panic", p, "stack", string(debug.Stack()))
+			err = fmt.Errorf("supervisor panicked: %v", p)
+		}
+	}()
+	sup, err := setup(ctx)
+	if err != nil {
+		return false, err
+	}
+	log.Info("starting interrogation supervisor")
+	sup.Run(ctx)
+	return true, errors.New("supervisor stopped")
 }
