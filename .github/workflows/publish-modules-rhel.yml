@@ -89,7 +89,8 @@ jobs:
               case "$SERVICE" in
                 autoscaler|scheduler|operator) image="odigos-$SERVICE"; file="$SERVICE/Dockerfile" ;;
                 instrumentor|collector)
-                  if $enterprise; then image="odigos-enterprise-$SERVICE"; file="$SERVICE/enterprise/Dockerfile"
+                  # The collector's enterprise build moved to collector/Dockerfile.
+                  if $enterprise; then image="odigos-enterprise-$SERVICE"; file="$SERVICE/enterprise/Dockerfile"; [ -f "$file" ] || file="$SERVICE/Dockerfile"
                   else image="odigos-$SERVICE"; file="$SERVICE/Dockerfile"; fi ;;
                 odiglet)
                   if $enterprise; then image="odigos-enterprise-odiglet"; file="$odiglet_file"
