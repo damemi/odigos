@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
-	"github.com/odigos-io/odigos/common/collector/sourceidentity"
 	"github.com/odigos-io/odigos/common/consts"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 
-	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 const (
@@ -27,14 +28,14 @@ const (
 //
 //	ARGV[1] = profile stacks key for the trace
 //	ARGV[2] = TTL seconds (refreshed on every call tree key handled)
-//	ARGV[3] = JSON array of invocations: {"k": call tree key prefix (workload
-//	          only: ns/kind/name/container), "t": transaction id (always the
-//	          last key segment), "s": [span id hexes of the invocation]}
+//	ARGV[3] = JSON array of invocations: {"k": call tree key prefix (the
+//	          source id), "t": transaction id (always the last key segment),
+//	          "s": [span id hexes of the invocation]}
 //
 // Each stack is merged into the call tree of the invocation its span belongs
 // to: HSETNX node fields into k\x1f<sampleType>\x1f<t> (structure only, no
 // counts). Stacks whose span belongs to no invocation are ignored. Returns
-// newly inserted nodes.
+// the call tree keys that gained a node.
 //
 // Hash field = sha1hex(parent\0frameType\0name)
 // Hash value = parent\0frameType\0name  (parent is "root" or node id)
@@ -60,14 +61,14 @@ local stacks = redis.call('HGETALL', profileKey)
 
 -- No profile hash (or empty): nothing to correlate for this trace.
 if #stacks == 0 then
-  return 0
+  return {}
 end
 
 -- Unit separator (same as Go "\x1f"); Lua 5.1 has no \xHH escapes / continue.
 local sep = string.char(31)
 local nul = string.char(0)
-local added = 0
 local touched = {}
+local changed = {}
 
 local function mergeStack(field, blob)
   -- Profile fields are "<spanHex>:<stackDigest>"; reject unknown shapes.
@@ -101,7 +102,7 @@ local function mergeStack(field, blob)
 
       -- Insert only if this node is new under the call tree key.
       if redis.call('HSETNX', callTreeKey, nid, payload) == 1 then
-        added = added + 1
+        changed[callTreeKey] = true
       end
 
       parent = nid
@@ -122,7 +123,12 @@ if ttl and ttl > 0 then
   end
 end
 
-return added
+local changedKeys = {}
+for callTreeKey in pairs(changed) do
+  table.insert(changedKeys, callTreeKey)
+end
+
+return changedKeys
 `)
 
 type stackBlobFrame struct {
@@ -180,29 +186,15 @@ func redisProfileKey(traceID string) string {
 	return consts.RedisAutopilotProfileKeyPrefix + traceID
 }
 
-// redisCallTreeWorkloadPrefix is the key prefix for a workload container.
-// Full keys are prefix\x1f<sampleType>\x1f<txID> so the transaction id is always last.
-func redisCallTreeWorkloadPrefix(namespace, kind, name, container string) string {
-	return redisCallTreeKeyPrefix +
-		namespace + "\x1f" +
-		kind + "\x1f" +
-		name + "\x1f" +
-		container
+// redisCallTreeSourcePrefix is the key prefix for a source, by its insights
+// source id (repo.HashSourceID, as in the transactions table). Full keys are
+// prefix\x1f<sampleType>\x1f<txID> so the transaction id is always last.
+func redisCallTreeSourcePrefix(sourceID int64) string {
+	return redisCallTreeKeyPrefix + strconv.FormatInt(sourceID, 10)
 }
 
-// redisCallTreeSourcePrefix is redisCallTreeWorkloadPrefix for the workload
-// container in a k8s source identity, or false when it is incomplete.
-func redisCallTreeSourcePrefix(sourceIdentity map[string]string) (string, bool) {
-	kind, name := sourceidentity.K8sWorkloadKindAndNameFromResourceAttributesMap(sourceIdentity)
-	namespace, container := sourceIdentity[semconv.K8SNamespaceName], sourceIdentity[semconv.K8SContainerName]
-	if namespace == "" || kind == "" || name == "" || container == "" {
-		return "", false
-	}
-	return redisCallTreeWorkloadPrefix(namespace, kind, name, container), true
-}
-
-func redisCallTreeKey(namespace, kind, name, container, sampleType, txID string) string {
-	return redisCallTreeWorkloadPrefix(namespace, kind, name, container) + "\x1f" + sampleType + "\x1f" + txID
+func redisCallTreeKey(sourceID int64, sampleType, txID string) string {
+	return redisCallTreeSourcePrefix(sourceID) + "\x1f" + sampleType + "\x1f" + txID
 }
 
 // redisInvocation is one service invocation as mergeCallTreesScript reads it.
@@ -216,19 +208,18 @@ type redisInvocation struct {
 // structure-only call tree Hashes (one key per invocation and sample type), in
 // one script call for all the trace's invocations. traceID and the span ids are
 // hex, as the profiles exporter keys them. Invocations without a transaction
-// id, a complete k8s source identity or span ids are skipped. Returns newly
-// inserted nodes.
-func (r *tracesRedis) mergeCallTrees(ctx context.Context, traceID string, invocations []ServiceInvocation) (int64, error) {
+// id, a source identity or span ids are skipped. Returns the call tree keys
+// that gained at least one node.
+func (r *tracesRedis) mergeCallTrees(ctx context.Context, traceID string, invocations []ServiceInvocation) ([]string, error) {
 	if r == nil || r.rdb == nil || traceID == "" {
-		return 0, nil
+		return nil, nil
 	}
 	payload := make([]redisInvocation, 0, len(invocations))
 	for _, inv := range invocations {
 		if inv.TransactionID == "" {
 			continue
 		}
-		keyPrefix, ok := redisCallTreeSourcePrefix(inv.SourceIdentity)
-		if !ok {
+		if len(inv.SourceIdentity) == 0 {
 			continue
 		}
 		spanIDs := make([]string, 0, len(inv.SpanIDs))
@@ -240,23 +231,120 @@ func (r *tracesRedis) mergeCallTrees(ctx context.Context, traceID string, invoca
 		if len(spanIDs) == 0 {
 			continue
 		}
-		payload = append(payload, redisInvocation{KeyPrefix: keyPrefix, TransactionID: inv.TransactionID, SpanIDs: spanIDs})
+		payload = append(payload, redisInvocation{KeyPrefix: redisCallTreeSourcePrefix(repo.HashSourceID(inv.SourceIdentity)), TransactionID: inv.TransactionID, SpanIDs: spanIDs})
 	}
 	if len(payload) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 	invocationsJSON, err := json.Marshal(payload)
 	if err != nil {
-		return 0, fmt.Errorf("encode service invocations: %w", err)
+		return nil, fmt.Errorf("encode service invocations: %w", err)
 	}
 
-	n, err := mergeCallTreesScript.Run(ctx, r.rdb, nil,
+	changed, err := mergeCallTreesScript.Run(ctx, r.rdb, nil,
 		redisProfileKey(traceID),
 		int(redisCallTreeKeyTTL/time.Second),
 		string(invocationsJSON),
-	).Int64()
+	).StringSlice()
 	if err != nil {
-		return 0, fmt.Errorf("redis merge call trees: %w", err)
+		return nil, fmt.Errorf("redis merge call trees: %w", err)
 	}
-	return n, nil
+	return changed, nil
+}
+
+// redisCallTreeKeyMeta is the source + sample-type identity encoded in a call tree key.
+type redisCallTreeKeyMeta struct {
+	SourceID      int64
+	SampleType    string
+	TransactionID int64
+}
+
+// parseRedisCallTreeKey splits odigos:autopilot:call-tree:{sourceID}\x1f{sampleType}\x1f{txID}.
+func parseRedisCallTreeKey(key string) (redisCallTreeKeyMeta, bool) {
+	rest, ok := strings.CutPrefix(key, redisCallTreeKeyPrefix)
+	if !ok || rest == "" {
+		return redisCallTreeKeyMeta{}, false
+	}
+	parts := strings.Split(rest, "\x1f")
+	if len(parts) != 3 {
+		return redisCallTreeKeyMeta{}, false
+	}
+	for _, p := range parts {
+		if p == "" {
+			return redisCallTreeKeyMeta{}, false
+		}
+	}
+	sourceID, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return redisCallTreeKeyMeta{}, false
+	}
+	txID, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return redisCallTreeKeyMeta{}, false
+	}
+	return redisCallTreeKeyMeta{
+		SourceID:      sourceID,
+		SampleType:    parts[1],
+		TransactionID: txID,
+	}, true
+}
+
+// parseSyncableCallTreeKey is parseRedisCallTreeKey limited to the sample
+// types the store keeps.
+func parseSyncableCallTreeKey(key string) (redisCallTreeKeyMeta, bool) {
+	meta, ok := parseRedisCallTreeKey(key)
+	if !ok || (meta.SampleType != "events" && meta.SampleType != "samples") {
+		return redisCallTreeKeyMeta{}, false
+	}
+	return meta, true
+}
+
+// parseCallTreeHashValue splits parent\0frameType\0name from a Redis hash value.
+func parseCallTreeHashValue(raw string) (parent, frameType, functionName string, ok bool) {
+	parts := strings.SplitN(raw, "\x00", 3)
+	if len(parts) != 3 {
+		return "", "", "", false
+	}
+	parent, frameType, functionName = parts[0], parts[1], parts[2]
+	if parent == "" || functionName == "" || (frameType != "jvm" && frameType != "hotspot") {
+		return "", "", "", false
+	}
+	return parent, frameType, functionName, true
+}
+
+// loadCallTreeStructureNodes reads one call tree hash into structure-only call tree nodes.
+func (r *tracesRedis) loadCallTreeStructureNodes(ctx context.Context, key string, meta redisCallTreeKeyMeta) ([]repo.CallTreeNode, error) {
+	if r == nil || r.rdb == nil || key == "" {
+		return nil, nil
+	}
+	fields, err := r.rdb.HGetAll(ctx, key).Result()
+	if err != nil {
+		return nil, fmt.Errorf("hgetall %s: %w", key, err)
+	}
+	out := make([]repo.CallTreeNode, 0, len(fields))
+	for nodeID, raw := range fields {
+		if nodeID == "" {
+			continue
+		}
+		parent, frameType, functionName, ok := parseCallTreeHashValue(raw)
+		if !ok {
+			if r.logger != nil {
+				r.logger.Debug("skip malformed redis call tree node",
+					"key", key,
+					"node_id", nodeID,
+				)
+			}
+			continue
+		}
+		out = append(out, repo.CallTreeNode{
+			SourceID:      meta.SourceID,
+			TransactionID: meta.TransactionID,
+			NodeID:        nodeID,
+			Parent:        parent,
+			FunctionName:  functionName,
+			FrameType:     frameType,
+			SampleType:    meta.SampleType,
+		})
+	}
+	return out, nil
 }

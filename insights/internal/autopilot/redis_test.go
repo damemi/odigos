@@ -10,6 +10,8 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
 func TestMergeCallTrees_BuildsStructureWithoutCounts(t *testing.T) {
@@ -43,15 +45,15 @@ func TestMergeCallTrees_BuildsStructureWithoutCounts(t *testing.T) {
 		SpanIDs:        []string{spanHex},
 	}
 
-	n, err := tr.mergeCallTrees(context.Background(), traceID, []ServiceInvocation{tx})
+	changed, err := tr.mergeCallTrees(context.Background(), traceID, []ServiceInvocation{tx})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 {
-		t.Fatalf("new nodes = %d, want 2", n)
-	}
 
-	callTreeKey := redisCallTreeKey("default", "Deployment", "checkout", "app", "samples", tx.TransactionID)
+	callTreeKey := redisCallTreeKey(repo.HashSourceID(tx.SourceIdentity), "samples", tx.TransactionID)
+	if len(changed) != 1 || changed[0] != callTreeKey {
+		t.Fatalf("changed keys = %q, want [%q]", changed, callTreeKey)
+	}
 	fields, err := rdb.HGetAll(context.Background(), callTreeKey).Result()
 	if err != nil {
 		t.Fatal(err)
@@ -76,12 +78,12 @@ func TestMergeCallTrees_BuildsStructureWithoutCounts(t *testing.T) {
 	}
 
 	// Idempotent: same stacks do not add nodes again.
-	n, err = tr.mergeCallTrees(context.Background(), traceID, []ServiceInvocation{tx})
+	changed, err = tr.mergeCallTrees(context.Background(), traceID, []ServiceInvocation{tx})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 0 {
-		t.Fatalf("second merge new nodes = %d, want 0", n)
+	if len(changed) != 0 {
+		t.Fatalf("second merge changed keys = %q, want none", changed)
 	}
 }
 
@@ -112,16 +114,16 @@ func TestMergeCallTrees_SeparateKeysPerSampleType(t *testing.T) {
 		SourceIdentity: deploymentSource("ns", "svc", "c"), TransactionID: "tx",
 		SpanIDs: []string{hex.EncodeToString(spanA), hex.EncodeToString(spanB)},
 	}
-	n, err := tr.mergeCallTrees(context.Background(), traceID, []ServiceInvocation{tx})
+	changed, err := tr.mergeCallTrees(context.Background(), traceID, []ServiceInvocation{tx})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 {
-		t.Fatalf("new nodes = %d, want 2", n)
+	if len(changed) != 2 {
+		t.Fatalf("changed keys = %q, want one per sample type", changed)
 	}
 
-	samplesKey := redisCallTreeKey("ns", "Deployment", "svc", "c", "samples", tx.TransactionID)
-	eventsKey := redisCallTreeKey("ns", "Deployment", "svc", "c", "events", tx.TransactionID)
+	samplesKey := redisCallTreeKey(repo.HashSourceID(tx.SourceIdentity), "samples", tx.TransactionID)
+	eventsKey := redisCallTreeKey(repo.HashSourceID(tx.SourceIdentity), "events", tx.TransactionID)
 	if !mr.Exists(samplesKey) || !mr.Exists(eventsKey) {
 		t.Fatalf("expected both sample-type keys; samples=%v events=%v", mr.Exists(samplesKey), mr.Exists(eventsKey))
 	}
@@ -151,14 +153,14 @@ func TestMergeCallTrees_IgnoresUnmatchedSpans(t *testing.T) {
 		SourceIdentity: deploymentSource("ns", "svc", "c"), TransactionID: "tx",
 		SpanIDs: []string{"0202020202020202"},
 	}
-	n, err := tr.mergeCallTrees(context.Background(), traceID, []ServiceInvocation{tx})
+	changed, err := tr.mergeCallTrees(context.Background(), traceID, []ServiceInvocation{tx})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 0 {
-		t.Fatalf("new nodes = %d, want 0", n)
+	if len(changed) != 0 {
+		t.Fatalf("changed keys = %q, want none", changed)
 	}
-	if mr.Exists(redisCallTreeKey("ns", "Deployment", "svc", "c", "events", tx.TransactionID)) {
+	if mr.Exists(redisCallTreeKey(repo.HashSourceID(tx.SourceIdentity), "events", tx.TransactionID)) {
 		t.Fatal("call tree key should not be created when no spans match")
 	}
 }
@@ -176,20 +178,19 @@ func deploymentSource(namespace, name, container string) map[string]string {
 	}
 }
 
-func TestMergeCallTrees_SkipsIncompleteSourceIdentity(t *testing.T) {
+func TestMergeCallTrees_SkipsMissingSourceIdentity(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
 	t.Cleanup(func() { _ = rdb.Close() })
 	tr := &tracesRedis{rdb: rdb}
 
 	tx := ServiceInvocation{
-		SourceIdentity: map[string]string{"k8s.namespace.name": "ns", "k8s.container.name": "c"},
-		TransactionID:  "tx",
-		SpanIDs:        []string{"0101010101010101"},
+		TransactionID: "tx",
+		SpanIDs:       []string{"0101010101010101"},
 	}
-	n, err := tr.mergeCallTrees(context.Background(), "01", []ServiceInvocation{tx})
-	if err != nil || n != 0 {
-		t.Fatalf("mergeCallTrees = %d, %v; want 0, nil for a source identity without a workload", n, err)
+	changed, err := tr.mergeCallTrees(context.Background(), "01", []ServiceInvocation{tx})
+	if err != nil || len(changed) != 0 {
+		t.Fatalf("mergeCallTrees = %q, %v; want none, nil for an invocation without a source identity", changed, err)
 	}
 }
 
@@ -214,19 +215,19 @@ func TestMergeCallTrees_OneCallPerTrace(t *testing.T) {
 		{SourceIdentity: deploymentSource("shop", "checkout", "app"), TransactionID: "1", SpanIDs: []string{checkoutSpan}},
 		{SourceIdentity: deploymentSource("shop", "pricing", "app"), TransactionID: "2", SpanIDs: []string{pricingSpan}},
 	}
-	n, err := tr.mergeCallTrees(context.Background(), traceID, invocations)
+	changed, err := tr.mergeCallTrees(context.Background(), traceID, invocations)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n != 2 {
-		t.Fatalf("new nodes = %d, want 2", n)
+	if len(changed) != 2 {
+		t.Fatalf("changed keys = %q, want one per invocation", changed)
 	}
 
 	for _, tc := range []struct{ workload, txID, function string }{
 		{"checkout", "1", "com.app.Checkout"},
 		{"pricing", "2", "com.app.Pricing"},
 	} {
-		key := redisCallTreeKey("shop", "Deployment", tc.workload, "app", "samples", tc.txID)
+		key := redisCallTreeKey(repo.HashSourceID(deploymentSource("shop", tc.workload, "app")), "samples", tc.txID)
 		fields, _ := rdb.HGetAll(context.Background(), key).Result()
 		want := "root\x00jvm\x00" + tc.function
 		if len(fields) != 1 || fields[sha1Hex(want)] != want {
@@ -235,5 +236,88 @@ func TestMergeCallTrees_OneCallPerTrace(t *testing.T) {
 		if ttl := mr.TTL(key); ttl != redisCallTreeKeyTTL {
 			t.Errorf("%s call tree ttl = %v, want %v", tc.workload, ttl, redisCallTreeKeyTTL)
 		}
+	}
+}
+
+func TestParseRedisCallTreeKey(t *testing.T) {
+	key := redisCallTreeKey(42, "samples", "123")
+	got, ok := parseRedisCallTreeKey(key)
+	if !ok {
+		t.Fatal("expected parse ok")
+	}
+	if got.SourceID != 42 || got.SampleType != "samples" || got.TransactionID != 123 {
+		t.Fatalf("unexpected meta: %+v", got)
+	}
+
+	if _, ok := parseRedisCallTreeKey("odigos:autopilot:profile:abc"); ok {
+		t.Fatal("profile key must not parse as call tree key")
+	}
+	if _, ok := parseRedisCallTreeKey(redisCallTreeKeyPrefix + "42\x1fsamples"); ok {
+		t.Fatal("short key must not parse")
+	}
+	if _, ok := parseRedisCallTreeKey(redisCallTreeKeyPrefix + "42\x1f\x1f123"); ok {
+		t.Fatal("empty segment must not parse")
+	}
+	if _, ok := parseRedisCallTreeKey(redisCallTreeKeyPrefix + "ns\x1fsamples\x1f123"); ok {
+		t.Fatal("non-numeric source id must not parse")
+	}
+	if _, ok := parseRedisCallTreeKey(redisCallTreeKey(42, "samples", "GET /buy")); ok {
+		t.Fatal("non-numeric transaction id must not parse")
+	}
+}
+
+func TestParseCallTreeHashValue(t *testing.T) {
+	parent, ft, name, ok := parseCallTreeHashValue("root\x00jvm\x00com.app.Root.run")
+	if !ok || parent != "root" || ft != "jvm" || name != "com.app.Root.run" {
+		t.Fatalf("got parent=%q ft=%q name=%q ok=%v", parent, ft, name, ok)
+	}
+	if _, _, _, ok := parseCallTreeHashValue("root\x00native\x00com.app.X"); ok {
+		t.Fatal("non jvm/hotspot frame type must be rejected")
+	}
+	if _, _, _, ok := parseCallTreeHashValue("root\x00jvm"); ok {
+		t.Fatal("short value must be rejected")
+	}
+}
+
+func TestLoadCallTreeStructureNodes(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	tr := &tracesRedis{rdb: rdb}
+	key := redisCallTreeKey(42, "samples", "7")
+	rootPayload := "root\x00jvm\x00com.app.Root"
+	rootID := sha1Hex(rootPayload)
+	leafPayload := rootID + "\x00jvm\x00com.app.Leaf"
+	leafID := sha1Hex(leafPayload)
+	if err := rdb.HSet(context.Background(), key, rootID, rootPayload, leafID, leafPayload).Err(); err != nil {
+		t.Fatal(err)
+	}
+	_ = rdb.HSet(context.Background(), key, "badnode", "not-a-payload").Err()
+
+	meta, ok := parseRedisCallTreeKey(key)
+	if !ok {
+		t.Fatal("expected parse ok")
+	}
+	nodes, err := tr.loadCallTreeStructureNodes(context.Background(), key, meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("nodes = %d, want 2 (malformed field skipped); got %#v", len(nodes), nodes)
+	}
+
+	byID := make(map[string]repo.CallTreeNode, len(nodes))
+	for _, n := range nodes {
+		byID[n.NodeID] = n
+	}
+	root := byID[rootID]
+	if root.Parent != "root" || root.FunctionName != "com.app.Root" || root.FrameType != "jvm" ||
+		root.SampleType != "samples" || root.SourceID != 42 || root.TransactionID != 7 {
+		t.Fatalf("root node unexpected: %+v", root)
+	}
+	leaf := byID[leafID]
+	if leaf.Parent != rootID || leaf.FunctionName != "com.app.Leaf" {
+		t.Fatalf("leaf node unexpected: %+v", leaf)
 	}
 }

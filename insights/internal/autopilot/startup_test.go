@@ -52,7 +52,7 @@ func TestTracesRedis_RecoversWhenRedisStartsLater(t *testing.T) {
 // Open must not fail just because Redis is unreachable at startup.
 func TestOpen_SucceedsWithUnreachableRedis(t *testing.T) {
 	commonlogger.Init("error", "insights-test")
-	c, err := Open("127.0.0.1:1", commonlogger.LoggerCompat())
+	c, err := Open("127.0.0.1:1", &fakeCallTreeNodeStore{}, commonlogger.LoggerCompat())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -63,8 +63,11 @@ func TestOpen_SucceedsWithUnreachableRedis(t *testing.T) {
 
 func TestOpen_RejectsMissingConfig(t *testing.T) {
 	commonlogger.Init("error", "insights-test")
-	if _, err := Open("", commonlogger.LoggerCompat()); err == nil {
+	if _, err := Open("", &fakeCallTreeNodeStore{}, commonlogger.LoggerCompat()); err == nil {
 		t.Fatal("expected error for empty redis endpoint")
+	}
+	if _, err := Open("127.0.0.1:1", nil, commonlogger.LoggerCompat()); err == nil {
+		t.Fatal("expected error for a nil call tree store")
 	}
 }
 

@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS autopilot_call_tree_nodes;
 DROP TABLE IF EXISTS maintenance_runs;
 DROP TABLE IF EXISTS notification_attempts;
 DROP TABLE IF EXISTS notification_cursors;

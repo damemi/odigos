@@ -71,6 +71,12 @@ A flush writes all three tables in one transaction.
 |---|---|---|
 | `service_graph_edges` | `(server, client, connection_type, collector_pod)` | Overwrite only with a newer `observed_at`. Reads sum counts across pods. |
 
+## Autopilot
+
+| Table | Key | Merge on write |
+|---|---|---|
+| `autopilot_call_tree_nodes` | `(source_id, transaction_id, sample_type, node_id)` | Insert-if-missing. One row per function node of a transaction's call tree, synced from Redis by each replica as the tree gains nodes. No foreign keys: a tree usually syncs before the baseline flush writes its source and transaction. |
+
 ## Notifications
 
 | Table | Key | Merge on write |

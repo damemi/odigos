@@ -402,3 +402,23 @@ INSERT INTO system_settings (
     true
 )
 ON CONFLICT DO NOTHING;
+
+-- One row per call-path node of an autopilot call tree, synced from Redis.
+-- source_id and transaction_id are the sources and transactions ids. No
+-- foreign keys: a call tree is synced within seconds, usually before the
+-- baseline flush writes its source and transaction. Every sync re-sends the
+-- whole call tree, and a node already stored is skipped. node_id already
+-- covers the parent, frame type, and function name. A root node's parent is
+-- 'root'.
+CREATE TABLE IF NOT EXISTS autopilot_call_tree_nodes (
+    source_id      bigint NOT NULL,
+    transaction_id bigint NOT NULL,
+    -- 'events' or 'samples'.
+    sample_type    text NOT NULL,
+    node_id        text NOT NULL,
+    parent         text NOT NULL,
+    function_name  text NOT NULL,
+    -- 'jvm' or 'hotspot'.
+    frame_type     text NOT NULL,
+    PRIMARY KEY (source_id, transaction_id, sample_type, node_id)
+);
