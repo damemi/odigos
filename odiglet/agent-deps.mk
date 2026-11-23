@@ -166,7 +166,6 @@ pin-image-agent-digest:
 		fi; \
 	done
 
-# golang (enterprise-go-instrumentation) is consumed only as a go.mod replace of go.opentelemetry.io/auto.
 .PHONY: upgrade-golang-version
 upgrade-golang-version:
 	@if [ -z "$(AGENT_VERSION)" ]; then \
@@ -174,7 +173,7 @@ upgrade-golang-version:
 		exit 1; \
 	fi
 	@echo "Updating golang (enterprise-go-instrumentation) version to $(AGENT_VERSION) in go.mod"
-	@go mod edit -replace go.opentelemetry.io/auto=github.com/odigos-io/enterprise-go-instrumentation@$(AGENT_VERSION)
+	@go get github.com/odigos-io/enterprise-go-instrumentation@$(AGENT_VERSION)
 	@echo "Running go mod tidy to clean up go.sum"
 	@go mod tidy
 	@echo "Successfully updated golang agents version to $(AGENT_VERSION) in go.mod"

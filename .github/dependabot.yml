@@ -35,11 +35,9 @@ updates:
       otel-dependencies:
         patterns:
           - 'go.opentelemetry.io*'
-        exclude-patterns:
-          - 'go.opentelemetry.io/auto'
       go-auto-instrumentations:
         patterns:
-          - 'go.opentelemetry.io/auto'
+          - 'github.com/odigos-io/enterprise-go-instrumentation'
       k8s-dependencies:
         patterns:
           - 'k8s.io*'

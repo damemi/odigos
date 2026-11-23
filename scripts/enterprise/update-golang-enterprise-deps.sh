@@ -5,8 +5,7 @@
 #
 # What it does:
 #   1. Resolves ENTERPRISE_GO_BRANCH tip to a pseudo-version via `go list`.
-#   2. Rewrites the go.opentelemetry.io/auto replace directive in odiglet/go.mod
-#      to point at that pseudo-version and runs `go mod tidy`.
+#   2. Bumps odiglet/go.mod to that pseudo-version and runs `go mod tidy`.
 #   3. Bakes the resolved version into deps.mk as the default GOLANG_ENTERPRISE_TAG.
 #   4. Builds & loads a new odiglet image into kind and rolls out the daemonset.
 #
@@ -18,7 +17,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ODIGLET_DIR="${ODIGLET_DIR:-${ROOT_DIR}/odiglet}"
 DEPS_MK="${DEPS_MK:-${ROOT_DIR}/deps.mk}"
 
-AUTO_MODULE_PATH="${AUTO_MODULE_PATH:-go.opentelemetry.io/auto}"
 ENTERPRISE_GO_MODULE="${ENTERPRISE_GO_MODULE:-github.com/odigos-io/enterprise-go-instrumentation}"
 ENTERPRISE_GO_REMOTE="${ENTERPRISE_GO_REMOTE:-git@github.com:odigos-io/enterprise-go-instrumentation.git}"
 ENTERPRISE_GO_BRANCH="${ENTERPRISE_GO_BRANCH:-optimize-code-attributes}"
@@ -95,7 +93,7 @@ fi
 
 (
 	cd "${ODIGLET_DIR}"
-	GOWORK="${GOWORK:-off}" go mod edit -replace="${AUTO_MODULE_PATH}=${ENTERPRISE_GO_MODULE}@${version}"
+	GOWORK="${GOWORK:-off}" go get "${ENTERPRISE_GO_MODULE}@${version}"
 	GOWORK="${GOWORK:-off}" go mod tidy
 )
 
@@ -118,6 +116,6 @@ fi
 
 kubectl -n "${NAMESPACE}" rollout status daemonset/odiglet
 
-echo "Updated ${AUTO_MODULE_PATH} to ${ENTERPRISE_GO_MODULE}@${version}"
+echo "Updated ${ENTERPRISE_GO_MODULE} to ${version}"
 echo "Commit: ${commit}"
 echo "Tag: ${TAG}"

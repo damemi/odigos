@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	goAutoConfig "github.com/odigos-io/enterprise-go-instrumentation/config"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common/api/agentsignalconfig"
 	"github.com/odigos-io/odigos/common/api/instrumentationrules"
 	commonapisampling "github.com/odigos-io/odigos/common/api/sampling"
-	goAutoConfig "go.opentelemetry.io/auto/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 )
 
