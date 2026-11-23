@@ -401,13 +401,20 @@ func modelCalled(st *State, u usage, outcome, errText string, t time.Time) Event
 // answerUpdated carries the run's answer as its payload.
 func answerUpdated(st *State, t time.Time) Event {
 	a := st.Answer
-	return newEvent(st, EventAnswerUpdated, t, fmt.Sprintf("Answer updated, certainty %d", a.Certainty), map[string]any{
+	p := map[string]any{
 		"text":       a.Text,
 		"certainty":  a.Certainty,
 		"final":      a.Final,
 		"round":      a.Round,
 		"updated_at": a.UpdatedAt,
-	})
+	}
+	if a.Summary != "" {
+		p["summary"] = a.Summary
+	}
+	if len(a.Reasons) > 0 {
+		p["reasons"] = a.Reasons
+	}
+	return newEvent(st, EventAnswerUpdated, t, fmt.Sprintf("Answer updated, certainty %d", a.Certainty), p)
 }
 
 func changeEvent(st *State, typ string, p *Probe, t time.Time, message string, payload map[string]any) Event {

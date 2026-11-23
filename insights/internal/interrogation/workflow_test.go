@@ -9,6 +9,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -795,7 +796,14 @@ func TestGraph_NodeNames(t *testing.T) {
 // on the model's done.
 func TestRun_TwoRounds(t *testing.T) {
 	h := newHarness(t)
-	h.reply(replyJSON(t, nil), replyJSON(t, done(80)))
+	h.reply(replyJSON(t, nil), replyJSON(t, func(r *Reply) {
+		done(80)(r)
+		r.Summary = "POST /claims waits on IntakeService.validate."
+		r.Reasons = []ReplyReason{{
+			Text: "IntakeService.validate is the only callee of ClaimController.submit.", Basis: "inferred",
+			Targets: []string{"com.claims.IntakeService.validate", "com.claims.ClaimController.submit"}, TransactionIDs: []string{"8841", "1"},
+		}}
+	}))
 	// The new probe's frames show up in the call tree during the observe window.
 	h.store.onGet = func(n int) {
 		if n == 2 {
@@ -804,6 +812,18 @@ func TestRun_TwoRounds(t *testing.T) {
 	}
 	st := h.run()
 	h.checkEnded(st, StatusCompleted, EndDone)
+	// The cited function links to the run's probe on it, the transaction to
+	// the scope; the caller has no probe and 1 is not in scope.
+	wantReasons := []AnswerReason{{
+		Text: "IntakeService.validate is the only callee of ClaimController.submit.", Basis: apitypes.Inferred,
+		ChangeIds: []string{st.Probes[0].ChangeID}, TransactionIds: []string{"8841"},
+	}}
+	if !reflect.DeepEqual(st.Answer.Reasons, wantReasons) || !reflect.DeepEqual(st.Rounds[1].Reply.Reasons, wantReasons) {
+		t.Errorf("reasons %+v, round 2 reply %+v, want %+v", st.Answer.Reasons, st.Rounds[1].Reply, wantReasons)
+	}
+	if st.Rounds[0].Reply.Summary != "" || st.Rounds[0].Reply.Reasons != nil {
+		t.Errorf("round 1 reply %+v, want no summary or reasons from a reply without them", st.Rounds[0].Reply)
+	}
 
 	if len(st.Rounds) != 2 || st.Round != 2 || st.ModelCalls != 2 {
 		t.Fatalf("rounds %d, round %d, model calls %d; want 2, 2, 2", len(st.Rounds), st.Round, st.ModelCalls)

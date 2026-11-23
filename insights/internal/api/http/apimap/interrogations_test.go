@@ -718,6 +718,40 @@ func TestFromInterrogation_Measured(t *testing.T) {
 	sameJSON(t, got.Rounds[0].Timings, `[{"transaction_id":8841,"window_seconds":30,"requests":40,"errors":1,"avg_ms":20,"max_ms":90,"avg_spans":4,"uncovered_avg_ms":2}]`)
 }
 
+// The answer's summary and reasons are served as the run stored them, on the
+// answer and on the round's reply.
+func TestFromInterrogation_StructuredAnswer(t *testing.T) {
+	st := runningState(t)
+	reasons := []apitypes.InterrogationAnswerReason{
+		{Text: "ClaimValidator.validate averages 1005 ms of the 1060 ms request", Basis: apitypes.Measured, ChangeIds: []string{"chg_3f9a1c07b2d44e6a8c51"}, TransactionIds: []string{"7636099928166363546"}},
+		{Text: "FraudClient.score runs once per line item", Basis: apitypes.Inferred, ChangeIds: []string{}, TransactionIds: []string{}},
+	}
+	summary := "POST /api/claims is slow because ClaimValidator.validate takes 1005 of its 1060 ms."
+	st.Answer.Summary, st.Answer.Reasons = summary, reasons
+	st.Rounds[1].Reply.Summary, st.Rounds[1].Reply.Reasons = summary, reasons
+	in := storedRun(t, &st, claimsRequest())
+	got, err := FromInterrogation(in, nil, true, at(t, "2026-11-17T09:50:03Z"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantReasons := `[
+    {"text": "ClaimValidator.validate averages 1005 ms of the 1060 ms request", "basis": "measured", "change_ids": ["chg_3f9a1c07b2d44e6a8c51"], "transaction_ids": ["7636099928166363546"]},
+    {"text": "FraudClient.score runs once per line item", "basis": "inferred", "change_ids": [], "transaction_ids": []}
+  ]`
+	sameJSON(t, got.Answer, `{
+  "text": "Most of the time in POST /api/claims is inside ClaimValidator.validate, which calls FraudClient.score once per line item.",
+  "summary": "POST /api/claims is slow because ClaimValidator.validate takes 1005 of its 1060 ms.",
+  "reasons": `+wantReasons+`,
+  "certainty": 45, "final": false, "round": 2, "updated_at": "2026-11-17T09:46:38Z"
+}`)
+	sameJSON(t, got.Rounds[1].Reply, `{
+  "text": "Most of the time in POST /api/claims is inside ClaimValidator.validate, which calls FraudClient.score once per line item.",
+  "summary": "POST /api/claims is slow because ClaimValidator.validate takes 1005 of its 1060 ms.",
+  "reasons": `+wantReasons+`,
+  "certainty": 45, "done": false
+}`)
+}
+
 func TestFromInterrogationSummary(t *testing.T) {
 	src := repo.InterrogationSource{Namespace: "claims-demo", Kind: "Deployment", Name: "claims-intake"}
 	got := FromInterrogationSummary(

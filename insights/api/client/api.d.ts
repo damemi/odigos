@@ -3602,6 +3602,23 @@ export interface components {
             round: number;
             /** Format: date-time */
             updated_at: string;
+            /** @description The conclusion in one sentence, at most 300 characters. Absent when the model gave none; `text` then holds the whole answer. */
+            summary?: string;
+            /** @description What the conclusion rests on, at most 5, most important first. Absent when the model gave none. `text` adds only what they do not say. */
+            reasons?: components["schemas"]["InterrogationAnswerReason"][];
+        };
+        InterrogationAnswerReason: {
+            /** @description A short statement, at most 300 characters. */
+            text: string;
+            /**
+             * @description `measured`: rests on what probes or the entry spans measured, in `change_ids` or `transaction_ids`. `inferred`: the model's reasoning from call-graph structure or elimination. A reason the model called measured that links no measured change or transaction is `inferred`.
+             * @enum {string}
+             */
+            basis: "measured" | "inferred";
+            /** @description Changes of this run on the functions the reason cites; ids of `Interrogation.changes`. Functions without a change of this run are not linked. */
+            change_ids: string[];
+            /** @description Transactions in scope whose timings the reason cites, as strings of their 64-bit ids. */
+            transaction_ids: string[];
         };
         InterrogationChangeCounts: {
             /** @description Every change of the run: `live` + `reverting` + `reverted` + `expired` + `failed` + `denied`. */
@@ -3705,6 +3722,10 @@ export interface components {
             certainty: number;
             /** @description The model decided more probes would not change the answer. */
             done: boolean;
+            /** @description As the answer's `summary`. */
+            summary?: string;
+            /** @description As the answer's `reasons`. */
+            reasons?: components["schemas"]["InterrogationAnswerReason"][];
         };
         /** @description One round, as the workflow recorded it. A field that is absent has not happened yet. */
         InterrogationRound: {

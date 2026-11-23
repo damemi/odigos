@@ -47,7 +47,7 @@ func TestBuildRequest(t *testing.T) {
 			{Language: "java", Target: "com.claims.Audit.write", Round: 1, Status: ProbeReverted},
 			{Language: "java", Target: "com.claims.Next.one", Round: 2, Status: ProbePending},
 		},
-		Answer: &Answer{Text: "Most of the time is in IntakeService.validate.", Certainty: 45, UpdatedAt: at},
+		Answer: &Answer{Summary: "Most of the time is in IntakeService.validate.", Text: "FraudClient.score is not measured yet.", Certainty: 45, UpdatedAt: at},
 	}
 
 	timings := requestTimings(&measure.Transaction{

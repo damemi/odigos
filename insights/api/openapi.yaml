@@ -5315,7 +5315,32 @@ components:
         final: { type: boolean }
         round: { type: integer, description: "Round that produced this version." }
         updated_at: { type: string, format: date-time }
+        summary:
+          type: string
+          description: The conclusion in one sentence, at most 300 characters. Absent when the model gave none; `text` then holds the whole answer.
+        reasons:
+          type: array
+          description: What the conclusion rests on, at most 5, most important first. Absent when the model gave none. `text` adds only what they do not say.
+          items: { $ref: "#/components/schemas/InterrogationAnswerReason" }
       required: [text, certainty, final, round, updated_at]
+
+    InterrogationAnswerReason:
+      type: object
+      properties:
+        text: { type: string, description: "A short statement, at most 300 characters." }
+        basis:
+          type: string
+          enum: [measured, inferred]
+          description: "`measured`: rests on what probes or the entry spans measured, in `change_ids` or `transaction_ids`. `inferred`: the model's reasoning from call-graph structure or elimination. A reason the model called measured that links no measured change or transaction is `inferred`."
+        change_ids:
+          type: array
+          description: Changes of this run on the functions the reason cites; ids of `Interrogation.changes`. Functions without a change of this run are not linked.
+          items: { type: string }
+        transaction_ids:
+          type: array
+          description: Transactions in scope whose timings the reason cites, as strings of their 64-bit ids.
+          items: { type: string }
+      required: [text, basis, change_ids, transaction_ids]
 
     InterrogationChangeCounts:
       type: object
@@ -5404,6 +5429,11 @@ components:
         text: { type: string, description: "Its answer on the evidence of this round." }
         certainty: { type: integer, minimum: 0, maximum: 100 }
         done: { type: boolean, description: "The model decided more probes would not change the answer." }
+        summary: { type: string, description: "As the answer's `summary`." }
+        reasons:
+          type: array
+          description: As the answer's `reasons`.
+          items: { $ref: "#/components/schemas/InterrogationAnswerReason" }
       required: [text, certainty, done]
 
     InterrogationRound:

@@ -300,6 +300,24 @@ func (e IntegrationFieldType) Valid() bool {
 	}
 }
 
+// Defines values for InterrogationAnswerReasonBasis.
+const (
+	Inferred InterrogationAnswerReasonBasis = "inferred"
+	Measured InterrogationAnswerReasonBasis = "measured"
+)
+
+// Valid indicates whether the value is a known member of the InterrogationAnswerReasonBasis enum.
+func (e InterrogationAnswerReasonBasis) Valid() bool {
+	switch e {
+	case Inferred:
+		return true
+	case Measured:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InterrogationEventStopRequestedPayloadChanges.
 const (
 	InterrogationEventStopRequestedPayloadChangesKeep   InterrogationEventStopRequestedPayloadChanges = "keep"
@@ -1558,11 +1576,35 @@ type InterrogationAnswer struct {
 	Certainty int  `json:"certainty"`
 	Final     bool `json:"final"`
 
+	// Reasons What the conclusion rests on, at most 5, most important first. Absent when the model gave none. `text` adds only what they do not say.
+	Reasons []InterrogationAnswerReason `json:"reasons,omitempty"`
+
 	// Round Round that produced this version.
-	Round     int       `json:"round"`
+	Round int `json:"round"`
+
+	// Summary The conclusion in one sentence, at most 300 characters. Absent when the model gave none; `text` then holds the whole answer.
+	Summary   string    `json:"summary,omitempty"`
 	Text      string    `json:"text"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// InterrogationAnswerReason defines model for InterrogationAnswerReason.
+type InterrogationAnswerReason struct {
+	// Basis `measured`: rests on what probes or the entry spans measured, in `change_ids` or `transaction_ids`. `inferred`: the model's reasoning from call-graph structure or elimination. A reason the model called measured that links no measured change or transaction is `inferred`.
+	Basis InterrogationAnswerReasonBasis `json:"basis"`
+
+	// ChangeIds Changes of this run on the functions the reason cites; ids of `Interrogation.changes`. Functions without a change of this run are not linked.
+	ChangeIds []string `json:"change_ids"`
+
+	// Text A short statement, at most 300 characters.
+	Text string `json:"text"`
+
+	// TransactionIds Transactions in scope whose timings the reason cites, as strings of their 64-bit ids.
+	TransactionIds []string `json:"transaction_ids"`
+}
+
+// InterrogationAnswerReasonBasis `measured`: rests on what probes or the entry spans measured, in `change_ids` or `transaction_ids`. `inferred`: the model's reasoning from call-graph structure or elimination. A reason the model called measured that links no measured change or transaction is `inferred`.
+type InterrogationAnswerReasonBasis string
 
 // InterrogationBudget defines model for InterrogationBudget.
 type InterrogationBudget struct {
@@ -2420,6 +2462,12 @@ type InterrogationRoundReply struct {
 
 	// Done The model decided more probes would not change the answer.
 	Done bool `json:"done"`
+
+	// Reasons As the answer's `reasons`.
+	Reasons []InterrogationAnswerReason `json:"reasons,omitempty"`
+
+	// Summary As the answer's `summary`.
+	Summary string `json:"summary,omitempty"`
 
 	// Text Its answer on the evidence of this round.
 	Text string `json:"text"`

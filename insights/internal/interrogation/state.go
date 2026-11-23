@@ -227,6 +227,7 @@ type ScopeTransaction struct {
 // Wire types whose generated JSON is exactly what the run stores.
 type (
 	Answer         = apitypes.InterrogationAnswer
+	AnswerReason   = apitypes.InterrogationAnswerReason
 	EvidenceCounts = apitypes.InterrogationEvidenceCounts
 	RoundReply     = apitypes.InterrogationRoundReply
 )
@@ -441,8 +442,9 @@ func (st *State) callSent(t time.Time) {
 // answer records the model's reply as the run's answer and the round's
 // reply.
 func (st *State) answer(reply *Reply, t time.Time) {
-	st.Answer = &Answer{Text: reply.Answer, Certainty: reply.Certainty, Round: st.Round, UpdatedAt: t}
+	summary, reasons := cut(reply.Summary, maxSummary), st.answerReasons(reply.Reasons)
+	st.Answer = &Answer{Text: reply.Answer, Summary: summary, Reasons: reasons, Certainty: reply.Certainty, Round: st.Round, UpdatedAt: t}
 	if r := st.currentRound(); r != nil {
-		r.Reply = &RoundReply{Text: reply.Answer, Certainty: reply.Certainty, Done: reply.Done}
+		r.Reply = &RoundReply{Text: reply.Answer, Summary: summary, Reasons: reasons, Certainty: reply.Certainty, Done: reply.Done}
 	}
 }

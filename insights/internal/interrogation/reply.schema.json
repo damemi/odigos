@@ -94,6 +94,16 @@
           "type": "array",
           "maxItems": 15
         },
+        "summary": {
+          "type": "string"
+        },
+        "reasons": {
+          "items": {
+            "$ref": "#/$defs/ReplyReason"
+          },
+          "type": "array",
+          "maxItems": 5
+        },
         "answer": {
           "type": "string"
         },
@@ -112,9 +122,46 @@
         "schemaVersion",
         "transactionId",
         "recommendations",
+        "summary",
+        "reasons",
         "answer",
         "certainty",
         "done"
+      ]
+    },
+    "ReplyReason": {
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "basis": {
+          "type": "string",
+          "enum": [
+            "measured",
+            "inferred"
+          ]
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "maxItems": 8
+        },
+        "transactionIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "text",
+        "basis",
+        "targets",
+        "transactionIds"
       ]
     }
   },
@@ -135,6 +182,16 @@
       "type": "array",
       "maxItems": 15
     },
+    "summary": {
+      "type": "string"
+    },
+    "reasons": {
+      "items": {
+        "$ref": "#/$defs/ReplyReason"
+      },
+      "type": "array",
+      "maxItems": 5
+    },
     "answer": {
       "type": "string"
     },
@@ -153,6 +210,8 @@
     "schemaVersion",
     "transactionId",
     "recommendations",
+    "summary",
+    "reasons",
     "answer",
     "certainty",
     "done"
