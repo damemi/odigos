@@ -1265,7 +1265,7 @@ export interface paths {
         put?: never;
         /**
          * Stop an interrogation
-         * @description No more rounds, model calls or new changes. `changes` says what happens to the changes already made: `keep` (default) leaves them until each expires, `revert` removes them now. Idempotent. On a run that has already ended, `revert` still reverts its remaining live changes. A later `revert` overrides an earlier `keep`, never the reverse. 202 = recorded, the run is `stopping`. 200 = the run has ended: it already had, or it was still `queued` and this call ended it as `stopped`. A run that had finished its last node when the stop arrived keeps the status it ended with.
+         * @description No more rounds, model calls or new changes. `changes` says what happens to the changes already made: `keep` (default) leaves them until each expires, `revert` removes them now; changes a person kept stay either way. Idempotent. On a run that has already ended, `revert` still reverts its remaining live temporary changes. A later `revert` overrides an earlier `keep`, never the reverse. 202 = recorded, the run is `stopping`. 200 = the run has ended: it already had, or it was still `queued` and this call ended it as `stopped`. A run that had finished its last node when the stop arrived keeps the status it ended with.
          */
         post: operations["stopInterrogation"];
         delete?: never;
@@ -1288,9 +1288,225 @@ export interface paths {
         put?: never;
         /**
          * Give an interrogation more time
-         * @description Moves `deadline_at` and the expiry of the run's live changes later by `seconds`, together; the run records `interrogation.extended` within seconds. `extended_seconds` on the run is the sum of extensions; `budget.time_limit_seconds` stays as requested. Only while the run is `queued` or `running` and its deadline has not passed (409 `not_running` otherwise). `budget.time_limit_seconds` + `extended_seconds` cannot pass `options.extend.max_total_seconds` (422 `invalid_argument`).
+         * @description Moves `deadline_at` and the expiry of the run's live temporary changes later by `seconds`, together; the run records `interrogation.extended` within seconds. `extended_seconds` on the run is the sum of extensions; `budget.time_limit_seconds` stays as requested. Only while the run is `queued` or `running` and its deadline has not passed (409 `not_running` otherwise). `budget.time_limit_seconds` + `extended_seconds` cannot pass `options.extend.max_total_seconds` (422 `invalid_argument`).
          */
         post: operations["extendInterrogation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogations/{interrogation_id}/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Changes made by one interrogation
+         * @description Every change of the run in any state, oldest first, including denied
+         *     proposals. Never cut by a limit. The same changes as `changes` on
+         *     `GET /interrogations/{id}`, in the shape of the changes resource.
+         *
+         *     **Use for:** the changes of one run with their actions, and resolving
+         *     the ids in `rounds[].proposed` and `rounds[].applied`.
+         *
+         *     **Not for:** what is in the cluster now across runs (use
+         *     `GET /interrogation-changes`, which has no denied proposals).
+         */
+        get: operations["listInterrogationRunChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogation-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List changes across interrogations
+         * @description The changes in the cluster now (`state` `requested`, `blocked`,
+         *     `active` or `reverting`), soonest expiry first, permanent ones last.
+         *     There are no filters: the set is bounded by the caps (open runs,
+         *     probes per source), and the page groups and filters what it loaded;
+         *     `GET /interrogation-changes/summary` has the per-source totals.
+         *     Ended changes and denied proposals are listed under their run.
+         *
+         *     **Use for:** the Active changes page.
+         *
+         *     **Not for:** one run's changes, ended ones and denied proposals
+         *     included (use `GET /interrogations/{id}/changes`).
+         */
+        get: operations["listInterrogationChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogation-changes/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Totals of live changes
+         * @description Backs the Active changes banner, the group headers and the list page's changes card.
+         */
+        get: operations["getInterrogationChangesSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogation-changes/revert-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert every temporary change
+         * @description Ends every live temporary change, optionally narrowed to one source, of open and ended runs alike. Permanent changes are never touched. Returns how many were ended; the removal from the cluster happens on the next reconcile. A run that is still open is told on its next round. Repeating it ends nothing more.
+         */
+        post: operations["revertAllInterrogationChanges"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogation-changes/{change_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Get one change
+         * @description A stored change; a denied proposal is not one (404).
+         */
+        get: operations["getInterrogationChange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogation-changes/{change_id}/keep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep a temporary change permanently
+         * @description The change stops expiring and stays in the source's instrumentation rule, also after its run has ended, until someone removes it. Only for a live temporary change (409 `invalid_change_state` otherwise, with `details.state`). Idempotent: keeping a kept change answers 200 with the change.
+         */
+        post: operations["keepInterrogationChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogation-changes/{change_id}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert a temporary change now
+         * @description Ends the change; it leaves the cluster on the next reconcile, within seconds (`state` goes `reverting` then `reverted`, `end_reason` `revert`). Works while the run is open, which is told on its next round, and after it ended. The run's other changes stay, and the change keeps its place in the run's probe budget. Idempotent. A permanent change needs `remove` (409 `invalid_change_state`).
+         */
+        post: operations["revertInterrogationChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogation-changes/{change_id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a permanent change
+         * @description Same effect as `revert`, for a change a person kept permanently (`state` goes `reverting` then `reverted`, `end_reason` `remove`). The record stays for the run's history. Idempotent. A temporary change needs `revert` (409 `invalid_change_state`).
+         */
+        post: operations["removeInterrogationChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/interrogation-changes/{change_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo the last keep, revert or remove (planned)
+         * @description Reverses the last action a person took on the change. Planned: answers 422 `not_supported_yet` with `option` `operation=undoInterrogationChange`, and `actions` never offers it.
+         */
+        post: operations["undoInterrogationChange"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3145,7 +3361,7 @@ export interface components {
                 details?: components["schemas"]["InterrogationErrorDetails"];
             };
         };
-        /** @description `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. Open set. */
+        /** @description `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. `invalid_change_state` (409): the change is not in a state the action accepts; `state` has the current one. Open set. */
         InterrogationErrorReason: string;
         InterrogationErrorDetails: {
             reason: components["schemas"]["InterrogationErrorReason"];
@@ -3157,6 +3373,7 @@ export interface components {
             value?: string;
             interrogation_id?: string;
             display_id?: string;
+            state?: string;
             requires?: string;
             open?: number;
             max_open?: number;
@@ -3174,8 +3391,12 @@ export interface components {
         InterrogationTriggerKind: string;
         /** @description `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set. */
         InterrogationChangeKind: string;
-        /** @description `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by stop-and-revert or because the source is gone (`end_reason`). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. Open set. */
+        /** @description `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by a person, by stop-and-revert or because the source is gone (`end_reason`; `remove` means it was permanent). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. A kept change is live with `lifetime` `permanent`. Open set. */
         InterrogationChangeState: string;
+        /** @description `temporary` changes have `expires_at`; `permanent` ones were kept by a person. Open set. */
+        InterrogationChangeLifetime: string;
+        /** @description An action the UI may offer on a change. `undo` is planned and never offered. Open set. */
+        InterrogationChangeActionName: string;
         /** @description Open set. */
         InterrogationChangeDenyReason: string;
         /** @description A node of the run's workflow graph. `prepare`: check the source is instrumented and open round 1. `wait_baseline`: wait for traffic before the first reading. `gate`: check the run's limits and the model gateway before paying for a call. `wait_model`: the gateway is paused; wait. `gather`: flush and read the call graphs and build the model request. `analyze`: the model call. `record`: validate the reply, record the answer and the changes it proposes. `apply`: validate each proposed change and store the accepted ones. `wait_apply`, `confirm`: wait until the accepted changes are in the instrumentation rule. `wait_observe`, `observe`: let traffic run with them, then read the call graph again. `conclude`: end the run. A round runs `gate` to `observe`; round 1 also holds `prepare` and `wait_baseline`, and the last round `conclude`. Open set: the graph can gain nodes; show an unknown name as it is. */
@@ -3200,7 +3421,7 @@ export interface components {
         InterrogationChangeCategory: string;
         /** @description Why an accepted change is not in the rule. `covered_by_rule`: another rule already provides the probe. Open set. */
         InterrogationChangeBlockReason: string;
-        /** @description Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set. */
+        /** @description Why a change ended. `revert`: a person reverted a temporary change. `remove`: a person removed a permanent one. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set. */
         InterrogationChangeEndReason: string;
         /**
          * @description Open set: ignore types you do not know. The schema of `payload` for
@@ -3385,11 +3606,11 @@ export interface components {
         InterrogationChangeCounts: {
             /** @description Every change of the run: `live` + `reverting` + `reverted` + `expired` + `failed` + `denied`. */
             total: number;
-            /** @description `requested` + `blocked` + `active`. */
+            /** @description `requested` + `blocked` + `active`, kept ones included. */
             live: number;
             /** @description Ended, still in the rule until the next reconcile. */
             reverting: number;
-            /** @description Ended by stop-and-revert, or because the source is gone. */
+            /** @description Ended by a person, by stop-and-revert, or because the source is gone. */
             reverted: number;
             /** @description Left when their time ran out. The normal end of a run's changes. */
             expired: number;
@@ -3398,7 +3619,7 @@ export interface components {
             denied: number;
             /**
              * Format: date-time
-             * @description Soonest expiry among live changes. The list's "Ends" column.
+             * @description Soonest expiry among live temporary changes. The list's "Ends" column.
              */
             next_expiry_at?: string;
         };
@@ -3873,7 +4094,7 @@ export interface components {
             applied_at?: string;
             /**
              * Format: date-time
-             * @description Stored changes only. Never later than the run's `deadline_at`; moved by extend.
+             * @description Temporary stored changes only. Never later than the run's `deadline_at`; moved by extend.
              */
             expires_at?: string;
             /**
@@ -3885,6 +4106,137 @@ export interface components {
             end_reason?: components["schemas"]["InterrogationChangeEndReason"];
             /** @description Absent until `observe` has read the change's spans, and when none could be read. */
             measured?: components["schemas"]["InterrogationChangeMeasured"];
+            /** @description Why the model chose it, in its words, at most 500 characters. */
+            reason?: string;
+            lifetime?: components["schemas"]["InterrogationChangeLifetime"];
+            /** @description Actions valid right now; each is `POST /interrogation-changes/{id}/<action>`. Empty for a denied proposal and an ended change. */
+            actions?: components["schemas"]["InterrogationChangeActionName"][];
+        };
+        /** @description The interrogation that made the change, enough for a row. Absent once the run aged out. */
+        InterrogationChangeRef: {
+            id: string;
+            display_id: string;
+            title: string;
+            status: components["schemas"]["InterrogationStatus"];
+            /** @description The run's current round. */
+            round: number;
+            trigger: components["schemas"]["InterrogationTrigger"];
+        };
+        /**
+         * @description A change as the changes resource serves it, with its run and the actions a person may take on it. The fields it shares with `InterrogationChange` mean the same, but `target`, a string here, and `proposed_at`, which is `requested_at` there.
+         * @example {
+         *       "id": "chg_3f9a1c07b2d44e6a8c51",
+         *       "interrogation_id": "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21",
+         *       "interrogation": {
+         *         "id": "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21",
+         *         "display_id": "INT-0B6F6C1E",
+         *         "title": "Why is claim submission slow for some users?",
+         *         "status": "running",
+         *         "round": 2,
+         *         "trigger": {
+         *           "kind": "manual",
+         *           "actor": "alon"
+         *         }
+         *       },
+         *       "source": {
+         *         "namespace": "claims-demo",
+         *         "kind": "Deployment",
+         *         "name": "claims-intake"
+         *       },
+         *       "target": "com.claims.intake.ClaimValidator.validate",
+         *       "probe": {
+         *         "language": "java",
+         *         "class_name": "com.claims.intake.ClaimValidator",
+         *         "method_name": "validate"
+         *       },
+         *       "category": "observability",
+         *       "round": 1,
+         *       "reason": "ClaimValidator.validate is called from ClaimController.submit and sits before FraudClient.score.",
+         *       "checks": [
+         *         "changes_allowed",
+         *         "in_call_graph",
+         *         "application_code",
+         *         "not_already_probed",
+         *         "within_workload_cap",
+         *         "within_run_budget"
+         *       ],
+         *       "state": "active",
+         *       "lifetime": "temporary",
+         *       "proposed_at": "2026-11-17T09:41:02Z",
+         *       "applied_at": "2026-11-17T09:41:07Z",
+         *       "expires_at": "2026-11-17T10:38:00Z",
+         *       "actions": [
+         *         "keep",
+         *         "revert"
+         *       ]
+         *     }
+         */
+        InterrogationChangeDetail: {
+            /** @description `chg_` + 20 hex characters; the same proposal always gets the same id. */
+            id: string;
+            interrogation_id: string;
+            interrogation?: components["schemas"]["InterrogationChangeRef"];
+            source: components["schemas"]["InterrogationSource"];
+            /** @description What it changes; for a probe the function, e.g. `com.acme.Foo.bar`. */
+            target: string;
+            probe?: components["schemas"]["InterrogationProbe"];
+            category?: components["schemas"]["InterrogationChangeCategory"];
+            /** @description Round that proposed it. */
+            round: number;
+            /** @description Why the model chose it, in its words, at most 500 characters. */
+            reason: string;
+            /** @description Checks passed, in order. All six for a stored change; those before the failing one for a denied proposal. */
+            checks: components["schemas"]["InterrogationChangeCheck"][];
+            state: components["schemas"]["InterrogationChangeState"];
+            lifetime: components["schemas"]["InterrogationChangeLifetime"];
+            deny_reason?: components["schemas"]["InterrogationChangeDenyReason"];
+            block_reason?: components["schemas"]["InterrogationChangeBlockReason"];
+            /** @description Set once the change is ending or ended. For `failed` it is why the change never took effect. */
+            end_reason?: components["schemas"]["InterrogationChangeEndReason"];
+            /**
+             * Format: date-time
+             * @description When the model proposed it.
+             */
+            proposed_at: string;
+            /** Format: date-time */
+            applied_at?: string;
+            /**
+             * Format: date-time
+             * @description Temporary stored changes only. Moved by extend.
+             */
+            expires_at?: string;
+            /** Format: date-time */
+            kept_at?: string;
+            /** @description The actor of the keep, when it named one. */
+            kept_by?: string;
+            /**
+             * Format: date-time
+             * @description When it left the cluster.
+             */
+            ended_at?: string;
+            /** @description Actions valid right now, so the UI does not re-derive the rules. */
+            actions: components["schemas"]["InterrogationChangeActionName"][];
+        };
+        InterrogationChangeList: {
+            count: number;
+            items: components["schemas"]["InterrogationChangeDetail"][];
+        };
+        /**
+         * @example {
+         *       "actor": "dana"
+         *     }
+         */
+        InterrogationChangeAction: {
+            actor?: string;
+        };
+        InterrogationChangesRevertAll: {
+            /** @description Only this source. Absent means the whole cluster. */
+            source?: components["schemas"]["InterrogationSource"];
+            actor?: string;
+        };
+        InterrogationChangesReverted: {
+            /** @description Changes ended by this call. */
+            count: number;
         };
         InterrogationChangesBySource: {
             source: components["schemas"]["InterrogationSource"];
@@ -3898,6 +4250,8 @@ export interface components {
         /**
          * @example {
          *       "live": 3,
+         *       "temporary": 2,
+         *       "permanent": 1,
          *       "by_kind": {
          *         "custom_instrumentation": 3
          *       },
@@ -3920,11 +4274,18 @@ export interface components {
          */
         InterrogationChangesSummary: {
             live: number;
+            /** @description Live and temporary. */
+            temporary: number;
+            /** @description Live and kept permanently. */
+            permanent: number;
             /** @description Live changes per `InterrogationChangeKind`. */
             by_kind: {
                 [key: string]: number;
             };
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Soonest expiry among live temporary changes.
+             */
             next_expiry_at?: string;
             next_expiry_change_id?: string;
             by_source: components["schemas"]["InterrogationChangesBySource"][];
@@ -4172,6 +4533,8 @@ export interface components {
         IntegrationId: string;
         /** @description The interrogation's server-assigned id (a UUID), not the display id. */
         InterrogationId: string;
+        /** @description The change's server-assigned id. */
+        InterrogationChangeId: string;
     };
     requestBodies: never;
     headers: never;
@@ -6031,6 +6394,267 @@ export interface operations {
             413: components["responses"]["Error"];
             422: components["responses"]["InterrogationError"];
             500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    listInterrogationRunChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The interrogation's server-assigned id (a UUID), not the display id. */
+                interrogation_id: components["parameters"]["InterrogationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Changes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangeList"];
+                };
+            };
+            404: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    listInterrogationChanges: {
+        parameters: {
+            query?: {
+                /** @description Default 200; the server clamps to 1000. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Changes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangeList"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    getInterrogationChangesSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangesSummary"];
+                };
+            };
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    revertAllInterrogationChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterrogationChangesRevertAll"];
+            };
+        };
+        responses: {
+            /** @description Reverts recorded. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangesReverted"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    getInterrogationChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangeDetail"];
+                };
+            };
+            404: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    keepInterrogationChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterrogationChangeAction"];
+            };
+        };
+        responses: {
+            /** @description The change, now permanent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangeDetail"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            404: components["responses"]["InterrogationError"];
+            409: components["responses"]["InterrogationError"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    revertInterrogationChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterrogationChangeAction"];
+            };
+        };
+        responses: {
+            /** @description Revert recorded. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangeDetail"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            404: components["responses"]["InterrogationError"];
+            409: components["responses"]["InterrogationError"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    removeInterrogationChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterrogationChangeAction"];
+            };
+        };
+        responses: {
+            /** @description Removal recorded. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangeDetail"];
+                };
+            };
+            400: components["responses"]["InterrogationError"];
+            404: components["responses"]["InterrogationError"];
+            409: components["responses"]["InterrogationError"];
+            413: components["responses"]["Error"];
+            422: components["responses"]["InterrogationError"];
+            500: components["responses"]["InterrogationError"];
+            503: components["responses"]["InterrogationError"];
+        };
+    };
+    undoInterrogationChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The change's server-assigned id. */
+                change_id: components["parameters"]["InterrogationChangeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["InterrogationChangeAction"];
+            };
+        };
+        responses: {
+            /** @description The change after the undo. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterrogationChangeDetail"];
+                };
+            };
+            404: components["responses"]["InterrogationError"];
+            422: components["responses"]["InterrogationError"];
             503: components["responses"]["InterrogationError"];
         };
     };

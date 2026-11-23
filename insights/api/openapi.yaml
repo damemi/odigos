@@ -96,6 +96,12 @@ tags:
       enumerations in this tag are open sets. Every endpoint except
       `GET /interrogations/options` answers 503 with `details.reason`
       `not_enabled` unless `insights.autopilot.enabled` is true.
+  - name: interrogation-changes
+    description: >
+      Changes an interrogation made to the cluster (today: custom
+      instrumentation probes), as a resource of their own across all
+      interrogations. A change is temporary (expires) or permanent (kept by a
+      person).
 
 paths:
   /healthz:
@@ -1810,9 +1816,9 @@ paths:
       description: >
         No more rounds, model calls or new changes. `changes` says what
         happens to the changes already made: `keep` (default) leaves them
-        until each expires, `revert` removes them now. Idempotent. On a run
-        that has already ended, `revert` still reverts its remaining live
-        changes. A later `revert` overrides an earlier `keep`, never the
+        until each expires, `revert` removes them now; changes a person kept
+        stay either way. Idempotent. On a run that has already ended,
+        `revert` still reverts its remaining live temporary changes. A later `revert` overrides an earlier `keep`, never the
         reverse. 202 = recorded, the run is `stopping`. 200 = the run has
         ended: it already had, or it was still `queued` and this call ended
         it as `stopped`. A run that had finished its last node when the stop
@@ -1848,8 +1854,8 @@ paths:
       tags: [interrogations]
       summary: Give an interrogation more time
       description: >
-        Moves `deadline_at` and the expiry of the run's live changes
-        later by `seconds`, together; the run records
+        Moves `deadline_at` and the expiry of the run's live temporary
+        changes later by `seconds`, together; the run records
         `interrogation.extended` within seconds. `extended_seconds` on the
         run is the sum of extensions; `budget.time_limit_seconds` stays as
         requested. Only while the run is `queued` or `running` and its
@@ -1874,6 +1880,248 @@ paths:
         "409": { $ref: "#/components/responses/InterrogationError" }
         "422": { $ref: "#/components/responses/InterrogationError" }
         "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogations/{interrogation_id}/changes:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationId"
+    get:
+      tags: [interrogations]
+      summary: Changes made by one interrogation
+      description: |
+        Every change of the run in any state, oldest first, including denied
+        proposals. Never cut by a limit. The same changes as `changes` on
+        `GET /interrogations/{id}`, in the shape of the changes resource.
+
+        **Use for:** the changes of one run with their actions, and resolving
+        the ids in `rounds[].proposed` and `rounds[].applied`.
+
+        **Not for:** what is in the cluster now across runs (use
+        `GET /interrogation-changes`, which has no denied proposals).
+      operationId: listInterrogationRunChanges
+      responses:
+        "200":
+          description: Changes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangeList" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogation-changes:
+    get:
+      tags: [interrogation-changes]
+      summary: List changes across interrogations
+      description: |
+        The changes in the cluster now (`state` `requested`, `blocked`,
+        `active` or `reverting`), soonest expiry first, permanent ones last.
+        There are no filters: the set is bounded by the caps (open runs,
+        probes per source), and the page groups and filters what it loaded;
+        `GET /interrogation-changes/summary` has the per-source totals.
+        Ended changes and denied proposals are listed under their run.
+
+        **Use for:** the Active changes page.
+
+        **Not for:** one run's changes, ended ones and denied proposals
+        included (use `GET /interrogations/{id}/changes`).
+      operationId: listInterrogationChanges
+      parameters:
+        - name: limit
+          in: query
+          description: Default 200; the server clamps to 1000.
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+      responses:
+        "200":
+          description: Changes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangeList" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogation-changes/summary:
+    get:
+      tags: [interrogation-changes]
+      summary: Totals of live changes
+      description: Backs the Active changes banner, the group headers and the list page's changes card.
+      operationId: getInterrogationChangesSummary
+      responses:
+        "200":
+          description: Summary.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangesSummary" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogation-changes/revert-all:
+    post:
+      tags: [interrogation-changes]
+      summary: Revert every temporary change
+      description: >
+        Ends every live temporary change, optionally narrowed to one source,
+        of open and ended runs alike. Permanent changes are never touched.
+        Returns how many were ended; the removal from the cluster happens on
+        the next reconcile. A run that is still open is told on its next
+        round. Repeating it ends nothing more.
+      operationId: revertAllInterrogationChanges
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterrogationChangesRevertAll" }
+      responses:
+        "202":
+          description: Reverts recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangesReverted" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogation-changes/{change_id}:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationChangeId"
+    get:
+      tags: [interrogation-changes]
+      summary: Get one change
+      description: A stored change; a denied proposal is not one (404).
+      operationId: getInterrogationChange
+      responses:
+        "200":
+          description: The change.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangeDetail" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogation-changes/{change_id}/keep:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationChangeId"
+    post:
+      tags: [interrogation-changes]
+      summary: Keep a temporary change permanently
+      description: >
+        The change stops expiring and stays in the source's instrumentation
+        rule, also after its run has ended, until someone removes it. Only
+        for a live temporary change (409 `invalid_change_state` otherwise,
+        with `details.state`). Idempotent: keeping a kept change answers 200
+        with the change.
+      operationId: keepInterrogationChange
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterrogationChangeAction" }
+      responses:
+        "200":
+          description: The change, now permanent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangeDetail" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "409": { $ref: "#/components/responses/InterrogationError" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogation-changes/{change_id}/revert:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationChangeId"
+    post:
+      tags: [interrogation-changes]
+      summary: Revert a temporary change now
+      description: >
+        Ends the change; it leaves the cluster on the next reconcile, within
+        seconds (`state` goes `reverting` then `reverted`, `end_reason`
+        `revert`). Works while the run is open, which is told on its next
+        round, and after it ended. The run's other changes stay, and the
+        change keeps its place in the run's probe budget. Idempotent. A
+        permanent change needs `remove` (409 `invalid_change_state`).
+      operationId: revertInterrogationChange
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterrogationChangeAction" }
+      responses:
+        "202":
+          description: Revert recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangeDetail" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "409": { $ref: "#/components/responses/InterrogationError" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogation-changes/{change_id}/remove:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationChangeId"
+    post:
+      tags: [interrogation-changes]
+      summary: Remove a permanent change
+      description: >
+        Same effect as `revert`, for a change a person kept permanently
+        (`state` goes `reverting` then `reverted`, `end_reason` `remove`).
+        The record stays for the run's history. Idempotent. A temporary
+        change needs `revert` (409 `invalid_change_state`).
+      operationId: removeInterrogationChange
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterrogationChangeAction" }
+      responses:
+        "202":
+          description: Removal recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangeDetail" }
+        "400": { $ref: "#/components/responses/InterrogationError" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "409": { $ref: "#/components/responses/InterrogationError" }
+        "413": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/InterrogationError" }
+        "500": { $ref: "#/components/responses/InterrogationError" }
+        "503": { $ref: "#/components/responses/InterrogationError" }
+
+  /api/v1/interrogation-changes/{change_id}/undo:
+    parameters:
+      - $ref: "#/components/parameters/InterrogationChangeId"
+    post:
+      tags: [interrogation-changes]
+      summary: Undo the last keep, revert or remove (planned)
+      description: >
+        Reverses the last action a person took on the change. Planned:
+        answers 422 `not_supported_yet` with `option`
+        `operation=undoInterrogationChange`, and `actions` never offers it.
+      operationId: undoInterrogationChange
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InterrogationChangeAction" }
+      responses:
+        "200":
+          description: The change after the undo.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterrogationChangeDetail" }
+        "404": { $ref: "#/components/responses/InterrogationError" }
+        "422": { $ref: "#/components/responses/InterrogationError" }
         "503": { $ref: "#/components/responses/InterrogationError" }
 
 components:
@@ -1957,6 +2205,13 @@ components:
       in: path
       required: true
       description: The interrogation's server-assigned id (a UUID), not the display id.
+      schema: { type: string }
+
+    InterrogationChangeId:
+      name: change_id
+      in: path
+      required: true
+      description: The change's server-assigned id.
       schema: { type: string }
   responses:
     Error:
@@ -4565,7 +4820,8 @@ components:
         contract but not built. `no_evidence` (422): the source has
         no call-graph evidence. `invalid_argument` (422): `field` names the
         bad field. `not_running` (409): the run is not open, is stopping, or
-        is past its deadline. Open set.
+        is past its deadline. `invalid_change_state` (409): the change is not
+        in a state the action accepts; `state` has the current one. Open set.
       x-extensible-enum:
         - source_busy
         - at_capacity
@@ -4575,6 +4831,7 @@ components:
         - no_evidence
         - invalid_argument
         - not_running
+        - invalid_change_state
 
     InterrogationErrorDetails:
       type: object
@@ -4598,6 +4855,7 @@ components:
           description: "With `invalid_argument` on a list: the element at fault, e.g. the unknown id in `transaction_ids`."
         interrogation_id: { type: string }
         display_id: { type: string }
+        state: { type: string }
         requires: { type: string }
         open: { type: integer }
         max_open: { type: integer }
@@ -4675,12 +4933,23 @@ components:
         `requested`: accepted, waiting to be written to the instrumentation
         rule. `blocked`: accepted, but it cannot be placed in the rule
         (`block_reason`). `active`: in the rule. `reverting`: ended, still in
-        the rule until the next reconcile. `reverted`: ended by
-        stop-and-revert or because the source is gone (`end_reason`).
-        `expired`: its time ran out (`end_reason` `expired`). `failed`: given
-        up before it took effect (`end_reason` says why). Live = `requested`,
-        `blocked`, `active`. Open set.
+        the rule until the next reconcile. `reverted`: ended by a person, by
+        stop-and-revert or because the source is gone (`end_reason`; `remove`
+        means it was permanent). `expired`: its time ran out (`end_reason`
+        `expired`). `failed`: given up before it took effect (`end_reason`
+        says why). Live = `requested`, `blocked`, `active`. A kept change is
+        live with `lifetime` `permanent`. Open set.
       x-extensible-enum: [denied, requested, blocked, active, reverting, reverted, expired, failed]
+
+    InterrogationChangeLifetime:
+      type: string
+      description: "`temporary` changes have `expires_at`; `permanent` ones were kept by a person. Open set."
+      x-extensible-enum: [temporary, permanent]
+
+    InterrogationChangeActionName:
+      type: string
+      description: An action the UI may offer on a change. `undo` is planned and never offered. Open set.
+      x-extensible-enum: [keep, revert, remove, undo]
 
     InterrogationChangeDenyReason:
       type: string
@@ -4805,11 +5074,14 @@ components:
     InterrogationChangeEndReason:
       type: string
       description: >
-        Why a change ended. `stop`: stop with revert. `expired`: its time
-        ran out. `source_gone`: the source is no longer instrumented.
-        `not_applied_in_time` and the block reasons: the change never took
-        effect (`state` `failed`). Open set.
+        Why a change ended. `revert`: a person reverted a temporary change.
+        `remove`: a person removed a permanent one. `stop`: stop with revert.
+        `expired`: its time ran out. `source_gone`: the source is no longer
+        instrumented. `not_applied_in_time` and the block reasons: the change
+        never took effect (`state` `failed`). Open set.
       x-extensible-enum:
+        - revert
+        - remove
         - stop
         - expired
         - source_gone
@@ -5049,16 +5321,16 @@ components:
       type: object
       properties:
         total: { type: integer, description: "Every change of the run: `live` + `reverting` + `reverted` + `expired` + `failed` + `denied`." }
-        live: { type: integer, description: "`requested` + `blocked` + `active`." }
+        live: { type: integer, description: "`requested` + `blocked` + `active`, kept ones included." }
         reverting: { type: integer, description: "Ended, still in the rule until the next reconcile." }
-        reverted: { type: integer, description: "Ended by stop-and-revert, or because the source is gone." }
+        reverted: { type: integer, description: "Ended by a person, by stop-and-revert, or because the source is gone." }
         expired: { type: integer, description: "Left when their time ran out. The normal end of a run's changes." }
         failed: { type: integer, description: "Accepted, never took effect." }
         denied: { type: integer }
         next_expiry_at:
           type: string
           format: date-time
-          description: Soonest expiry among live changes. The list's "Ends" column.
+          description: Soonest expiry among live temporary changes. The list's "Ends" column.
           x-go-type-skip-optional-pointer: false
       required: [total, live, reverting, reverted, expired, failed, denied]
 
@@ -5607,7 +5879,7 @@ components:
         expires_at:
           type: string
           format: date-time
-          description: Stored changes only. Never later than the run's `deadline_at`; moved by extend.
+          description: Temporary stored changes only. Never later than the run's `deadline_at`; moved by extend.
           x-go-type-skip-optional-pointer: false
         ended_at: { type: string, format: date-time, description: "When it left the cluster.", x-go-type-skip-optional-pointer: false }
         end_reason:
@@ -5617,6 +5889,15 @@ components:
           allOf: [{ $ref: "#/components/schemas/InterrogationChangeMeasured" }]
           description: Absent until `observe` has read the change's spans, and when none could be read.
           x-go-type-skip-optional-pointer: false
+        reason: { type: string, description: "Why the model chose it, in its words, at most 500 characters." }
+        lifetime: { $ref: "#/components/schemas/InterrogationChangeLifetime" }
+        actions:
+          type: array
+          description: >
+            Actions valid right now; each is `POST
+            /interrogation-changes/{id}/<action>`. Empty for a denied
+            proposal and an ended change.
+          items: { $ref: "#/components/schemas/InterrogationChangeActionName" }
       required: [id, round, language, target, state, checks, requested_at]
       examples:
         - id: "chg_3f9a1c07b2d44e6a8c51"
@@ -5628,6 +5909,115 @@ components:
           requested_at: "2026-11-17T09:41:02Z"
           applied_at: "2026-11-17T09:41:07Z"
           expires_at: "2026-11-17T10:38:03Z"
+
+    InterrogationChangeRef:
+      type: object
+      description: The interrogation that made the change, enough for a row. Absent once the run aged out.
+      properties:
+        id: { type: string }
+        display_id: { type: string }
+        title: { type: string }
+        status: { $ref: "#/components/schemas/InterrogationStatus" }
+        round: { type: integer, description: "The run's current round." }
+        trigger: { $ref: "#/components/schemas/InterrogationTrigger" }
+      required: [id, display_id, title, status, round, trigger]
+
+    InterrogationChangeDetail:
+      type: object
+      description: >
+        A change as the changes resource serves it, with its run and the
+        actions a person may take on it. The fields it shares with
+        `InterrogationChange` mean the same, but `target`, a string here,
+        and `proposed_at`, which is `requested_at` there.
+      properties:
+        id: { type: string, description: "`chg_` + 20 hex characters; the same proposal always gets the same id." }
+        interrogation_id: { type: string }
+        interrogation:
+          allOf: [{ $ref: "#/components/schemas/InterrogationChangeRef" }]
+          x-go-type-skip-optional-pointer: false
+        source: { $ref: "#/components/schemas/InterrogationSource" }
+        target: { type: string, description: "What it changes; for a probe the function, e.g. `com.acme.Foo.bar`." }
+        probe:
+          allOf: [{ $ref: "#/components/schemas/InterrogationProbe" }]
+          x-go-type-skip-optional-pointer: false
+        category: { $ref: "#/components/schemas/InterrogationChangeCategory" }
+        round: { type: integer, description: "Round that proposed it." }
+        reason: { type: string, description: "Why the model chose it, in its words, at most 500 characters." }
+        checks:
+          type: array
+          description: Checks passed, in order. All six for a stored change; those before the failing one for a denied proposal.
+          items: { $ref: "#/components/schemas/InterrogationChangeCheck" }
+        state: { $ref: "#/components/schemas/InterrogationChangeState" }
+        lifetime: { $ref: "#/components/schemas/InterrogationChangeLifetime" }
+        deny_reason: { $ref: "#/components/schemas/InterrogationChangeDenyReason" }
+        block_reason: { $ref: "#/components/schemas/InterrogationChangeBlockReason" }
+        end_reason:
+          $ref: "#/components/schemas/InterrogationChangeEndReason"
+          description: Set once the change is ending or ended. For `failed` it is why the change never took effect.
+        proposed_at: { type: string, format: date-time, description: "When the model proposed it." }
+        applied_at: { type: string, format: date-time, x-go-type-skip-optional-pointer: false }
+        expires_at: { type: string, format: date-time, description: "Temporary stored changes only. Moved by extend.", x-go-type-skip-optional-pointer: false }
+        kept_at: { type: string, format: date-time, x-go-type-skip-optional-pointer: false }
+        kept_by: { type: string, description: "The actor of the keep, when it named one." }
+        ended_at: { type: string, format: date-time, description: "When it left the cluster.", x-go-type-skip-optional-pointer: false }
+        actions:
+          type: array
+          description: Actions valid right now, so the UI does not re-derive the rules.
+          items: { $ref: "#/components/schemas/InterrogationChangeActionName" }
+      required: [id, interrogation_id, source, target, round, reason, checks, state, lifetime, proposed_at, actions]
+      examples:
+        - id: "chg_3f9a1c07b2d44e6a8c51"
+          interrogation_id: "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21"
+          interrogation:
+            id: "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21"
+            display_id: INT-0B6F6C1E
+            title: "Why is claim submission slow for some users?"
+            status: running
+            round: 2
+            trigger: { kind: manual, actor: alon }
+          source: { namespace: claims-demo, kind: Deployment, name: claims-intake }
+          target: com.claims.intake.ClaimValidator.validate
+          probe: { language: java, class_name: com.claims.intake.ClaimValidator, method_name: validate }
+          category: observability
+          round: 1
+          reason: "ClaimValidator.validate is called from ClaimController.submit and sits before FraudClient.score."
+          checks: [changes_allowed, in_call_graph, application_code, not_already_probed, within_workload_cap, within_run_budget]
+          state: active
+          lifetime: temporary
+          proposed_at: "2026-11-17T09:41:02Z"
+          applied_at: "2026-11-17T09:41:07Z"
+          expires_at: "2026-11-17T10:38:00Z"
+          actions: [keep, revert]
+
+    InterrogationChangeList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/InterrogationChangeDetail" }
+      required: [count, items]
+
+    InterrogationChangeAction:
+      type: object
+      properties:
+        actor: { type: string, maxLength: 200 }
+      examples:
+        - { actor: dana }
+
+    InterrogationChangesRevertAll:
+      type: object
+      properties:
+        source:
+          $ref: "#/components/schemas/InterrogationSource"
+          description: Only this source. Absent means the whole cluster.
+        actor: { type: string, maxLength: 200 }
+
+    InterrogationChangesReverted:
+      type: object
+      properties:
+        count: { type: integer, description: "Changes ended by this call." }
+      required: [count]
 
     InterrogationChangesBySource:
       type: object
@@ -5643,18 +6033,22 @@ components:
       type: object
       properties:
         live: { type: integer }
+        temporary: { type: integer, description: "Live and temporary." }
+        permanent: { type: integer, description: "Live and kept permanently." }
         by_kind:
           type: object
           description: Live changes per `InterrogationChangeKind`.
           additionalProperties: { type: integer }
-        next_expiry_at: { type: string, format: date-time, x-go-type-skip-optional-pointer: false }
+        next_expiry_at: { type: string, format: date-time, description: "Soonest expiry among live temporary changes.", x-go-type-skip-optional-pointer: false }
         next_expiry_change_id: { type: string }
         by_source:
           type: array
           items: { $ref: "#/components/schemas/InterrogationChangesBySource" }
-      required: [live, by_kind, by_source]
+      required: [live, temporary, permanent, by_kind, by_source]
       examples:
         - live: 3
+          temporary: 2
+          permanent: 1
           by_kind: { custom_instrumentation: 3 }
           next_expiry_at: "2026-11-17T10:38:00Z"
           next_expiry_change_id: "chg_3f9a1c07b2d44e6a8c51"

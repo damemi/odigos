@@ -139,7 +139,7 @@ func NewRouter(r repo.Repository, log *commonlogger.OdigosLogger) (*gin.Engine, 
 		v1.GET("/findings/deliveries", api.getFindingDeliveries)
 
 		// On-demand interrogations: start a run on a source, follow it, stop
-		// or extend it.
+		// or extend it; the changes runs made to the cluster, across runs.
 		v1.GET("/interrogations", api.listInterrogations)
 		v1.POST("/interrogations", limitInterrogationBody, api.startInterrogation)
 		v1.GET("/interrogations/summary", api.getInterrogationSummary)
@@ -150,6 +150,15 @@ func NewRouter(r repo.Repository, log *commonlogger.OdigosLogger) (*gin.Engine, 
 		v1.GET("/interrogations/:interrogation_id/events", api.listInterrogationEvents)
 		v1.POST("/interrogations/:interrogation_id/stop", limitInterrogationBody, api.stopInterrogation)
 		v1.POST("/interrogations/:interrogation_id/extend", limitInterrogationBody, api.extendInterrogation)
+		v1.GET("/interrogations/:interrogation_id/changes", api.listInterrogationRunChanges)
+		v1.GET("/interrogation-changes", api.listInterrogationChanges)
+		v1.GET("/interrogation-changes/summary", api.getInterrogationChangesSummary)
+		v1.POST("/interrogation-changes/revert-all", limitInterrogationBody, api.revertAllInterrogationChanges)
+		v1.GET("/interrogation-changes/:change_id", api.getInterrogationChange)
+		v1.POST("/interrogation-changes/:change_id/keep", limitInterrogationBody, api.interrogationChangeAction(repo.ChangeKeep))
+		v1.POST("/interrogation-changes/:change_id/revert", limitInterrogationBody, api.interrogationChangeAction(repo.ChangeRevert))
+		v1.POST("/interrogation-changes/:change_id/remove", limitInterrogationBody, api.interrogationChangeAction(repo.ChangeRemove))
+		v1.POST("/interrogation-changes/:change_id/undo", limitInterrogationBody, api.undoInterrogationChange)
 	}
 
 	return engine, api

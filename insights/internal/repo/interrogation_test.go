@@ -1,6 +1,7 @@
 package repo
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -41,26 +42,53 @@ func TestInterrogationChange_State(t *testing.T) {
 	now := time.Date(2026, 11, 17, 10, 0, 0, 0, time.UTC)
 	later, earlier := now.Add(time.Hour), now.Add(-time.Hour)
 	cases := []struct {
-		name  string
-		c     InterrogationChange
-		state string
+		name     string
+		c        InterrogationChange
+		state    string
+		lifetime string
+		actions  []string
 	}{
-		{"live, not in the rule, not blocked", InterrogationChange{Desired: ChangeApproved, ExpiresAt: later}, "requested"},
-		{"live, not in the rule, blocked", InterrogationChange{Desired: ChangeApproved, ExpiresAt: later, BlockReason: "rule_disabled"}, "blocked"},
-		{"live, in the rule", InterrogationChange{Desired: ChangeApproved, ExpiresAt: later, InRule: true}, "active"},
-		{"not live, in the rule", InterrogationChange{Desired: ChangeReverted, EndReason: "stop", InRule: true}, "reverting"},
-		{"expired, still in the rule", InterrogationChange{Desired: ChangeApproved, ExpiresAt: earlier, InRule: true}, "reverting"},
-		{"not applied in time", InterrogationChange{Desired: ChangeReverted, EndReason: "not_applied_in_time"}, "failed"},
-		{"given up as blocked", InterrogationChange{Desired: ChangeReverted, EndReason: "workload_cap_reached"}, "failed"},
-		{"reverted", InterrogationChange{Desired: ChangeReverted, EndReason: "stop"}, "reverted"},
-		{"expired", InterrogationChange{Desired: ChangeApproved, ExpiresAt: earlier}, "expired"},
-		{"expires now", InterrogationChange{Desired: ChangeApproved, ExpiresAt: now}, "expired"},
-		{"unknown stored state", InterrogationChange{Desired: "proposed"}, "proposed"},
+		{"live, not in the rule, not blocked", InterrogationChange{Desired: ChangeApproved, ExpiresAt: later},
+			"requested", "temporary", []string{"keep", "revert"}},
+		{"live kept, not in the rule", InterrogationChange{Desired: ChangeKept},
+			"requested", "permanent", []string{"remove"}},
+		{"live, not in the rule, blocked", InterrogationChange{Desired: ChangeApproved, ExpiresAt: later, BlockReason: "rule_disabled"},
+			"blocked", "temporary", []string{"keep", "revert"}},
+		{"live, in the rule", InterrogationChange{Desired: ChangeApproved, ExpiresAt: later, InRule: true},
+			"active", "temporary", []string{"keep", "revert"}},
+		{"kept, in the rule", InterrogationChange{Desired: ChangeKept, InRule: true},
+			"active", "permanent", []string{"remove"}},
+		{"not live, in the rule", InterrogationChange{Desired: ChangeReverted, EndReason: "revert", InRule: true},
+			"reverting", "temporary", []string{}},
+		{"removed, still in the rule", InterrogationChange{Desired: ChangeReverted, EndReason: "remove", InRule: true},
+			"reverting", "permanent", []string{}},
+		{"expired, still in the rule", InterrogationChange{Desired: ChangeApproved, ExpiresAt: earlier, InRule: true},
+			"reverting", "temporary", []string{}},
+		{"not applied in time", InterrogationChange{Desired: ChangeReverted, EndReason: "not_applied_in_time"},
+			"failed", "temporary", []string{}},
+		{"given up as blocked", InterrogationChange{Desired: ChangeReverted, EndReason: "workload_cap_reached"},
+			"failed", "temporary", []string{}},
+		{"reverted", InterrogationChange{Desired: ChangeReverted, EndReason: "stop"},
+			"reverted", "temporary", []string{}},
+		{"removed", InterrogationChange{Desired: ChangeReverted, EndReason: "remove"},
+			"reverted", "permanent", []string{}},
+		{"expired", InterrogationChange{Desired: ChangeApproved, ExpiresAt: earlier},
+			"expired", "temporary", []string{}},
+		{"expires now", InterrogationChange{Desired: ChangeApproved, ExpiresAt: now},
+			"expired", "temporary", []string{}},
+		{"unknown stored state", InterrogationChange{Desired: "proposed"},
+			"proposed", "temporary", []string{}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := tc.c.State(now); got != tc.state {
 				t.Errorf("State() = %q, want %q", got, tc.state)
+			}
+			if got := tc.c.Lifetime(); got != tc.lifetime {
+				t.Errorf("Lifetime() = %q, want %q", got, tc.lifetime)
+			}
+			if got := tc.c.Actions(now); !slices.Equal(got, tc.actions) {
+				t.Errorf("Actions() = %q, want %q", got, tc.actions)
 			}
 		})
 	}

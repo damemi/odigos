@@ -22,7 +22,8 @@ const (
 	probeWaiting outcome = iota
 	// probeInRule: the rule has it, from this row or from another rule.
 	probeInRule
-	// probeEnded: the row ended meanwhile; its source is gone.
+	// probeEnded: the row ended meanwhile: a person reverted it, or its
+	// source is gone.
 	probeEnded
 	// probeGivenUp: blocked, gone, or not in the rule in time.
 	probeGivenUp
@@ -120,8 +121,9 @@ func probeOutcome(ch repo.InterrogationChange, found, late bool, now time.Time) 
 }
 
 // syncChanges marks the run's live probes whose rows ended since it last
-// looked: their source is gone, or they expired. The model is then no longer
-// told they are in place.
+// looked: a person reverted them, a stop with revert did, their source is
+// gone, or they expired. The model is then no longer told they are in place.
+// A kept probe is live and stays as it is.
 func syncChanges(ctx context.Context, changes Changes, st *State, t time.Time) ([]Event, error) {
 	if !slices.ContainsFunc(st.Probes, func(p Probe) bool { return probeLive(p.Status) }) {
 		return nil, nil
@@ -141,7 +143,11 @@ func syncChanges(ctx context.Context, changes Changes, st *State, t time.Time) (
 		if !probeLive(p.Status) || !ok || ch.Live(t) {
 			continue
 		}
-		evs = append(evs, st.reverted(p, cmp.Or(ch.EndReason, repo.ChangeExpired), "", t))
+		by := ""
+		if ch.EndReason == endReasonStop && st.Stop != nil {
+			by = st.Stop.Actor
+		}
+		evs = append(evs, st.reverted(p, cmp.Or(ch.EndReason, repo.ChangeExpired), by, t))
 	}
 	return evs, nil
 }
@@ -221,15 +227,4 @@ func (st *State) failed(p *Probe, reason string, t time.Time) Event {
 func (st *State) reverted(p *Probe, reason, by string, t time.Time) Event {
 	p.Status, p.EndReason, p.EndedAt = ProbeReverted, reason, t
 	return changeReverted(st, p, by, t)
-}
-
-// revertProbes marks every probe the run holds as reverted by a stop.
-func (st *State) revertProbes(actor string, t time.Time) []Event {
-	var evs []Event
-	for i := range st.Probes {
-		if p := &st.Probes[i]; probeLive(p.Status) {
-			evs = append(evs, st.reverted(p, endReasonStop, actor, t))
-		}
-	}
-	return evs
 }

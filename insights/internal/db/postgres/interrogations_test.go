@@ -258,11 +258,12 @@ func TestGetInterrogation_ChangeCounts(t *testing.T) {
 	d.markStarted(t, "run", now)
 
 	ids := map[string]string{}
-	for _, name := range []string{"requested", "blocked", "active", "reverting", "failed", "reverted", "expired"} {
+	for _, name := range []string{"requested", "blocked", "active", "kept", "reverting", "failed", "reverted", "expired"} {
 		ids[name] = d.request(t, "run", "app", "a.B."+name, now)
 	}
 	d.setChange(t, ids["blocked"], `block_reason = 'rule_disabled'`)
 	d.setChange(t, ids["active"], `in_rule = true`)
+	d.setChange(t, ids["kept"], `state = 'kept', expires_at = 'epoch', in_rule = true`)
 	d.setChange(t, ids["reverting"], `state = 'reverted', end_reason = 'stop', in_rule = true`)
 	d.setChange(t, ids["failed"], `state = 'reverted', end_reason = 'not_applied_in_time'`)
 	d.setChange(t, ids["reverted"], `state = 'reverted', end_reason = 'stop'`)
@@ -273,8 +274,8 @@ func TestGetInterrogation_ChangeCounts(t *testing.T) {
 		counter   string
 		got, want int
 	}{
-		{"stored", got.Stored, 7},
-		{"live", got.Live, 3},
+		{"stored", got.Stored, 8},
+		{"live", got.Live, 4},
 		{"reverting", got.Reverting, 1},
 		{"reverted", got.Reverted, 1},
 		{"expired", got.Expired, 1},
@@ -702,6 +703,87 @@ func TestInterrogationChanges(t *testing.T) {
 	}
 }
 
+func TestInterrogationChangeActions(t *testing.T) {
+	d := newInterrogationDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	d.start(t, ctx, "run", "app")
+	d.markStarted(t, "run", now)
+	d.start(t, ctx, "other", "web")
+	d.markStarted(t, "other", now)
+	keep := d.request(t, "run", "app", "a.B.keep", now)
+	revert := d.request(t, "run", "app", "a.B.revert", now.Add(time.Second))
+	expired := d.request(t, "run", "app", "a.B.expired", now.Add(2*time.Second))
+	d.setChange(t, expired, `expires_at = $2`, now.Add(-time.Minute))
+	web := d.request(t, "other", "web", "a.W.web", now)
+	webLater := d.request(t, "other", "web", "a.W.later", now)
+	d.setChange(t, webLater, `expires_at = $2`, now.Add(2*time.Hour))
+
+	c, ok, err := d.repo.KeepInterrogationChange(ctx, keep, "dana", now)
+	if err != nil || !ok {
+		t.Fatalf("keep: ok=%v err=%v", ok, err)
+	}
+	if c.Desired != repo.ChangeKept || c.KeptBy != "dana" || !c.KeptAt.Equal(now) || !c.ExpiresAt.IsZero() ||
+		c.Lifetime() != repo.ChangePermanent || c.Interrogation == nil || c.Interrogation.ID != "run" {
+		t.Errorf("kept change = %+v", c)
+	}
+	if _, ok, err := d.repo.KeepInterrogationChange(ctx, keep, "dana", now); ok || err != nil {
+		t.Errorf("keeping a kept change: ok=%v err=%v", ok, err)
+	}
+	if _, ok, err := d.repo.KeepInterrogationChange(ctx, expired, "dana", now); ok || err != nil {
+		t.Errorf("keeping an expired change: ok=%v err=%v", ok, err)
+	}
+	if _, ok, err := d.repo.RevertInterrogationChange(ctx, keep, repo.ChangeApproved, repo.ChangeRevert, now); ok || err != nil {
+		t.Errorf("reverting a kept change: ok=%v err=%v", ok, err)
+	}
+
+	sum, err := d.repo.InterrogationChangesSummary(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Live != 4 || sum.Temporary != 3 || sum.Permanent != 1 || sum.NextExpiryChangeID == keep {
+		t.Errorf("summary = %+v", sum)
+	}
+
+	listed, err := d.repo.ListClusterInterrogationChanges(ctx, 10, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, c := range listed {
+		order = append(order, c.ChangeID)
+	}
+	// web and revert expire together, and the id breaks the tie.
+	if want := []string{web, revert, webLater, keep}; !slices.Equal(order, want) {
+		t.Errorf("cluster changes %v, want %v: soonest expiry first, kept last", order, want)
+	}
+
+	if c, ok, err := d.repo.RevertInterrogationChange(ctx, revert, repo.ChangeApproved, repo.ChangeRevert, now); err != nil || !ok ||
+		c.State(now) != repo.ChangeReverted || c.EndReason != repo.ChangeRevert {
+		t.Errorf("revert: %+v ok=%v err=%v", c, ok, err)
+	}
+	if _, ok, err := d.repo.RevertInterrogationChange(ctx, revert, repo.ChangeApproved, repo.ChangeRevert, now); ok || err != nil {
+		t.Errorf("reverting twice: ok=%v err=%v", ok, err)
+	}
+	if c, ok, err := d.repo.RevertInterrogationChange(ctx, keep, repo.ChangeKept, repo.ChangeRemove, now); err != nil || !ok ||
+		c.State(now) != repo.ChangeReverted || c.Lifetime() != repo.ChangePermanent {
+		t.Errorf("remove: %+v ok=%v err=%v", c, ok, err)
+	}
+
+	n, err := d.repo.RevertAllInterrogationChanges(ctx, repo.InterrogationSource{Namespace: "ns", Kind: "Deployment", Name: "app"}, now)
+	if err != nil || n != 0 {
+		t.Errorf("revert all on app, which has nothing live: %d, %v", n, err)
+	}
+	if n, err = d.repo.RevertAllInterrogationChanges(ctx, repo.InterrogationSource{}, now); err != nil || n != 2 {
+		t.Errorf("revert all: %d, %v", n, err)
+	}
+
+	d.exec(t, `DELETE FROM adk.sessions WHERE user_id = 'other'`)
+	if c, ok, err := d.repo.GetInterrogationChange(ctx, web); err != nil || !ok || c.Interrogation != nil || c.Source.Name != "web" {
+		t.Errorf("a change whose run is gone: %+v ok=%v err=%v", c, ok, err)
+	}
+}
+
 // retentionLater is a retention pass that sees runs and changes of now as
 // older than 30 days.
 func retentionLater(now time.Time) time.Time {
@@ -857,9 +939,11 @@ func TestRetention_Changes(t *testing.T) {
 	d.setChange(t, updated, `state = 'reverted', updated_at = $2`, now.AddDate(0, 0, 2))
 	expiresLater := d.request(t, "run", "w", "p.Q.expiresLater", now)
 	d.setChange(t, expiresLater, `expires_at = $2`, now.AddDate(0, 0, 2))
+	kept := d.request(t, "run", "w", "p.Q.kept", now)
+	d.setChange(t, kept, `state = 'kept', expires_at = 'epoch'`)
 
 	deleted := d.prune(t, retentionLater(now))
-	for id, want := range map[string]bool{reverted: false, expired: false, inRule: true, updated: true, expiresLater: true} {
+	for id, want := range map[string]bool{reverted: false, expired: false, inRule: true, updated: true, expiresLater: true, kept: true} {
 		if _, ok, err := d.repo.GetInterrogationChange(ctx, id); ok != want || err != nil {
 			t.Errorf("%s after retention: stored=%v err=%v, want %v", id, ok, err, want)
 		}

@@ -1599,7 +1599,9 @@ type InterrogationCallEdge struct {
 //
 // Examples: {"applied_at":"2026-11-17T09:41:07Z","checks":["changes_allowed","in_call_graph","application_code","not_already_probed","within_workload_cap","within_run_budget"],"expires_at":"2026-11-17T10:38:03Z","id":"chg_3f9a1c07b2d44e6a8c51","language":"java","requested_at":"2026-11-17T09:41:02Z","round":1,"state":"active","target":{"class_name":"com.claims.intake.ClaimValidator","method_name":"validate"}}
 type InterrogationChange struct {
-	AppliedAt *time.Time `json:"applied_at,omitempty"`
+	// Actions Actions valid right now; each is `POST /interrogation-changes/{id}/<action>`. Empty for a denied proposal and an ended change.
+	Actions   []InterrogationChangeActionName `json:"actions,omitempty"`
+	AppliedAt *time.Time                      `json:"applied_at,omitempty"`
 
 	// BlockReason Why an accepted change is not in the rule. `covered_by_rule`: another rule already provides the probe. Open set.
 	BlockReason InterrogationChangeBlockReason `json:"block_reason,omitempty"`
@@ -1616,7 +1618,7 @@ type InterrogationChange struct {
 	// EndedAt When it left the cluster.
 	EndedAt *time.Time `json:"ended_at,omitempty"`
 
-	// ExpiresAt Stored changes only. Never later than the run's `deadline_at`; moved by extend.
+	// ExpiresAt Temporary stored changes only. Never later than the run's `deadline_at`; moved by extend.
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Id `chg_` + 20 hex characters; the id in `rounds[].proposed`, `rounds[].applied` and `change_id` on events.
@@ -1625,8 +1627,14 @@ type InterrogationChange struct {
 	// Language `java` today.
 	Language string `json:"language"`
 
+	// Lifetime `temporary` changes have `expires_at`; `permanent` ones were kept by a person. Open set.
+	Lifetime InterrogationChangeLifetime `json:"lifetime,omitempty"`
+
 	// Measured Absent until `observe` has read the change's spans, and when none could be read.
 	Measured *InterrogationChangeMeasured `json:"measured,omitempty"`
+
+	// Reason Why the model chose it, in its words, at most 500 characters.
+	Reason string `json:"reason,omitempty"`
 
 	// RequestedAt When the model proposed it.
 	RequestedAt time.Time `json:"requested_at"`
@@ -1634,12 +1642,20 @@ type InterrogationChange struct {
 	// Round Round that proposed it.
 	Round int `json:"round"`
 
-	// State `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by stop-and-revert or because the source is gone (`end_reason`). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. Open set.
+	// State `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by a person, by stop-and-revert or because the source is gone (`end_reason`; `remove` means it was permanent). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. A kept change is live with `lifetime` `permanent`. Open set.
 	State InterrogationChangeState `json:"state"`
 
 	// Target The function a probe instruments. Only the fields its language uses are set.
 	Target InterrogationChangeTarget `json:"target"`
 }
+
+// InterrogationChangeAction Examples: {"actor":"dana"}
+type InterrogationChangeAction struct {
+	Actor string `json:"actor,omitempty"`
+}
+
+// InterrogationChangeActionName An action the UI may offer on a change. `undo` is planned and never offered. Open set.
+type InterrogationChangeActionName = string
 
 // InterrogationChangeBlockReason Why an accepted change is not in the rule. `covered_by_rule`: another rule already provides the probe. Open set.
 type InterrogationChangeBlockReason = string
@@ -1660,13 +1676,13 @@ type InterrogationChangeCounts struct {
 	// Failed Accepted, never took effect.
 	Failed int `json:"failed"`
 
-	// Live `requested` + `blocked` + `active`.
+	// Live `requested` + `blocked` + `active`, kept ones included.
 	Live int `json:"live"`
 
-	// NextExpiryAt Soonest expiry among live changes. The list's "Ends" column.
+	// NextExpiryAt Soonest expiry among live temporary changes. The list's "Ends" column.
 	NextExpiryAt *time.Time `json:"next_expiry_at,omitempty"`
 
-	// Reverted Ended by stop-and-revert, or because the source is gone.
+	// Reverted Ended by a person, by stop-and-revert, or because the source is gone.
 	Reverted int `json:"reverted"`
 
 	// Reverting Ended, still in the rule until the next reconcile.
@@ -1679,11 +1695,81 @@ type InterrogationChangeCounts struct {
 // InterrogationChangeDenyReason Open set.
 type InterrogationChangeDenyReason = string
 
-// InterrogationChangeEndReason Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
+// InterrogationChangeDetail A change as the changes resource serves it, with its run and the actions a person may take on it. The fields it shares with `InterrogationChange` mean the same, but `target`, a string here, and `proposed_at`, which is `requested_at` there.
+//
+// Examples: {"actions":["keep","revert"],"applied_at":"2026-11-17T09:41:07Z","category":"observability","checks":["changes_allowed","in_call_graph","application_code","not_already_probed","within_workload_cap","within_run_budget"],"expires_at":"2026-11-17T10:38:00Z","id":"chg_3f9a1c07b2d44e6a8c51","interrogation":{"display_id":"INT-0B6F6C1E","id":"0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21","round":2,"status":"running","title":"Why is claim submission slow for some users?","trigger":{"actor":"alon","kind":"manual"}},"interrogation_id":"0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21","lifetime":"temporary","probe":{"class_name":"com.claims.intake.ClaimValidator","language":"java","method_name":"validate"},"proposed_at":"2026-11-17T09:41:02Z","reason":"ClaimValidator.validate is called from ClaimController.submit and sits before FraudClient.score.","round":1,"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"},"state":"active","target":"com.claims.intake.ClaimValidator.validate"}
+type InterrogationChangeDetail struct {
+	// Actions Actions valid right now, so the UI does not re-derive the rules.
+	Actions   []InterrogationChangeActionName `json:"actions"`
+	AppliedAt *time.Time                      `json:"applied_at,omitempty"`
+
+	// BlockReason Why an accepted change is not in the rule. `covered_by_rule`: another rule already provides the probe. Open set.
+	BlockReason InterrogationChangeBlockReason `json:"block_reason,omitempty"`
+
+	// Category Open set.
+	Category InterrogationChangeCategory `json:"category,omitempty"`
+
+	// Checks Checks passed, in order. All six for a stored change; those before the failing one for a denied proposal.
+	Checks []InterrogationChangeCheck `json:"checks"`
+
+	// DenyReason Open set.
+	DenyReason InterrogationChangeDenyReason `json:"deny_reason,omitempty"`
+
+	// EndReason Set once the change is ending or ended. For `failed` it is why the change never took effect.
+	EndReason InterrogationChangeEndReason `json:"end_reason,omitempty"`
+
+	// EndedAt When it left the cluster.
+	EndedAt *time.Time `json:"ended_at,omitempty"`
+
+	// ExpiresAt Temporary stored changes only. Moved by extend.
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// Id `chg_` + 20 hex characters; the same proposal always gets the same id.
+	Id              string                  `json:"id"`
+	Interrogation   *InterrogationChangeRef `json:"interrogation,omitempty"`
+	InterrogationId string                  `json:"interrogation_id"`
+	KeptAt          *time.Time              `json:"kept_at,omitempty"`
+
+	// KeptBy The actor of the keep, when it named one.
+	KeptBy string `json:"kept_by,omitempty"`
+
+	// Lifetime `temporary` changes have `expires_at`; `permanent` ones were kept by a person. Open set.
+	Lifetime InterrogationChangeLifetime `json:"lifetime"`
+	Probe    *InterrogationProbe         `json:"probe,omitempty"`
+
+	// ProposedAt When the model proposed it.
+	ProposedAt time.Time `json:"proposed_at"`
+
+	// Reason Why the model chose it, in its words, at most 500 characters.
+	Reason string `json:"reason"`
+
+	// Round Round that proposed it.
+	Round int `json:"round"`
+
+	// Source The workload a run targets. All containers of the workload.
+	Source InterrogationSource `json:"source"`
+
+	// State `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by a person, by stop-and-revert or because the source is gone (`end_reason`; `remove` means it was permanent). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. A kept change is live with `lifetime` `permanent`. Open set.
+	State InterrogationChangeState `json:"state"`
+
+	// Target What it changes; for a probe the function, e.g. `com.acme.Foo.bar`.
+	Target string `json:"target"`
+}
+
+// InterrogationChangeEndReason Why a change ended. `revert`: a person reverted a temporary change. `remove`: a person removed a permanent one. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
 type InterrogationChangeEndReason = string
 
 // InterrogationChangeKind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
 type InterrogationChangeKind = string
+
+// InterrogationChangeLifetime `temporary` changes have `expires_at`; `permanent` ones were kept by a person. Open set.
+type InterrogationChangeLifetime = string
+
+// InterrogationChangeList defines model for InterrogationChangeList.
+type InterrogationChangeList struct {
+	Count int                         `json:"count"`
+	Items []InterrogationChangeDetail `json:"items"`
+}
 
 // InterrogationChangeMeasured What the spans of a probe measured in the transactions in scope. Times are milliseconds.
 type InterrogationChangeMeasured struct {
@@ -1710,7 +1796,21 @@ type InterrogationChangeMeasured struct {
 	WindowSeconds int `json:"window_seconds"`
 }
 
-// InterrogationChangeState `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by stop-and-revert or because the source is gone (`end_reason`). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. Open set.
+// InterrogationChangeRef The interrogation that made the change, enough for a row. Absent once the run aged out.
+type InterrogationChangeRef struct {
+	DisplayId string `json:"display_id"`
+	Id        string `json:"id"`
+
+	// Round The run's current round.
+	Round int `json:"round"`
+
+	// Status `queued`: recorded, waiting for the leader. `running`: rounds in progress. `stopping`: a stop was recorded, the run is winding down. `completed`: ended on its own (`end_reason` says why). `stopped`: ended by a person. `failed`: ended on an error (`error` has the text). Terminal: `completed`, `stopped`, `failed`. Open set: treat an unknown value as non-terminal and keep polling. `queued` normally lasts about 2 s, up to about 20 s after a leader change, and `stopping` a few seconds; past 30 s (from `created_at`, or from `stop.requested_at`) show that it is taking longer than expected. A run that cannot finish is closed as `failed` (`interrupted`) 5 minutes after its deadline. A run that has been `queued` for 5 minutes is ended the same way by the next start on its source.
+	Status  InterrogationStatus  `json:"status"`
+	Title   string               `json:"title"`
+	Trigger InterrogationTrigger `json:"trigger"`
+}
+
+// InterrogationChangeState `denied`: proposed by the model, refused by validation (`deny_reason`); not a stored change. `requested`: accepted, waiting to be written to the instrumentation rule. `blocked`: accepted, but it cannot be placed in the rule (`block_reason`). `active`: in the rule. `reverting`: ended, still in the rule until the next reconcile. `reverted`: ended by a person, by stop-and-revert or because the source is gone (`end_reason`; `remove` means it was permanent). `expired`: its time ran out (`end_reason` `expired`). `failed`: given up before it took effect (`end_reason` says why). Live = `requested`, `blocked`, `active`. A kept change is live with `lifetime` `permanent`. Open set.
 type InterrogationChangeState = string
 
 // InterrogationChangeTarget The function a probe instruments. Only the fields its language uses are set.
@@ -1739,14 +1839,36 @@ type InterrogationChangesBySource struct {
 	Source InterrogationSource `json:"source"`
 }
 
-// InterrogationChangesSummary Examples: {"by_kind":{"custom_instrumentation":3},"by_source":[{"language":"java","live":3,"max_probes":20,"probes":3,"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"}}],"live":3,"next_expiry_at":"2026-11-17T10:38:00Z","next_expiry_change_id":"chg_3f9a1c07b2d44e6a8c51"}
+// InterrogationChangesRevertAll defines model for InterrogationChangesRevertAll.
+type InterrogationChangesRevertAll struct {
+	Actor string `json:"actor,omitempty"`
+
+	// Source Only this source. Absent means the whole cluster.
+	Source InterrogationSource `json:"source,omitempty"`
+}
+
+// InterrogationChangesReverted defines model for InterrogationChangesReverted.
+type InterrogationChangesReverted struct {
+	// Count Changes ended by this call.
+	Count int `json:"count"`
+}
+
+// InterrogationChangesSummary Examples: {"by_kind":{"custom_instrumentation":3},"by_source":[{"language":"java","live":3,"max_probes":20,"probes":3,"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"}}],"live":3,"next_expiry_at":"2026-11-17T10:38:00Z","next_expiry_change_id":"chg_3f9a1c07b2d44e6a8c51","permanent":1,"temporary":2}
 type InterrogationChangesSummary struct {
 	// ByKind Live changes per `InterrogationChangeKind`.
-	ByKind             map[string]int                 `json:"by_kind"`
-	BySource           []InterrogationChangesBySource `json:"by_source"`
-	Live               int                            `json:"live"`
-	NextExpiryAt       *time.Time                     `json:"next_expiry_at,omitempty"`
-	NextExpiryChangeId string                         `json:"next_expiry_change_id,omitempty"`
+	ByKind   map[string]int                 `json:"by_kind"`
+	BySource []InterrogationChangesBySource `json:"by_source"`
+	Live     int                            `json:"live"`
+
+	// NextExpiryAt Soonest expiry among live temporary changes.
+	NextExpiryAt       *time.Time `json:"next_expiry_at,omitempty"`
+	NextExpiryChangeId string     `json:"next_expiry_change_id,omitempty"`
+
+	// Permanent Live and kept permanently.
+	Permanent int `json:"permanent"`
+
+	// Temporary Live and temporary.
+	Temporary int `json:"temporary"`
 }
 
 // InterrogationEndReason Why the run ended; empty while open. `done`: the model decided it has the answer. `max_rounds`, `max_model_calls`, `time_limit`, `probe_budget`: a limit was reached. `changes_denied`: the model was not done and every probe it asked for was refused. `no_evidence`: no call graph was found for the transactions in scope. `stopped_by_user`. `source_gone`: the source is no longer instrumented. `model_unavailable`: the gateway kept refusing until the deadline. `interrupted`: the run was written by another version of the server and could not be continued. `error`: anything else. Status by reason: `completed` for the first seven, `stopped` for `stopped_by_user`, `failed` for the rest. Open set.
@@ -1772,16 +1894,17 @@ type InterrogationErrorDetails struct {
 	// Option With `not_supported_yet`: `<field>=<value>` for an option value (`goal=security`, `allow_changes=kernel_spans`), or the field path for a field (`budget.max_added_spans_per_min`).
 	Option string `json:"option,omitempty"`
 
-	// Reason `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. Open set.
+	// Reason `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. `invalid_change_state` (409): the change is not in a state the action accepts; `state` has the current one. Open set.
 	Reason   InterrogationErrorReason `json:"reason"`
 	Requires string                   `json:"requires,omitempty"`
+	State    string                   `json:"state,omitempty"`
 
 	// Value With `invalid_argument` on a list: the element at fault, e.g. the unknown id in `transaction_ids`.
 	Value                string                 `json:"value,omitempty"`
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
-// InterrogationErrorReason `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. Open set.
+// InterrogationErrorReason `source_busy` (409): the source has an open run; `interrogation_id` and `display_id` name it. `at_capacity` (503): too many open runs, `open` and `max_open`; or too many runs started in the last 24 hours, `max_per_day`. `not_enabled` (503): autopilot is off; `requires`. `not_ready` (503): tables or the runner are not available yet; retry. `not_supported_yet` (422): the option named in `option` is in the contract but not built. `no_evidence` (422): the source has no call-graph evidence. `invalid_argument` (422): `field` names the bad field. `not_running` (409): the run is not open, is stopping, or is past its deadline. `invalid_change_state` (409): the change is not in a state the action accepts; `state` has the current one. Open set.
 type InterrogationErrorReason = string
 
 // InterrogationErrorResponse The standard `ErrorResponse` envelope with `error.details` typed: the existing `ErrorBody.details` is an untyped object, and this schema says what this tag puts in it. `code` keeps the existing closed set; the typed reason is in `details.reason`. The server writes the one `ErrorResponse` type (`x-go-type`).
@@ -1865,7 +1988,7 @@ type InterrogationEventChangeFailedPayload struct {
 	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
 	Kind InterrogationChangeKind `json:"kind"`
 
-	// Reason Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
+	// Reason Why a change ended. `revert`: a person reverted a temporary change. `remove`: a person removed a permanent one. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
 	Reason InterrogationChangeEndReason `json:"reason"`
 	Target string                       `json:"target"`
 }
@@ -1927,7 +2050,7 @@ type InterrogationEventChangeRevertedPayload struct {
 	// By Actor of the stop, when it named one.
 	By string `json:"by,omitempty"`
 
-	// EndReason Why a change ended. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
+	// EndReason Why a change ended. `revert`: a person reverted a temporary change. `remove`: a person removed a permanent one. `stop`: stop with revert. `expired`: its time ran out. `source_gone`: the source is no longer instrumented. `not_applied_in_time` and the block reasons: the change never took effect (`state` `failed`). Open set.
 	EndReason InterrogationChangeEndReason `json:"end_reason"`
 
 	// Kind `custom_instrumentation` is supported; the others are in the contract and rejected at start. Open set.
@@ -2409,7 +2532,7 @@ type InterrogationSummary struct {
 	// AvgRounds Mean rounds of the runs counted in `concluded`. Absent when there are none.
 	AvgRounds *float32 `json:"avg_rounds,omitempty"`
 
-	// Changes Examples: {"by_kind":{"custom_instrumentation":3},"by_source":[{"language":"java","live":3,"max_probes":20,"probes":3,"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"}}],"live":3,"next_expiry_at":"2026-11-17T10:38:00Z","next_expiry_change_id":"chg_3f9a1c07b2d44e6a8c51"}
+	// Changes Examples: {"by_kind":{"custom_instrumentation":3},"by_source":[{"language":"java","live":3,"max_probes":20,"probes":3,"source":{"kind":"Deployment","name":"claims-intake","namespace":"claims-demo"}}],"live":3,"next_expiry_at":"2026-11-17T10:38:00Z","next_expiry_change_id":"chg_3f9a1c07b2d44e6a8c51","permanent":1,"temporary":2}
 	Changes InterrogationChangesSummary `json:"changes"`
 
 	// Concluded Of those, the ended ones, any terminal status.
@@ -3245,6 +3368,9 @@ type FromTime = string
 // IntegrationId defines model for IntegrationId.
 type IntegrationId = string
 
+// InterrogationChangeId defines model for InterrogationChangeId.
+type InterrogationChangeId = string
+
 // InterrogationId defines model for InterrogationId.
 type InterrogationId = string
 
@@ -3384,6 +3510,12 @@ type ListIntegrationAttemptsParams struct {
 type ListIntegrationDeliveriesParams struct {
 	State DeliveryState `form:"state,omitempty" json:"state,omitempty"`
 	Limit int           `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListInterrogationChangesParams defines parameters for ListInterrogationChanges.
+type ListInterrogationChangesParams struct {
+	// Limit Default 200; the server clamps to 1000.
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListInterrogationsParams defines parameters for ListInterrogations.
@@ -3554,6 +3686,21 @@ type UpdateIntegrationJSONRequestBody = IntegrationWrite
 // RetryIntegrationDeliveriesJSONRequestBody defines body for RetryIntegrationDeliveries for application/json ContentType.
 type RetryIntegrationDeliveriesJSONRequestBody = DeliveryRetryRequest
 
+// RevertAllInterrogationChangesJSONRequestBody defines body for RevertAllInterrogationChanges for application/json ContentType.
+type RevertAllInterrogationChangesJSONRequestBody = InterrogationChangesRevertAll
+
+// KeepInterrogationChangeJSONRequestBody defines body for KeepInterrogationChange for application/json ContentType.
+type KeepInterrogationChangeJSONRequestBody = InterrogationChangeAction
+
+// RemoveInterrogationChangeJSONRequestBody defines body for RemoveInterrogationChange for application/json ContentType.
+type RemoveInterrogationChangeJSONRequestBody = InterrogationChangeAction
+
+// RevertInterrogationChangeJSONRequestBody defines body for RevertInterrogationChange for application/json ContentType.
+type RevertInterrogationChangeJSONRequestBody = InterrogationChangeAction
+
+// UndoInterrogationChangeJSONRequestBody defines body for UndoInterrogationChange for application/json ContentType.
+type UndoInterrogationChangeJSONRequestBody = InterrogationChangeAction
+
 // StartInterrogationJSONRequestBody defines body for StartInterrogation for application/json ContentType.
 type StartInterrogationJSONRequestBody = InterrogationStart
 
@@ -3693,6 +3840,14 @@ func (a *InterrogationErrorDetails) UnmarshalJSON(b []byte) error {
 		delete(object, "requires")
 	}
 
+	if raw, found := object["state"]; found {
+		err = json.Unmarshal(raw, &a.State)
+		if err != nil {
+			return fmt.Errorf("error reading 'state': %w", err)
+		}
+		delete(object, "state")
+	}
+
 	if raw, found := object["value"]; found {
 		err = json.Unmarshal(raw, &a.Value)
 		if err != nil {
@@ -3763,6 +3918,11 @@ func (a InterrogationErrorDetails) MarshalJSON() ([]byte, error) {
 	object["requires"], err = json.Marshal(a.Requires)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'requires': %w", err)
+	}
+
+	object["state"], err = json.Marshal(a.State)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'state': %w", err)
 	}
 
 	object["value"], err = json.Marshal(a.Value)

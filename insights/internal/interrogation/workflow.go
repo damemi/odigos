@@ -229,7 +229,8 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 	// builder. Its output is the model's user message.
 	gather := node("gather", func(ctx agent.Context, st *State, _ Control, _ any) (*session.Event, error) {
 		t := now()
-		// A probe of this run may have ended because its source is gone.
+		// A probe of this run may have ended: a person reverted it, or its
+		// source is gone.
 		evs, err := syncChanges(ctx, dp.Changes, st, t)
 		if err != nil {
 			return nil, err
@@ -478,9 +479,13 @@ func BuildWorkflow(dp Deps) (agent.Agent, error) {
 			if err := dp.Changes.RevertInterrogationProbes(ctx, st.ID, t); err != nil {
 				return nil, err
 			}
-			// From state, not from the rows: a repeat of this node after a
-			// failure finds them already reverted.
-			evs = append(evs, st.revertProbes(st.Stop.Actor, t)...)
+			// From the rows: a probe a person kept stays, and one a person
+			// reverted keeps that reason.
+			reverted, err := syncChanges(ctx, dp.Changes, st, t)
+			if err != nil {
+				return nil, err
+			}
+			evs = append(evs, reverted...)
 		}
 		if r := st.currentRound(); r != nil && r.State == RoundInProgress {
 			evs = append(evs, st.closeRound(RoundEnded, t))

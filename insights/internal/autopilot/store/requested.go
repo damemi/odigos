@@ -13,8 +13,10 @@ import (
 // States of a requested probe. Only the run and the API set them; the
 // reconciler reads them.
 const (
-	// ProbeApproved is a probe in the rule until ExpiresAt.
+	// ProbeApproved is a temporary probe, in the rule until ExpiresAt.
 	ProbeApproved = "approved"
+	// ProbeKept is a probe a person kept: it has no expiry.
+	ProbeKept = "kept"
 	// ProbeReverted is a probe that ended; EndReason says why.
 	ProbeReverted = "reverted"
 )
@@ -30,8 +32,8 @@ var (
 // flagged, well past the API server's one minute request timeout.
 const placingTimeout = 5 * time.Minute
 
-// maxProbeLifetime bounds a probe's expiry whatever its run's deadline
-// says.
+// maxProbeLifetime bounds a temporary probe's expiry whatever its run's
+// deadline says.
 const maxProbeLifetime = 24 * time.Hour
 
 // RequestedProbe is a probe an interrogation asked for: a row of
@@ -44,6 +46,8 @@ type RequestedProbe struct {
 	Round           int
 	State           string
 	ExpiresAt       time.Time
+	KeptBy          string
+	KeptAt          time.Time
 	EndReason       string
 
 	// Written only by the reconciler.
@@ -59,7 +63,7 @@ type RequestedProbe struct {
 
 // Live reports whether the probe should be in the workload's rule at now.
 func (p RequestedProbe) Live(now time.Time) bool {
-	return p.State == ProbeApproved && p.ExpiresAt.After(now)
+	return p.State == ProbeKept || (p.State == ProbeApproved && p.ExpiresAt.After(now))
 }
 
 const requestedProbeColumns = `
@@ -67,7 +71,7 @@ const requestedProbeColumns = `
 	namespace, workload_kind, workload_name, container_name, transaction_id,
 	language, target, category, function, why,
 	class_name, method_name, package_name, function_name, receiver_name, receiver_method_name, signature,
-	analysis_revision, state, expires_at, end_reason,
+	analysis_revision, state, expires_at, kept_by, kept_at, end_reason,
 	in_rule, being_placed, place_gen, applied_at, removed_at, block_reason, updated_at`
 
 func scanRequestedProbe(row pgx.Row) (RequestedProbe, error) {
@@ -78,7 +82,7 @@ func scanRequestedProbe(row pgx.Row) (RequestedProbe, error) {
 		&p.Namespace, &p.WorkloadKind, &p.WorkloadName, &p.ContainerName, &txID,
 		&p.Language, &p.Target, &p.Category, &p.Function, &p.Why,
 		&p.ClassName, &p.MethodName, &p.PackageName, &p.FunctionName, &p.ReceiverName, &p.ReceiverMethodName, &p.Signature,
-		&p.AnalysisRevision, &p.State, &p.ExpiresAt, &p.EndReason,
+		&p.AnalysisRevision, &p.State, &p.ExpiresAt, &p.KeptBy, &p.KeptAt, &p.EndReason,
 		&p.InRule, &p.BeingPlaced, &p.PlaceGen, &p.AppliedAt, &p.RemovedAt, &p.BlockReason, &p.UpdatedAt,
 	)
 	p.TransactionID = strconv.FormatInt(txID, 10)
@@ -154,7 +158,7 @@ FOR UPDATE OF r FOR SHARE OF c
 			if _, err := tx.Exec(ctx, `
 INSERT INTO interrogation_requested_probes (`+requestedProbeColumns+`)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
-	$22, 'approved', $23, '', false, false, 0, 'epoch', 'epoch', '', $24)
+	$22, 'approved', $23, '', 'epoch', '', false, false, 0, 'epoch', 'epoch', '', $24)
 ON CONFLICT (change_id) DO NOTHING`,
 				p.ChangeID, p.InterrogationID, p.Round, p.FirstSeen,
 				p.Namespace, p.WorkloadKind, p.WorkloadName, p.ContainerName, txID,
@@ -205,7 +209,7 @@ func (c *Client) ListRequestedProbes(ctx context.Context, now time.Time) ([]Requ
 	rows, err := c.pool.Query(ctx, `
 SELECT `+requestedProbeColumns+`
 FROM interrogation_requested_probes
-WHERE in_rule OR being_placed OR (state = 'approved' AND expires_at > $1)
+WHERE in_rule OR being_placed OR state = 'kept' OR (state = 'approved' AND expires_at > $1)
 ORDER BY namespace COLLATE "C", workload_kind COLLATE "C", workload_name COLLATE "C",
 	first_seen, language COLLATE "C", target COLLATE "C"
 `, now)
@@ -312,8 +316,8 @@ WHERE change_id = ANY($1) AND block_reason <> $2
 	return nil
 }
 
-// EndWorkloadProbes ends every approved probe of a workload that is no longer
-// instrumented. ContainerName is ignored.
+// EndWorkloadProbes ends every approved and kept probe of a workload that is
+// no longer instrumented. ContainerName is ignored.
 func (c *Client) EndWorkloadProbes(ctx context.Context, w SourceKey, now time.Time) error {
 	if c == nil || c.pool == nil {
 		return fmt.Errorf("autopilot store: nil pool")
@@ -324,7 +328,7 @@ func (c *Client) EndWorkloadProbes(ctx context.Context, w SourceKey, now time.Ti
 	if _, err := c.pool.Exec(ctx, `
 UPDATE interrogation_requested_probes
 SET state = 'reverted', end_reason = 'source_gone', updated_at = $4
-WHERE namespace = $1 AND workload_kind = $2 AND workload_name = $3 AND state = 'approved'
+WHERE namespace = $1 AND workload_kind = $2 AND workload_name = $3 AND state IN ('approved', 'kept')
 `, w.Namespace, w.WorkloadKind, w.WorkloadName, now); err != nil {
 		return fmt.Errorf("end workload probes: %w", err)
 	}

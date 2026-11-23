@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -72,6 +73,8 @@ const (
 	reasonNoEvidence      = "no_evidence"
 	reasonInvalidArgument = "invalid_argument"
 	reasonNotRunning      = "not_running"
+
+	reasonInvalidChangeState = "invalid_change_state"
 )
 
 // interrogationOption is a value of an option set: whether this build has
@@ -153,7 +156,8 @@ func (e *interrogationError) Error() string { return e.err.Error() }
 func (e *interrogationError) Unwrap() error { return e.err }
 
 var (
-	errInterrogationNotFound = errors.New("interrogation not found")
+	errInterrogationNotFound       = errors.New("interrogation not found")
+	errInterrogationChangeNotFound = errors.New("interrogation change not found")
 
 	errInterrogationsNotEnabled = &interrogationError{
 		status:  http.StatusServiceUnavailable,
@@ -227,7 +231,7 @@ func writeInterrogationError(c *gin.Context, err error) {
 	var ie *interrogationError
 	switch {
 	case errors.As(err, &ie):
-	case errors.Is(err, errInterrogationNotFound):
+	case errors.Is(err, errInterrogationNotFound), errors.Is(err, errInterrogationChangeNotFound):
 		writeError(c, http.StatusNotFound, err)
 		return
 	case storeUnavailable(err):
@@ -793,6 +797,186 @@ func (a *API) InterrogationSourceTransactions(ctx context.Context, params apityp
 	return apimap.InterrogationSourceTransactionList(txs), nil
 }
 
+// ---------- changes ----------
+
+// InterrogationRunChanges returns every change of one run, the proposals it
+// denied included.
+func (a *API) InterrogationRunChanges(ctx context.Context, id string) (apitypes.InterrogationChangeList, error) {
+	cfg, err := a.interrogationsOrErr()
+	if err != nil {
+		return apitypes.InterrogationChangeList{}, err
+	}
+	if err := checkInterrogationID(id); err != nil {
+		return apitypes.InterrogationChangeList{}, err
+	}
+	now := cfg.now()
+	in, err := a.loadInterrogation(ctx, id, now)
+	if err != nil {
+		return apitypes.InterrogationChangeList{}, err
+	}
+	changes, err := a.Repo.ListInterrogationChanges(ctx, id)
+	if err != nil {
+		return apitypes.InterrogationChangeList{}, err
+	}
+	return apimap.InterrogationRunChanges(in, changes, now)
+}
+
+// ListInterrogationChanges returns the changes in the cluster now.
+func (a *API) ListInterrogationChanges(ctx context.Context, limit int) (apitypes.InterrogationChangeList, error) {
+	cfg, err := a.interrogationsOrErr()
+	if err != nil {
+		return apitypes.InterrogationChangeList{}, err
+	}
+	now := cfg.now()
+	changes, err := a.Repo.ListClusterInterrogationChanges(ctx, clampTo(limit, defaultInterrogationReadLimit, maxInterrogationReadLimit), now)
+	if err != nil {
+		return apitypes.InterrogationChangeList{}, err
+	}
+	return apimap.InterrogationChangeList(changes, now), nil
+}
+
+// InterrogationChangesSummary returns the totals of the live changes.
+func (a *API) InterrogationChangesSummary(ctx context.Context) (apitypes.InterrogationChangesSummary, error) {
+	cfg, err := a.interrogationsOrErr()
+	if err != nil {
+		return apitypes.InterrogationChangesSummary{}, err
+	}
+	s, err := a.Repo.InterrogationChangesSummary(ctx, cfg.now())
+	if err != nil {
+		return apitypes.InterrogationChangesSummary{}, err
+	}
+	return apimap.FromInterrogationChangesSummary(s, cfg.MaxProbesPerWorkload), nil
+}
+
+// GetInterrogationChange returns one stored change. A denied proposal is not
+// one.
+func (a *API) GetInterrogationChange(ctx context.Context, changeID string) (apitypes.InterrogationChangeDetail, error) {
+	cfg, err := a.interrogationsOrErr()
+	if err != nil {
+		return apitypes.InterrogationChangeDetail{}, err
+	}
+	c, err := a.loadInterrogationChange(ctx, changeID)
+	if err != nil {
+		return apitypes.InterrogationChangeDetail{}, err
+	}
+	return apimap.FromInterrogationChange(c, cfg.now()), nil
+}
+
+// changeIDPattern is the form of every change id (loop.ChangeID).
+var changeIDPattern = regexp.MustCompile(`^chg_[0-9a-f]{20}$`)
+
+func (a *API) loadInterrogationChange(ctx context.Context, changeID string) (repo.InterrogationChange, error) {
+	if !changeIDPattern.MatchString(changeID) {
+		return repo.InterrogationChange{}, errInterrogationChangeNotFound
+	}
+	c, ok, err := a.Repo.GetInterrogationChange(ctx, changeID)
+	if err != nil {
+		return repo.InterrogationChange{}, err
+	}
+	if !ok {
+		return repo.InterrogationChange{}, errInterrogationChangeNotFound
+	}
+	return c, nil
+}
+
+// ActOnInterrogationChange keeps, reverts or removes a change (action is
+// repo.ChangeKeep, ChangeRevert or ChangeRemove) and returns it with the
+// action's success status. Each is one conditional write of the change's
+// row, which any replica may make whether or not its run is still open: the
+// reconciler applies it, and a run still open reads it on its next round.
+// Repeating an action that took effect succeeds; an action the change's
+// state does not allow answers 409.
+func (a *API) ActOnInterrogationChange(ctx context.Context, changeID, action, actor string) (apitypes.InterrogationChangeDetail, int, error) {
+	cfg, err := a.interrogationsOrErr()
+	if err != nil {
+		return apitypes.InterrogationChangeDetail{}, 0, err
+	}
+	if err := checkActor(actor); err != nil {
+		return apitypes.InterrogationChangeDetail{}, 0, err
+	}
+	now := cfg.now()
+	c, err := a.loadInterrogationChange(ctx, changeID)
+	if err != nil {
+		return apitypes.InterrogationChangeDetail{}, 0, err
+	}
+	if slices.Contains(c.Actions(now), action) {
+		var wrote bool
+		switch action {
+		case repo.ChangeKeep:
+			c, wrote, err = a.Repo.KeepInterrogationChange(ctx, changeID, actor, now)
+		case repo.ChangeRevert:
+			c, wrote, err = a.Repo.RevertInterrogationChange(ctx, changeID, repo.ChangeApproved, repo.ChangeRevert, now)
+		case repo.ChangeRemove:
+			c, wrote, err = a.Repo.RevertInterrogationChange(ctx, changeID, repo.ChangeKept, repo.ChangeRemove, now)
+		}
+		if err != nil {
+			return apitypes.InterrogationChangeDetail{}, 0, err
+		}
+		// Another write got there first: answer from the row as it is now.
+		if !wrote {
+			if c, err = a.loadInterrogationChange(ctx, changeID); err != nil {
+				return apitypes.InterrogationChangeDetail{}, 0, err
+			}
+		}
+	}
+	status := http.StatusAccepted
+	done := c.Desired == repo.ChangeReverted && c.EndReason == action
+	if action == repo.ChangeKeep {
+		status, done = http.StatusOK, c.Desired == repo.ChangeKept
+	}
+	if !done {
+		state := c.State(now)
+		return apitypes.InterrogationChangeDetail{}, 0, &interrogationError{
+			status:  http.StatusConflict,
+			reason:  reasonInvalidChangeState,
+			details: map[string]any{"state": state},
+			err:     fmt.Errorf("change %s is %s; %s does not apply", changeID, state, action),
+		}
+	}
+	return apimap.FromInterrogationChange(c, now), status, nil
+}
+
+// UndoInterrogationChange is in the contract and not built.
+func (a *API) UndoInterrogationChange(ctx context.Context, changeID string) error {
+	if _, err := a.interrogationsOrErr(); err != nil {
+		return err
+	}
+	if _, err := a.loadInterrogationChange(ctx, changeID); err != nil {
+		return err
+	}
+	return notSupported("operation=undoInterrogationChange")
+}
+
+// RevertAllInterrogationChanges reverts every live temporary change, of one
+// source when it is given.
+func (a *API) RevertAllInterrogationChanges(ctx context.Context, body apitypes.InterrogationChangesRevertAll) (apitypes.InterrogationChangesReverted, error) {
+	cfg, err := a.interrogationsOrErr()
+	if err != nil {
+		return apitypes.InterrogationChangesReverted{}, err
+	}
+	src := repo.InterrogationSource{Namespace: body.Source.Namespace, Kind: body.Source.Kind, Name: body.Source.Name}
+	if src != (repo.InterrogationSource{}) {
+		for _, f := range []struct{ field, value string }{
+			{"source.namespace", src.Namespace}, {"source.kind", src.Kind}, {"source.name", src.Name},
+		} {
+			if f.value == "" {
+				return apitypes.InterrogationChangesReverted{}, invalidArgument(f.field, "%s is required with a source", f.field)
+			}
+			if err := checkNoNUL(f.field, f.value); err != nil {
+				return apitypes.InterrogationChangesReverted{}, err
+			}
+		}
+	}
+	if err := checkActor(body.Actor); err != nil {
+		return apitypes.InterrogationChangesReverted{}, err
+	}
+	n, err := a.Repo.RevertAllInterrogationChanges(ctx, src, cfg.now())
+	if err != nil {
+		return apitypes.InterrogationChangesReverted{}, err
+	}
+	return apitypes.InterrogationChangesReverted{Count: int(n)}, nil
+}
+
 func clampTo(limit, def, maxLimit int) int {
 	switch {
 	case limit <= 0:
@@ -950,4 +1134,82 @@ func (a *API) extendInterrogation(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, out)
+}
+
+func (a *API) listInterrogationRunChanges(c *gin.Context) {
+	out, err := a.InterrogationRunChanges(c.Request.Context(), c.Param("interrogation_id"))
+	if err != nil {
+		writeInterrogationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (a *API) listInterrogationChanges(c *gin.Context) {
+	var params apitypes.ListInterrogationChangesParams
+	if err := c.ShouldBindQuery(&params); err != nil {
+		writeBindError(c, err)
+		return
+	}
+	out, err := a.ListInterrogationChanges(c.Request.Context(), params.Limit)
+	if err != nil {
+		writeInterrogationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (a *API) getInterrogationChangesSummary(c *gin.Context) {
+	out, err := a.InterrogationChangesSummary(c.Request.Context())
+	if err != nil {
+		writeInterrogationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (a *API) revertAllInterrogationChanges(c *gin.Context) {
+	var body apitypes.InterrogationChangesRevertAll
+	if !bindOptionalJSON(c, &body) {
+		return
+	}
+	out, err := a.RevertAllInterrogationChanges(c.Request.Context(), body)
+	if err != nil {
+		writeInterrogationError(c, err)
+		return
+	}
+	c.JSON(http.StatusAccepted, out)
+}
+
+func (a *API) getInterrogationChange(c *gin.Context) {
+	out, err := a.GetInterrogationChange(c.Request.Context(), c.Param("change_id"))
+	if err != nil {
+		writeInterrogationError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// interrogationChangeAction serves POST /interrogation-changes/{id}/<action>.
+func (a *API) interrogationChangeAction(action string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body apitypes.InterrogationChangeAction
+		if !bindOptionalJSON(c, &body) {
+			return
+		}
+		out, status, err := a.ActOnInterrogationChange(c.Request.Context(), c.Param("change_id"), action, body.Actor)
+		if err != nil {
+			writeInterrogationError(c, err)
+			return
+		}
+		c.JSON(status, out)
+	}
+}
+
+func (a *API) undoInterrogationChange(c *gin.Context) {
+	var body apitypes.InterrogationChangeAction
+	if !bindOptionalJSON(c, &body) {
+		return
+	}
+	writeInterrogationError(c, a.UndoInterrogationChange(c.Request.Context(), c.Param("change_id")))
 }

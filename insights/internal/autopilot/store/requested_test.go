@@ -469,10 +469,12 @@ func TestListRequestedProbes(t *testing.T) {
 	newer := insert("run-a", "com.acme.A.newer", now.Add(time.Second))
 	older := insert("run-a", "com.acme.A.older", now)
 	otherWorkload := insert("run-b", "com.acme.B.b", now)
+	kept := insert("run-a", "com.acme.A.kept", now.Add(2*time.Second))
 	expired := insert("run-a", "com.acme.A.expired", now.Add(3*time.Second))
 	expiredInRule := insert("run-a", "com.acme.A.inrule", now.Add(4*time.Second))
 	reverted := insert("run-a", "com.acme.A.reverted", now.Add(5*time.Second))
 
+	e.exec(t, `UPDATE interrogation_requested_probes SET state = 'kept', expires_at = 'epoch' WHERE change_id = $1`, kept.ChangeID)
 	e.exec(t, `UPDATE interrogation_requested_probes SET expires_at = $2 WHERE change_id = ANY($1)`,
 		[]string{expired.ChangeID, expiredInRule.ChangeID}, now)
 	e.exec(t, `UPDATE interrogation_requested_probes SET in_rule = true WHERE change_id = $1`, expiredInRule.ChangeID)
@@ -482,13 +484,16 @@ func TestListRequestedProbes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{older.ChangeID, newer.ChangeID, expiredInRule.ChangeID, otherWorkload.ChangeID}
+	want := []string{older.ChangeID, newer.ChangeID, kept.ChangeID, expiredInRule.ChangeID, otherWorkload.ChangeID}
 	if strings.Join(changeIDs(got), " ") != strings.Join(want, " ") {
 		t.Fatalf("listed = %v, want %v", changeIDs(got), want)
 	}
 	for _, p := range got {
 		if p.ChangeID == expiredInRule.ChangeID && p.Live(now) {
 			t.Fatal("expired row reported live")
+		}
+		if p.ChangeID == kept.ChangeID && !p.Live(now.Add(48*time.Hour)) {
+			t.Fatal("kept row not live")
 		}
 	}
 }
@@ -500,19 +505,23 @@ func TestEndWorkloadProbes(t *testing.T) {
 	e.startRun(t, "run-1", now, 3600)
 	e.startRun(t, "run-2", now, 3600)
 	approved, _ := e.db.InsertRequestedProbe(ctx, requestedProbe("run-1", "com.acme.A.a"), 5, now)
+	kept, _ := e.db.InsertRequestedProbe(ctx, requestedProbe("run-1", "com.acme.A.kept"), 5, now)
 	reverted, _ := e.db.InsertRequestedProbe(ctx, requestedProbe("run-1", "com.acme.A.reverted"), 5, now)
 	other, err := e.db.InsertRequestedProbe(ctx, requestedProbe("run-2", "com.acme.A.a"), 5, now)
 	if err != nil {
 		t.Fatal(err)
 	}
+	e.exec(t, `UPDATE interrogation_requested_probes SET state = 'kept' WHERE change_id = $1`, kept.ChangeID)
 	e.exec(t, `UPDATE interrogation_requested_probes SET state = 'reverted', end_reason = 'stop' WHERE change_id = $1`, reverted.ChangeID)
 
 	later := now.Add(time.Minute)
 	if err := e.db.EndWorkloadProbes(ctx, store.SourceKey{Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: "run-1"}, later); err != nil {
 		t.Fatal(err)
 	}
-	if got := get(t, e, approved.ChangeID); got.State != store.ProbeReverted || got.EndReason != "source_gone" || !got.UpdatedAt.Equal(later) {
-		t.Errorf("approved row = state %s end_reason %s updated_at %v", got.State, got.EndReason, got.UpdatedAt)
+	for _, id := range []string{approved.ChangeID, kept.ChangeID} {
+		if got := get(t, e, id); got.State != store.ProbeReverted || got.EndReason != "source_gone" || !got.UpdatedAt.Equal(later) {
+			t.Errorf("%s = state %s end_reason %s updated_at %v", id, got.State, got.EndReason, got.UpdatedAt)
+		}
 	}
 	if got := get(t, e, reverted.ChangeID); got.EndReason != "stop" {
 		t.Errorf("already reverted row got end_reason %s", got.EndReason)

@@ -19,6 +19,7 @@ import (
 
 	commonlogger "github.com/odigos-io/odigos/common/logger"
 	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
+	"github.com/odigos-io/odigos/insights/internal/autopilot/loop"
 	apstore "github.com/odigos-io/odigos/insights/internal/autopilot/store"
 	"github.com/odigos-io/odigos/insights/internal/db/postgres"
 	"github.com/odigos-io/odigos/insights/internal/db/postgres/pgtest"
@@ -249,12 +250,14 @@ func (s *interrogationServer) end(t *testing.T, id string, startedAt time.Time) 
 // probe stores a probe of the run as RequestProbe does.
 func (s *interrogationServer) probe(t *testing.T, id, name, target string) string {
 	t.Helper()
+	class, method, _ := strings.Cut(target, "#")
 	p, err := s.probes.InsertRequestedProbe(context.Background(), apstore.RequestedProbe{
 		Recommendation: apstore.Recommendation{
 			Namespace: "ns", WorkloadKind: "Deployment", WorkloadName: name, ContainerName: "app",
-			TransactionID: "1", Language: "java", Target: target, Function: target,
+			TransactionID: "1", Language: "java", Target: target, Function: target, Category: "observability",
+			Why: "called from " + target, ClassName: class, MethodName: method,
 		},
-		ChangeID:        "chg_" + target,
+		ChangeID:        loop.ChangeID(id, "java", target),
 		InterrogationID: id,
 		Round:           1,
 	}, 5, time.Now())
@@ -308,6 +311,15 @@ var interrogationEndpoints = []struct{ method, path, body string }{
 	{http.MethodGet, "/api/v1/interrogations/x/events", ""},
 	{http.MethodPost, "/api/v1/interrogations/x/stop", `{"changes":"revert"}`},
 	{http.MethodPost, "/api/v1/interrogations/x/extend", `{"seconds":600}`},
+	{http.MethodGet, "/api/v1/interrogations/x/changes", ""},
+	{http.MethodGet, "/api/v1/interrogation-changes", ""},
+	{http.MethodGet, "/api/v1/interrogation-changes/summary", ""},
+	{http.MethodPost, "/api/v1/interrogation-changes/revert-all", ""},
+	{http.MethodGet, "/api/v1/interrogation-changes/x", ""},
+	{http.MethodPost, "/api/v1/interrogation-changes/x/keep", ""},
+	{http.MethodPost, "/api/v1/interrogation-changes/x/revert", ""},
+	{http.MethodPost, "/api/v1/interrogation-changes/x/remove", ""},
+	{http.MethodPost, "/api/v1/interrogation-changes/x/undo", ""},
 }
 
 func TestInterrogations_NotReadyBeforeSet(t *testing.T) {
@@ -326,7 +338,8 @@ func TestInterrogations_NotReadyBeforeSet(t *testing.T) {
 func TestInterrogations_BodyTooLarge(t *testing.T) {
 	h := newTestRouter(t)
 	body := `{"question":"` + strings.Repeat("a", 2<<20) + `"}`
-	for _, path := range []string{"/api/v1/interrogations", "/api/v1/interrogations/x/stop", "/api/v1/interrogations/x/extend"} {
+	for _, path := range []string{"/api/v1/interrogations", "/api/v1/interrogations/x/stop", "/api/v1/interrogations/x/extend",
+		"/api/v1/interrogation-changes/revert-all", "/api/v1/interrogation-changes/x/keep"} {
 		w := do(t, h, http.MethodPost, path, body)
 		if w.Code != http.StatusRequestEntityTooLarge {
 			t.Fatalf("POST %s: %d, want 413", path, w.Code)

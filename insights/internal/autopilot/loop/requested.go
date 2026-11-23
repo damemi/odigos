@@ -581,7 +581,7 @@ func (m *Manager) endRequested(ctx context.Context, w store.SourceKey, requested
 	}
 	out := slices.Clone(requested)
 	for i := range out {
-		if out[i].State == store.ProbeApproved {
+		if out[i].State == store.ProbeApproved || out[i].State == store.ProbeKept {
 			out[i].State = store.ProbeReverted
 		}
 	}

@@ -162,7 +162,9 @@ type Interrogation struct {
 	RunEndReason string
 	RunError     string
 	// Seq is the sequence of the last event the workflow wrote.
-	Seq     int64
+	Seq int64
+	// Round is the workflow's current round, 0 before the first.
+	Round   int
 	Closed  *InterrogationClosed
 	Control InterrogationControl
 	// Changes counts the run's stored changes; denied proposals are only in
@@ -297,9 +299,12 @@ type InterrogationChangeCounts struct {
 	NextExpiryAt time.Time
 }
 
-// InterrogationChangesSummary counts the changes live in the cluster.
+// InterrogationChangesSummary counts the changes live in the cluster. Live is
+// split into Temporary and Permanent; the next expiry is a temporary one's.
 type InterrogationChangesSummary struct {
 	Live               int
+	Temporary          int
+	Permanent          int
 	NextExpiryAt       time.Time
 	NextExpiryChangeID string
 	BySource           []InterrogationSourceChanges
@@ -315,6 +320,7 @@ type InterrogationSourceChanges struct {
 // Desired states of a change, as stored.
 const (
 	ChangeApproved = "approved"
+	ChangeKept     = "kept"
 	ChangeReverted = "reverted"
 )
 
@@ -326,6 +332,20 @@ const (
 	ChangeReverting = "reverting"
 	ChangeExpired   = "expired"
 	ChangeFailed    = "failed"
+)
+
+// Lifetimes of a change.
+const (
+	ChangeTemporary = "temporary"
+	ChangePermanent = "permanent"
+)
+
+// Actions a person may take on a change, and the end reasons of the two that
+// end one.
+const (
+	ChangeKeep   = "keep"
+	ChangeRevert = "revert"
+	ChangeRemove = "remove"
 )
 
 // ChangeNotAppliedInTime is the end reason of a change the reconciler did not
@@ -340,10 +360,16 @@ var ChangeFailureReasons = []string{ChangeNotAppliedInTime, "rule_disabled", "ru
 // InterrogationChange is a probe an interrogation requested: a row of
 // interrogation_requested_probes.
 type InterrogationChange struct {
-	ChangeID  string
-	Round     int
-	FirstSeen time.Time
-	Language  string
+	ChangeID        string
+	InterrogationID string
+	Round           int
+	FirstSeen       time.Time
+	Source          InterrogationSource
+	Language        string
+	Target          string
+	Category        string
+	// Why is the model's reason for the probe, as it sent it.
+	Why string
 
 	ClassName          string
 	MethodName         string
@@ -353,9 +379,12 @@ type InterrogationChange struct {
 	ReceiverMethodName string
 	Signature          string
 
-	// Desired is the stored state: ChangeApproved or ChangeReverted.
+	// Desired is the stored state: ChangeApproved, ChangeKept or
+	// ChangeReverted.
 	Desired   string
 	ExpiresAt time.Time
+	KeptBy    string
+	KeptAt    time.Time
 	EndReason string
 
 	// What the reconciler observed.
@@ -365,11 +394,16 @@ type InterrogationChange struct {
 	BlockReason string
 
 	UpdatedAt time.Time
+
+	// Interrogation is the change's run without its workflow state and change
+	// counts; nil once the run is gone. Reads of one run's changes leave it
+	// nil.
+	Interrogation *Interrogation
 }
 
 // Live reports whether the change should be in the workload's rule at now.
 func (c InterrogationChange) Live(now time.Time) bool {
-	return c.Desired == ChangeApproved && c.ExpiresAt.After(now)
+	return c.Desired == ChangeKept || (c.Desired == ChangeApproved && c.ExpiresAt.After(now))
 }
 
 // State derives the change's wire state at now from its row. A stored state
@@ -393,4 +427,24 @@ func (c InterrogationChange) State(now time.Time) string {
 		return ChangeExpired
 	}
 	return c.Desired
+}
+
+// Lifetime is ChangePermanent for a change a person kept, also after it was
+// removed, and ChangeTemporary otherwise.
+func (c InterrogationChange) Lifetime() string {
+	if c.Desired == ChangeKept || c.Desired == ChangeReverted && c.EndReason == ChangeRemove {
+		return ChangePermanent
+	}
+	return ChangeTemporary
+}
+
+// Actions lists what a person may do with the change at now.
+func (c InterrogationChange) Actions(now time.Time) []string {
+	switch {
+	case c.Desired == ChangeKept:
+		return []string{ChangeRemove}
+	case c.Live(now):
+		return []string{ChangeKeep, ChangeRevert}
+	}
+	return []string{}
 }

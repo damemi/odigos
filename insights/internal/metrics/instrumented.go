@@ -739,6 +739,52 @@ func (m *instrumentedRepo) ListInterrogationChanges(ctx context.Context, interro
 	return out, err
 }
 
+func (m *instrumentedRepo) ListClusterInterrogationChanges(ctx context.Context, limit int, now time.Time) ([]repo.InterrogationChange, error) {
+	var out []repo.InterrogationChange
+	err := observe("ListClusterInterrogationChanges", func() error {
+		var e error
+		out, e = m.inner.ListClusterInterrogationChanges(ctx, limit, now)
+		return e
+	})
+	return out, err
+}
+
+func (m *instrumentedRepo) KeepInterrogationChange(ctx context.Context, changeID, actor string, now time.Time) (repo.InterrogationChange, bool, error) {
+	var (
+		out repo.InterrogationChange
+		ok  bool
+	)
+	err := observe("KeepInterrogationChange", func() error {
+		var e error
+		out, ok, e = m.inner.KeepInterrogationChange(ctx, changeID, actor, now)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) RevertInterrogationChange(ctx context.Context, changeID, from, reason string, now time.Time) (repo.InterrogationChange, bool, error) {
+	var (
+		out repo.InterrogationChange
+		ok  bool
+	)
+	err := observe("RevertInterrogationChange", func() error {
+		var e error
+		out, ok, e = m.inner.RevertInterrogationChange(ctx, changeID, from, reason, now)
+		return e
+	})
+	return out, ok, err
+}
+
+func (m *instrumentedRepo) RevertAllInterrogationChanges(ctx context.Context, w repo.InterrogationSource, now time.Time) (int64, error) {
+	var out int64
+	err := observe("RevertAllInterrogationChanges", func() error {
+		var e error
+		out, e = m.inner.RevertAllInterrogationChanges(ctx, w, now)
+		return e
+	})
+	return out, err
+}
+
 func (m *instrumentedRepo) InterrogationChangesSummary(ctx context.Context, now time.Time) (repo.InterrogationChangesSummary, error) {
 	var out repo.InterrogationChangesSummary
 	err := observe("InterrogationChangesSummary", func() error {

@@ -2227,8 +2227,20 @@ func (f *fakeRepo) GetInterrogationChange(_ context.Context, _ string) (repo.Int
 func (f *fakeRepo) ListInterrogationChanges(_ context.Context, _ string) ([]repo.InterrogationChange, error) {
 	return nil, nil
 }
+func (f *fakeRepo) ListClusterInterrogationChanges(_ context.Context, _ int, _ time.Time) ([]repo.InterrogationChange, error) {
+	return nil, nil
+}
 func (f *fakeRepo) InterrogationChangesSummary(_ context.Context, _ time.Time) (repo.InterrogationChangesSummary, error) {
 	return repo.InterrogationChangesSummary{}, nil
+}
+func (f *fakeRepo) KeepInterrogationChange(_ context.Context, _, _ string, _ time.Time) (repo.InterrogationChange, bool, error) {
+	return repo.InterrogationChange{}, false, nil
+}
+func (f *fakeRepo) RevertInterrogationChange(_ context.Context, _, _, _ string, _ time.Time) (repo.InterrogationChange, bool, error) {
+	return repo.InterrogationChange{}, false, nil
+}
+func (f *fakeRepo) RevertAllInterrogationChanges(_ context.Context, _ repo.InterrogationSource, _ time.Time) (int64, error) {
+	return 0, nil
 }
 func (f *fakeRepo) EndInterrogationChange(_ context.Context, _, _ string, _ time.Time) error {
 	return nil

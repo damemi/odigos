@@ -181,7 +181,7 @@ func (f *fakeRequestedStore) EndWorkloadProbes(_ context.Context, w store.Source
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for id, p := range f.rows {
-		if rowWorkload(p) == workloadKeyOf(w) && p.State == store.ProbeApproved {
+		if rowWorkload(p) == workloadKeyOf(w) && (p.State == store.ProbeApproved || p.State == store.ProbeKept) {
 			p.State = store.ProbeReverted
 			p.EndReason = "source_gone"
 			p.UpdatedAt = now
@@ -260,6 +260,27 @@ func TestReconcile_RequestedProbeWithAutoApplyOff(t *testing.T) {
 	}
 
 	m.reconcileRules(context.Background(), autopilotModeOff)
+	wantTargets(t, c)
+}
+
+func TestReconcile_KeptProbeOutlivesItsExpiry(t *testing.T) {
+	row := requestedRow("run-1", checkout, storedAuth, firstSeen)
+	req := newFakeRequestedStore(row)
+	m, c := newRequestedRuleManager(t, fakeRecommendationStore{}, req)
+
+	m.reconcileRules(context.Background(), "")
+	wantTargets(t, c, "com.acme.Auth.check")
+
+	req.update(row.ChangeID, func(p *store.RequestedProbe) {
+		p.State, p.ExpiresAt = store.ProbeKept, time.Unix(0, 0)
+	})
+	m.reconcileRules(context.Background(), "")
+	wantTargets(t, c, "com.acme.Auth.check")
+
+	req.update(row.ChangeID, func(p *store.RequestedProbe) {
+		p.State, p.EndReason = store.ProbeReverted, "remove"
+	})
+	m.reconcileRules(context.Background(), "")
 	wantTargets(t, c)
 }
 

@@ -18,14 +18,18 @@ import (
 // store's writes and the probe insert's locks, is in this file. Statements
 // that compare with the clock take now from the caller.
 
-// interrogationSelect reads a run from its session r, its control session c
-// and the counts of its changes.
-const interrogationSelect = `SELECT
-	r.id, coalesce(r.create_time, 'epoch'), coalesce(r.state->>'open', '') = 'true',
+// interrogationHeadCols reads a run from its session r and its control
+// session c, either of which may be missing in a LEFT JOIN.
+const interrogationHeadCols = `
+	coalesce(r.id, ''), coalesce(r.create_time, 'epoch'), coalesce(r.state->>'open', '') = 'true',
 	r.state->'request', coalesce(r.state ? 'run', false),
 	coalesce(r.state->'run'->>'status', ''), coalesce(r.state->'run'->>'end_reason', ''),
 	coalesce(r.state->'run'->>'error', ''), coalesce((r.state->'run'->>'seq')::bigint, 0),
-	r.state->'closed', c.state, r.state->'run',
+	coalesce((r.state->'run'->>'round')::int, 0), r.state->'closed', c.state`
+
+// interrogationSelect reads a run from its session r, its control session c
+// and the counts of its changes.
+const interrogationSelect = `SELECT` + interrogationHeadCols + `, r.state->'run',
 	ch.stored, ch.live, ch.reverting, ch.reverted, ch.expired, ch.failed, ch.next_expiry_at
 FROM adk.sessions r
 LEFT JOIN adk.sessions c ON c.app_name = 'interrogation.ctl' AND c.user_id = r.user_id AND c.id = r.id` +
@@ -42,46 +46,67 @@ LEFT JOIN LATERAL (
 		count(*) FILTER (WHERE p.gone AND p.state = 'reverted' AND NOT p.end_reason = ANY($2)) AS reverted,
 		count(*) FILTER (WHERE p.gone AND p.state = 'approved') AS expired,
 		count(*) FILTER (WHERE p.gone AND p.state = 'reverted' AND p.end_reason = ANY($2)) AS failed,
-		min(p.expires_at) FILTER (WHERE p.live) AS next_expiry_at
+		min(p.expires_at) FILTER (WHERE p.live AND p.state = 'approved') AS next_expiry_at
 	FROM (
 		SELECT state, expires_at, in_rule, end_reason,
-			state = 'approved' AND expires_at > $1 AS live,
-			NOT in_rule AND NOT (state = 'approved' AND expires_at > $1) AS gone
+			(state = 'kept' OR (state = 'approved' AND expires_at > $1)) AS live,
+			NOT in_rule AND NOT (state = 'kept' OR (state = 'approved' AND expires_at > $1)) AS gone
 		FROM interrogation_requested_probes WHERE interrogation_id = r.id
 	) p
 ) ch ON true`
 
-func scanInterrogation(s rowScanner) (repo.Interrogation, error) {
-	var (
-		in                       repo.Interrogation
-		request, closed, control []byte
-		nextExpiry               *time.Time
-	)
-	c := &in.Changes
-	if err := s.Scan(&in.ID, &in.CreatedAt, &in.Open, &request, &in.Started,
-		&in.RunStatus, &in.RunEndReason, &in.RunError, &in.Seq, &closed, &control, &in.Run,
-		&c.Stored, &c.Live, &c.Reverting, &c.Reverted, &c.Expired, &c.Failed, &nextExpiry); err != nil {
-		return repo.Interrogation{}, err
-	}
-	if nextExpiry != nil {
-		c.NextExpiryAt = *nextExpiry
-	}
-	if len(request) > 0 {
-		if err := json.Unmarshal(request, &in.Request); err != nil {
+// interrogationHead holds what interrogationHeadCols reads before decoding.
+type interrogationHead struct {
+	in                       repo.Interrogation
+	request, closed, control []byte
+}
+
+func (h *interrogationHead) dest() []any {
+	return []any{&h.in.ID, &h.in.CreatedAt, &h.in.Open, &h.request, &h.in.Started,
+		&h.in.RunStatus, &h.in.RunEndReason, &h.in.RunError, &h.in.Seq, &h.in.Round, &h.closed, &h.control}
+}
+
+func (h *interrogationHead) decode() (repo.Interrogation, error) {
+	in := h.in
+	if len(h.request) > 0 {
+		if err := json.Unmarshal(h.request, &in.Request); err != nil {
 			return repo.Interrogation{}, fmt.Errorf("decode interrogation %s request: %w", in.ID, err)
 		}
 	}
-	if len(closed) > 0 && string(closed) != "null" {
+	if len(h.closed) > 0 && string(h.closed) != "null" {
 		in.Closed = &repo.InterrogationClosed{}
-		if err := json.Unmarshal(closed, in.Closed); err != nil {
+		if err := json.Unmarshal(h.closed, in.Closed); err != nil {
 			return repo.Interrogation{}, fmt.Errorf("decode interrogation %s closed: %w", in.ID, err)
 		}
 	}
-	if len(control) > 0 {
-		if err := json.Unmarshal(control, &in.Control); err != nil {
+	if len(h.control) > 0 {
+		if err := json.Unmarshal(h.control, &in.Control); err != nil {
 			return repo.Interrogation{}, fmt.Errorf("decode interrogation %s control: %w", in.ID, err)
 		}
 	}
+	return in, nil
+}
+
+func scanInterrogation(s rowScanner) (repo.Interrogation, error) {
+	var (
+		h          interrogationHead
+		run        []byte
+		c          repo.InterrogationChangeCounts
+		nextExpiry *time.Time
+	)
+	if err := s.Scan(append(h.dest(), &run,
+		&c.Stored, &c.Live, &c.Reverting, &c.Reverted, &c.Expired, &c.Failed, &nextExpiry)...); err != nil {
+		return repo.Interrogation{}, err
+	}
+	in, err := h.decode()
+	if err != nil {
+		return repo.Interrogation{}, err
+	}
+	in.Run = run
+	if nextExpiry != nil {
+		c.NextExpiryAt = *nextExpiry
+	}
+	in.Changes = c
 	return in, nil
 }
 
@@ -271,7 +296,7 @@ SELECT t.namespace, t.workload_kind, t.workload_name,
 	count(DISTINCT t.transaction_id), coalesce(max(a.last_seen), 'epoch'), coalesce(o.id, ''),
 	(SELECT count(*) FROM interrogation_requested_probes p
 		WHERE p.namespace = t.namespace AND p.workload_kind = t.workload_kind AND p.workload_name = t.workload_name
-			AND p.state = 'approved' AND p.expires_at > $2)
+			AND (p.state = 'kept' OR (p.state = 'approved' AND p.expires_at > $2)))
 FROM t
 LEFT JOIN transaction_activity a ON a.transaction_id = t.transaction_id
 LEFT JOIN adk.sessions o ON o.app_name = 'interrogation' AND o.state->>'open' = 'true'
@@ -314,38 +339,87 @@ LIMIT $4`,
 
 // ---------- interrogation changes ----------
 
-const changeSelect = `SELECT
-	change_id, round, first_seen, language,
-	class_name, method_name, package_name, function_name, receiver_name, receiver_method_name, signature,
-	state, expires_at, end_reason, in_rule, applied_at, removed_at, block_reason, updated_at
-FROM interrogation_requested_probes`
+const changeCols = `
+	p.change_id, p.interrogation_id, p.round, p.first_seen,
+	p.namespace, p.workload_kind, p.workload_name, p.language, p.target, p.category, p.why,
+	p.class_name, p.method_name, p.package_name, p.function_name, p.receiver_name, p.receiver_method_name, p.signature,
+	p.state, p.expires_at, p.kept_by, p.kept_at, p.end_reason,
+	p.in_rule, p.applied_at, p.removed_at, p.block_reason, p.updated_at`
+
+// changeSelect reads the rows p of from, a table or a statement's RETURNING,
+// with their run's two sessions.
+func changeSelect(from string) string {
+	return `SELECT` + changeCols + `,` + interrogationHeadCols + `
+FROM ` + from + ` p
+LEFT JOIN adk.sessions r ON r.app_name = 'interrogation' AND r.user_id = p.interrogation_id AND r.id = p.interrogation_id
+LEFT JOIN adk.sessions c ON c.app_name = 'interrogation.ctl' AND c.user_id = p.interrogation_id AND c.id = p.interrogation_id`
+}
+
+func changeDest(c *repo.InterrogationChange) []any {
+	return []any{&c.ChangeID, &c.InterrogationID, &c.Round, &c.FirstSeen,
+		&c.Source.Namespace, &c.Source.Kind, &c.Source.Name, &c.Language, &c.Target, &c.Category, &c.Why,
+		&c.ClassName, &c.MethodName, &c.PackageName, &c.FunctionName, &c.ReceiverName, &c.ReceiverMethodName, &c.Signature,
+		&c.Desired, &c.ExpiresAt, &c.KeptBy, &c.KeptAt, &c.EndReason,
+		&c.InRule, &c.AppliedAt, &c.RemovedAt, &c.BlockReason, &c.UpdatedAt}
+}
+
+func normalizeChange(c *repo.InterrogationChange) {
+	for _, t := range []*time.Time{&c.FirstSeen, &c.ExpiresAt, &c.KeptAt, &c.AppliedAt, &c.RemovedAt, &c.UpdatedAt} {
+		*t = normalizeEpoch(*t)
+	}
+}
 
 func scanChange(s rowScanner) (repo.InterrogationChange, error) {
 	var c repo.InterrogationChange
-	if err := s.Scan(&c.ChangeID, &c.Round, &c.FirstSeen, &c.Language,
-		&c.ClassName, &c.MethodName, &c.PackageName, &c.FunctionName, &c.ReceiverName, &c.ReceiverMethodName, &c.Signature,
-		&c.Desired, &c.ExpiresAt, &c.EndReason, &c.InRule, &c.AppliedAt, &c.RemovedAt, &c.BlockReason, &c.UpdatedAt,
-	); err != nil {
+	if err := s.Scan(changeDest(&c)...); err != nil {
 		return repo.InterrogationChange{}, err
 	}
-	for _, t := range []*time.Time{&c.FirstSeen, &c.ExpiresAt, &c.AppliedAt, &c.RemovedAt, &c.UpdatedAt} {
-		*t = normalizeEpoch(*t)
+	normalizeChange(&c)
+	return c, nil
+}
+
+func scanChangeWithRun(s rowScanner) (repo.InterrogationChange, error) {
+	var (
+		c repo.InterrogationChange
+		h interrogationHead
+	)
+	if err := s.Scan(append(changeDest(&c), h.dest()...)...); err != nil {
+		return repo.InterrogationChange{}, err
+	}
+	normalizeChange(&c)
+	if h.in.ID != "" {
+		in, err := h.decode()
+		if err != nil {
+			return repo.InterrogationChange{}, err
+		}
+		c.Interrogation = &in
 	}
 	return c, nil
 }
 
-// GetInterrogationChange returns one change; ok=false when unknown.
+// GetInterrogationChange returns one change with its run; ok=false when
+// unknown.
 func (r *Repo) GetInterrogationChange(ctx context.Context, changeID string) (repo.InterrogationChange, bool, error) {
-	return queryRow(ctx, r.pool, "get interrogation change", changeSelect+`
-WHERE change_id = $1`, scanChange, changeID)
+	return queryRow(ctx, r.pool, "get interrogation change", changeSelect("interrogation_requested_probes")+`
+WHERE p.change_id = $1`, scanChangeWithRun, changeID)
 }
 
 // ListInterrogationChanges returns every stored change of one run, oldest
 // first.
 func (r *Repo) ListInterrogationChanges(ctx context.Context, interrogationID string) ([]repo.InterrogationChange, error) {
-	return queryRows(ctx, r.pool, "list interrogation changes", changeSelect+`
-WHERE interrogation_id = $1
-ORDER BY first_seen, change_id`, scanChange, interrogationID)
+	return queryRows(ctx, r.pool, "list interrogation changes", `SELECT`+changeCols+`
+FROM interrogation_requested_probes p
+WHERE p.interrogation_id = $1
+ORDER BY p.first_seen, p.change_id`, scanChange, interrogationID)
+}
+
+// ListClusterInterrogationChanges returns the changes that are live at now or
+// still in a rule, with their runs, soonest expiry first and kept ones last.
+func (r *Repo) ListClusterInterrogationChanges(ctx context.Context, limit int, now time.Time) ([]repo.InterrogationChange, error) {
+	return queryRows(ctx, r.pool, "list cluster interrogation changes", changeSelect("interrogation_requested_probes")+`
+WHERE p.in_rule OR p.state = 'kept' OR (p.state = 'approved' AND p.expires_at > $2)
+ORDER BY (p.state = 'kept'), p.expires_at, p.change_id
+LIMIT $1`, scanChangeWithRun, limit, now)
 }
 
 // InterrogationChangesSummary counts the changes live at now, in all and per
@@ -355,16 +429,17 @@ func (r *Repo) InterrogationChangesSummary(ctx context.Context, now time.Time) (
 		id       string
 		source   repo.InterrogationSource
 		language string
+		kept     bool
 		expires  time.Time
 	}
 	rows, err := queryRows(ctx, r.pool, "interrogation changes summary", `
-SELECT change_id, namespace, workload_kind, workload_name, language, expires_at
+SELECT change_id, namespace, workload_kind, workload_name, language, state = 'kept', expires_at
 FROM interrogation_requested_probes
-WHERE state = 'approved' AND expires_at > $1
+WHERE state = 'kept' OR (state = 'approved' AND expires_at > $1)
 ORDER BY namespace, workload_name, workload_kind, language, expires_at, change_id`,
 		func(s rowScanner) (liveChange, error) {
 			var v liveChange
-			err := s.Scan(&v.id, &v.source.Namespace, &v.source.Kind, &v.source.Name, &v.language, &v.expires)
+			err := s.Scan(&v.id, &v.source.Namespace, &v.source.Kind, &v.source.Name, &v.language, &v.kept, &v.expires)
 			return v, err
 		}, now)
 	if err != nil {
@@ -373,9 +448,14 @@ ORDER BY namespace, workload_name, workload_kind, language, expires_at, change_i
 	sum := repo.InterrogationChangesSummary{BySource: []repo.InterrogationSourceChanges{}}
 	for _, c := range rows {
 		sum.Live++
-		if sum.NextExpiryAt.IsZero() || c.expires.Before(sum.NextExpiryAt) ||
-			c.expires.Equal(sum.NextExpiryAt) && c.id < sum.NextExpiryChangeID {
-			sum.NextExpiryAt, sum.NextExpiryChangeID = c.expires, c.id
+		if c.kept {
+			sum.Permanent++
+		} else {
+			sum.Temporary++
+			if sum.NextExpiryAt.IsZero() || c.expires.Before(sum.NextExpiryAt) ||
+				c.expires.Equal(sum.NextExpiryAt) && c.id < sum.NextExpiryChangeID {
+				sum.NextExpiryAt, sum.NextExpiryChangeID = c.expires, c.id
+			}
 		}
 		if n := len(sum.BySource); n == 0 || sum.BySource[n-1].Source != c.source || sum.BySource[n-1].Language != c.language {
 			sum.BySource = append(sum.BySource, repo.InterrogationSourceChanges{Source: c.source, Language: c.language})
@@ -395,6 +475,52 @@ WHERE change_id = $1 AND state = 'approved'`, changeID, reason, now); err != nil
 		return fmt.Errorf("end interrogation change: %w", err)
 	}
 	return nil
+}
+
+// updateChange runs update, a statement on interrogation_requested_probes that changes
+// at most one row and returns it (RETURNING *), and reads that row with its
+// run; ok=false when it changed none.
+func (r *Repo) updateChange(ctx context.Context, what, update string, a ...any) (repo.InterrogationChange, bool, error) {
+	return queryRow(ctx, r.pool, what, `WITH u AS (`+update+`)
+`+changeSelect("u"), scanChangeWithRun, a...)
+}
+
+// KeepInterrogationChange keeps a temporary change that is live at now: it
+// no longer expires. ok=false when the change is not live and temporary.
+func (r *Repo) KeepInterrogationChange(ctx context.Context, changeID, actor string, now time.Time) (repo.InterrogationChange, bool, error) {
+	return r.updateChange(ctx, "keep interrogation change", `
+UPDATE interrogation_requested_probes
+SET state = 'kept', expires_at = 'epoch', kept_by = $2, kept_at = $3, updated_at = $3
+WHERE change_id = $1 AND state = 'approved' AND expires_at > $3
+RETURNING *`, changeID, actor, now)
+}
+
+// RevertInterrogationChange ends a live change in state from: a revert of a
+// temporary one (repo.ChangeApproved) or a removal of a kept one
+// (repo.ChangeKept). reason becomes its end reason. ok=false when the change
+// is not live in state from.
+func (r *Repo) RevertInterrogationChange(ctx context.Context, changeID, from, reason string, now time.Time) (repo.InterrogationChange, bool, error) {
+	return r.updateChange(ctx, "revert interrogation change", `
+UPDATE interrogation_requested_probes
+SET state = 'reverted', end_reason = $3, updated_at = $4
+WHERE change_id = $1 AND state = $2 AND (state = 'kept' OR expires_at > $4)
+RETURNING *`, changeID, from, reason, now)
+}
+
+// RevertAllInterrogationChanges reverts every temporary change live at now,
+// of one workload when w is set, and returns how many it reverted. Kept
+// changes are not touched.
+func (r *Repo) RevertAllInterrogationChanges(ctx context.Context, w repo.InterrogationSource, now time.Time) (int64, error) {
+	tag, err := r.pool.Exec(ctx, `
+UPDATE interrogation_requested_probes
+SET state = 'reverted', end_reason = 'revert', updated_at = $4
+WHERE state = 'approved' AND expires_at > $4
+	AND ($1 = '' OR (namespace = $1 AND workload_kind = $2 AND workload_name = $3))`,
+		w.Namespace, w.Kind, w.Name, now)
+	if err != nil {
+		return 0, fmt.Errorf("revert all interrogation changes: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // RevertInterrogationProbes is a stop with revert: it reverts the run's
@@ -436,7 +562,7 @@ WHERE r.app_name = 'interrogation' AND r.user_id = p.interrogation_id AND r.id =
 // cascade) and control sessions, and the changes that ended before cutoff and
 // left the rule. Open runs are never deleted, so this does not race the
 // workflow; nothing appends to a closed run, so its update_time is the time it
-// ended.
+// ended. A kept change outlives its run.
 func (r *Repo) pruneInterrogations(ctx context.Context, cutoff, unstartedCutoff time.Time, deleted map[string]int64) error {
 	n, err := r.deleteInChunks(ctx, "adk.sessions",
 		`app_name = 'interrogation' AND state->>'open' = 'false' AND (update_time < $1 OR NOT state ? 'run' AND update_time < $2)`,
@@ -455,7 +581,7 @@ func (r *Repo) pruneInterrogations(ctx context.Context, cutoff, unstartedCutoff 
 	}
 	deleted["interrogation_control_sessions"] = n
 	n, err = r.deleteInChunks(ctx, "interrogation_requested_probes",
-		`NOT in_rule AND NOT being_placed AND greatest(updated_at, expires_at) < $1`, cutoff)
+		`state <> 'kept' AND NOT in_rule AND NOT being_placed AND greatest(updated_at, expires_at) < $1`, cutoff)
 	if err != nil {
 		return fmt.Errorf("prune interrogation changes: %w", err)
 	}

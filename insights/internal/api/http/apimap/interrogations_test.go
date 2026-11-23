@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
 	apschema "github.com/odigos-io/odigos/insights/internal/autopilot/schema"
@@ -157,7 +159,7 @@ func storedRun(t *testing.T, st *interrogation.State, req repo.InterrogationRequ
 		}
 		in.Started, in.Run = true, b
 		in.RunStatus, in.RunEndReason, in.RunError = string(st.Status), string(st.EndReason), st.Error
-		in.Seq = st.Seq
+		in.Seq, in.Round = st.Seq, st.Round
 	}
 	return in
 }
@@ -223,17 +225,19 @@ func TestFromInterrogation_Running(t *testing.T) {
      "target": {"class_name": "com.claims.intake.ClaimValidator", "method_name": "validate"},
      "state": "active",
      "checks": ["changes_allowed", "in_call_graph", "application_code", "not_already_probed", "within_workload_cap", "within_run_budget"],
-     "requested_at": "2026-11-17T09:41:02Z", "applied_at": "2026-11-17T09:41:07Z", "expires_at": "2026-11-17T10:38:03Z"},
+     "requested_at": "2026-11-17T09:41:02Z", "applied_at": "2026-11-17T09:41:07Z", "expires_at": "2026-11-17T10:38:03Z",
+     "lifetime": "temporary", "actions": ["keep", "revert"]},
     {"id": "chg_a41be09d7c2f4b318e60", "round": 1, "language": "java",
      "target": {"class_name": "com.claims.intake.ClaimRepository", "method_name": "save"},
      "state": "denied", "deny_reason": "already_probed",
      "checks": ["changes_allowed", "in_call_graph", "application_code"],
-     "requested_at": "2026-11-17T09:41:02Z"},
+     "requested_at": "2026-11-17T09:41:02Z", "lifetime": "temporary"},
     {"id": "chg_7d20c5e9f1a84b6c93d2", "round": 2, "language": "java",
      "target": {"class_name": "com.claims.intake.FraudClient", "method_name": "score"},
      "state": "active",
      "checks": ["changes_allowed", "in_call_graph", "application_code", "not_already_probed", "within_workload_cap", "within_run_budget"],
-     "requested_at": "2026-11-17T09:46:45Z", "applied_at": "2026-11-17T09:47:10Z", "expires_at": "2026-11-17T10:38:03Z"}
+     "requested_at": "2026-11-17T09:46:45Z", "applied_at": "2026-11-17T09:47:10Z", "expires_at": "2026-11-17T10:38:03Z",
+     "lifetime": "temporary", "actions": ["keep", "revert"]}
   ],
   "usage": {"rounds": 2, "duration_seconds": 720, "probes_used": 2, "max_probes": 5, "model_calls": 2, "input_tokens": 17400, "output_tokens": 1160, "model": "gpt-4o-mini"},
   "last_sequence": 41,
@@ -640,6 +644,57 @@ func TestRunChanges_DeniedAgain(t *testing.T) {
 	}
 }
 
+// The changes resource serves a run's stored changes and denied proposals
+// with the run, the probed function as one string, and the model's reason
+// cut to its bound; a kept change whose run is gone has no run.
+func TestInterrogationRunChanges(t *testing.T) {
+	st := runningState(t)
+	st.Probes[1].Target, st.Probes[1].Why = "com.claims.intake.ClaimRepository.save", strings.Repeat("é", maxReason+10)
+	in := storedRun(t, &st, claimsRequest())
+	row := storedChange(t, "chg_3f9a1c07b2d44e6a8c51", 1, "com.claims.intake.ClaimValidator", "validate", "2026-11-17T09:41:02Z", "2026-11-17T09:41:07Z")
+	row.InterrogationID, row.Source, row.Target, row.Category, row.Why = in.ID, in.Request.Source, "com.claims.intake.ClaimValidator.validate", "observability", " sits before FraudClient.score "
+
+	got, err := InterrogationRunChanges(in, []repo.InterrogationChange{row}, at(t, "2026-11-17T09:50:03Z"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Count != 2 {
+		t.Fatalf("count %d", got.Count)
+	}
+	sameJSON(t, got.Items[0], `{
+  "id": "chg_3f9a1c07b2d44e6a8c51",
+  "interrogation_id": "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21",
+  "interrogation": {"id": "0b6f6c1e-5d0a-4b53-9f3e-0c1d7a9e4f21", "display_id": "INT-0B6F6C1E",
+    "title": "Why is claim submission slow for some users?", "status": "running", "round": 2,
+    "trigger": {"kind": "manual", "actor": "alon"}},
+  "source": {"namespace": "claims-demo", "kind": "Deployment", "name": "claims-intake"},
+  "target": "com.claims.intake.ClaimValidator.validate",
+  "probe": {"language": "java", "class_name": "com.claims.intake.ClaimValidator", "method_name": "validate"},
+  "category": "observability",
+  "round": 1,
+  "reason": "sits before FraudClient.score",
+  "checks": ["changes_allowed", "in_call_graph", "application_code", "not_already_probed", "within_workload_cap", "within_run_budget"],
+  "state": "active",
+  "lifetime": "temporary",
+  "proposed_at": "2026-11-17T09:41:02Z",
+  "applied_at": "2026-11-17T09:41:07Z",
+  "expires_at": "2026-11-17T10:38:03Z",
+  "actions": ["keep", "revert"]
+}`)
+	denied := got.Items[1]
+	if denied.State != "denied" || denied.Target != "com.claims.intake.ClaimRepository.save" || denied.Interrogation == nil ||
+		len(denied.Actions) != 0 || denied.Actions == nil || utf8.RuneCountInString(denied.Reason) != maxReason || !strings.HasSuffix(denied.Reason, "…") {
+		t.Errorf("denied %+v", denied)
+	}
+
+	row.Desired, row.ExpiresAt, row.KeptBy, row.KeptAt = repo.ChangeKept, time.Time{}, "dana", at(t, "2026-11-17T09:45:00Z")
+	kept := FromInterrogationChange(row, at(t, "2026-11-18T09:00:00Z"))
+	if kept.Interrogation != nil || kept.Lifetime != repo.ChangePermanent || kept.KeptBy != "dana" || kept.ExpiresAt != nil ||
+		kept.State != repo.ChangeActive || len(kept.Actions) != 1 || kept.Actions[0] != repo.ChangeRemove {
+		t.Errorf("kept change of a run that is gone %+v", kept)
+	}
+}
+
 // What observe measured is served on the change it belongs to and on its
 // round, from the state as the workflow stores it.
 func TestFromInterrogation_Measured(t *testing.T) {
@@ -668,7 +723,7 @@ func TestFromInterrogationSummary(t *testing.T) {
 	got := FromInterrogationSummary(
 		repo.InterrogationSummary{Running: 1, RunningSources: []repo.InterrogationSource{src}, Total: 7, Ended: 3,
 			Averaged: 3, AvgRounds: 1.75, AvgDurationSeconds: 1320.4, ModelCalls: 38, InputTokens: 388000, OutputTokens: 24000, Model: "gpt-4o-mini"},
-		repo.InterrogationChangesSummary{Live: 3, NextExpiryAt: at(t, "2026-11-17T10:38:03Z"),
+		repo.InterrogationChangesSummary{Live: 3, Temporary: 2, Permanent: 1, NextExpiryAt: at(t, "2026-11-17T10:38:03Z"),
 			NextExpiryChangeID: "chg_3f9a1c07b2d44e6a8c51",
 			BySource:           []repo.InterrogationSourceChanges{{Source: src, Language: "java", Live: 3}}},
 		20)
@@ -677,7 +732,7 @@ func TestFromInterrogationSummary(t *testing.T) {
   "running_sources": [{"namespace": "claims-demo", "kind": "Deployment", "name": "claims-intake"}],
   "total": 7, "concluded": 3, "avg_rounds": 1.75, "avg_duration_seconds": 1320,
   "changes": {
-    "live": 3,
+    "live": 3, "temporary": 2, "permanent": 1,
     "by_kind": {"custom_instrumentation": 3},
     "next_expiry_at": "2026-11-17T10:38:03Z",
     "next_expiry_change_id": "chg_3f9a1c07b2d44e6a8c51",

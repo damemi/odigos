@@ -63,6 +63,15 @@ func TestOpenAPISpecValid(t *testing.T) {
 		"/api/v1/interrogations/{interrogation_id}/events",
 		"/api/v1/interrogations/{interrogation_id}/stop",
 		"/api/v1/interrogations/{interrogation_id}/extend",
+		"/api/v1/interrogations/{interrogation_id}/changes",
+		"/api/v1/interrogation-changes",
+		"/api/v1/interrogation-changes/summary",
+		"/api/v1/interrogation-changes/revert-all",
+		"/api/v1/interrogation-changes/{change_id}",
+		"/api/v1/interrogation-changes/{change_id}/keep",
+		"/api/v1/interrogation-changes/{change_id}/revert",
+		"/api/v1/interrogation-changes/{change_id}/remove",
+		"/api/v1/interrogation-changes/{change_id}/undo",
 	}
 	for _, p := range wantPaths {
 		if _, ok := doc.Paths[p]; !ok {

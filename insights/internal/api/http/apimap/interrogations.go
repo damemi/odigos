@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/odigos-io/odigos/insights/internal/api/http/apitypes"
@@ -19,6 +20,9 @@ const (
 	// graphs exist for Java only.
 	sourceLanguage = "java"
 	gateway        = "litellm"
+	// maxReason bounds a change's reason: model text about code, asked to be
+	// one or two sentences.
+	maxReason = 500
 )
 
 // InterrogationTitle is the run's question, or the default question when none
@@ -322,6 +326,9 @@ func fromChange(c repo.InterrogationChange, now time.Time) apitypes.Interrogatio
 		RequestedAt: c.FirstSeen,
 		AppliedAt:   timePtr(c.AppliedAt),
 		ExpiresAt:   timePtr(c.ExpiresAt),
+		Reason:      changeReason(c.Why),
+		Lifetime:    c.Lifetime(),
+		Actions:     c.Actions(now),
 	}
 	if state == repo.ChangeBlocked {
 		out.BlockReason = c.BlockReason
@@ -362,7 +369,118 @@ func deniedChange(p interrogation.Probe) apitypes.InterrogationChange {
 		DenyReason:  p.DenyReason,
 		Checks:      loop.PassedChecks(loop.DenyReason(p.DenyReason)),
 		RequestedAt: p.ProposedAt,
+		Reason:      changeReason(p.Why),
+		Lifetime:    repo.ChangeTemporary,
+		Actions:     []string{},
 	}
+}
+
+// changeReason is the model's reason for a probe, cut to maxReason
+// characters.
+func changeReason(why string) string {
+	why = strings.TrimSpace(why)
+	if r := []rune(why); len(r) > maxReason {
+		return string(r[:maxReason-1]) + "…"
+	}
+	return why
+}
+
+// FromInterrogationChange maps a stored change to the changes resource's
+// wire type at now.
+func FromInterrogationChange(c repo.InterrogationChange, now time.Time) apitypes.InterrogationChangeDetail {
+	out := changeDetail(fromChange(c, now), c.Target, c.Category, c.InterrogationID, c.Source)
+	out.KeptAt, out.KeptBy = timePtr(c.KeptAt), c.KeptBy
+	if c.Interrogation != nil {
+		out.Interrogation = changeRef(*c.Interrogation)
+	}
+	return out
+}
+
+func changeRef(in repo.Interrogation) *apitypes.InterrogationChangeRef {
+	status, _, _ := in.Status()
+	return &apitypes.InterrogationChangeRef{
+		Id:        in.ID,
+		DisplayId: in.DisplayID(),
+		Title:     InterrogationTitle(in.Request),
+		Status:    status,
+		Round:     in.Round,
+		Trigger:   apitypes.InterrogationTrigger{Kind: in.Request.Trigger.Kind, Actor: in.Request.Trigger.Actor},
+	}
+}
+
+// changeDetail is a run's change in the changes resource's shape, where the
+// target is the probed function's name and the probe its parts.
+func changeDetail(ch apitypes.InterrogationChange, target, category, interrogationID string, src repo.InterrogationSource) apitypes.InterrogationChangeDetail {
+	t := ch.Target
+	return apitypes.InterrogationChangeDetail{
+		Id:              ch.Id,
+		InterrogationId: interrogationID,
+		Source:          fromInterrogationSource(src),
+		Target:          target,
+		Probe: &apitypes.InterrogationProbe{
+			Language:           ch.Language,
+			ClassName:          t.ClassName,
+			MethodName:         t.MethodName,
+			PackageName:        t.PackageName,
+			FunctionName:       t.FunctionName,
+			ReceiverName:       t.ReceiverName,
+			ReceiverMethodName: t.ReceiverMethodName,
+			Signature:          t.Signature,
+		},
+		Category:    category,
+		Round:       ch.Round,
+		Reason:      ch.Reason,
+		Checks:      ch.Checks,
+		State:       ch.State,
+		Lifetime:    ch.Lifetime,
+		DenyReason:  ch.DenyReason,
+		BlockReason: ch.BlockReason,
+		EndReason:   ch.EndReason,
+		ProposedAt:  ch.RequestedAt,
+		AppliedAt:   ch.AppliedAt,
+		ExpiresAt:   ch.ExpiresAt,
+		EndedAt:     ch.EndedAt,
+		Actions:     ch.Actions,
+	}
+}
+
+// InterrogationChangeList maps stored changes to the wire list at now.
+func InterrogationChangeList(changes []repo.InterrogationChange, now time.Time) apitypes.InterrogationChangeList {
+	items := make([]apitypes.InterrogationChangeDetail, len(changes))
+	for i, c := range changes {
+		items[i] = FromInterrogationChange(c, now)
+	}
+	return apitypes.InterrogationChangeList{Count: len(items), Items: items}
+}
+
+// InterrogationRunChanges lists every change of one run at now, oldest first:
+// its stored changes and the proposals it denied, which exist only in the
+// run's state. changes are the run's stored changes, read without it.
+func InterrogationRunChanges(in repo.Interrogation, changes []repo.InterrogationChange, now time.Time) (apitypes.InterrogationChangeList, error) {
+	var st interrogation.State
+	if len(in.Run) > 0 {
+		if err := json.Unmarshal(in.Run, &st); err != nil {
+			return apitypes.InterrogationChangeList{}, fmt.Errorf("decode interrogation %s: %w", in.ID, err)
+		}
+	}
+	ref := changeRef(in)
+	items := make([]apitypes.InterrogationChangeDetail, 0, len(changes))
+	for _, c := range changes {
+		item := FromInterrogationChange(c, now)
+		item.Interrogation = ref
+		items = append(items, item)
+	}
+	for _, p := range st.Probes {
+		if deniedOnly(p) {
+			item := changeDetail(deniedChange(p), p.Target, p.Category, in.ID, in.Request.Source)
+			item.Interrogation = ref
+			items = append(items, item)
+		}
+	}
+	slices.SortStableFunc(items, func(a, b apitypes.InterrogationChangeDetail) int {
+		return a.ProposedAt.Compare(b.ProposedAt)
+	})
+	return apitypes.InterrogationChangeList{Count: len(items), Items: items}, nil
 }
 
 // FromInterrogationChangesSummary maps the live changes' totals to the wire
@@ -384,6 +502,8 @@ func FromInterrogationChangesSummary(s repo.InterrogationChangesSummary, maxProb
 	}
 	return apitypes.InterrogationChangesSummary{
 		Live:               s.Live,
+		Temporary:          s.Temporary,
+		Permanent:          s.Permanent,
 		ByKind:             byKind,
 		NextExpiryAt:       timePtr(s.NextExpiryAt),
 		NextExpiryChangeId: s.NextExpiryChangeID,

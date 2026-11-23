@@ -223,6 +223,22 @@ func (c *fakeChanges) sourceGone(id string) {
 	ch.Desired, ch.EndReason = repo.ChangeReverted, "source_gone"
 }
 
+// revert ends a row as a person's revert of the change does.
+func (c *fakeChanges) revert(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ch := c.rows[id]
+	ch.Desired, ch.EndReason = repo.ChangeReverted, repo.ChangeRevert
+}
+
+// keep makes a row permanent as a person's keep of the change does.
+func (c *fakeChanges) keep(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ch := c.rows[id]
+	ch.Desired, ch.ExpiresAt = repo.ChangeKept, time.Time{}
+}
+
 func (c *fakeChanges) row(id string) (repo.InterrogationChange, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -935,6 +951,56 @@ func TestRun_RevertedBetweenRounds(t *testing.T) {
 	}
 	if r := h.eventsOf(EventChangeReverted); len(r) != 1 || r[0].Round != 2 {
 		t.Errorf("change.reverted %+v, want one in round 2", r)
+	}
+}
+
+// A probe a person reverts while the run observes is reported reverted in the
+// next round's request, and still counts against the run's budget.
+func TestRun_ChangeRevertedMidRun(t *testing.T) {
+	h := newHarness(t)
+	h.reply(replyJSON(t, nil), replyJSON(t, done(70)))
+	h.runUntil(parkedIn("wait_observe"))
+	h.changes.revert(probeID)
+	st := h.run()
+	h.checkEnded(st, StatusCompleted, EndDone)
+	if p := st.Probes[0]; p.Status != ProbeReverted || p.EndReason != repo.ChangeRevert {
+		t.Fatalf("probe %s/%s, want reverted by a person", p.Status, p.EndReason)
+	}
+	var first, second Request
+	for i, r := range []*Request{&first, &second} {
+		if err := json.Unmarshal([]byte(h.model.calls()[i]), r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(second.AddedProbes) != 1 || second.AddedProbes[0].State != string(ProbeReverted) {
+		t.Errorf("round 2 added probes %+v, want the probe reverted", second.AddedProbes)
+	}
+	if second.ProbeBudget != first.ProbeBudget-1 {
+		t.Errorf("probe budget %d after %d, want the reverted probe still counted", second.ProbeBudget, first.ProbeBudget)
+	}
+	if r := h.eventsOf(EventChangeReverted); len(r) != 1 || r[0].Payload["end_reason"] != repo.ChangeRevert {
+		t.Errorf("change.reverted %+v, want one with end reason revert", r)
+	}
+}
+
+// A stop with revert leaves a probe a person kept in the rule, and in the
+// run's state as applied.
+func TestStop_RevertLeavesKeptProbe(t *testing.T) {
+	h := newHarness(t)
+	h.reply(replyJSON(t, nil), replyJSON(t, done(70)))
+	h.runUntil(parkedIn("wait_observe"))
+	h.changes.keep(probeID)
+	h.ctl.Stop = &Stop{Changes: ChangesRevert, Actor: "bob", At: testStart.Add(2 * time.Minute)}
+	st := h.run()
+	h.checkEnded(st, StatusStopped, EndStoppedByUser)
+	if p := st.Probes[0]; p.Status != ProbeApplied {
+		t.Fatalf("probe %s, want applied", p.Status)
+	}
+	if row, _ := h.changes.row(probeID); row.Desired != repo.ChangeKept {
+		t.Fatalf("row %s, want kept", row.Desired)
+	}
+	if r := h.eventsOf(EventChangeReverted); len(r) != 0 {
+		t.Fatalf("change.reverted %+v, want none", r)
 	}
 }
 

@@ -409,15 +409,33 @@ type Repository interface {
 	// that have a call graph, busiest first.
 	ListInterrogationSourceTransactions(ctx context.Context, source InterrogationSource, limit int) ([]InterrogationSourceTransaction, error)
 
-	// GetInterrogationChange returns one stored change; ok=false when unknown.
+	// GetInterrogationChange returns one stored change with its run; ok=false
+	// when unknown.
 	GetInterrogationChange(ctx context.Context, changeID string) (InterrogationChange, bool, error)
 
 	// ListInterrogationChanges returns every stored change of one run, oldest
 	// first.
 	ListInterrogationChanges(ctx context.Context, interrogationID string) ([]InterrogationChange, error)
 
+	// ListClusterInterrogationChanges returns the changes live at now or still
+	// in a rule, with their runs, soonest expiry first and kept ones last.
+	ListClusterInterrogationChanges(ctx context.Context, limit int, now time.Time) ([]InterrogationChange, error)
+
 	// InterrogationChangesSummary counts the changes live at now.
 	InterrogationChangesSummary(ctx context.Context, now time.Time) (InterrogationChangesSummary, error)
+
+	// KeepInterrogationChange makes a temporary change live at now permanent
+	// and returns it. ok=false when it changed nothing.
+	KeepInterrogationChange(ctx context.Context, changeID, actor string, now time.Time) (InterrogationChange, bool, error)
+
+	// RevertInterrogationChange reverts a temporary change live at now (from
+	// ChangeApproved) or removes a kept one (from ChangeKept), with reason as
+	// its end reason, and returns it. ok=false when it changed nothing.
+	RevertInterrogationChange(ctx context.Context, changeID, from, reason string, now time.Time) (InterrogationChange, bool, error)
+
+	// RevertAllInterrogationChanges reverts every temporary change live at
+	// now, of one workload when w is set, and returns how many.
+	RevertAllInterrogationChanges(ctx context.Context, w InterrogationSource, now time.Time) (int64, error)
 
 	// EndInterrogationChange ends an approved change that never took effect,
 	// with reason as its end reason. An ended change is left as it is.
