@@ -70,7 +70,7 @@ enum FieldType {
 enum ManagedBy {
   Profile
   OdigosUi
-  InterrogationLoop
+  AutopilotLoop
   LiveTrafficLearning
   Unknown
 }

@@ -59,13 +59,13 @@ func TestGetInstrumentationRuleReportsManagedBy(t *testing.T) {
 		},
 		&v1alpha1.InstrumentationRule{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "rule-interrogation",
+				Name:      "rule-autopilot",
 				Namespace: consts.DefaultOdigosNamespace,
 				Labels: map[string]string{
-					k8sconsts.OdigosProfilesManagedByLabel: k8sconsts.OdigosInterrogationLoopManagedByValue,
+					k8sconsts.OdigosProfilesManagedByLabel: k8sconsts.OdigosAutopilotLoopManagedByValue,
 				},
 			},
-			Spec: v1alpha1.InstrumentationRuleSpec{RuleName: "interrogation"},
+			Spec: v1alpha1.InstrumentationRuleSpec{RuleName: "autopilot"},
 		},
 	)
 
@@ -77,9 +77,9 @@ func TestGetInstrumentationRuleReportsManagedBy(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, model.ManagedByUnknown, yamlRule.ManagedBy)
 
-	interrogationRule, err := GetInstrumentationRule(ctx, "rule-interrogation")
+	autopilotRule, err := GetInstrumentationRule(ctx, "rule-autopilot")
 	require.NoError(t, err)
-	require.Equal(t, model.ManagedByInterrogationLoop, interrogationRule.ManagedBy)
+	require.Equal(t, model.ManagedByAutopilotLoop, autopilotRule.ManagedBy)
 
 	rules, err := GetInstrumentationRules(ctx)
 	require.NoError(t, err)
@@ -90,5 +90,5 @@ func TestGetInstrumentationRuleReportsManagedBy(t *testing.T) {
 	}
 	require.Equal(t, model.ManagedByOdigosUI, byID["rule-ui"])
 	require.Equal(t, model.ManagedByUnknown, byID["rule-yaml"])
-	require.Equal(t, model.ManagedByInterrogationLoop, byID["rule-interrogation"])
+	require.Equal(t, model.ManagedByAutopilotLoop, byID["rule-autopilot"])
 }

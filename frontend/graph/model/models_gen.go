@@ -5274,7 +5274,7 @@ type ManagedBy string
 const (
 	ManagedByProfile             ManagedBy = "Profile"
 	ManagedByOdigosUI            ManagedBy = "OdigosUi"
-	ManagedByInterrogationLoop   ManagedBy = "InterrogationLoop"
+	ManagedByAutopilotLoop       ManagedBy = "AutopilotLoop"
 	ManagedByLiveTrafficLearning ManagedBy = "LiveTrafficLearning"
 	ManagedByUnknown             ManagedBy = "Unknown"
 )
@@ -5282,14 +5282,14 @@ const (
 var AllManagedBy = []ManagedBy{
 	ManagedByProfile,
 	ManagedByOdigosUI,
-	ManagedByInterrogationLoop,
+	ManagedByAutopilotLoop,
 	ManagedByLiveTrafficLearning,
 	ManagedByUnknown,
 }
 
 func (e ManagedBy) IsValid() bool {
 	switch e {
-	case ManagedByProfile, ManagedByOdigosUI, ManagedByInterrogationLoop, ManagedByLiveTrafficLearning, ManagedByUnknown:
+	case ManagedByProfile, ManagedByOdigosUI, ManagedByAutopilotLoop, ManagedByLiveTrafficLearning, ManagedByUnknown:
 		return true
 	}
 	return false
