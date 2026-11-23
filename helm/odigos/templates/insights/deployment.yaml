@@ -70,6 +70,12 @@ spec:
             - name: POSTGRES_VOLUME_SIZE
               value: {{ .Values.insights.database.storage.size | quote }}
             {{- end }}
+            {{- if include "odigos.autopilotEnabled" . }}
+            # Insights expands the odigos_autopilot_profiles exporter's profile
+            # stacks in odigos-cache into autopilot call trees.
+            - name: AUTOPILOT_ENABLED
+              value: "true"
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

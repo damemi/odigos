@@ -16,6 +16,8 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pprofile"
 	"go.uber.org/zap"
+
+	"github.com/odigos-io/odigos/common/consts"
 )
 
 func TestInsertStacks_HSETNXAndExpire(t *testing.T) {
@@ -40,7 +42,7 @@ func TestInsertStacks_HSETNXAndExpire(t *testing.T) {
 
 	require.NoError(t, pr.insertStacks(context.Background(), []profileStack{stack, stack}))
 
-	key := redisKeyPrefix + hex.EncodeToString(traceID)
+	key := consts.RedisAutopilotProfileKeyPrefix + hex.EncodeToString(traceID)
 	require.True(t, mr.Exists(key))
 	fields, err := rdb.HGetAll(context.Background(), key).Result()
 	require.NoError(t, err)
@@ -91,7 +93,7 @@ func TestInsertStacks_DifferentStacksSameSpan(t *testing.T) {
 	}
 	require.NoError(t, pr.insertStacks(context.Background(), []profileStack{a, b}))
 
-	fields, err := rdb.HGetAll(context.Background(), redisKeyPrefix+hex.EncodeToString(traceID)).Result()
+	fields, err := rdb.HGetAll(context.Background(), consts.RedisAutopilotProfileKeyPrefix+hex.EncodeToString(traceID)).Result()
 	require.NoError(t, err)
 	assert.Len(t, fields, 2)
 }
@@ -165,7 +167,7 @@ func TestProfileStacksFrom_EventAndSamplesSameSpanSameReport(t *testing.T) {
 	pr := &profilesRedis{rdb: rdb, logger: zap.NewNop(), keyTTL: 2 * defaultGroupByTraceWaitDuration}
 	require.NoError(t, pr.insertStacks(context.Background(), stacks))
 
-	fields, err := rdb.HGetAll(context.Background(), redisKeyPrefix+hex.EncodeToString(traceID[:])).Result()
+	fields, err := rdb.HGetAll(context.Background(), consts.RedisAutopilotProfileKeyPrefix+hex.EncodeToString(traceID[:])).Result()
 	require.NoError(t, err)
 	byType := map[string]int{}
 	for _, raw := range fields {
@@ -197,13 +199,13 @@ func TestInsertStacks_DropsWhenTraceHashFull(t *testing.T) {
 	}
 	require.NoError(t, pr.insertStacks(context.Background(), stacks))
 
-	n, err := rdb.HLen(context.Background(), redisKeyPrefix+hex.EncodeToString(traceID)).Result()
+	n, err := rdb.HLen(context.Background(), consts.RedisAutopilotProfileKeyPrefix+hex.EncodeToString(traceID)).Result()
 	require.NoError(t, err)
 	assert.Equal(t, int64(redisMaxStacksPerTrace), n)
 
 	// Re-inserting an existing field is a no-op and must not evict or grow.
 	require.NoError(t, pr.insertStacks(context.Background(), []profileStack{stacks[0]}))
-	n, err = rdb.HLen(context.Background(), redisKeyPrefix+hex.EncodeToString(traceID)).Result()
+	n, err = rdb.HLen(context.Background(), consts.RedisAutopilotProfileKeyPrefix+hex.EncodeToString(traceID)).Result()
 	require.NoError(t, err)
 	assert.Equal(t, int64(redisMaxStacksPerTrace), n)
 }

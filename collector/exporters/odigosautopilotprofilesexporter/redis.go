@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	redisKeyPrefix         = "odigos:autopilot:profile:"
 	redisMaxStacksPerTrace = 500
 	// stackDigestBytes is the sha1 prefix length identifying a distinct stack in a field.
 	stackDigestBytes = 8
@@ -200,7 +199,7 @@ func (r *profilesRedis) writeEncoded(ctx context.Context, byTrace map[string][]f
 		for _, p := range pairs {
 			args = append(args, p.field, p.blob)
 		}
-		key := redisKeyPrefix + traceHex
+		key := consts.RedisAutopilotProfileKeyPrefix + traceHex
 		res, err := appendProfileStacksScript.Run(ctx, r.rdb, []string{key}, args...).Int64Slice()
 		if err != nil {
 			return fmt.Errorf("redis append profile stacks: %w", err)

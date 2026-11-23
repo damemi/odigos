@@ -1,6 +1,7 @@
 // Command insights is the entrypoint for the odigos-enterprise-insights
 // service. It boots the HTTP API (consumed by the UI) and the OTLP gRPC
-// receiver (fed by the Odigos gateway), both backed by Postgres.
+// receiver (fed by the Odigos gateway), both backed by Postgres, and
+// optionally the autopilot call-tree writer (see internal/autopilot).
 package main
 
 import (
@@ -17,10 +18,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/odigos-io/odigos/api/k8sconsts"
 	"github.com/odigos-io/odigos/common"
 	commonlogger "github.com/odigos-io/odigos/common/logger"
+	"github.com/odigos-io/odigos/k8sutils/pkg/env"
 
 	apihttp "github.com/odigos-io/odigos/insights/internal/api/http"
+	"github.com/odigos-io/odigos/insights/internal/autopilot"
 	"github.com/odigos-io/odigos/insights/internal/cache"
 	"github.com/odigos-io/odigos/insights/internal/db/postgres"
 	"github.com/odigos-io/odigos/insights/internal/db/postgres/migrate"
@@ -54,6 +58,12 @@ const (
 	// envPostgresVolumeSize is the bundled database's volume size (a k8s
 	// quantity such as 8Gi), so the Storage page can report how full it is.
 	envPostgresVolumeSize = "POSTGRES_VOLUME_SIZE"
+
+	// envAutopilotEnabled, when set to any value, turns on the autopilot
+	// call-tree writer, which reads profile stacks from odigos-cache in the
+	// insights namespace. The Helm chart sets it only when
+	// insights.autopilot.enabled is true.
+	envAutopilotEnabled = "AUTOPILOT_ENABLED"
 
 	// leaderLease elects the one replica that runs the singleton jobs (findings
 	// notifier, recommendation sweeps, retention). The chart grants leases get/create/update.
@@ -164,6 +174,22 @@ func main() {
 
 	eng := engine.New(r, log, learningCfg, alertCfg)
 	go runAlertPolicyReloader(rootCtx, log, eng)
+
+	if _, ok := os.LookupEnv(envAutopilotEnabled); ok {
+		redisEndpoint := k8sconsts.OdigosCacheEndpoint(env.GetCurrentNamespace())
+		ic, err := autopilot.Open(redisEndpoint, log)
+		if err != nil {
+			log.Warn("autopilot call-tree writer unavailable; java-ebpf profile correlation disabled",
+				"redis_endpoint", redisEndpoint, "error", err)
+		} else {
+			eng.SetAutopilot(ic)
+			defer func() {
+				if err := ic.Close(); err != nil {
+					log.Warn("autopilot call-tree writer close failed", "error", err)
+				}
+			}()
+		}
+	}
 
 	// Same pattern for service guardrails (operator-declared L7 segmentation):
 	// an in-memory snapshot resolves a service's guardrail off the per-trace

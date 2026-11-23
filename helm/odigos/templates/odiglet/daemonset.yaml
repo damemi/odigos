@@ -261,6 +261,10 @@ spec:
             - name: hostproc
               mountPath: /hostproc
           {{- end }}
+          {{- if and .Values.profiling.enabled (not .Values.odiglet.noHostPathMounts) }}
+            - name: host-bpffs
+              mountPath: /sys/fs/bpf
+          {{- end }}
              # needed to load eBPF tracepoints - used by runtime-detector
             - name: sys-kernel
               mountPath: /sys/kernel
@@ -384,6 +388,11 @@ spec:
             - name: sys-kernel
               mountPath: /sys/kernel
               readOnly: true
+            {{- end }}
+            {{- if and .Values.profiling.enabled (not .Values.odiglet.noHostPathMounts) }}
+            # profiling receiver pins traces_ctx_v1 on the host bpffs for span-linked samples
+            - name: host-bpffs
+              mountPath: /sys/fs/bpf
             {{- end }}
             - name: exchange-dir
               mountPath: /var/exchange
@@ -575,6 +584,12 @@ spec:
         - name: host-cgroup
           hostPath:
             path: /sys/fs/cgroup
+            type: Directory
+      {{- end }}
+      {{- if and .Values.profiling.enabled (not .Values.odiglet.noHostPathMounts) }}
+        - name: host-bpffs
+          hostPath:
+            path: /sys/fs/bpf
             type: Directory
       {{- end }}
         - name: odigos-go-offsets

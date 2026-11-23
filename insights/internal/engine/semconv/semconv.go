@@ -15,14 +15,15 @@ import (
 
 // Attribute keys read in scorers / transaction identification.
 var (
-	ServiceName      = string(otelsemconv.ServiceNameKey)
-	K8SNamespaceName = string(otelsemconv.K8SNamespaceNameKey)
-	K8SPodName       = string(otelsemconv.K8SPodNameKey)
-	K8SContainerName = string(otelsemconv.K8SContainerNameKey)
-	ServerAddress    = string(otelsemconv.ServerAddressKey)
-	ServerPort       = string(otelsemconv.ServerPortKey)
-	RPCSystem        = string(otelsemconv.RPCSystemKey)
-	FaaSTrigger      = string(otelsemconv.FaaSTriggerKey)
+	ServiceName         = string(otelsemconv.ServiceNameKey)
+	K8SNamespaceName    = string(otelsemconv.K8SNamespaceNameKey)
+	K8SPodName          = string(otelsemconv.K8SPodNameKey)
+	K8SContainerName    = string(otelsemconv.K8SContainerNameKey)
+	TelemetryDistroName = string(otelsemconv.TelemetryDistroNameKey)
+	ServerAddress       = string(otelsemconv.ServerAddressKey)
+	ServerPort          = string(otelsemconv.ServerPortKey)
+	RPCSystem           = string(otelsemconv.RPCSystemKey)
+	FaaSTrigger         = string(otelsemconv.FaaSTriggerKey)
 
 	// Database attributes (D6). db.operation.name is only set when the
 	// gateway's odigossqldboperationprocessor ran; the D6 scorer derives it
