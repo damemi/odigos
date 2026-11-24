@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+
+	"github.com/odigos-io/odigos/collector/exporters/odigosautopilotprofilesexporter/internal/metadata"
 )
 
 // stackWriter persists batched profile stacks to Redis.
@@ -22,15 +25,23 @@ type stackBatcher struct {
 	flushInterval  time.Duration
 	flushThreshold int
 	logger         *zap.Logger
-	writer         stackWriter
+	// throttledLogger logs each message at most once per failureLogEvery, so a
+	// slow or unreachable Redis does not log every flush or drop.
+	throttledLogger *zap.Logger
+	// telemetry counts dropped stacks; nil when the builder failed to initialize.
+	telemetry *metadata.TelemetryBuilder
+	writer    stackWriter
 
 	pending []profileStack
+
+	// failing is set while flushes fail; owned by the loop goroutine.
+	failing bool
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 }
 
-func newStackBatcher(flushInterval time.Duration, flushThreshold int, logger *zap.Logger) *stackBatcher {
+func newStackBatcher(flushInterval time.Duration, flushThreshold int, logger *zap.Logger, telemetry *metadata.TelemetryBuilder) *stackBatcher {
 	if flushInterval <= 0 {
 		flushInterval = defaultFlushInterval
 	}
@@ -42,7 +53,11 @@ func newStackBatcher(flushInterval time.Duration, flushThreshold int, logger *za
 		flushInterval:  flushInterval,
 		flushThreshold: flushThreshold,
 		logger:         logger,
-		pending:        make([]profileStack, 0, flushThreshold),
+		throttledLogger: logger.WithOptions(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
+			return zapcore.NewSamplerWithOptions(c, failureLogEvery, 1, 0)
+		})),
+		telemetry: telemetry,
+		pending:   make([]profileStack, 0, flushThreshold),
 	}
 }
 
@@ -72,13 +87,19 @@ func (b *stackBatcher) enabled() bool {
 	return b != nil && b.cancel != nil
 }
 
-func (b *stackBatcher) recordStack(s profileStack) {
+func (b *stackBatcher) recordStack(ctx context.Context, s profileStack) {
 	if !b.enabled() {
 		return
 	}
 	select {
 	case b.ch <- s:
 	default:
+		if b.telemetry != nil {
+			b.telemetry.OdigosAutopilotProfilesExporterQueueDroppedStacks.Add(ctx, 1)
+		}
+		b.throttledLogger.Warn("autopilot profiles redis is too slow to keep up; skipping some stacks, call trees fill in from later profiles",
+			zap.Int("queue_size", cap(b.ch)),
+		)
 	}
 }
 
@@ -94,8 +115,25 @@ func (b *stackBatcher) flush(ctx context.Context) {
 	if b.writer == nil {
 		return
 	}
-	if err := b.writer.insertStacks(ctx, toFlush); err != nil {
-		b.logger.Error("autopilot profiles redis insert failed", zap.Error(err))
+	start := time.Now()
+	err := b.writer.insertStacks(ctx, toFlush)
+	if b.telemetry != nil {
+		b.telemetry.OdigosAutopilotProfilesExporterCacheWriteDuration.Record(ctx, time.Since(start).Seconds())
+	}
+	if err != nil {
+		b.failing = true
+		if b.telemetry != nil {
+			b.telemetry.OdigosAutopilotProfilesExporterCacheWriteFailedStacks.Add(ctx, int64(len(toFlush)))
+		}
+		b.throttledLogger.Error("autopilot profiles redis insert failed; dropping stacks", zap.Error(err))
+		return
+	}
+	if b.telemetry != nil {
+		b.telemetry.OdigosAutopilotProfilesExporterCacheWrittenStacks.Add(ctx, int64(len(toFlush)))
+	}
+	if b.failing {
+		b.failing = false
+		b.logger.Info("autopilot profiles redis insert recovered")
 	}
 }
 

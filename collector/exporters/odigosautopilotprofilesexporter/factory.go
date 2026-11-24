@@ -36,5 +36,5 @@ func createProfilesExporter(
 	set exporter.Settings,
 	cfg component.Config,
 ) (xexporter.Profiles, error) {
-	return newExporter(set.Logger, cfg.(*Config)), nil
+	return newExporter(set.Logger, set.TelemetrySettings, cfg.(*Config)), nil
 }

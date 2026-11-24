@@ -8,3 +8,38 @@ status:
   distributions: [odigos]
   codeowners:
     active: [blumamir]
+
+telemetry:
+  metrics:
+    odigos.autopilot_profiles.exporter.cache_write.duration:
+      enabled: true
+      description: "Time to write one batch of profile stacks to the cache, successful or not."
+      unit: "s"
+      histogram:
+        value_type: double
+        bucket_boundaries: [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+      stability: development
+    odigos.autopilot_profiles.exporter.cache_write_failed.stacks:
+      enabled: true
+      description: "Profile stacks dropped because their batch failed to write to the cache."
+      unit: "{stacks}"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development
+    odigos.autopilot_profiles.exporter.cache_written.stacks:
+      enabled: true
+      description: "Profile stacks in batches written to the cache successfully."
+      unit: "{stacks}"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development
+    odigos.autopilot_profiles.exporter.queue_dropped.stacks:
+      enabled: true
+      description: "Profile stacks dropped because the batcher queue was full while cache writes fell behind."
+      unit: "{stacks}"
+      sum:
+        value_type: int
+        monotonic: true
+      stability: development

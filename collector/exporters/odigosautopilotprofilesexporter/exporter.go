@@ -8,36 +8,45 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pprofile"
 	"go.uber.org/zap"
+
+	"github.com/odigos-io/odigos/collector/exporters/odigosautopilotprofilesexporter/internal/metadata"
 )
 
 const profileFrameTypeKey = "profile.frame.type"
 
 type autopilotProfilesExporter struct {
-	logger  *zap.Logger
-	cfg     *Config
-	batcher *stackBatcher
+	logger    *zap.Logger
+	cfg       *Config
+	batcher   *stackBatcher
+	telemetry *metadata.TelemetryBuilder
 }
 
-func newExporter(logger *zap.Logger, cfg *Config) *autopilotProfilesExporter {
+func newExporter(logger *zap.Logger, tel component.TelemetrySettings, cfg *Config) *autopilotProfilesExporter {
+	telemetry, err := metadata.NewTelemetryBuilder(tel)
+	if err != nil {
+		logger.Error("failed to create telemetry builder", zap.Error(err))
+		telemetry = nil
+	}
 	return &autopilotProfilesExporter{
-		logger:  logger,
-		cfg:     cfg,
-		batcher: newStackBatcher(cfg.FlushInterval, cfg.FlushThreshold, logger),
+		logger:    logger,
+		cfg:       cfg,
+		batcher:   newStackBatcher(cfg.FlushInterval, cfg.FlushThreshold, logger, telemetry),
+		telemetry: telemetry,
 	}
 }
 
 func (e *autopilotProfilesExporter) Start(context.Context, component.Host) error {
 	keyTTL := 2 * e.cfg.GroupByTraceWaitDuration
-	rdb, err := openProfilesRedis(e.cfg.RedisEndpoint, keyTTL, e.logger)
+	rdb, err := newProfilesRedis(e.cfg.RedisEndpoint, keyTTL, e.logger)
 	if err != nil {
-		e.logger.Error("autopilot profiles redis unavailable; continuing without it",
+		e.logger.Error("autopilot profiles redis misconfigured; continuing without it",
 			zap.String("endpoint", e.cfg.RedisEndpoint),
 			zap.Error(err),
 		)
 		return nil
 	}
 	e.batcher.start(rdb)
-	e.logger.Info("autopilot profiles redis connected",
+	e.logger.Info("autopilot profiles redis writer ready",
 		zap.String("endpoint", e.cfg.RedisEndpoint),
 		zap.Duration("group_by_trace_wait_duration", e.cfg.GroupByTraceWaitDuration),
 		zap.Duration("redis_key_ttl", keyTTL),
@@ -48,6 +57,9 @@ func (e *autopilotProfilesExporter) Start(context.Context, component.Host) error
 }
 
 func (e *autopilotProfilesExporter) Shutdown(context.Context) error {
+	if e.telemetry != nil {
+		defer e.telemetry.Shutdown()
+	}
 	if err := e.batcher.stop(); err != nil {
 		e.logger.Warn("autopilot profiles redis close failed", zap.Error(err))
 		return err
@@ -61,12 +73,12 @@ func (e *autopilotProfilesExporter) Capabilities() consumer.Capabilities {
 
 // ConsumeProfiles queues linked sample stacks to Redis for later correlation
 // by the insights autopilot service.
-func (e *autopilotProfilesExporter) ConsumeProfiles(_ context.Context, profiles pprofile.Profiles) error {
+func (e *autopilotProfilesExporter) ConsumeProfiles(ctx context.Context, profiles pprofile.Profiles) error {
 	if !e.batcher.enabled() {
 		return nil
 	}
 	for _, s := range profileStacksFrom(profiles) {
-		e.batcher.recordStack(s)
+		e.batcher.recordStack(ctx, s)
 	}
 	return nil
 }
