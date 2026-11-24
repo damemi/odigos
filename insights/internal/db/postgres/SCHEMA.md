@@ -10,7 +10,7 @@ replicas never overwrite each other.
 |---|---|---|
 | `sources` | `source_id` | Insert-if-missing. The Odigos source a transaction came from and its `platform`, which names the table holding its fields. The id is a hash of the source identity. |
 | `k8s_source_identity` | `source_id` | Insert-if-missing. Typed fields of a `k8s` source (namespace, workload kind/name, container). A new platform gets its own `<platform>_source_identity` table. |
-| `transactions` | `transaction_id` | Overwrite. The id is a hash of `(service, namespace, operation, entry_kind, source identity)`; `source_id` points at its source. The namespace is not stored here - it belongs to the source. |
+| `transactions` | `transaction_id` | Overwrite. The id is a hash of `(service, namespace, operation, entry_kind, source identity)`; `source_id` points at its source. `operation` is the entry span's name with the identity dimensions appended (`POST /buy [http.response.status_code=200]`); `operation_name` and `attributes` hold the two parts. The namespace is not stored here - it belongs to the source. |
 | `transaction_activity` | `transaction_id` | `volume` summed, `last_seen` max. Powers "most active" ordering. |
 
 Queries that need a transaction's namespace join the source's platform table

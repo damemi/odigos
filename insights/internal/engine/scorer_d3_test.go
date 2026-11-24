@@ -49,15 +49,16 @@ func TestD3_AboveP99Deviates(t *testing.T) {
 	traces = append(traces, latencyTrace(500))
 	baseline := learnD3(t, traces...)
 
-	if dev, _, _ := (d3Latency{}).Score(latencyTrace(127), baseline); dev {
-		t.Errorf("latency at p99 must not deviate")
+	// Up to 50% over p99 (190us) is noise.
+	if dev, _, _ := (d3Latency{}).Score(latencyTrace(190), baseline); dev {
+		t.Errorf("latency within 50%% of p99 must not deviate")
 	}
 
-	dev, ev, _ := (d3Latency{}).Score(latencyTrace(128), baseline)
+	dev, ev, _ := (d3Latency{}).Score(latencyTrace(191), baseline)
 	if !dev {
-		t.Fatalf("expected deviation for latency above p99")
+		t.Fatalf("expected deviation for latency over 50%% above p99")
 	}
-	if !contains(string(ev), "128") || !contains(string(ev), "latency_p99") {
+	if !contains(string(ev), "191") || !contains(string(ev), "latency_p99") {
 		t.Errorf("evidence missing latency details: %s", ev)
 	}
 }

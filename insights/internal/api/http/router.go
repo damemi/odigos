@@ -49,6 +49,10 @@ func NewRouter(r repo.Repository, log *commonlogger.OdigosLogger) (*gin.Engine, 
 		// service - backs the per-anomaly blast-radius map.
 		v1.GET("/services/blast-radius", api.getServiceBlastRadius)
 
+		// A workload container's transactions with their autopilot call trees -
+		// backs the Profiling page's "By transaction" view.
+		v1.GET("/autopilot/call-trees", api.listAutopilotCallTrees)
+
 		// Transactions the UI browses, most frequent first. Filterable by
 		// ?namespace=&service= (drill into one service) and ?kind=HTTP|GRPC|...
 		v1.GET("/transactions", api.listTransactions)

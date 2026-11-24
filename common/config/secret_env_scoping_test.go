@@ -658,14 +658,15 @@ var secretScopingCases = map[common.DestinationType][]secretScopingCase{
 		signals:           []common.ObservabilitySignal{sigTraces, sigLogs},
 		wantScopedSecrets: []string{"SEQ_API_KEY"},
 	}},
+	// SIGNALFX_CA_PEM is secret, so it is absent from spec.data; SIGNALFX_USE_CUSTOM_CA is the
+	// non-secret field that says the Secret carries one.
 	"signalfx": {{
 		config: map[string]string{
-			"SIGNALFX_ACCESS_TOKEN": "signalfx-access-token-value",
-			"SIGNALFX_CA_PEM":       "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----",
-			"SIGNALFX_REALM":        "signalfx-realm-value",
+			"SIGNALFX_REALM":         "signalfx-realm-value",
+			"SIGNALFX_USE_CUSTOM_CA": "true",
 		},
 		signals:           []common.ObservabilitySignal{sigTraces, sigMetrics},
-		wantScopedSecrets: []string{"SIGNALFX_ACCESS_TOKEN"},
+		wantScopedSecrets: []string{"SIGNALFX_ACCESS_TOKEN", "SIGNALFX_CA_PEM"},
 	}},
 	"signoz": {{
 		config: map[string]string{

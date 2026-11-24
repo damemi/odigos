@@ -269,14 +269,14 @@ spec:
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
           # HTTP
-          "go.opentelemetry.io/auto/net/http":
+          "github.com/odigos-io/enterprise-go-instrumentation/net/http":
             - new_attribute: "odigos.category"
               value: "HTTP"
             - new_attribute: "odigos.sub_category"
               from_field: "http.request.method"
             - new_attribute: "odigos.transaction.type"
               value: "web"
-          "go.opentelemetry.io/auto/github.com/gin-gonic/gin":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/gin-gonic/gin":
             - new_attribute: "odigos.category"
               value: "HTTP"
             - new_attribute: "odigos.sub_category"
@@ -285,30 +285,21 @@ spec:
               value: "web"
 
           # Database
-          "go.opentelemetry.io/auto/database/sql":
+          "github.com/odigos-io/enterprise-go-instrumentation/database/sql":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
               from_field: "db.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/bradfitz/gomemcache/memcache":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/bradfitz/gomemcache/memcache":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
               from_field: "db.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/go-redis/redis/v7":
-            - new_attribute: "odigos.category"
-              value: "Database"
-            - new_attribute: "odigos.sub_category"
-              from_field: "db.system"
-            - new_attribute: "odigos.sub_category"
-              from_field: "db.system.name"
-            - new_attribute: "odigos.transaction.type"
-              value: "non-web"
-          "go.opentelemetry.io/auto/github.com/go-redis/redis/v8":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/go-redis/redis/v7":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
@@ -317,7 +308,7 @@ spec:
               from_field: "db.system.name"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/redis/go-redis/v9":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/go-redis/redis/v8":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
@@ -326,35 +317,44 @@ spec:
               from_field: "db.system.name"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/elastic/go-elasticsearch":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/redis/go-redis/v9":
+            - new_attribute: "odigos.category"
+              value: "Database"
+            - new_attribute: "odigos.sub_category"
+              from_field: "db.system"
+            - new_attribute: "odigos.sub_category"
+              from_field: "db.system.name"
+            - new_attribute: "odigos.transaction.type"
+              value: "non-web"
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/elastic/go-elasticsearch":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
               from_field: "db.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/gocql/gocql":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/gocql/gocql":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
               from_field: "db.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/ClickHouse/clickhouse-go/v2":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/ClickHouse/clickhouse-go/v2":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
               from_field: "db.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/jackc/pgx":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/jackc/pgx":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
               from_field: "db.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/aws/aws-sdk-go-v2/service/dynamodb":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/aws/aws-sdk-go-v2/service/dynamodb":
             - new_attribute: "odigos.category"
               value: "Database"
             - new_attribute: "odigos.sub_category"
@@ -365,28 +365,28 @@ spec:
               value: "non-web"
 
           # Messaging Queues
-          "go.opentelemetry.io/auto/github.com/segmentio/kafka-go":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/segmentio/kafka-go":
             - new_attribute: "odigos.category"
               value: "Messaging queues"
             - new_attribute: "odigos.sub_category"
               from_field: "messaging.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/IBM/sarama":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/IBM/sarama":
             - new_attribute: "odigos.category"
               value: "Messaging queues"
             - new_attribute: "odigos.sub_category"
               from_field: "messaging.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/rabbitmq/amqp091-go":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/rabbitmq/amqp091-go":
             - new_attribute: "odigos.category"
               value: "Messaging queues"
             - new_attribute: "odigos.sub_category"
               from_field: "messaging.system"
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
-          "go.opentelemetry.io/auto/github.com/apache/pulsar-client-go/pulsar":
+          "github.com/odigos-io/enterprise-go-instrumentation/github.com/apache/pulsar-client-go/pulsar":
             - new_attribute: "odigos.category"
               value: "Messaging queues"
             - new_attribute: "odigos.sub_category"
@@ -394,7 +394,7 @@ spec:
             - new_attribute: "odigos.transaction.type"
               value: "non-web"
           # RPC Systems
-          "go.opentelemetry.io/auto/google.golang.org/grpc":
+          "github.com/odigos-io/enterprise-go-instrumentation/google.golang.org/grpc":
             - new_attribute: "odigos.category"
               value: "RPC Systems"
             - new_attribute: "odigos.sub_category"

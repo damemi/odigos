@@ -281,8 +281,8 @@ github.com/odigos-io/ebpf-java-instrumentation/v2 v2.63.0 h1:9WJc1GJCkrozrX0XqXC
 github.com/odigos-io/ebpf-java-instrumentation/v2 v2.63.0/go.mod h1:RqQyYsqblnLjKAckIFpEcbfFo2GhlZaCAc0y+YyABqQ=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.21.0 h1:WIiDN1wRkEeaWmg5Xs0TDMQ0CzXep0AK5jCJDHqMO/U=
 github.com/odigos-io/ebpf-nodejs-instrumentation v0.21.0/go.mod h1:pXCGQ5GpWuu6Rhvyye1qLpXS+loKe5aO4djbr3h7VM0=
-github.com/odigos-io/enterprise-go-instrumentation v1.34.0 h1:ik1PnpY+iIjOQfPanxr2Y/4uwTJjB2Ecunjt5dXbrL8=
-github.com/odigos-io/enterprise-go-instrumentation v1.34.0/go.mod h1:lgtE7phrHgzm/KcmXRZh+COOlGyfWuFUolU9qN0CmGc=
+github.com/odigos-io/enterprise-go-instrumentation v1.35.0 h1:ChZOM5MKoj1F6FU+YInsPhGY3AN4eQpaht3G8Dt/65g=
+github.com/odigos-io/enterprise-go-instrumentation v1.35.0/go.mod h1:FmP2FTARcCXeqahpy1ely+8qc9JEibiMbJ6+tat4McY=
 github.com/odigos-io/odigos-device-plugin v1.19.8 h1:YsNALk+mZeMVvgvn7FYGUKEPuZizODyJnP17a0ZMgaY=
 github.com/odigos-io/odigos-device-plugin v1.19.8/go.mod h1:hE6uBely/Hblo3G3PbkzMFq0/OUlvE8VEQxZAX+2fro=
 github.com/odigos-io/python-ebpf v0.0.0-20261104125337-291ec51988a2 h1:SCJU5dSNlcA7i0j5p6rivyY+qlhI7agQLF8z6P8lKBE=

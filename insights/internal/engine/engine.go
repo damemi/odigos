@@ -215,8 +215,12 @@ func (e *Engine) processOne(ctx context.Context, t *Trace, full *Trace, claims *
 	// that names their scheme, and the inventory generation it belongs to all
 	// come from the same settings generation.
 	system := e.system.snapshot()
-	ident.Operation = applyIdentityDimensions(ident.Operation, t.Root, system.settings.TransactionIdentityDimensions)
+	operationName := ident.Operation
+	attrs := identityAttributes(t.Root, system.settings.TransactionIdentityDimensions)
+	ident.Operation = applyIdentityDimensions(ident.Operation, attrs)
 	tx := repo.NewTransaction(ident.Service, ident.Namespace, ident.Operation, ident.Kind, sourceIdentity)
+	tx.OperationName = operationName
+	tx.Attributes = attrs
 	// 1a. Per-service cap on distinct transactions. An identity the inventory
 	// does not know yet is dropped once its service is full, before anything
 	// (guardrail state, baselines, activity, samples) is recorded for it. This

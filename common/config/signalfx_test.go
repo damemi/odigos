@@ -149,6 +149,81 @@ func TestSignalFxTLSAppliesToEveryExporter(t *testing.T) {
 	assert.Equal(t, GenericMap{"insecure_skip_verify": true}, tracesTLS)
 }
 
+// SIGNALFX_CA_PEM is a secret field, so it is stored in the Destination Secret and is not visible
+// in GetConfig. A supplied CA must therefore be gated on the non-secret SIGNALFX_USE_CUSTOM_CA and
+// read through the destination-scoped env var, on both exporters.
+func TestSignalFxCustomCAReachesEveryExporter(t *testing.T) {
+	dest := &mockDestination{
+		id: "signalfx.example",
+		config: map[string]string{
+			signalfxRealm:       "us0",
+			signalfxUseCustomCa: "true",
+		},
+		signals: []common.ObservabilitySignal{
+			common.TracesObservabilitySignal,
+			common.MetricsObservabilitySignal,
+		},
+	}
+	cfg := newSignalFxConfig()
+
+	_, err := (&SignalFx{}).ModifyConfig(dest, &cfg)
+	require.NoError(t, err)
+
+	want := GenericMap{
+		"insecure_skip_verify": false,
+		"ca_pem":               "${ODIGOS_DEST_signalfx_example_SIGNALFX_CA_PEM}",
+	}
+	for _, exporter := range []string{"signalfx/signalfx.example", "otlp_http/signalfx-signalfx.example"} {
+		tls, ok := cfg.Exporters[exporter].(GenericMap)["tls"].(GenericMap)
+		require.True(t, ok, "%s has no tls block", exporter)
+		assert.Equal(t, want, tls, exporter)
+		// ca_file would point at a path nothing mounts into the gateway pod.
+		assert.NotContains(t, tls, "ca_file", exporter)
+	}
+}
+
+// The certificate lives in the Secret, so leaving the checkbox off must not emit a ca reference
+// the collector would then fail to resolve.
+func TestSignalFxCustomCANotRequestedEmitsNoCA(t *testing.T) {
+	dest := &mockDestination{
+		id: "signalfx.example",
+		config: map[string]string{
+			signalfxRealm:              "us0",
+			signalfxInsecureSkipVerify: "true",
+		},
+		signals: []common.ObservabilitySignal{common.MetricsObservabilitySignal},
+	}
+	cfg := newSignalFxConfig()
+
+	_, err := (&SignalFx{}).ModifyConfig(dest, &cfg)
+	require.NoError(t, err)
+
+	tls := cfg.Exporters["signalfx/signalfx.example"].(GenericMap)["tls"].(GenericMap)
+	assert.Equal(t, GenericMap{"insecure_skip_verify": true}, tls)
+}
+
+// A custom CA and skipped verification are independent, so both can be set at once.
+func TestSignalFxCustomCAWithInsecureSkipVerify(t *testing.T) {
+	dest := &mockDestination{
+		id: "signalfx.example",
+		config: map[string]string{
+			signalfxRealm:              "us0",
+			signalfxUseCustomCa:        "true",
+			signalfxInsecureSkipVerify: "true",
+		},
+		signals: []common.ObservabilitySignal{common.MetricsObservabilitySignal},
+	}
+	cfg := newSignalFxConfig()
+
+	_, err := (&SignalFx{}).ModifyConfig(dest, &cfg)
+	require.NoError(t, err)
+
+	assert.Equal(t, GenericMap{
+		"insecure_skip_verify": true,
+		"ca_pem":               "${ODIGOS_DEST_signalfx_example_SIGNALFX_CA_PEM}",
+	}, cfg.Exporters["signalfx/signalfx.example"].(GenericMap)["tls"])
+}
+
 func TestSignalFxNoTLSCustomizationLeavesExporterDefaults(t *testing.T) {
 	dest := &mockDestination{
 		id:      "signalfx.example",

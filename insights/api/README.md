@@ -80,6 +80,10 @@ detail on click**.
 - **Service overview / all transactions** → `GET /transactions` (has volume + last_seen)
 - **Drill into one service** → `GET /transactions?namespace=&service=`
 
+### Profiling: by transaction
+
+- **A Java service's transactions and the functions each runs** → `GET /autopilot/call-trees?namespace=&workload_kind=&workload_name=&container_name=` (the call trees autopilot built from profile stacks; `limit`/`offset` to page)
+
 ### Anomaly investigate / compare
 
 1. `GET /anomalies/{transaction_id}/{signature}` - full investigate page payload:

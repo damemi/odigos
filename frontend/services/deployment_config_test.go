@@ -117,7 +117,7 @@ func TestBuildConfigResponseAutopilotEnabled(t *testing.T) {
 				k8sconsts.OdigosDeploymentConfigMapInstallationStatusKey: string(Finished),
 			})
 
-			assert.Equal(t, tt.want, config.InterrogationEnabled)
+			assert.Equal(t, tt.want, config.AutopilotEnabled)
 		})
 	}
 }

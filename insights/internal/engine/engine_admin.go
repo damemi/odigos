@@ -337,7 +337,7 @@ func (e *Engine) subTransactionID(sub *Trace, dims []repo.TransactionIdentityDim
 	if !ok {
 		return 0, false
 	}
-	operation := applyIdentityDimensions(ident.Operation, sub.Root, dims)
+	operation := applyIdentityDimensions(ident.Operation, identityAttributes(sub.Root, dims))
 	return repo.HashTransactionID(ident.Service, ident.Namespace, operation, ident.Kind, sourceIdentity), true
 }
 

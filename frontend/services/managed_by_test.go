@@ -20,7 +20,7 @@ func TestManagedByFromLabels(t *testing.T) {
 	require.Equal(t, model.ManagedByOdigosUI, managedByFromLabels(map[string]string{
 		k8sconsts.OdigosProfilesManagedByLabel: k8sconsts.OdigosUIManagedByValue,
 	}))
-	require.Equal(t, model.ManagedByInterrogationLoop, managedByFromLabels(map[string]string{
+	require.Equal(t, model.ManagedByAutopilotLoop, managedByFromLabels(map[string]string{
 		k8sconsts.OdigosProfilesManagedByLabel: k8sconsts.OdigosAutopilotLoopManagedByValue,
 	}))
 	require.Equal(t, model.ManagedByLiveTrafficLearning, ManagedByFromLabels(map[string]string{

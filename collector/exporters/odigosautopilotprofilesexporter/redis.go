@@ -85,7 +85,11 @@ type profilesRedis struct {
 	keyTTL time.Duration
 }
 
-func openProfilesRedis(endpoint string, keyTTL time.Duration, logger *zap.Logger) (*profilesRedis, error) {
+// newProfilesRedis builds the cacheDb client without dialing. go-redis
+// connects lazily and redials on every command, so a Redis that is unreachable
+// at startup (cacheDb still rolling out) is picked up on a later flush instead
+// of disabling the exporter for the life of the pod.
+func newProfilesRedis(endpoint string, keyTTL time.Duration, logger *zap.Logger) (*profilesRedis, error) {
 	if keyTTL <= 0 {
 		return nil, fmt.Errorf("redis key TTL must be positive")
 	}
@@ -97,12 +101,6 @@ func openProfilesRedis(endpoint string, keyTTL time.Duration, logger *zap.Logger
 		WriteTimeout:          2 * time.Second,
 		ContextTimeoutEnabled: true,
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	if err := client.Ping(ctx).Err(); err != nil {
-		_ = client.Close()
-		return nil, fmt.Errorf("ping redis: %w", err)
-	}
 	return &profilesRedis{
 		rdb:    client,
 		closer: client.Close,

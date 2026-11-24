@@ -14,10 +14,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/odigos-io/odigos/common"
-	"github.com/odigos-io/odigos/frontend/services"
 )
 
 // Must match the insights autopilot storage layout (insights/internal/autopilot/store).
@@ -171,20 +167,6 @@ func (c *Client) query(ctx context.Context, sql string, args ...any) (pgx.Rows, 
 		return nil, nil, err
 	}
 	return rows, cancel, nil
-}
-
-// IsEnabled reports whether autopilot is enabled in effective config.
-func IsEnabled(ctx context.Context, c client.Client) (bool, error) {
-	cfg, err := services.GetEffectiveConfig(ctx, c)
-	if err != nil {
-		return false, err
-	}
-	return EnabledFromOdigosConfig(cfg), nil
-}
-
-// EnabledFromOdigosConfig reports whether autopilot is enabled for a loaded config.
-func EnabledFromOdigosConfig(cfg *common.OdigosConfiguration) bool {
-	return cfg.AutopilotEnabled()
 }
 
 // ListSources returns every workload container that has stored transactions, in

@@ -89,6 +89,10 @@ type Transaction struct {
 	// transactions. Not stored as-is: the DB keeps the source's typed fields,
 	// so it is empty on a transaction read back from the DB.
 	SourceIdentity map[string]string
+	// OperationName is the entry span's name without the identity dimensions
+	// Operation carries, and Attributes those dimensions in settings order.
+	OperationName string
+	Attributes    []TransactionIdentityValue
 }
 
 // TransactionRef is a transaction's id and the service it belongs to, without

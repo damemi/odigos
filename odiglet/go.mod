@@ -11,6 +11,7 @@ require (
 	github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 v2.63.0
 	github.com/odigos-io/ebpf-java-instrumentation/v2 v2.63.0
 	github.com/odigos-io/ebpf-nodejs-instrumentation v0.21.0
+	github.com/odigos-io/enterprise-go-instrumentation v1.35.0
 	github.com/odigos-io/odigos/api v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/common v0.0.0-00010101000000-000000000000
 	github.com/odigos-io/odigos/deviceplugin v0.0.0-00010101000000-000000000000
@@ -25,7 +26,6 @@ require (
 	github.com/odigos-io/runtime-detector v0.0.25
 	github.com/opencontainers/cgroups v0.0.6
 	github.com/stretchr/testify v1.12.1
-	go.opentelemetry.io/auto v0.24.0
 	go.opentelemetry.io/collector/consumer v1.67.0
 	go.opentelemetry.io/collector/consumer/consumertest v0.161.0
 	go.opentelemetry.io/collector/exporter v1.67.0
@@ -270,12 +270,6 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.0 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-// currently, enterprise-go-instrumentation has no versioning or releases, so we pin it to main here.
-// it would be better to import "github.com/odigos-io/enterprise-go-instrumentation" directly,
-// but this is not possible at the moment since the enterprise fork still uses "go.opentelemetry.io/auto"
-// for it's name, which needs to be changed first.
-replace go.opentelemetry.io/auto => github.com/odigos-io/enterprise-go-instrumentation v1.34.0
 
 // parca-agent pins cloud.google.com/go/compute v1.6.1, which still embeds cloud.google.com/go/compute/metadata.
 // grpc and OTel GCP detectors use the standalone cloud.google.com/go/compute/metadata module — same import path, two modules.

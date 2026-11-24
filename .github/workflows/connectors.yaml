@@ -15,8 +15,8 @@ on:
     types: [checks_requested]
   pull_request:
     branches: [main, "releases/**"]
-    # labeled/unlabeled re-run the build when a "build: arm" or "build: no-cache" label is added or removed.
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    # No labeled/unlabeled: pr-label-rerun.yaml re-runs this workflow when a label it reads changes.
+    types: [opened, synchronize, reopened]
 
 env:
   IMAGE_TAG: pr-${{ github.event.number || github.run_number }}-${{ github.run_id }}

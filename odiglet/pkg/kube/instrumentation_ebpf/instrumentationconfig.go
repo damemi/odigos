@@ -88,7 +88,7 @@ func (i *InstrumentationConfigReconciler) Reconcile(ctx context.Context, req ctr
 
 	// potentially send instrumentation requests for processes that are part of the instrumented workload and support
 	// instrumentation without restart
-	instrumentationRequestErr := i.sendInstrumentationRequest(ctx, podWorkload, instrumentationConfig)
+	instrumentationRequestErr := sendInstrumentationRequest(ctx, i.Client, i.InstrumentationRequests, i.DistributionGetter, podWorkload, instrumentationConfig)
 	if instrumentationRequestErr != nil {
 		return resolveErrReconcileResult(instrumentationRequestErr)
 	}
@@ -155,7 +155,8 @@ func (i *InstrumentationConfigReconciler) sendConfigUpdates(ctx context.Context,
 
 // sendInstrumentationRequest sends an instrumentation request for all processes that are part of the given workload
 // and run in containers that support instrumentation without a restart.
-func (i *InstrumentationConfigReconciler) sendInstrumentationRequest(ctx context.Context, podWorkload k8sconsts.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error {
+func sendInstrumentationRequest(ctx context.Context, c client.Client, requests ebpf.K8sInstrumentationRequests, distributionGetter *distros.Getter,
+	podWorkload k8sconsts.PodWorkload, instrumentationConfig *odigosv1.InstrumentationConfig) error {
 	// check for distributions that support instrumentation without a restart
 	distroByContainer := make(map[string]*distro.OtelDistro)
 	for _, containerConfig := range instrumentationConfig.Spec.Containers {
@@ -167,7 +168,7 @@ func (i *InstrumentationConfigReconciler) sendInstrumentationRequest(ctx context
 			// if the manifest injection is optional, we can send an instrumentation request here and have it instrumented without a restart.
 			continue
 		}
-		d := i.DistributionGetter.GetDistroByName(containerConfig.OtelDistroName)
+		d := distributionGetter.GetDistroByName(containerConfig.OtelDistroName)
 		distroByContainer[containerConfig.ContainerName] = d
 	}
 
@@ -176,7 +177,7 @@ func (i *InstrumentationConfigReconciler) sendInstrumentationRequest(ctx context
 		return nil
 	}
 
-	selectedPods, err := kubecommon.WorkloadPodsOnCurrentNode(i.Client, ctx, instrumentationConfig)
+	selectedPods, err := kubecommon.WorkloadPodsOnCurrentNode(c, ctx, instrumentationConfig)
 	if err != nil {
 		return err
 	}
@@ -257,7 +258,7 @@ func (i *InstrumentationConfigReconciler) sendInstrumentationRequest(ctx context
 	// try to send the request, return an error if the consumer is busy
 	// the caller (controller) can retry/requeue the handling
 	select {
-	case i.InstrumentationRequests <- ir:
+	case requests <- ir:
 		return nil
 	default:
 		return &consumerBusyError{instrumentationRequestType}

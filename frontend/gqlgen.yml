@@ -137,13 +137,6 @@ models:
       processes:
         resolver: true
 
-  AutopilotTransaction:
-    fields:
-      sampleTrace:
-        resolver: true
-      callTrie:
-        resolver: true
-
   K8sActualSource:
     fields:
       profiling:

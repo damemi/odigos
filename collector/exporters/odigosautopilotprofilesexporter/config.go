@@ -12,6 +12,7 @@ const (
 	defaultGroupByTraceWaitDuration = 30 * time.Second
 	defaultFlushInterval            = 5 * time.Second
 	defaultFlushThreshold           = 500
+	failureLogEvery                 = time.Minute
 )
 
 // Config configures the autopilot profiles exporter.

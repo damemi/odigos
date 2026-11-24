@@ -861,6 +861,45 @@ type AnomalySpanHighlight struct {
 // AnomalyStatus Lifecycle bucket. `accepted` means the operator confirmed the behaviour is legitimate and folded it into the baseline (it stops re-alerting) - the shared affirmative term with ViolationStatus.
 type AnomalyStatus string
 
+// AutopilotCallTreeList defines model for AutopilotCallTreeList.
+type AutopilotCallTreeList struct {
+	Count int                            `json:"count"`
+	Items []AutopilotCallTreeTransaction `json:"items"`
+}
+
+// AutopilotCallTreeNode One function on a call path of the transaction's profile stacks.
+type AutopilotCallTreeNode struct {
+	// FrameType The profile frame type, e.g. `jvm` or `hotspot`.
+	FrameType    string `json:"frame_type"`
+	FunctionName string `json:"function_name"`
+
+	// Id Unique within the transaction: `<sample_type>:<stored node id>`. A call path has the same stored id in each sample type's tree.
+	Id string `json:"id"`
+
+	// ParentId The parent node's `id`. Absent for roots.
+	ParentId string `json:"parent_id,omitempty"`
+
+	// SampleType `samples` (periodic CPU samples) or `events`.
+	SampleType string `json:"sample_type"`
+}
+
+// AutopilotCallTreeTransaction One transaction's call trees, one per sample type, as a flat node list.
+type AutopilotCallTreeTransaction struct {
+	// EntryKind HTTP, GRPC, CONSUMER, PRODUCER, CRON or INTERNAL. Absent with `operation`.
+	EntryKind string `json:"entry_kind,omitempty"`
+
+	// IdentityDimensions The identity dimensions parsed from `operation`, as in `Transaction.identity_dimensions`. Absent with `operation`.
+	IdentityDimensions []TransactionIdentityValue `json:"identity_dimensions,omitempty"`
+	Nodes              []AutopilotCallTreeNode    `json:"nodes"`
+
+	// Operation The transaction's operation, as in `Transaction.operation`. Absent until insights stores the transaction.
+	Operation string `json:"operation,omitempty"`
+
+	// OperationName The operation without its identity dimensions, as in `Transaction.operation_name`. Absent with `operation`.
+	OperationName string `json:"operation_name,omitempty"`
+	TransactionId int64  `json:"transaction_id"`
+}
+
 // BaselineClass Examples: {"class":"D2_egress","class_description":"Learned set of external destinations (host:port) this transaction reaches.","class_label":"Outbound peers","data":{"peers":["default/pricing","default/cart","checkout.stripe.com:443"]},"data_schema_version":1,"last_changed_at":"2026-07-12T11:20:05Z","learning":{"mode":"any","observations_since_last_change":7213,"phase":"promoted","quiet_minutes":1200,"ready_to_promote":false,"stability":{"duration":{"current":1200,"drives_promotion":false,"met":false,"target":0},"observations":{"current":7213,"drives_promotion":true,"met":true,"target":50}}},"learning_started_at":"2026-07-01T09:00:00Z","observation_count":15234,"observation_count_at_last_change":8021,"promoted":true,"transaction_id":4211}
 type BaselineClass struct {
 	// Class One baseline dimension; the scoring engine is the source of truth.
@@ -3468,6 +3507,28 @@ type ListAnomaliesParams struct {
 
 	// TransactionId Limit to one transaction's issues (e.g. transaction detail page).
 	TransactionId int64 `form:"transaction_id,omitempty" json:"transaction_id,omitempty"`
+}
+
+// ListAutopilotCallTreesParams defines parameters for ListAutopilotCallTrees.
+type ListAutopilotCallTreesParams struct {
+	Namespace string `form:"namespace" json:"namespace"`
+
+	// WorkloadKind The workload's kind, e.g. `Deployment`.
+	WorkloadKind  string `form:"workload_kind" json:"workload_kind"`
+	WorkloadName  string `form:"workload_name" json:"workload_name"`
+	ContainerName string `form:"container_name" json:"container_name"`
+
+	// TransactionId Only these transactions. Repeat the parameter for several.
+	TransactionId []int64 `form:"transaction_id,omitempty" json:"transaction_id,omitempty"`
+
+	// Search Substring of the transaction id.
+	Search string `form:"search,omitempty" json:"search,omitempty"`
+
+	// Limit At most this many transactions. Omit for all.
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Skip this many matching transactions, for paging.
+	Offset int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListFindingsParams defines parameters for ListFindings.

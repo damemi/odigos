@@ -409,9 +409,9 @@ export const GET_NAMESPACES_WITH_WORKLOADS = gql`
   }
 `;
 
-// Autopilot transactions with their call tries, for the Autopilot page.
-export const GET_INTERROGATION_TRANSACTIONS = gql`
-  query GetInterrogationTransactions($ids: [K8sWorkloadIdInput!]!) {
+// Autopilot transactions with their call trees, for the Profiling page's By transaction view.
+export const GET_AUTOPILOT_TRANSACTIONS = gql`
+  query GetAutopilotTransactions($ids: [K8sWorkloadIdInput!]!) {
     workloadsByIds(ids: $ids) {
       id {
         namespace
@@ -420,26 +420,21 @@ export const GET_INTERROGATION_TRANSACTIONS = gql`
       }
       containers {
         containerName
-        interrogationTransactions {
+        autopilotTransactions {
           id
-          operation
-          kind
-          seenCount
-          functions {
-            name
-            frameType
-            frameKind
-            sampleType
-            seenCount
+          operationName
+          identityDimensions {
+            key
+            value
           }
-          callTrie {
+          kind
+          callTree {
             id
             parentId
             name
             frameType
             frameKind
             sampleType
-            seenCount
           }
         }
       }

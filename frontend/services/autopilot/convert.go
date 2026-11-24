@@ -1,8 +1,12 @@
 package autopilot
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/odigos-io/odigos/common/autopilot"
 	"github.com/odigos-io/odigos/frontend/graph/model"
+	"github.com/odigos-io/odigos/frontend/services/insights"
 )
 
 // Only JVM frames carry Java package names the classifier understands.
@@ -28,26 +32,44 @@ func classifyFrame(name, frameType string) model.AutopilotFrameKind {
 	return frameKindToModel[autopilot.ClassifyFrame(name)]
 }
 
-// TransactionsToModel converts stored transactions to GraphQL models.
-func TransactionsToModel(txs []Transaction) []*model.AutopilotTransaction {
+// TransactionIDs parses GraphQL transaction ids for the insights API. Ids that
+// aren't insights ids (signed 64-bit integers) match nothing, so they are
+// dropped; ok is false when none is left.
+func TransactionIDs(ids []string) (parsed []int64, ok bool) {
+	for _, id := range ids {
+		if n, err := strconv.ParseInt(strings.TrimSpace(id), 10, 64); err == nil {
+			parsed = append(parsed, n)
+		}
+	}
+	return parsed, len(parsed) > 0
+}
+
+// TransactionsToModel converts insights' call tree transactions to GraphQL
+// models, keeping their order.
+func TransactionsToModel(txs []insights.AutopilotCallTreeTransaction) []*model.AutopilotTransaction {
 	out := make([]*model.AutopilotTransaction, 0, len(txs))
 	for _, tx := range txs {
-		fns := make([]*model.AutopilotFunction, 0, len(tx.Functions))
-		for _, fn := range tx.Functions {
-			fns = append(fns, &model.AutopilotFunction{
-				Name:       fn.Name,
-				FrameType:  fn.FrameType,
-				FrameKind:  classifyFrame(fn.Name, fn.FrameType),
-				SampleType: fn.SampleType,
-				SeenCount:  int(fn.SeenCount),
-			})
-		}
 		out = append(out, &model.AutopilotTransaction{
-			ID:        tx.ID,
-			Operation: optionalString(tx.Operation),
-			Kind:      optionalString(tx.Kind),
-			SeenCount: int(tx.SeenCount),
-			Functions: fns,
+			ID:                 strconv.FormatInt(tx.TransactionID, 10),
+			OperationName:      optionalString(tx.OperationName),
+			IdentityDimensions: insights.TransactionIdentityValuesToModel(tx.IdentityDimensions),
+			Kind:               optionalString(tx.EntryKind),
+			CallTree:           callTreeToModel(tx.Nodes),
+		})
+	}
+	return out
+}
+
+func callTreeToModel(nodes []insights.AutopilotCallTreeNode) []*model.AutopilotCallTreeNode {
+	out := make([]*model.AutopilotCallTreeNode, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, &model.AutopilotCallTreeNode{
+			ID:         n.ID,
+			ParentID:   optionalString(n.ParentID),
+			Name:       n.FunctionName,
+			FrameType:  n.FrameType,
+			FrameKind:  classifyFrame(n.FunctionName, n.FrameType),
+			SampleType: n.SampleType,
 		})
 	}
 	return out
@@ -74,27 +96,6 @@ func SourcesToModel(sources []SourceTransactions) []*model.AutopilotSource {
 			ID:               &model.K8sWorkloadID{Namespace: s.Namespace, Kind: kind, Name: s.Name},
 			ContainerName:    s.ContainerName,
 			TransactionCount: int(s.TransactionCount),
-		})
-	}
-	return out
-}
-
-// CallTreeToModel converts flat call tree nodes to GraphQL models.
-func CallTreeToModel(nodes []CallTreeNode) []*model.AutopilotCallTrieNode {
-	out := make([]*model.AutopilotCallTrieNode, 0, len(nodes))
-	for _, n := range nodes {
-		var parentID *string
-		if n.ParentID != "" {
-			parentID = &n.ParentID
-		}
-		out = append(out, &model.AutopilotCallTrieNode{
-			ID:         n.ID,
-			ParentID:   parentID,
-			Name:       n.Name,
-			FrameType:  n.FrameType,
-			FrameKind:  classifyFrame(n.Name, n.FrameType),
-			SampleType: n.SampleType,
-			SeenCount:  int(n.SeenCount),
 		})
 	}
 	return out

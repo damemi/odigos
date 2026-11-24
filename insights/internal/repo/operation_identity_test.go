@@ -1,6 +1,34 @@
 package repo
 
-import "testing"
+import (
+	"encoding/json"
+	"slices"
+	"testing"
+)
+
+func TestTransactionIdentityValueJSON(t *testing.T) {
+	in := []TransactionIdentityValue{
+		{Key: "rpc.grpc.status_code", Value: "0"},
+		{Key: "http.response.status_code", Value: "403"},
+	}
+	data, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `[{"rpc.grpc.status_code":"0"},{"http.response.status_code":"403"}]`; string(data) != want {
+		t.Fatalf("marshal = %s, want %s", data, want)
+	}
+	var out []TransactionIdentityValue
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(out, in) {
+		t.Fatalf("unmarshal = %+v, want %+v", out, in)
+	}
+	if err := json.Unmarshal([]byte(`[{"a":"1","b":"2"}]`), &out); err == nil {
+		t.Fatal("want an error for an object with two keys")
+	}
+}
 
 func TestSplitOperationIdentity(t *testing.T) {
 	name, dims := SplitOperationIdentity("POST /buy")

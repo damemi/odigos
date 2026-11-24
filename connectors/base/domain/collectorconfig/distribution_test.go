@@ -182,12 +182,18 @@ func missingComponents(t *testing.T, manifest, doc string) []string {
 			if !ok {
 				module = strings.ReplaceAll(componentType, "_", "") + kind
 			}
-			if !strings.Contains(manifest, "/"+module+" ") {
+			if !declaresModule(manifest, module) {
 				missing = append(missing, section+"."+name)
 			}
 		}
 	}
 	return missing
+}
+
+// declaresModule reports whether the builder manifest names a module path ending in module: either a
+// "gomod: <path> <version>" entry, or an "import: <path>" line of a module that provides several components.
+func declaresModule(manifest, module string) bool {
+	return strings.Contains(manifest, "/"+module+" ") || strings.Contains(manifest, "/"+module+"\n")
 }
 
 // placeholder is a value a configurer is likely to accept for a field: its declared initial value, the

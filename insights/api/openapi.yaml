@@ -44,6 +44,10 @@ tags:
     description: Liveness and readiness probes.
   - name: services
     description: Per-service activity rollups.
+  - name: autopilot
+    description: >
+      The call trees autopilot builds per transaction from profile stacks, by
+      workload container. Backs the Profiling page's "By transaction" view.
   - name: transactions
     description: >
       Baselined units of work. `GET /transactions` = directory with volume;
@@ -2123,6 +2127,64 @@ paths:
         "404": { $ref: "#/components/responses/InterrogationError" }
         "422": { $ref: "#/components/responses/InterrogationError" }
         "503": { $ref: "#/components/responses/InterrogationError" }
+  /api/v1/autopilot/call-trees:
+    get:
+      tags: [autopilot]
+      summary: List a workload container's transaction call trees
+      description: >
+        **Use for:** the functions each transaction of a workload container runs,
+        as the call trees autopilot built from its profile stacks.
+
+        Ordered by the number of CPU-sample call paths (most first), then by
+        transaction id. Empty when the container has no call trees yet,
+        including when insights hasn't stored its source yet.
+      operationId: listAutopilotCallTrees
+      parameters:
+        - name: namespace
+          in: query
+          required: true
+          schema: { type: string }
+        - name: workload_kind
+          in: query
+          required: true
+          description: The workload's kind, e.g. `Deployment`.
+          schema: { type: string }
+        - name: workload_name
+          in: query
+          required: true
+          schema: { type: string }
+        - name: container_name
+          in: query
+          required: true
+          schema: { type: string }
+        - name: transaction_id
+          in: query
+          description: Only these transactions. Repeat the parameter for several.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: integer, format: int64 }
+        - name: search
+          in: query
+          description: Substring of the transaction id.
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: At most this many transactions. Omit for all.
+          schema: { type: integer, minimum: 1, maximum: 1000 }
+        - name: offset
+          in: query
+          description: Skip this many matching transactions, for paging.
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: The container's transactions with their call trees.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AutopilotCallTreeList" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
 
 components:
   parameters:
@@ -2535,6 +2597,65 @@ components:
           type: array
           items: { $ref: "#/components/schemas/TransactionStat" }
       required: [count, items]
+
+    AutopilotCallTreeList:
+      type: object
+      properties:
+        count: { type: integer }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AutopilotCallTreeTransaction" }
+      required: [count, items]
+
+    AutopilotCallTreeTransaction:
+      type: object
+      description: One transaction's call trees, one per sample type, as a flat node list.
+      properties:
+        transaction_id: { type: integer, format: int64 }
+        operation:
+          type: string
+          description: >
+            The transaction's operation, as in `Transaction.operation`. Absent
+            until insights stores the transaction.
+        operation_name:
+          type: string
+          description: >
+            The operation without its identity dimensions, as in
+            `Transaction.operation_name`. Absent with `operation`.
+        identity_dimensions:
+          type: array
+          description: >
+            The identity dimensions parsed from `operation`, as in
+            `Transaction.identity_dimensions`. Absent with `operation`.
+          items: { $ref: "#/components/schemas/TransactionIdentityValue" }
+        entry_kind:
+          type: string
+          description: HTTP, GRPC, CONSUMER, PRODUCER, CRON or INTERNAL. Absent with `operation`.
+        nodes:
+          type: array
+          items: { $ref: "#/components/schemas/AutopilotCallTreeNode" }
+      required: [transaction_id, nodes]
+
+    AutopilotCallTreeNode:
+      type: object
+      description: One function on a call path of the transaction's profile stacks.
+      properties:
+        id:
+          type: string
+          description: >
+            Unique within the transaction: `<sample_type>:<stored node id>`. A call
+            path has the same stored id in each sample type's tree.
+        parent_id:
+          type: string
+          description: The parent node's `id`. Absent for roots.
+        function_name: { type: string }
+        frame_type:
+          type: string
+          description: The profile frame type, e.g. `jvm` or `hotspot`.
+        sample_type:
+          type: string
+          description: "`samples` (periodic CPU samples) or `events`."
+      required: [id, function_name, frame_type, sample_type]
 
     TransactionIdentityValue:
       type: object

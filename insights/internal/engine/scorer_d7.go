@@ -66,14 +66,14 @@ func (baseline d7Data) scoreWithLayout(t *Trace, layout histogram.Layout) (bool,
 	deviated := false
 
 	if reqSize >= 0 && baseline.Request.Total() > 0 {
-		if p99, ok := baseline.Request.Percentile(0.99, layout); ok && reqSize > p99 {
+		if p99, ok := baseline.Request.Percentile(0.99, layout); ok && aboveRatio(reqSize, p99, d7DeviationRatio) {
 			deviated = true
 			ev["request_body_size"] = reqSize
 			ev["request_p99"] = p99
 		}
 	}
 	if respSize >= 0 && baseline.Response.Total() > 0 {
-		if p99, ok := baseline.Response.Percentile(0.99, layout); ok && respSize > p99 {
+		if p99, ok := baseline.Response.Percentile(0.99, layout); ok && aboveRatio(respSize, p99, d7DeviationRatio) {
 			deviated = true
 			ev["response_body_size"] = respSize
 			ev["response_p99"] = p99
@@ -89,6 +89,11 @@ func (baseline d7Data) scoreWithLayout(t *Trace, layout histogram.Layout) (bool,
 	}
 	return true, evJSON, nil
 }
+
+// d7DeviationRatio is how far over its learned p99 a payload must be to deviate:
+// a cache bleed or an over-fetch grows the body by far more, while anything less
+// is jitter and the p99's power-of-two bucket edge.
+const d7DeviationRatio = 1.3
 
 // d7ResponseExfilRatio is how many times over the learned response p99 a
 // response body must be to be flagged as bulk extraction - a gross overshoot

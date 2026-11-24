@@ -9,6 +9,7 @@ import (
 	"github.com/odigos-io/odigos/api/k8sconsts"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
+	"github.com/odigos-io/odigos/k8sutils/pkg/containers"
 	"github.com/odigos-io/odigos/k8sutils/pkg/describe/properties"
 )
 
@@ -367,18 +368,8 @@ func podPhaseToStatus(phase corev1.PodPhase) properties.PropertyStatus {
 	}
 }
 
-func getContainerStatus(pod *corev1.Pod, containerName string) *corev1.ContainerStatus {
-	for i := range pod.Status.ContainerStatuses {
-		containerStatus := &pod.Status.ContainerStatuses[i]
-		if containerStatus.Name == containerName {
-			return containerStatus
-		}
-	}
-	return nil
-}
-
 func analyzePodContainer(pod *corev1.Pod, container *corev1.Container, resources *OdigosSourceResources) PodContainerAnalyze {
-	containerStatus := getContainerStatus(pod, container.Name)
+	containerStatus := containers.GetContainerStatusByName(pod.Status.ContainerStatuses, container.Name)
 	containerName := properties.EntityProperty{
 		Name:    "Container Name",
 		Value:   container.Name,

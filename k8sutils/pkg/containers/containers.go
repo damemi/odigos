@@ -15,6 +15,15 @@ func GetContainerByName(containers []corev1.Container, name string) *corev1.Cont
 	return nil
 }
 
+func GetContainerStatusByName(statuses []corev1.ContainerStatus, name string) *corev1.ContainerStatus {
+	for i := range statuses {
+		if statuses[i].Name == name {
+			return &statuses[i]
+		}
+	}
+	return nil
+}
+
 func GetCollectorContainerName(pod *corev1.Pod) string {
 	role := pod.Labels[k8sconsts.OdigosCollectorRoleLabel]
 	switch k8sconsts.CollectorRole(role) {

@@ -35,7 +35,7 @@ Locally: **`make materialize-obi generate compile-odiglet`** from **`odiglet`**,
 
 ## Why this affects generated **`.go`** and not the **`.o`**
 
-When generating other eBPF libraries like `go.opentelemetry.io/auto`, we simply `cd` into the modcache and run `go generate` there. Why does that work for them but not OBI?
+When generating other eBPF libraries like `github.com/odigos-io/enterprise-go-instrumentation`, we simply `cd` into the modcache and run `go generate` there. Why does that work for them but not OBI?
 
 The answer is because those libraries commit generated bpf2go files (`*_bpfel.go`). The only thing that is generated in the cache at build time are the `*.o` binary eBPF files.
 

@@ -1,0 +1,89 @@
+# Re-runs the PR checks that read a label when a "build: arm", "build: no-cache" or "test-k8s/<version>" label
+# is added to or removed from a PR. central, connectors and platform-k8s read the build labels; platform-k8s
+# also reads the test-k8s labels.
+#
+# Those workflows don't start on labeled/unlabeled themselves. Labels added together (e.g. by a bot right
+# after it opens a PR) would start several runs that cancel each other in no fixed order, and when the
+# newest run is the one cancelled before its jobs start, its required check stays "Expected" on the PR.
+# Instead this re-runs each workflow's newest run on the PR's head commit, which reads the labels the PR has
+# when its jobs run. Other labels start nothing.
+#
+# pull_request_target runs the copy of this file on the base branch, so the token can re-run runs of fork
+# PRs too. It never checks out or runs PR code.
+name: PR label re-run
+
+on:
+  pull_request_target:
+    branches: [main, "releases/**"]
+    types: [labeled, unlabeled]
+
+permissions: {}
+
+jobs:
+  rerun:
+    if: "startsWith(github.event.label.name, 'build: ') || startsWith(github.event.label.name, 'test-k8s/')"
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: read
+    # On the job, not the workflow, so a label this skips never cancels a re-run in progress. Every run
+    # re-runs all three workflows, so the last of several label changes covers the ones it cancelled.
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Re-run the workflows that read PR labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # A push since the label change starts new runs, which read the PR's labels themselves.
+          HEAD_SHA=$(gh pr view "$PR_NUMBER" --json headRefOid --jq .headRefOid)
+          if [ "$HEAD_SHA" != "$EVENT_HEAD_SHA" ]; then
+            echo "The PR's head moved from ${EVENT_HEAD_SHA} to ${HEAD_SHA} since the label change; its new runs read the current labels."
+            exit 0
+          fi
+
+          FAILED=0
+          for workflow in central.yaml connectors.yaml platform-k8s.yaml; do
+            # The PR's checks follow the newest run. Runs created in the same second can be listed in any
+            # order, so pick it by ID.
+            RUN=$(gh run list --workflow "$workflow" --commit "$HEAD_SHA" --event pull_request --limit 20 \
+              --json databaseId,status,conclusion \
+              --jq 'max_by(.databaseId) // empty | "\(.databaseId) \(.status) \(.conclusion)"')
+            if [ -z "$RUN" ]; then
+              echo "${workflow}: no pull_request run on ${HEAD_SHA}, nothing to re-run."
+              continue
+            fi
+            read -r RUN_ID STATUS CONCLUSION <<< "$RUN"
+
+            # A fork PR's run waiting for a maintainer's approval stays that way; a re-run must not skip it.
+            if [ "$CONCLUSION" = "action_required" ] || [ "$STATUS" = "action_required" ] || [ "$STATUS" = "waiting" ]; then
+              echo "${workflow}: run ${RUN_ID} is waiting for approval, not re-running it."
+              continue
+            fi
+
+            # A run can only be re-run once it has completed.
+            if [ "$STATUS" != "completed" ]; then
+              echo "${workflow}: cancelling run ${RUN_ID} (${STATUS})."
+              # It may have completed since it was listed.
+              gh run cancel "$RUN_ID" || true
+              for _ in $(seq 60); do
+                [ "$(gh run view "$RUN_ID" --json status --jq .status)" = "completed" ] && break
+                sleep 10
+              done
+            fi
+
+            echo "${workflow}: re-running run ${RUN_ID}."
+            if gh run rerun "$RUN_ID"; then
+              echo "- \`${workflow}\`: re-ran [run ${RUN_ID}](${GITHUB_SERVER_URL}/${GH_REPO}/actions/runs/${RUN_ID})" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::error::Could not re-run ${workflow} run ${RUN_ID}; re-run it from the Actions tab."
+              FAILED=1
+            fi
+          done
+          exit "$FAILED"

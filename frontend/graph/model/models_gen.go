@@ -122,37 +122,26 @@ type AutoRollbackConfig struct {
 	StabilityWindowTime *string `json:"stabilityWindowTime,omitempty"`
 }
 
-// One node in a transaction's call-path trie (flat list; assemble tree via parentId).
-type AutopilotCallTrieNode struct {
-	// Stable node id for this call-path frame (sha1 of parent + frame identity).
+// One node in a transaction's call tree (flat list; assemble the tree via parentId).
+type AutopilotCallTreeNode struct {
+	// Unique within the transaction: the stored node id prefixed with its sample type
+	// ("samples:<id>"). Each sample type has its own tree, and a call path has the
+	// same stored id in both.
 	ID string `json:"id"`
-	// Parent node id, or null for roots (children of the ClickHouse Parent "root").
-	ParentID   *string            `json:"parentId,omitempty"`
-	Name       string             `json:"name"`
-	FrameType  string             `json:"frameType"`
-	FrameKind  AutopilotFrameKind `json:"frameKind"`
-	SampleType string             `json:"sampleType"`
-	// Call-trie rows stored for this node (relative heat, not a sample count).
-	SeenCount int `json:"seenCount"`
+	// Parent node id, or null for roots.
+	ParentID *string `json:"parentId,omitempty"`
+	Name     string  `json:"name"`
+	// profile.frame.type (e.g. jvm, hotspot).
+	FrameType string             `json:"frameType"`
+	FrameKind AutopilotFrameKind `json:"frameKind"`
+	// Profile sample type: events (probe) or samples (periodic CPU).
+	SampleType string `json:"sampleType"`
 }
 
 type AutopilotConfig struct {
 	Enabled *bool                 `json:"enabled,omitempty"`
 	Mode    *AutopilotMode        `json:"mode,omitempty"`
 	Model   *AutopilotModelConfig `json:"model,omitempty"`
-}
-
-// One detected function from a profile sample linked to a transaction.
-type AutopilotFunction struct {
-	Name string `json:"name"`
-	// profile.frame.type (e.g. jvm, hotspot).
-	FrameType string             `json:"frameType"`
-	FrameKind AutopilotFrameKind `json:"frameKind"`
-	// Profile sample type: events (probe) or samples (periodic CPU).
-	SampleType string `json:"sampleType"`
-	// Call-trie rows stored for this function in the transaction (relative heat, not
-	// a sample count).
-	SeenCount int `json:"seenCount"`
 }
 
 type AutopilotModelConfig struct {
@@ -169,29 +158,24 @@ type AutopilotSource struct {
 	TransactionCount int `json:"transactionCount"`
 }
 
-// One transaction observed for a workload container, with ClickHouse-stored functions.
+// One transaction observed for a workload container, with its call tree.
 type AutopilotTransaction struct {
-	// Transaction id as stored in tx_call_trie_structure.TransactionId.
+	// The insights transaction id (a signed 64-bit integer, as a string).
 	ID string `json:"id"`
-	// What the transaction is, from the insights inventory: its root span's operation
-	// (e.g. "POST /buy [http.response.status_code=500]"). Null when the inventory has
-	// no row for the id.
-	Operation *string `json:"operation,omitempty"`
+	// The transaction's root span operation from the insights inventory, without its
+	// identity dimensions (e.g. "POST /buy"). Null when the inventory has no row for
+	// the id.
+	OperationName *string `json:"operationName,omitempty"`
+	// The identity dimensions that tell transactions with the same operation name
+	// apart (e.g. http.response.status_code=500), in settings order. Empty when the
+	// inventory has no row for the id.
+	IdentityDimensions []*InsightsTransactionIdentityValue `json:"identityDimensions"`
 	// The transaction's kind from the insights inventory: HTTP, GRPC, CONSUMER,
 	// PRODUCER, CRON or INTERNAL. Null when the inventory has no row for the id.
 	Kind *string `json:"kind,omitempty"`
-	// Call-trie rows stored for this transaction's sample-type roots (relative heat,
-	// not a sample count).
-	SeenCount int                  `json:"seenCount"`
-	Functions []*AutopilotFunction `json:"functions"`
-	// OTLP JSON traces sample for this transaction (service-invocation spans only),
-	// if stored in autopilot.tx_transactions. Null when missing or autopilot is off.
-	SampleTrace *string `json:"sampleTrace,omitempty"`
-	// Flat call-path trie nodes for this transaction. Resolved on demand from
-	// the autopilot call tries when selected; null when missing or autopilot is
-	// off. Empty when the query returns no nodes. Build the tree in the client via
+	// Flat call tree nodes of every sample type. Build the trees in the client via
 	// id/parentId.
-	CallTrie []*AutopilotCallTrieNode `json:"callTrie,omitempty"`
+	CallTree []*AutopilotCallTreeNode `json:"callTree"`
 }
 
 type CardinalityControlConfig struct {
@@ -346,7 +330,7 @@ type Config struct {
 	ClusterName           *string             `json:"clusterName,omitempty"`
 	IsCentralProxyRunning *bool               `json:"isCentralProxyRunning,omitempty"`
 	InsightsEnabled       bool                `json:"insightsEnabled"`
-	InterrogationEnabled  bool                `json:"interrogationEnabled"`
+	AutopilotEnabled      bool                `json:"autopilotEnabled"`
 }
 
 type ConfigYaml struct {
@@ -2382,12 +2366,12 @@ type K8sWorkloadContainer struct {
 	CollectorConfig   *K8sWorkloadContainerCollectorConfig             `json:"collectorConfig,omitempty"`
 	Instrumentations  []*K8sWorkloadPodContainerProcessInstrumentation `json:"instrumentations,omitempty"`
 	URLTemplatization *K8sWorkloadContainerURLTemplatization           `json:"urlTemplatization,omitempty"`
-	// Autopilot: transactions and detected stack functions for this
-	// container, read from the autopilot call tries in the insights Postgres. Empty when
-	// autopilot is disabled or nothing has been stored yet.
-	// Ordered by seenCount desc, then id. Select callTrie only with a narrow page
-	// (ids or limit): it costs one ClickHouse query per returned transaction.
-	InterrogationTransactions []*AutopilotTransaction `json:"interrogationTransactions"`
+	// Autopilot: the transactions of this container with their call trees, which
+	// insights builds per transaction. Empty when autopilot or insights is disabled,
+	// or nothing has been stored yet. Ordered by the number of CPU-sample call paths,
+	// most first, then id. Each transaction carries its whole call tree, so page with
+	// limit on busy containers.
+	AutopilotTransactions []*AutopilotTransaction `json:"autopilotTransactions"`
 }
 
 type K8sWorkloadContainerAgentConfig struct {
@@ -3512,27 +3496,24 @@ func (e ActionType) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 
-// What a call-map frame belongs to. Classified when read, from the JVM frame name.
+// What a call tree frame belongs to. Classified when read, from the JVM frame name.
 type AutopilotFrameKind string
 
 const (
-	// Customer code: probe candidates and AI evidence.
+	// Customer code and the libraries it calls: probe candidates.
 	AutopilotFrameKindApp AutopilotFrameKind = "APP"
-	// Third-party framework or library code, kept so the map shows app → library → app flows.
-	AutopilotFrameKindLibrary AutopilotFrameKind = "LIBRARY"
-	// JDK, VM and agent plumbing (normally dropped at ingest).
+	// JDK, VM and agent plumbing.
 	AutopilotFrameKindRuntime AutopilotFrameKind = "RUNTIME"
 )
 
 var AllAutopilotFrameKind = []AutopilotFrameKind{
 	AutopilotFrameKindApp,
-	AutopilotFrameKindLibrary,
 	AutopilotFrameKindRuntime,
 }
 
 func (e AutopilotFrameKind) IsValid() bool {
 	switch e {
-	case AutopilotFrameKindApp, AutopilotFrameKindLibrary, AutopilotFrameKindRuntime:
+	case AutopilotFrameKindApp, AutopilotFrameKindRuntime:
 		return true
 	}
 	return false
@@ -5448,7 +5429,7 @@ type ManagedBy string
 const (
 	ManagedByProfile             ManagedBy = "Profile"
 	ManagedByOdigosUI            ManagedBy = "OdigosUi"
-	ManagedByInterrogationLoop   ManagedBy = "InterrogationLoop"
+	ManagedByAutopilotLoop       ManagedBy = "AutopilotLoop"
 	ManagedByLiveTrafficLearning ManagedBy = "LiveTrafficLearning"
 	ManagedByUnknown             ManagedBy = "Unknown"
 )
@@ -5456,14 +5437,14 @@ const (
 var AllManagedBy = []ManagedBy{
 	ManagedByProfile,
 	ManagedByOdigosUI,
-	ManagedByInterrogationLoop,
+	ManagedByAutopilotLoop,
 	ManagedByLiveTrafficLearning,
 	ManagedByUnknown,
 }
 
 func (e ManagedBy) IsValid() bool {
 	switch e {
-	case ManagedByProfile, ManagedByOdigosUI, ManagedByInterrogationLoop, ManagedByLiveTrafficLearning, ManagedByUnknown:
+	case ManagedByProfile, ManagedByOdigosUI, ManagedByAutopilotLoop, ManagedByLiveTrafficLearning, ManagedByUnknown:
 		return true
 	}
 	return false

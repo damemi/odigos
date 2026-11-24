@@ -33,6 +33,14 @@ spec:
         required: true
         tooltip: The SignalFx realm where your data will be sent (e.g., us0, us1, eu0).
 
+    - name: SIGNALFX_USE_CUSTOM_CA
+      displayName: Use Custom CA Certificate
+      componentType: checkbox
+      componentProps:
+        required: false
+        tooltip: Verify the Splunk Observability Cloud endpoint against a CA certificate you supply instead of the system roots.
+      initialValue: false
+
     - name: SIGNALFX_CA_PEM
       displayName: CA Certificate (PEM)
       componentType: textarea
@@ -40,6 +48,10 @@ spec:
         required: false
         tooltip: Optional CA certificate in PEM format for TLS verification.
       secret: true
+      renderCondition:
+        - SIGNALFX_USE_CUSTOM_CA
+        - ==
+        - 'true'
 
     - name: SIGNALFX_INSECURE_SKIP_VERIFY
       displayName: Skip TLS Verification

@@ -53,7 +53,7 @@ build-opamp-supervisor:
 OWNED_GO_MODS := $(shell find . -type f -name 'go.mod' ! -path './odigosotelcol/*' ! -path './.tools/*' ! -path './internal/tools/*' | sort)
 OWNED_METADATA := $(shell find . -type f -name 'metadata.yaml' ! -path './odigosotelcol/*' ! -path './.tools/*' ! -path './internal/tools/*' | sort)
 # the cloud storage exporters' tests are not run
-TESTED_GO_MODS := $(filter-out ./exporters/googlecloudstorageexporter/go.mod ./exporters/azureblobstorageexporter/go.mod,$(OWNED_GO_MODS))
+UNTESTED_PKGS := github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter
 
 # resolved through internal/tools because mdatagen's own go.mod carries replace directives, which
 # `go install` refuses to honour for a module named directly
@@ -68,7 +68,7 @@ install-tools:
 .PHONY: generate
 generate: install-tools
 	# mdatagen resolves the import root by running `git rev-parse --show-toplevel` and reading the
-	# go.mod there; this repo has no root go.mod, so point GIT_WORK_TREE at the component instead
+	# go.mod there; this repo has no root go.mod, so point GIT_WORK_TREE at the component's module instead
 	@REPO_ROOT="$$(git rev-parse --show-toplevel)"; \
 	for META_FILE in $(OWNED_METADATA); do \
 		META_DIR="$$(dirname "$$META_FILE")"; \
@@ -86,12 +86,14 @@ generate: install-tools
 	done
 	$(MAKE) fmt
 
-# mdatagen does not group imports, so the generated files are only stable once goimports has run
+# mdatagen does not group imports, so the generated files are only stable once goimports has run.
+# goimports gets the module's package dirs rather than ./, which would also rewrite the generated
+# odigosotelcol and the nested modules
 .PHONY: fmt
 fmt: $(OWNED_GO_MODS:%=fmt/%)
 fmt/%: GO_MOD=$*
 fmt/%: install-tools
-	cd $(shell dirname $(GO_MOD)) && $(TOOLS_BIN_DIR)/goimports -w -local github.com/odigos-io ./
+	cd $(shell dirname $(GO_MOD)) && $(TOOLS_BIN_DIR)/goimports -w -local github.com/odigos-io $$(GOWORK=off $(GOCMD) list -e -f '{{.Dir}}' ./...)
 
 # tidies each owned component module so its (indirect) odigos-io deps track the local-replaced
 # siblings after a dependency bump; without this, `generate`'s mdatagen
@@ -103,12 +105,13 @@ tidy/%:
 	cd $(shell dirname $(GO_MOD)) && GOWORK=off $(GOCMD) mod tidy
 
 .PHONY: test
-test: $(TESTED_GO_MODS:%=test/%)
+test: $(OWNED_GO_MODS:%=test/%)
 	cd odigosotelcol && GOWORK=off $(GOCMD) test --ldflags="-checklinkname=0" -v ./...
 
 test/%: GO_MOD=$*
 test/%:
-	cd $(shell dirname $(GO_MOD)) && GOWORK=off $(GOCMD) test --ldflags="-checklinkname=0" -v ./...
+	cd $(shell dirname $(GO_MOD)) && GOWORK=off $(GOCMD) test --ldflags="-checklinkname=0" -v \
+		$$(GOWORK=off $(GOCMD) list ./... | grep -v $(UNTESTED_PKGS:%=-e %))
 
 .PHONY: go-licenses
 go-licenses:

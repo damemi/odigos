@@ -2,8 +2,9 @@
 
 The Odigos collector distribution, assembled by the OpenTelemetry collector builder (`ocb`) from
 [`builder-config.yaml`](./builder-config.yaml). The Odigos components live next to it, under
-`processors/`, `exporters/`, `extension/`, `receivers/`, `connectors/` and `providers/`, and
-`builder-config.yaml` replaces each of them with its local directory.
+`processors/`, `exporters/`, `extension/`, `receivers/`, `connectors/` and `providers/`, in the
+single module `github.com/odigos-io/odigos/collector` (`go.mod` in this directory), which
+`builder-config.yaml` replaces with its local directory.
 
 ## Building
 

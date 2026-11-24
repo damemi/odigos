@@ -29,53 +29,6 @@ func parentWorkloadID(ctx context.Context) (model.K8sWorkloadID, error) {
 	return *(*w).ID, nil
 }
 
-// autopilotTransactionParents walks from an AutopilotTransaction field
-// (e.g. sampleTrace) up to the owning container and workload.
-//
-// gqlgen inserts an index FieldContext for each list element, so the path is:
-//
-//	sampleTrace → tx-index → autopilotTransactions → container-index →
-//	containers → workload
-func autopilotTransactionParents(ctx context.Context) (workloadID model.K8sWorkloadID, containerName string, err error) {
-	fc := graphql.GetFieldContext(ctx)
-	if fc == nil || fc.Parent == nil || fc.Parent.Parent == nil || fc.Parent.Parent.Parent == nil ||
-		fc.Parent.Parent.Parent.Parent == nil || fc.Parent.Parent.Parent.Parent.Parent == nil {
-		return model.K8sWorkloadID{}, "", fmt.Errorf("missing parent resolver context for autopilot transaction")
-	}
-
-	container, ok := k8sWorkloadContainerFromResult(fc.Parent.Parent.Parent.Result)
-	if !ok {
-		return model.K8sWorkloadID{}, "", fmt.Errorf("parent is not a workload container")
-	}
-	w, ok := k8sWorkloadFromResult(fc.Parent.Parent.Parent.Parent.Parent.Result)
-	if !ok || w.ID == nil {
-		return model.K8sWorkloadID{}, "", fmt.Errorf("parent is not a workload")
-	}
-	return *w.ID, container.ContainerName, nil
-}
-
-func k8sWorkloadContainerFromResult(result any) (*model.K8sWorkloadContainer, bool) {
-	switch v := result.(type) {
-	case *model.K8sWorkloadContainer:
-		return v, v != nil
-	case **model.K8sWorkloadContainer:
-		return *v, v != nil && *v != nil
-	default:
-		return nil, false
-	}
-}
-
-func k8sWorkloadFromResult(result any) (*model.K8sWorkload, bool) {
-	switch v := result.(type) {
-	case *model.K8sWorkload:
-		return v, v != nil
-	case **model.K8sWorkload:
-		return *v, v != nil && *v != nil
-	default:
-		return nil, false
-	}
-}
-
 // collectEffectiveDetectedLanguages returns the sorted, unique list of programming
 // languages across all containers of an InstrumentationConfig, preferring the
 // user-defined override (Spec.ContainersOverrides[].RuntimeInfo) over the

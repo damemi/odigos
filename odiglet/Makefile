@@ -6,7 +6,7 @@
 include obi.mk
 
 # Libraries that need generate run in module cache (must have a generate target that works without git).
-LIBRARIES := go.opentelemetry.io/auto \
+LIBRARIES := github.com/odigos-io/enterprise-go-instrumentation \
 			github.com/odigos-io/ebpf-java-instrumentation/v2 \
 			github.com/odigos-io/ebpf-java-instrumentation/otel_agent_extension/v2 \
 			github.com/odigos-io/ebpf-core \

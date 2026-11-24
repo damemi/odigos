@@ -256,16 +256,6 @@ func TestListContainerTransactionsNamesFailureKeepsTransactions(t *testing.T) {
 	assert.Empty(t, got.Transactions[0].Operation)
 }
 
-func TestTransactionsToModelNames(t *testing.T) {
-	got := TransactionsToModel([]Transaction{{ID: "42", Operation: "POST /pay", Kind: "HTTP"}, {ID: "43"}})
-	require.Len(t, got, 2)
-	require.NotNil(t, got[0].Operation)
-	assert.Equal(t, "POST /pay", *got[0].Operation)
-	assert.Equal(t, "HTTP", *got[0].Kind)
-	assert.Nil(t, got[1].Operation)
-	assert.Nil(t, got[1].Kind)
-}
-
 func TestListContainerTransactionsFilters(t *testing.T) {
 	conn := &fakeConn{}
 	c := newClientWithQuerier(conn)

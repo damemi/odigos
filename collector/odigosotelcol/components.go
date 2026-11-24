@@ -23,9 +23,9 @@ import (
 	nopexporter "go.opentelemetry.io/collector/exporter/nopexporter"
 	otlpexporter "go.opentelemetry.io/collector/exporter/otlpexporter"
 	otlphttpexporter "go.opentelemetry.io/collector/exporter/otlphttpexporter"
-	azureblobstorageexporter "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter"
-	googlecloudstorageexporter "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter"
-	mockdestinationexporter "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter"
+	azureblobstorageexporter "github.com/odigos-io/odigos/collector/exporters/azureblobstorageexporter"
+	googlecloudstorageexporter "github.com/odigos-io/odigos/collector/exporters/googlecloudstorageexporter"
+	mockdestinationexporter "github.com/odigos-io/odigos/collector/exporters/mockdestinationexporter"
 	odigosurltemplatizationexporter "github.com/odigos-io/odigos/collector/exporters/odigosurltemplatizationexporter"
 	odigosautopilotprofilesexporter "github.com/odigos-io/odigos/collector/exporters/odigosautopilotprofilesexporter"
 	awscloudwatchlogsexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awscloudwatchlogsexporter"
@@ -82,10 +82,10 @@ import (
 	odigostailsamplingprocessor "github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor"
 	odigosgroupbytraceprocessor "github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor"
 	odigostracestateprocessor "github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor"
-	odigosconditionalattributes "odigosconditionalattributes"
-	odigossqldboperationprocessor "odigossqldboperationprocessor"
-	odigossqlqueryprocessor "github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor"
-	odigospiimaskingprocessor "github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor"
+	odigosconditionalattributes "github.com/odigos-io/odigos/collector/processors/odigosconditionalattributes"
+	odigossqldboperationprocessor "github.com/odigos-io/odigos/collector/processors/odigossqldboperationprocessor"
+	odigossqlqueryprocessor "github.com/odigos-io/odigos/collector/processors/odigossqlqueryprocessor"
+	odigospiimaskingprocessor "github.com/odigos-io/odigos/collector/processors/odigospiimaskingprocessor"
 	batchprocessor "go.opentelemetry.io/collector/processor/batchprocessor"
 	memorylimiterprocessor "go.opentelemetry.io/collector/processor/memorylimiterprocessor"
 	attributesprocessor "github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor"
@@ -106,10 +106,10 @@ import (
 	tailsamplingprocessor "github.com/open-telemetry/opentelemetry-collector-contrib/processor/tailsamplingprocessor"
 	transformprocessor "github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
 	remotetapprocessor "github.com/open-telemetry/opentelemetry-collector-contrib/processor/remotetapprocessor"
-	odigostrafficmetrics "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics"
-	odigosurltemplateprocessor "github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor"
-	odigoslogsresourceattrsprocessor "github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor"
-	odigosextractattributeprocessor "github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor"
+	odigostrafficmetrics "github.com/odigos-io/odigos/collector/processors/odigostrafficmetrics"
+	odigosurltemplateprocessor "github.com/odigos-io/odigos/collector/processors/odigosurltemplateprocessor"
+	odigoslogsresourceattrsprocessor "github.com/odigos-io/odigos/collector/processors/odigoslogsresourceattrsprocessor"
+	odigosextractattributeprocessor "github.com/odigos-io/odigos/collector/processors/odigosextractattributeprocessor"
 	odigostracefilterprocessor "github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor"
 	odigosprofilesprocessor "github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor"
 	odigosvmprofileattrsprocessor "github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor"
@@ -178,11 +178,11 @@ func components() (otelcol.Factories, error) {
 		googleclientauthextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.159.0",
 		k8sleaderelector.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/k8sleaderelector v0.159.0",
 		opampextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampextension v0.159.0",
-		odigosconfigk8sextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigosconfigk8sextension v0.159.0",
-		odigoscapabilitiesextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigoscapabilitiesextension v0.159.0",
-		odigosenterpriseauthextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigosenterpriseauthextension v0.0.0-00010101000000-000000000000",
-		odigosconfigvmextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigosconfigvmextension v0.0.0-00010101000000-000000000000",
-		odigosconfigconnectorextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector/extension/odigosconfigconnectorextension v0.0.0-00010101000000-000000000000",
+		odigosconfigk8sextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigoscapabilitiesextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosenterpriseauthextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosconfigvmextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosconfigconnectorextension.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
 	})
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
@@ -210,7 +210,7 @@ func components() (otelcol.Factories, error) {
 		k8sclusterreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sclusterreceiver v0.159.0",
 		hostmetricsreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.159.0",
 		prometheusreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.159.0",
-		odigosebpfreceiver.NewFactory().Type(): "github.com/odigos-io/odigos/collector/receivers/odigosebpfreceiver v0.0.0-00010101000000-000000000000",
+		odigosebpfreceiver.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
 		collector.NewFactory().Type(): "go.opentelemetry.io/ebpf-profiler v0.0.202614",
 		journaldreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.159.0",
 	})
@@ -270,11 +270,11 @@ func components() (otelcol.Factories, error) {
 		nopexporter.NewFactory().Type(): "go.opentelemetry.io/collector/exporter/nopexporter v0.159.0",
 		otlpexporter.NewFactory().Type(): "go.opentelemetry.io/collector/exporter/otlpexporter v0.159.0",
 		otlphttpexporter.NewFactory().Type(): "go.opentelemetry.io/collector/exporter/otlphttpexporter v0.159.0",
-		azureblobstorageexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/azureblobstorageexporter v0.159.0",
-		googlecloudstorageexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/googlecloudstorageexporter v0.159.0",
-		mockdestinationexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/exporter/mockdestinationexporter v0.159.0",
-		odigosurltemplatizationexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector/exporters/odigosurltemplatizationexporter v0.0.0-00010101000000-000000000000",
-		odigosautopilotprofilesexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector/exporters/odigosautopilotprofilesexporter v0.0.0-00010101000000-000000000000",
+		azureblobstorageexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		googlecloudstorageexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		mockdestinationexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosurltemplatizationexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosautopilotprofilesexporter.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
 		awscloudwatchlogsexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awscloudwatchlogsexporter v0.159.0",
 		awsemfexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsemfexporter v0.159.0",
 		awss3exporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awss3exporter v0.159.0",
@@ -354,13 +354,13 @@ func components() (otelcol.Factories, error) {
 		return otelcol.Factories{}, err
 	}
 	factories.ProcessorModules = makeModulesMap(factories.Processors, map[component.Type]string{
-		odigostailsamplingprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigostailsamplingprocessor v0.159.0",
-		odigosgroupbytraceprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigosgroupbytraceprocessor v0.159.0",
-		odigostracestateprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigostracestateprocessor v0.159.0",
-		odigosconditionalattributes.NewFactory().Type(): "odigosconditionalattributes v0.159.0",
-		odigossqldboperationprocessor.NewFactory().Type(): "odigossqldboperationprocessor v0.159.0",
-		odigossqlqueryprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processor/odigossqlqueryprocessor v0.159.0",
-		odigospiimaskingprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processor/odigospiimaskingprocessor v0.159.0",
+		odigostailsamplingprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosgroupbytraceprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigostracestateprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosconditionalattributes.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigossqldboperationprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigossqlqueryprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigospiimaskingprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
 		batchprocessor.NewFactory().Type(): "go.opentelemetry.io/collector/processor/batchprocessor v0.159.0",
 		memorylimiterprocessor.NewFactory().Type(): "go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.159.0",
 		attributesprocessor.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.159.0",
@@ -381,14 +381,14 @@ func components() (otelcol.Factories, error) {
 		tailsamplingprocessor.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/processor/tailsamplingprocessor v0.159.0",
 		transformprocessor.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.159.0",
 		remotetapprocessor.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/processor/remotetapprocessor v0.159.0",
-		odigostrafficmetrics.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/odigos/processor/odigostrafficmetrics v0.159.0",
-		odigosurltemplateprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processor/odigosurltemplateprocessor v0.159.0",
-		odigoslogsresourceattrsprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processor/odigoslogsresourceattrsprocessor v0.159.0",
-		odigosextractattributeprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processor/odigosextractattributeprocessor v0.159.0",
-		odigostracefilterprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigostracefilterprocessor v0.159.0",
-		odigosprofilesprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigosprofilesprocessor v0.0.0-00010101000000-000000000000",
-		odigosvmprofileattrsprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigosvmprofileattrsprocessor v0.0.0-00010101000000-000000000000",
-		odigossymbolizeprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector/processors/odigossymbolizeprocessor v0.0.0-00010101000000-000000000000",
+		odigostrafficmetrics.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosurltemplateprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigoslogsresourceattrsprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosextractattributeprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigostracefilterprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosprofilesprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigosvmprofileattrsprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
+		odigossymbolizeprocessor.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
 	})
 
 	factories.Connectors, err = otelcol.MakeFactoryMap[connector.Factory](
@@ -412,7 +412,7 @@ func components() (otelcol.Factories, error) {
 		routingconnector.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.159.0",
 		servicegraphconnector.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector v0.159.0",
 		spanmetricsconnector.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.159.0",
-		odigosrouterconnector.NewFactory().Type(): "github.com/odigos-io/odigos/collector/connectors/odigosrouterconnector v0.159.0",
+		odigosrouterconnector.NewFactory().Type(): "github.com/odigos-io/odigos/collector v0.0.0-00010101000000-000000000000",
 	})
 
 	return factories, nil

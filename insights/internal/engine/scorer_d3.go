@@ -57,7 +57,7 @@ func (baseline d3Data) scoreWithLayout(t *Trace, layout histogram.Layout) (bool,
 		return false, nil, nil
 	}
 	p99, ok := baseline.Latency.Percentile(0.99, layout)
-	if !ok || us <= p99 {
+	if !ok || !aboveRatio(us, p99, d3DeviationRatio) {
 		return false, nil, nil
 	}
 	ev, err := json.Marshal(map[string]any{
@@ -181,4 +181,13 @@ func entryLatencyMicros(t *Trace) (int64, bool) {
 		return 0, false
 	}
 	return int64((s.EndUnix - s.StartUnix) / uint64(time.Microsecond)), true
+}
+
+// d3DeviationRatio is how far over its learned p99 a request's latency must be
+// to deviate: latency is noisy, and the p99 is a power-of-two bucket edge.
+const d3DeviationRatio = 1.5
+
+// aboveRatio reports whether value exceeds baseline by more than ratio.
+func aboveRatio(value, baseline int64, ratio float64) bool {
+	return float64(value) > float64(baseline)*ratio
 }

@@ -24,8 +24,15 @@ CREATE TABLE IF NOT EXISTS transactions (
     source_id       bigint NOT NULL REFERENCES sources,
     service         text NOT NULL,
     -- The entry span's name, e.g. 'POST /checkout', 'myapp.UserService/Login'
-    -- or 'kafka.consume orders'.
+    -- or 'kafka.consume orders', followed by the identity dimensions it
+    -- carried, e.g. 'POST /checkout [http.response.status_code=200]'. The
+    -- transaction_id is hashed from it.
     operation       text NOT NULL,
+    -- The entry span's name alone, e.g. 'POST /checkout'.
+    operation_name  text NOT NULL,
+    -- The configured identity dimensions the entry span carried, in settings
+    -- order, e.g. [{"http.response.status_code": "200"}].
+    attributes      jsonb NOT NULL DEFAULT '[]',
     -- HTTP, GRPC, CONSUMER, PRODUCER, CRON or INTERNAL.
     entry_kind      text NOT NULL
 );

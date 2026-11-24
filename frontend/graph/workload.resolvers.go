@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -20,78 +21,9 @@ import (
 	"github.com/odigos-io/odigos/frontend/services"
 	"github.com/odigos-io/odigos/frontend/services/autopilot"
 	frontendcommon "github.com/odigos-io/odigos/frontend/services/common"
+	"github.com/odigos-io/odigos/frontend/services/insights"
 	sourceutils "github.com/odigos-io/odigos/k8sutils/pkg/source"
 )
-
-// SampleTrace is the resolver for the sampleTrace field.
-func (r *autopilotTransactionResolver) SampleTrace(ctx context.Context, obj *model.AutopilotTransaction) (*string, error) {
-	if obj == nil || obj.ID == "" {
-		return nil, nil
-	}
-	enabled, err := autopilot.IsEnabled(ctx, r.K8sCacheClient)
-	if err != nil {
-		return nil, fmt.Errorf("reading effective config for autopilot: %w", err)
-	}
-	if !enabled || r.AutopilotClient == nil {
-		return nil, nil
-	}
-
-	workloadID, containerName, err := autopilotTransactionParents(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	raw, err := r.AutopilotClient.GetTransactionSampleTrace(
-		ctx,
-		workloadID.Namespace,
-		string(workloadID.Kind),
-		workloadID.Name,
-		containerName,
-		obj.ID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if raw == "" {
-		return nil, nil
-	}
-	return &raw, nil
-}
-
-// CallTrie is the resolver for the callTrie field.
-func (r *autopilotTransactionResolver) CallTrie(ctx context.Context, obj *model.AutopilotTransaction) ([]*model.AutopilotCallTrieNode, error) {
-	if obj == nil || obj.ID == "" {
-		return nil, nil
-	}
-	enabled, err := autopilot.IsEnabled(ctx, r.K8sCacheClient)
-	if err != nil {
-		return nil, fmt.Errorf("reading effective config for autopilot: %w", err)
-	}
-	if !enabled || r.AutopilotClient == nil {
-		return nil, nil
-	}
-
-	workloadID, containerName, err := autopilotTransactionParents(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	nodes, ok, err := r.AutopilotClient.GetTransactionCallTree(
-		ctx,
-		workloadID.Namespace,
-		string(workloadID.Kind),
-		workloadID.Name,
-		containerName,
-		obj.ID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-	}
-	return autopilot.CallTreeToModel(nodes), nil
-}
 
 // MarkedForInstrumentation is the resolver for the markedForInstrumentation field.
 func (r *k8sNamespaceResolver) MarkedForInstrumentation(ctx context.Context, obj *model.K8sNamespace) (bool, error) {
@@ -872,6 +804,70 @@ func (r *k8sWorkloadContainerResolver) URLTemplatization(ctx context.Context, ob
 	}, nil
 }
 
+// AutopilotTransactions is the resolver for the autopilotTransactions field.
+func (r *k8sWorkloadContainerResolver) AutopilotTransactions(ctx context.Context, obj *model.K8sWorkloadContainer, ids []string, search *string, limit *int, offset *int) ([]*model.AutopilotTransaction, error) {
+	if obj == nil || obj.ContainerName == "" {
+		return []*model.AutopilotTransaction{}, nil
+	}
+
+	// The call trees are built and served by insights; with either feature off there are none.
+	autopilotOn, err := autopilot.IsEnabled(ctx, r.K8sCacheClient)
+	if err != nil {
+		return nil, fmt.Errorf("reading effective config for autopilot: %w", err)
+	}
+	insightsOn, err := insights.IsEnabled(ctx, r.K8sCacheClient)
+	if err != nil {
+		return nil, fmt.Errorf("reading effective config for insights: %w", err)
+	}
+	if !autopilotOn || !insightsOn {
+		return []*model.AutopilotTransaction{}, nil
+	}
+	client, err := r.insightsClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	workloadID, err := parentWorkloadID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	params := insights.ListAutopilotCallTreesParams{
+		Namespace:     workloadID.Namespace,
+		WorkloadKind:  string(workloadID.Kind),
+		WorkloadName:  workloadID.Name,
+		ContainerName: obj.ContainerName,
+	}
+	if ids != nil {
+		parsed, ok := autopilot.TransactionIDs(ids)
+		if !ok {
+			return []*model.AutopilotTransaction{}, nil
+		}
+		params.TransactionIDs = parsed
+	}
+	if search != nil {
+		params.Search = strings.TrimSpace(*search)
+	}
+	if limit != nil {
+		if *limit < 1 {
+			return nil, fmt.Errorf("limit must be positive")
+		}
+		params.Limit = *limit
+	}
+	if offset != nil {
+		if *offset < 0 {
+			return nil, fmt.Errorf("offset must not be negative")
+		}
+		params.Offset = *offset
+	}
+
+	txs, err := client.ListAutopilotCallTrees(ctx, params)
+	if err != nil {
+		return nil, insights.GraphQLError(ctx, err)
+	}
+	return autopilot.TransactionsToModel(txs), nil
+}
+
 // Processes is the resolver for the processes field.
 func (r *k8sWorkloadPodContainerResolver) Processes(ctx context.Context, obj *model.K8sWorkloadPodContainer) ([]*model.K8sWorkloadPodContainerProcess, error) {
 	l := loaders.For(ctx)
@@ -1087,11 +1083,6 @@ func (r *queryResolver) InterrogationSources(ctx context.Context) ([]*model.Auto
 	panic(fmt.Errorf("not implemented: InterrogationSources - interrogationSources"))
 }
 
-// AutopilotTransaction returns AutopilotTransactionResolver implementation.
-func (r *Resolver) AutopilotTransaction() AutopilotTransactionResolver {
-	return &autopilotTransactionResolver{r}
-}
-
 // K8sNamespace returns K8sNamespaceResolver implementation.
 func (r *Resolver) K8sNamespace() K8sNamespaceResolver { return &k8sNamespaceResolver{r} }
 
@@ -1118,7 +1109,6 @@ func (r *Resolver) K8sWorkloadTelemetryMetrics() K8sWorkloadTelemetryMetricsReso
 	return &k8sWorkloadTelemetryMetricsResolver{r}
 }
 
-type autopilotTransactionResolver struct{ *Resolver }
 type k8sNamespaceResolver struct{ *Resolver }
 type k8sWorkloadResolver struct{ *Resolver }
 type k8sWorkloadContainerResolver struct{ *Resolver }

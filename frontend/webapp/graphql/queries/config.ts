@@ -12,7 +12,7 @@ export const GET_CONFIG = gql`
       clusterName
       isCentralProxyRunning
       insightsEnabled
-      interrogationEnabled
+      autopilotEnabled
     }
   }
 `;

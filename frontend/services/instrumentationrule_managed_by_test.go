@@ -79,7 +79,7 @@ func TestGetInstrumentationRuleReportsManagedBy(t *testing.T) {
 
 	autopilotRule, err := GetInstrumentationRule(ctx, "rule-autopilot")
 	require.NoError(t, err)
-	require.Equal(t, model.ManagedByInterrogationLoop, autopilotRule.ManagedBy)
+	require.Equal(t, model.ManagedByAutopilotLoop, autopilotRule.ManagedBy)
 
 	rules, err := GetInstrumentationRules(ctx)
 	require.NoError(t, err)
@@ -90,5 +90,5 @@ func TestGetInstrumentationRuleReportsManagedBy(t *testing.T) {
 	}
 	require.Equal(t, model.ManagedByOdigosUI, byID["rule-ui"])
 	require.Equal(t, model.ManagedByUnknown, byID["rule-yaml"])
-	require.Equal(t, model.ManagedByInterrogationLoop, byID["rule-autopilot"])
+	require.Equal(t, model.ManagedByAutopilotLoop, byID["rule-autopilot"])
 }

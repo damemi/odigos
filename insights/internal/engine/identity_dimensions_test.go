@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/odigos-io/odigos/insights/internal/engine/semconv"
@@ -11,11 +12,11 @@ func TestApplyIdentityDimensions_StatusSplitsIdentity(t *testing.T) {
 	dims := []repo.TransactionIdentityDimension{
 		{Key: repo.IdentityDimHTTPStatusCode, Enabled: true},
 	}
-	op200 := applyIdentityDimensions("POST /buy", &Span{
+	op200 := identityOperation("POST /buy", &Span{
 		Name:      "POST /buy",
 		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "200"},
 	}, dims)
-	op403 := applyIdentityDimensions("POST /buy", &Span{
+	op403 := identityOperation("POST /buy", &Span{
 		Name:      "POST /buy",
 		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "403"},
 	}, dims)
@@ -40,7 +41,7 @@ func TestApplyIdentityDimensions_MissingStatusOmits(t *testing.T) {
 		{Key: repo.IdentityDimHTTPStatusCode, Enabled: true},
 		{Key: repo.IdentityDimRPCGRPCStatus, Enabled: true},
 	}
-	got := applyIdentityDimensions("POST /buy", &Span{
+	got := identityOperation("POST /buy", &Span{
 		Name:      "POST /buy",
 		SpanAttrs: map[string]string{},
 	}, dims)
@@ -53,13 +54,13 @@ func TestApplyIdentityDimensions_DisabledConfig(t *testing.T) {
 	dims := []repo.TransactionIdentityDimension{
 		{Key: repo.IdentityDimHTTPStatusCode, Enabled: false},
 	}
-	got := applyIdentityDimensions("POST /buy", &Span{
+	got := identityOperation("POST /buy", &Span{
 		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "500"},
 	}, dims)
 	if got != "POST /buy" {
 		t.Fatalf("disabled dim should not append, got %q", got)
 	}
-	gotEmpty := applyIdentityDimensions("POST /buy", &Span{
+	gotEmpty := identityOperation("POST /buy", &Span{
 		SpanAttrs: map[string]string{semconv.HTTPResponseStatusCode: "500"},
 	}, []repo.TransactionIdentityDimension{})
 	if gotEmpty != "POST /buy" {
@@ -72,11 +73,11 @@ func TestApplyIdentityDimensions_OrderStable(t *testing.T) {
 		"a": "1",
 		"b": "2",
 	}}
-	ab := applyIdentityDimensions("op", root, []repo.TransactionIdentityDimension{
+	ab := identityOperation("op", root, []repo.TransactionIdentityDimension{
 		{Key: "a", Enabled: true},
 		{Key: "b", Enabled: true},
 	})
-	ba := applyIdentityDimensions("op", root, []repo.TransactionIdentityDimension{
+	ba := identityOperation("op", root, []repo.TransactionIdentityDimension{
 		{Key: "b", Enabled: true},
 		{Key: "a", Enabled: true},
 	})
@@ -92,7 +93,7 @@ func TestApplyIdentityDimensions_OrderStable(t *testing.T) {
 }
 
 func TestApplyIdentityDimensions_LegacyHTTPStatus(t *testing.T) {
-	got := applyIdentityDimensions("GET /x", &Span{
+	got := identityOperation("GET /x", &Span{
 		SpanAttrs: map[string]string{semconv.LegacyHTTPStatusCode: "404"},
 	}, []repo.TransactionIdentityDimension{
 		{Key: repo.IdentityDimHTTPStatusCode, Enabled: true},
@@ -103,12 +104,38 @@ func TestApplyIdentityDimensions_LegacyHTTPStatus(t *testing.T) {
 }
 
 func TestEscapeIdentityDimToken(t *testing.T) {
-	got := applyIdentityDimensions("op", &Span{
+	got := identityOperation("op", &Span{
 		SpanAttrs: map[string]string{"weird": "a=b]c"},
 	}, []repo.TransactionIdentityDimension{
 		{Key: "weird", Enabled: true},
 	})
 	if got != `op [weird=a\=b\]c]` {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// identityOperation is the operation string the engine hashes for root.
+func identityOperation(operation string, root *Span, dims []repo.TransactionIdentityDimension) string {
+	return applyIdentityDimensions(operation, identityAttributes(root, dims))
+}
+
+func TestIdentityAttributes(t *testing.T) {
+	root := &Span{SpanAttrs: map[string]string{
+		semconv.LegacyHTTPStatusCode: "404",
+		"tenant":                     "acme",
+		"region":                     "eu",
+	}}
+	got := identityAttributes(root, []repo.TransactionIdentityDimension{
+		{Key: repo.IdentityDimHTTPStatusCode, Enabled: true},
+		{Key: "tenant", Enabled: true},
+		{Key: "region", Enabled: false},
+		{Key: "missing", Enabled: true},
+	})
+	want := []repo.TransactionIdentityValue{{Key: repo.IdentityDimHTTPStatusCode, Value: "404"}, {Key: "tenant", Value: "acme"}}
+	if !slices.Equal(got, want) {
+		t.Fatalf("attributes = %v, want %v", got, want)
+	}
+	if got := identityAttributes(nil, nil); got == nil || len(got) != 0 {
+		t.Fatalf("nil root = %#v, want empty list", got)
 	}
 }

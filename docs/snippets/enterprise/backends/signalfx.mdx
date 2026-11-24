@@ -42,6 +42,8 @@ icon: 'signal-stream'
   - This field is required
 - **SIGNALFX_REALM** `string` : Realm. The SignalFx realm where your data will be sent (e.g., us0, us1, eu0).
   - This field is required
+- **SIGNALFX_USE_CUSTOM_CA** `boolean` : Use Custom CA Certificate. Verify the Splunk Observability Cloud endpoint against a CA certificate you supply instead of the system roots.
+  - This field is optional and defaults to `False`
 - **SIGNALFX_CA_PEM** `string` : CA Certificate (PEM). Optional CA certificate in PEM format for TLS verification.
   - This field is optional
 - **SIGNALFX_INSECURE_SKIP_VERIFY** `boolean` : Skip TLS Verification. If enabled, TLS certificate verification will be skipped. Not recommended for production.
@@ -80,6 +82,7 @@ There are two primary methods for configuring destinations in Odigos:
       data:
         SIGNALFX_REALM: <Realm>
         # Note: The commented fields below are optional.
+        # SIGNALFX_USE_CUSTOM_CA: <Use Custom CA Certificate>
         # SIGNALFX_INSECURE_SKIP_VERIFY: <Skip TLS Verification>
       destinationName: signalfx
       # Uncomment the 'secretRef' below if you are using the optional Secret.
