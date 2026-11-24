@@ -45,15 +45,16 @@ func TestD7_RequestAboveP99Deviates(t *testing.T) {
 	traces = append(traces, httpTrace(map[string]string{"http.request.body.size": "127"}))
 	baseline := learnD7(t, traces...)
 
-	if dev, _, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{"http.request.body.size": "127"}), baseline); dev {
-		t.Errorf("request at p99 must not deviate")
+	// Up to 30% over p99 (165 bytes) is jitter.
+	if dev, _, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{"http.request.body.size": "165"}), baseline); dev {
+		t.Errorf("request within 30%% of p99 must not deviate")
 	}
 
-	dev, ev, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{"http.request.body.size": "128"}), baseline)
+	dev, ev, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{"http.request.body.size": "166"}), baseline)
 	if !dev {
-		t.Fatalf("expected deviation for request above p99")
+		t.Fatalf("expected deviation for request over 30%% above p99")
 	}
-	if !contains(string(ev), "128") || !contains(string(ev), "request_p99") {
+	if !contains(string(ev), "166") || !contains(string(ev), "request_p99") {
 		t.Errorf("evidence missing request size details: %s", ev)
 	}
 }
@@ -71,18 +72,18 @@ func TestD7_ResponseAboveP99Deviates(t *testing.T) {
 	baseline := learnD7(t, traces...)
 
 	if dev, _, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{
-		"http.response.headers.content-length": "127",
+		"http.response.headers.content-length": "128",
 	}), baseline); dev {
-		t.Errorf("response at p99 must not deviate")
+		t.Errorf("response just above p99 must not deviate")
 	}
 
 	dev, ev, _ := (d7PayloadSize{}).Score(httpTrace(map[string]string{
-		"http.response.headers.content-length": "128",
+		"http.response.headers.content-length": "166",
 	}), baseline)
 	if !dev {
-		t.Fatalf("expected deviation for response above p99")
+		t.Fatalf("expected deviation for response over 30%% above p99")
 	}
-	if !contains(string(ev), "128") || !contains(string(ev), "response_p99") {
+	if !contains(string(ev), "166") || !contains(string(ev), "response_p99") {
 		t.Errorf("evidence missing response size details: %s", ev)
 	}
 }
