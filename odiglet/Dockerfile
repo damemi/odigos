@@ -251,7 +251,7 @@ RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN,required=true \
 # Download grpc_health_probe this is used by the deviceplugin container to check if the deviceplugin is healthy
 FROM --platform=$BUILDPLATFORM busybox:1.36.1 AS grpc-health-probe
 ARG TARGETARCH
-ARG GRPC_HEALTH_PROBE_VERSION=v0.4.59
+ARG GRPC_HEALTH_PROBE_VERSION=v0.4.63
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
         GRPC_ARCH="arm64"; \
     else \
