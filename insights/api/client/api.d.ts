@@ -1530,7 +1530,7 @@ export interface components {
              * @description Stable machine-readable code.
              * @enum {string}
              */
-            code: "bad_request" | "not_found" | "conflict" | "payload_too_large" | "unprocessable_entity" | "unavailable" | "internal_error";
+            code: "bad_request" | "not_found" | "conflict" | "unprocessable_entity" | "unavailable" | "internal_error";
             message: string;
             details?: {
                 [key: string]: unknown;

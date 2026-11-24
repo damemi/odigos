@@ -2255,7 +2255,7 @@ components:
         code:
           type: string
           description: Stable machine-readable code.
-          enum: [bad_request, not_found, conflict, payload_too_large, unprocessable_entity, unavailable, internal_error]
+          enum: [bad_request, not_found, conflict, unprocessable_entity, unavailable, internal_error]
         message: { type: string }
         details:
           type: object

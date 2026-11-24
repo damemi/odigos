@@ -137,14 +137,12 @@ func writeError(c *gin.Context, status int, err error) {
 // switch on, independent of the human message.
 func errorCode(status int) apitypes.ErrorBodyCode {
 	switch status {
-	case http.StatusBadRequest:
+	case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
 		return apitypes.ErrorBodyCodeBadRequest
 	case http.StatusNotFound:
 		return apitypes.ErrorBodyCodeNotFound
 	case http.StatusConflict:
 		return apitypes.ErrorBodyCodeConflict
-	case http.StatusRequestEntityTooLarge:
-		return apitypes.ErrorBodyCodePayloadTooLarge
 	case http.StatusUnprocessableEntity:
 		return apitypes.ErrorBodyCodeUnprocessableEntity
 	case http.StatusServiceUnavailable:

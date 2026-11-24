@@ -225,7 +225,6 @@ const (
 	ErrorBodyCodeConflict            ErrorBodyCode = "conflict"
 	ErrorBodyCodeInternalError       ErrorBodyCode = "internal_error"
 	ErrorBodyCodeNotFound            ErrorBodyCode = "not_found"
-	ErrorBodyCodePayloadTooLarge     ErrorBodyCode = "payload_too_large"
 	ErrorBodyCodeUnavailable         ErrorBodyCode = "unavailable"
 	ErrorBodyCodeUnprocessableEntity ErrorBodyCode = "unprocessable_entity"
 )
@@ -240,8 +239,6 @@ func (e ErrorBodyCode) Valid() bool {
 	case ErrorBodyCodeInternalError:
 		return true
 	case ErrorBodyCodeNotFound:
-		return true
-	case ErrorBodyCodePayloadTooLarge:
 		return true
 	case ErrorBodyCodeUnavailable:
 		return true

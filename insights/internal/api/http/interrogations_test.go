@@ -344,7 +344,7 @@ func TestInterrogations_BodyTooLarge(t *testing.T) {
 		if w.Code != http.StatusRequestEntityTooLarge {
 			t.Fatalf("POST %s: %d, want 413", path, w.Code)
 		}
-		if got := decodeBody[errorBody](t, w).Error.Code; got != string(apitypes.ErrorBodyCodePayloadTooLarge) {
+		if got := decodeBody[errorBody](t, w).Error.Code; got != string(apitypes.ErrorBodyCodeBadRequest) {
 			t.Errorf("POST %s: code %q", path, got)
 		}
 	}
