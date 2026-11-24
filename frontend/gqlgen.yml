@@ -114,6 +114,8 @@ models:
     fields:
       urlTemplatization:
         resolver: true
+      autopilotTransactions:
+        resolver: true
 
   K8sWorkloadContainerUrlTemplatization:
     fields:

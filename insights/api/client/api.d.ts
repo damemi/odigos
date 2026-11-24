@@ -1077,6 +1077,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/autopilot/call-trees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a workload container's transaction call trees
+         * @description **Use for:** the functions each transaction of a workload container runs, as the call trees autopilot built from its profile stacks.
+         *     Ordered by the number of CPU-sample call paths (most first), then by transaction id. Empty when the container has no call trees yet, including when insights hasn't stored its source yet.
+         */
+        get: operations["listAutopilotCallTrees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1314,6 +1335,36 @@ export interface components {
         TransactionStatList: {
             count: number;
             items: components["schemas"]["TransactionStat"][];
+        };
+        AutopilotCallTreeList: {
+            count: number;
+            items: components["schemas"]["AutopilotCallTreeTransaction"][];
+        };
+        /** @description One transaction's call trees, one per sample type, as a flat node list. */
+        AutopilotCallTreeTransaction: {
+            /** Format: int64 */
+            transaction_id: number;
+            /** @description The transaction's operation, as in `Transaction.operation`. Absent until insights stores the transaction. */
+            operation?: string;
+            /** @description The operation without its identity dimensions, as in `Transaction.operation_name`. Absent with `operation`. */
+            operation_name?: string;
+            /** @description The identity dimensions parsed from `operation`, as in `Transaction.identity_dimensions`. Absent with `operation`. */
+            identity_dimensions?: components["schemas"]["TransactionIdentityValue"][];
+            /** @description HTTP, GRPC, CONSUMER, PRODUCER, CRON or INTERNAL. Absent with `operation`. */
+            entry_kind?: string;
+            nodes: components["schemas"]["AutopilotCallTreeNode"][];
+        };
+        /** @description One function on a call path of the transaction's profile stacks. */
+        AutopilotCallTreeNode: {
+            /** @description Unique within the transaction: `<sample_type>:<stored node id>`. A call path has the same stored id in each sample type's tree. */
+            id: string;
+            /** @description The parent node's `id`. Absent for roots. */
+            parent_id?: string;
+            function_name: string;
+            /** @description The profile frame type, e.g. `jvm` or `hotspot`. */
+            frame_type: string;
+            /** @description `samples` (periodic CPU samples) or `events`. */
+            sample_type: string;
         };
         /** @description One parsed low-cardinality dimension from the stored operation identity suffix ([key=value]). For display only - canonical identity remains in `operation`. */
         TransactionIdentityValue: {
@@ -4508,6 +4559,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeliveryList"];
+                };
+            };
+            400: components["responses"]["Error"];
+            500: components["responses"]["Error"];
+        };
+    };
+    listAutopilotCallTrees: {
+        parameters: {
+            query: {
+                namespace: string;
+                /** @description The workload's kind, e.g. `Deployment`. */
+                workload_kind: string;
+                workload_name: string;
+                container_name: string;
+                /** @description Only these transactions. Repeat the parameter for several. */
+                transaction_id?: number[];
+                /** @description Substring of the transaction id. */
+                search?: string;
+                /** @description At most this many transactions. Omit for all. */
+                limit?: number;
+                /** @description Skip this many matching transactions, for paging. */
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The container's transactions with their call trees. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AutopilotCallTreeList"];
                 };
             };
             400: components["responses"]["Error"];

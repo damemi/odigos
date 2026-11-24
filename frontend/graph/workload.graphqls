@@ -385,6 +385,104 @@ type K8sWorkloadContainer {
   # InstrumentationConfig) plus optional live-traffic learning (unmatched paths
   # and recommended rules). Null when unavailable (OSS / unset hook).
   urlTemplatization: K8sWorkloadContainerUrlTemplatization
+
+  """
+  Autopilot: the transactions of this container with their call trees, which
+  insights builds per transaction. Empty when autopilot or insights is disabled,
+  or nothing has been stored yet. Ordered by the number of CPU-sample call paths,
+  most first, then id. Each transaction carries its whole call tree, so page with
+  limit on busy containers.
+  """
+  autopilotTransactions(
+    """
+    Only return these transaction ids. An empty list returns nothing.
+    """
+    ids: [String!]
+    """
+    Case-insensitive substring match on the transaction id.
+    """
+    search: String
+    """
+    Max transactions to return (must be positive). Omit to return all matches.
+    """
+    limit: Int
+    """
+    Number of matching transactions to skip (in result order), for paging.
+    """
+    offset: Int
+  ): [AutopilotTransaction!]!
+}
+
+"""
+What a call tree frame belongs to. Classified when read, from the JVM frame name.
+"""
+enum AutopilotFrameKind {
+  """
+  Customer code and the libraries it calls: probe candidates.
+  """
+  APP
+  """
+  JDK, VM and agent plumbing.
+  """
+  RUNTIME
+}
+
+"""
+One node in a transaction's call tree (flat list; assemble the tree via parentId).
+"""
+type AutopilotCallTreeNode {
+  """
+  Unique within the transaction: the stored node id prefixed with its sample type
+  ("samples:<id>"). Each sample type has its own tree, and a call path has the
+  same stored id in both.
+  """
+  id: String!
+  """
+  Parent node id, or null for roots.
+  """
+  parentId: String
+  name: String!
+  """
+  profile.frame.type (e.g. jvm, hotspot).
+  """
+  frameType: String!
+  frameKind: AutopilotFrameKind!
+  """
+  Profile sample type: events (probe) or samples (periodic CPU).
+  """
+  sampleType: String!
+}
+
+"""
+One transaction observed for a workload container, with its call tree.
+"""
+type AutopilotTransaction {
+  """
+  The insights transaction id (a signed 64-bit integer, as a string).
+  """
+  id: String!
+  """
+  The transaction's root span operation from the insights inventory, without its
+  identity dimensions (e.g. "POST /buy"). Null when the inventory has no row for
+  the id.
+  """
+  operationName: String
+  """
+  The identity dimensions that tell transactions with the same operation name
+  apart (e.g. http.response.status_code=500), in settings order. Empty when the
+  inventory has no row for the id.
+  """
+  identityDimensions: [InsightsTransactionIdentityValue!]!
+  """
+  The transaction's kind from the insights inventory: HTTP, GRPC, CONSUMER,
+  PRODUCER, CRON or INTERNAL. Null when the inventory has no row for the id.
+  """
+  kind: String
+  """
+  Flat call tree nodes of every sample type. Build the trees in the client via
+  id/parentId.
+  """
+  callTree: [AutopilotCallTreeNode!]!
 }
 
 # describes a single attribute of a process.

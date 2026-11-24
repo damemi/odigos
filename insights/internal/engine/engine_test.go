@@ -1283,6 +1283,10 @@ func (f *fakeRepo) ListTransactionRefs(_ context.Context) ([]repo.TransactionRef
 	return out, nil
 }
 
+func (f *fakeRepo) ListCallTreeTransactions(context.Context, repo.CallTreeTransactionsParams) ([]repo.CallTreeTransaction, error) {
+	return nil, nil
+}
+
 func (f *fakeRepo) GetTransactionByID(_ context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

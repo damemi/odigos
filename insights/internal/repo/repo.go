@@ -40,6 +40,12 @@ type Repository interface {
 	// seeded at startup and re-synced on settings reload; not on the per-trace path.
 	ListTransactionRefs(ctx context.Context) ([]TransactionRef, error)
 
+	// ListCallTreeTransactions returns the autopilot call trees of one workload
+	// container, one entry per transaction. Ordered by the number of
+	// CPU-sample call paths, most first, then by transaction id. Empty when the
+	// container's source isn't stored yet.
+	ListCallTreeTransactions(ctx context.Context, params CallTreeTransactionsParams) ([]CallTreeTransaction, error)
+
 	// GetTransactionByID returns one transaction's identity (service, namespace,
 	// operation, kind). ok=false when unknown.
 	GetTransactionByID(ctx context.Context, transactionID int64) (Transaction, bool, error)

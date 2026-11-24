@@ -69,6 +69,16 @@ func (m *instrumentedRepo) ListTransactionRefs(ctx context.Context) ([]repo.Tran
 	return out, err
 }
 
+func (m *instrumentedRepo) ListCallTreeTransactions(ctx context.Context, params repo.CallTreeTransactionsParams) ([]repo.CallTreeTransaction, error) {
+	var out []repo.CallTreeTransaction
+	err := observe("ListCallTreeTransactions", func() error {
+		var e error
+		out, e = m.inner.ListCallTreeTransactions(ctx, params)
+		return e
+	})
+	return out, err
+}
+
 func (m *instrumentedRepo) GetTransactionByID(ctx context.Context, transactionID int64) (repo.Transaction, bool, error) {
 	var (
 		out repo.Transaction

@@ -2,14 +2,32 @@ package graph
 
 import (
 	"cmp"
+	"context"
+	"fmt"
 	"slices"
 	"strconv"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql"
 	odigosv1 "github.com/odigos-io/odigos/api/odigos/v1alpha1"
 	"github.com/odigos-io/odigos/common"
 	"github.com/odigos-io/odigos/frontend/graph/model"
 )
+
+// parentWorkloadID walks GraphQL field context to the parent K8sWorkload id.
+// Field path for list items: autopilotTransactions -> container ->
+// containers -> workload.
+func parentWorkloadID(ctx context.Context) (model.K8sWorkloadID, error) {
+	fc := graphql.GetFieldContext(ctx)
+	if fc == nil || fc.Parent == nil || fc.Parent.Parent == nil || fc.Parent.Parent.Parent == nil {
+		return model.K8sWorkloadID{}, fmt.Errorf("missing parent resolver context")
+	}
+	w, ok := fc.Parent.Parent.Parent.Result.(**model.K8sWorkload)
+	if !ok || w == nil || (*w).ID == nil {
+		return model.K8sWorkloadID{}, fmt.Errorf("parent is not a workload")
+	}
+	return *(*w).ID, nil
+}
 
 // collectEffectiveDetectedLanguages returns the sorted, unique list of programming
 // languages across all containers of an InstrumentationConfig, preferring the

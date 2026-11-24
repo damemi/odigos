@@ -408,3 +408,36 @@ export const GET_NAMESPACES_WITH_WORKLOADS = gql`
     }
   }
 `;
+
+// Autopilot transactions with their call trees, for the Profiling page's By transaction view.
+export const GET_AUTOPILOT_TRANSACTIONS = gql`
+  query GetAutopilotTransactions($ids: [K8sWorkloadIdInput!]!) {
+    workloadsByIds(ids: $ids) {
+      id {
+        namespace
+        kind
+        name
+      }
+      containers {
+        containerName
+        autopilotTransactions {
+          id
+          operationName
+          identityDimensions {
+            key
+            value
+          }
+          kind
+          callTree {
+            id
+            parentId
+            name
+            frameType
+            frameKind
+            sampleType
+          }
+        }
+      }
+    }
+  }
+`;

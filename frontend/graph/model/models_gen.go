@@ -122,6 +122,42 @@ type AutoRollbackConfig struct {
 	StabilityWindowTime *string `json:"stabilityWindowTime,omitempty"`
 }
 
+// One node in a transaction's call tree (flat list; assemble the tree via parentId).
+type AutopilotCallTreeNode struct {
+	// Unique within the transaction: the stored node id prefixed with its sample type
+	// ("samples:<id>"). Each sample type has its own tree, and a call path has the
+	// same stored id in both.
+	ID string `json:"id"`
+	// Parent node id, or null for roots.
+	ParentID *string `json:"parentId,omitempty"`
+	Name     string  `json:"name"`
+	// profile.frame.type (e.g. jvm, hotspot).
+	FrameType string             `json:"frameType"`
+	FrameKind AutopilotFrameKind `json:"frameKind"`
+	// Profile sample type: events (probe) or samples (periodic CPU).
+	SampleType string `json:"sampleType"`
+}
+
+// One transaction observed for a workload container, with its call tree.
+type AutopilotTransaction struct {
+	// The insights transaction id (a signed 64-bit integer, as a string).
+	ID string `json:"id"`
+	// The transaction's root span operation from the insights inventory, without its
+	// identity dimensions (e.g. "POST /buy"). Null when the inventory has no row for
+	// the id.
+	OperationName *string `json:"operationName,omitempty"`
+	// The identity dimensions that tell transactions with the same operation name
+	// apart (e.g. http.response.status_code=500), in settings order. Empty when the
+	// inventory has no row for the id.
+	IdentityDimensions []*InsightsTransactionIdentityValue `json:"identityDimensions"`
+	// The transaction's kind from the insights inventory: HTTP, GRPC, CONSUMER,
+	// PRODUCER, CRON or INTERNAL. Null when the inventory has no row for the id.
+	Kind *string `json:"kind,omitempty"`
+	// Flat call tree nodes of every sample type. Build the trees in the client via
+	// id/parentId.
+	CallTree []*AutopilotCallTreeNode `json:"callTree"`
+}
+
 type CardinalityControlConfig struct {
 	URLTemplatization *URLTemplatizationCardinalityControlConfig `json:"urlTemplatization,omitempty"`
 }
@@ -274,6 +310,7 @@ type Config struct {
 	ClusterName           *string             `json:"clusterName,omitempty"`
 	IsCentralProxyRunning *bool               `json:"isCentralProxyRunning,omitempty"`
 	InsightsEnabled       bool                `json:"insightsEnabled"`
+	AutopilotEnabled      bool                `json:"autopilotEnabled"`
 }
 
 type ConfigYaml struct {
@@ -2308,6 +2345,12 @@ type K8sWorkloadContainer struct {
 	CollectorConfig   *K8sWorkloadContainerCollectorConfig             `json:"collectorConfig,omitempty"`
 	Instrumentations  []*K8sWorkloadPodContainerProcessInstrumentation `json:"instrumentations,omitempty"`
 	URLTemplatization *K8sWorkloadContainerURLTemplatization           `json:"urlTemplatization,omitempty"`
+	// Autopilot: the transactions of this container with their call trees, which
+	// insights builds per transaction. Empty when autopilot or insights is disabled,
+	// or nothing has been stored yet. Ordered by the number of CPU-sample call paths,
+	// most first, then id. Each transaction carries its whole call tree, so page with
+	// limit on busy containers.
+	AutopilotTransactions []*AutopilotTransaction `json:"autopilotTransactions"`
 }
 
 type K8sWorkloadContainerAgentConfig struct {
@@ -3423,6 +3466,50 @@ func (e *ActionType) UnmarshalGQL(v any) error {
 }
 
 func (e ActionType) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+// What a call tree frame belongs to. Classified when read, from the JVM frame name.
+type AutopilotFrameKind string
+
+const (
+	// Customer code and the libraries it calls: probe candidates.
+	AutopilotFrameKindApp AutopilotFrameKind = "APP"
+	// JDK, VM and agent plumbing.
+	AutopilotFrameKindRuntime AutopilotFrameKind = "RUNTIME"
+)
+
+var AllAutopilotFrameKind = []AutopilotFrameKind{
+	AutopilotFrameKindApp,
+	AutopilotFrameKindRuntime,
+}
+
+func (e AutopilotFrameKind) IsValid() bool {
+	switch e {
+	case AutopilotFrameKindApp, AutopilotFrameKindRuntime:
+		return true
+	}
+	return false
+}
+
+func (e AutopilotFrameKind) String() string {
+	return string(e)
+}
+
+func (e *AutopilotFrameKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AutopilotFrameKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AutopilotFrameKind", str)
+	}
+	return nil
+}
+
+func (e AutopilotFrameKind) MarshalGQL(w io.Writer) {
 	fmt.Fprint(w, strconv.Quote(e.String()))
 }
 

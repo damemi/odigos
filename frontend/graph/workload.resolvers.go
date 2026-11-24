@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/99designs/gqlgen/graphql"
@@ -18,7 +19,9 @@ import (
 	"github.com/odigos-io/odigos/frontend/graph/model"
 	"github.com/odigos-io/odigos/frontend/graph/status"
 	"github.com/odigos-io/odigos/frontend/services"
+	"github.com/odigos-io/odigos/frontend/services/autopilot"
 	frontendcommon "github.com/odigos-io/odigos/frontend/services/common"
+	"github.com/odigos-io/odigos/frontend/services/insights"
 	sourceutils "github.com/odigos-io/odigos/k8sutils/pkg/source"
 )
 
@@ -799,6 +802,70 @@ func (r *k8sWorkloadContainerResolver) URLTemplatization(ctx context.Context, ob
 	return &model.K8sWorkloadContainerURLTemplatization{
 		Templatization: templatization,
 	}, nil
+}
+
+// AutopilotTransactions is the resolver for the autopilotTransactions field.
+func (r *k8sWorkloadContainerResolver) AutopilotTransactions(ctx context.Context, obj *model.K8sWorkloadContainer, ids []string, search *string, limit *int, offset *int) ([]*model.AutopilotTransaction, error) {
+	if obj == nil || obj.ContainerName == "" {
+		return []*model.AutopilotTransaction{}, nil
+	}
+
+	// The call trees are built and served by insights; with either feature off there are none.
+	autopilotOn, err := autopilot.IsEnabled(ctx, r.K8sCacheClient)
+	if err != nil {
+		return nil, fmt.Errorf("reading effective config for autopilot: %w", err)
+	}
+	insightsOn, err := insights.IsEnabled(ctx, r.K8sCacheClient)
+	if err != nil {
+		return nil, fmt.Errorf("reading effective config for insights: %w", err)
+	}
+	if !autopilotOn || !insightsOn {
+		return []*model.AutopilotTransaction{}, nil
+	}
+	client, err := r.insightsClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	workloadID, err := parentWorkloadID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	params := insights.ListAutopilotCallTreesParams{
+		Namespace:     workloadID.Namespace,
+		WorkloadKind:  string(workloadID.Kind),
+		WorkloadName:  workloadID.Name,
+		ContainerName: obj.ContainerName,
+	}
+	if ids != nil {
+		parsed, ok := autopilot.TransactionIDs(ids)
+		if !ok {
+			return []*model.AutopilotTransaction{}, nil
+		}
+		params.TransactionIDs = parsed
+	}
+	if search != nil {
+		params.Search = strings.TrimSpace(*search)
+	}
+	if limit != nil {
+		if *limit < 1 {
+			return nil, fmt.Errorf("limit must be positive")
+		}
+		params.Limit = *limit
+	}
+	if offset != nil {
+		if *offset < 0 {
+			return nil, fmt.Errorf("offset must not be negative")
+		}
+		params.Offset = *offset
+	}
+
+	txs, err := client.ListAutopilotCallTrees(ctx, params)
+	if err != nil {
+		return nil, insights.GraphQLError(ctx, err)
+	}
+	return autopilot.TransactionsToModel(txs), nil
 }
 
 // Processes is the resolver for the processes field.
