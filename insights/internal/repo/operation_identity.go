@@ -1,14 +1,36 @@
 package repo
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 )
 
-// TransactionIdentityValue is one parsed key=value pair from a stored operation
-// identity suffix (see SplitOperationIdentity).
+// TransactionIdentityValue is one identity dimension key=value pair, read from
+// the entry span or parsed from a stored operation identity suffix (see
+// SplitOperationIdentity). In JSON it is a single-entry object, e.g.
+// {"http.response.status_code": "200"}.
 type TransactionIdentityValue struct {
 	Key   string
 	Value string
+}
+
+func (v TransactionIdentityValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{v.Key: v.Value})
+}
+
+func (v *TransactionIdentityValue) UnmarshalJSON(data []byte) error {
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err != nil {
+		return err
+	}
+	if len(m) != 1 {
+		return fmt.Errorf("transaction identity value: want one key, got %d", len(m))
+	}
+	for k, val := range m {
+		v.Key, v.Value = k, val
+	}
+	return nil
 }
 
 // Built-in identity dimension keys (single source of truth for engine, defaults, UI).

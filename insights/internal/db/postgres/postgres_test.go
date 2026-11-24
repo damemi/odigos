@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -126,6 +127,47 @@ func TestTransactions(t *testing.T) {
 	}
 	if !stats[0].HasBaseline || !stats[0].Promoted {
 		t.Fatalf("promoted transaction = has:%v promoted:%v, want true/true", stats[0].HasBaseline, stats[0].Promoted)
+	}
+}
+
+func TestTransactionOperationNameAndAttributes(t *testing.T) {
+	r := testRepo(t)
+	ctx := context.Background()
+	svc := uniqueService("txn-attrs")
+
+	withDims := repo.NewTransaction(svc, "ns", "POST /buy [rpc.grpc.status_code=0][http.response.status_code=403]", repo.KindHTTP, testSourceIdentity)
+	withDims.OperationName = "POST /buy"
+	withDims.Attributes = []repo.TransactionIdentityValue{
+		{Key: "rpc.grpc.status_code", Value: "0"},
+		{Key: "http.response.status_code", Value: "403"},
+	}
+	plain := repo.NewTransaction(svc, "ns", "GET /x", repo.KindHTTP, testSourceIdentity)
+	plain.OperationName = "GET /x"
+	if err := r.UpsertTransactions(ctx, []repo.Transaction{withDims, plain}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	conn, err := pgx.Connect(ctx, testDSN())
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	for _, want := range []repo.Transaction{withDims, plain} {
+		var operation, operationName string
+		var attrs []repo.TransactionIdentityValue
+		if err := conn.QueryRow(ctx,
+			`SELECT operation, operation_name, attributes FROM transactions WHERE transaction_id = $1`,
+			want.ID).Scan(&operation, &operationName, &attrs); err != nil {
+			t.Fatalf("select %q: %v", want.Operation, err)
+		}
+		wantAttrs := want.Attributes
+		if wantAttrs == nil {
+			wantAttrs = []repo.TransactionIdentityValue{}
+		}
+		if operation != want.Operation || operationName != want.OperationName || attrs == nil || !slices.Equal(attrs, wantAttrs) {
+			t.Fatalf("row = %q %q %v, want %q %q %v", operation, operationName, attrs, want.Operation, want.OperationName, wantAttrs)
+		}
 	}
 }
 

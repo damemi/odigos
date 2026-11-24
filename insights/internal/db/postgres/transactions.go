@@ -17,6 +17,7 @@ import (
 // UpsertTransactions on the write-behind flush instead.
 func (r *Repo) UpsertTransaction(ctx context.Context, service, namespace, operation string, kind repo.TransactionKind, sourceIdentity map[string]string) (repo.Transaction, error) {
 	tx := repo.NewTransaction(service, namespace, operation, kind, sourceIdentity)
+	tx.OperationName = operation
 	if err := r.UpsertTransactions(ctx, []repo.Transaction{tx}); err != nil {
 		return repo.Transaction{}, err
 	}
@@ -37,7 +38,7 @@ func (r *Repo) UpsertTransactions(ctx context.Context, txs []repo.Transaction) e
 	for _, tx := range sorted {
 		src := repo.NewSource(tx.SourceIdentity)
 		sources[src.ID] = src
-		txRows = append(txRows, []any{tx.ID, src.ID, tx.Service, tx.Operation, string(tx.Kind)})
+		txRows = append(txRows, []any{tx.ID, src.ID, tx.Service, tx.Operation, tx.OperationName, nonNilAttributes(tx.Attributes), string(tx.Kind)})
 	}
 	sourceRows, k8sRows := sourceRowsByID(sources)
 	err := r.inTx(ctx, func(tx pgx.Tx) error {
@@ -55,17 +56,27 @@ func (r *Repo) UpsertTransactions(ctx context.Context, txs []repo.Transaction) e
 			return err
 		}
 		return execBatch(ctx, tx,
-			`INSERT INTO transactions (transaction_id, source_id, service, operation, entry_kind)
-			 VALUES ($1, $2, $3, $4, $5)
+			`INSERT INTO transactions (transaction_id, source_id, service, operation, operation_name, attributes, entry_kind)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)
 			 ON CONFLICT (transaction_id) DO UPDATE SET
 				source_id = EXCLUDED.source_id, service = EXCLUDED.service,
-				operation = EXCLUDED.operation, entry_kind = EXCLUDED.entry_kind`,
+				operation = EXCLUDED.operation, operation_name = EXCLUDED.operation_name,
+				attributes = EXCLUDED.attributes, entry_kind = EXCLUDED.entry_kind`,
 			txRows)
 	})
 	if err != nil {
 		return fmt.Errorf("upsert transactions: %w", err)
 	}
 	return nil
+}
+
+// nonNilAttributes stores a transaction without identity dimensions
+// as [] rather than JSON null.
+func nonNilAttributes(attrs []repo.TransactionIdentityValue) []repo.TransactionIdentityValue {
+	if attrs == nil {
+		return []repo.TransactionIdentityValue{}
+	}
+	return attrs
 }
 
 // sourceRowsByID returns the sources and k8s_source_identity rows sorted by

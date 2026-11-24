@@ -7,36 +7,44 @@ import (
 	"github.com/odigos-io/odigos/insights/internal/repo"
 )
 
-// applyIdentityDimensions appends enabled low-cardinality dimensions from the
-// sub-transaction entry span (root) onto Operation. Missing values are omitted
-// (no synthetic "unknown"). Format: "POST /buy [key=value]" with deterministic
-// escaping so values cannot break the bracket structure.
-func applyIdentityDimensions(operation string, root *Span, dims []repo.TransactionIdentityDimension) string {
-	if root == nil || len(dims) == 0 {
+// applyIdentityDimensions appends the identity attributes (see
+// identityAttributes) onto Operation, in their order. Format:
+// "POST /buy [key=value]" with deterministic escaping so values cannot break
+// the bracket structure.
+func applyIdentityDimensions(operation string, attrs []repo.TransactionIdentityValue) string {
+	if len(attrs) == 0 {
 		return operation
 	}
 	var b strings.Builder
 	b.WriteString(operation)
-	wroteSep := false
+	b.WriteByte(' ')
+	for _, a := range attrs {
+		b.WriteByte('[')
+		b.WriteString(repo.EscapeIdentityDimToken(a.Key))
+		b.WriteByte('=')
+		b.WriteString(repo.EscapeIdentityDimToken(a.Value))
+		b.WriteByte(']')
+	}
+	return b.String()
+}
+
+// identityAttributes reads the enabled low-cardinality dimensions from the
+// sub-transaction entry span (root), in settings order. Missing values are
+// omitted (no synthetic "unknown").
+func identityAttributes(root *Span, dims []repo.TransactionIdentityDimension) []repo.TransactionIdentityValue {
+	attrs := []repo.TransactionIdentityValue{}
+	if root == nil {
+		return attrs
+	}
 	for _, d := range dims {
 		if !d.Enabled || d.Key == "" {
 			continue
 		}
-		val := resolveIdentityDimension(root, d.Key)
-		if val == "" {
-			continue
+		if val := resolveIdentityDimension(root, d.Key); val != "" {
+			attrs = append(attrs, repo.TransactionIdentityValue{Key: d.Key, Value: val})
 		}
-		if !wroteSep {
-			b.WriteByte(' ')
-			wroteSep = true
-		}
-		b.WriteByte('[')
-		b.WriteString(repo.EscapeIdentityDimToken(d.Key))
-		b.WriteByte('=')
-		b.WriteString(repo.EscapeIdentityDimToken(val))
-		b.WriteByte(']')
 	}
-	return b.String()
+	return attrs
 }
 
 func resolveIdentityDimension(root *Span, key string) string {
