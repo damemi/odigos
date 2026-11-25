@@ -276,6 +276,13 @@ func (gcp *GolangCustomProbeWithMetadata) Verify() error {
 	return gcp.GolangCustomProbe.Verify()
 }
 
+func (gcp *GolangCustomProbe) String() string {
+	if gcp.FunctionName != "" {
+		return fmt.Sprintf("%s.%s", gcp.PackageName, gcp.FunctionName)
+	}
+	return fmt.Sprintf("%s.(*%s).%s", gcp.PackageName, gcp.ReceiverName, gcp.ReceiverMethodName)
+}
+
 type CppCustomProbe struct {
 	// function signature to add custom probe for.
 	// the following scenarios are possible:

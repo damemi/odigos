@@ -116,7 +116,7 @@ func probesFromCustomInstrumentations(ruleName string, ci *instrumentationrules.
 		out = append(out, customProbe{RuleName: ruleName, Language: "java", Target: p.String()})
 	}
 	for _, p := range ci.Golang {
-		out = append(out, customProbe{RuleName: ruleName, Language: "go", Target: formatGolangProbe(p.GolangCustomProbe)})
+		out = append(out, customProbe{RuleName: ruleName, Language: "go", Target: p.String()})
 	}
 	for _, p := range ci.Php {
 		out = append(out, customProbe{RuleName: ruleName, Language: "php", Target: p.String()})
@@ -125,13 +125,6 @@ func probesFromCustomInstrumentations(ruleName string, ci *instrumentationrules.
 		out = append(out, customProbe{RuleName: ruleName, Language: "cpp", Target: p.Signature})
 	}
 	return out
-}
-
-func formatGolangProbe(p instrumentationrules.GolangCustomProbe) string {
-	if p.FunctionName != "" {
-		return fmt.Sprintf("%s.%s", p.PackageName, p.FunctionName)
-	}
-	return fmt.Sprintf("%s.(*%s).%s", p.PackageName, p.ReceiverName, p.ReceiverMethodName)
 }
 
 // uniqueProbeCount returns distinct language|target probes affecting the source.

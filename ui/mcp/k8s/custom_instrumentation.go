@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -54,81 +55,39 @@ func addCustomInstrumentationHandler(deps Deps) server.ToolHandlerFunc {
 		}
 		dryRun := boolArg(req, "dry_run", true)
 
-		ci := &instrumentationrules.CustomInstrumentationsWithMetadata{}
-		var probeSummary string
-
-		switch language {
-		case "java":
-			probe := instrumentationrules.JavaCustomProbeWithMetadata{
-				JavaCustomProbe: instrumentationrules.JavaCustomProbe{
-					ClassName:  stringArg(req, "class_name", ""),
-					MethodName: stringArg(req, "method_name", ""),
-				},
-			}
-			if err := probe.Verify(); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("invalid java probe: %v", err)), nil
-			}
-			ci.Java = []instrumentationrules.JavaCustomProbeWithMetadata{probe}
-			probeSummary = probe.String()
-		case "go":
-			probe := instrumentationrules.GolangCustomProbeWithMetadata{
-				GolangCustomProbe: instrumentationrules.GolangCustomProbe{
-					PackageName:        stringArg(req, "package_name", ""),
-					FunctionName:       stringArg(req, "function_name", ""),
-					ReceiverName:       stringArg(req, "receiver_name", ""),
-					ReceiverMethodName: stringArg(req, "receiver_method_name", ""),
-				},
-			}
-			if err := probe.Verify(); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("invalid go probe: %v", err)), nil
-			}
-			ci.Golang = []instrumentationrules.GolangCustomProbeWithMetadata{probe}
-			if probe.FunctionName != "" {
-				probeSummary = fmt.Sprintf("%s.%s", probe.PackageName, probe.FunctionName)
-			} else {
-				probeSummary = fmt.Sprintf("%s.(%s).%s", probe.PackageName, probe.ReceiverName, probe.ReceiverMethodName)
-			}
-		case "cpp":
-			probe := instrumentationrules.CppCustomProbeWithMetadata{
-				CppCustomProbe: instrumentationrules.CppCustomProbe{Signature: stringArg(req, "signature", "")},
-			}
-			if err := probe.Verify(); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("invalid cpp probe: %v", err)), nil
-			}
-			ci.Cpp = []instrumentationrules.CppCustomProbeWithMetadata{probe}
-			probeSummary = probe.Signature
-		case "php":
-			probe := instrumentationrules.PhpCustomProbeWithMetadata{
-				PhpCustomProbe: instrumentationrules.PhpCustomProbe{
-					ClassName:    stringArg(req, "class_name", ""),
-					FunctionName: stringArg(req, "function_name", ""),
-				},
-			}
-			if err := probe.Verify(); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("invalid php probe: %v", err)), nil
-			}
-			ci.Php = []instrumentationrules.PhpCustomProbeWithMetadata{probe}
-			probeSummary = probe.String()
-		case "python":
-			var captures []instrumentationrules.PythonCapture
+		var captures []instrumentationrules.PythonCapture
+		if language == instrumentationrules.CustomProbeLanguagePython {
 			if _, err := decodeArg(req, "captures", &captures); err != nil {
 				return mcp.NewToolResultError(fmt.Sprintf("invalid python captures: %v", err)), nil
 			}
-			probe := instrumentationrules.PythonCustomProbeWithMetadata{
-				PythonCustomProbe: instrumentationrules.PythonCustomProbe{
-					Module:   stringArg(req, "module", ""),
-					Qualname: stringArg(req, "qualname", ""),
-					Captures: captures,
-				},
-			}
-			if err := probe.Verify(); err != nil {
-				return mcp.NewToolResultError(fmt.Sprintf("invalid python probe: %v", err)), nil
-			}
-			ci.Python = []instrumentationrules.PythonCustomProbeWithMetadata{probe}
-			probeSummary = probe.String()
-		default:
-			return errorWithOptions(fmt.Sprintf("unknown language %q", language), []string{"java", "go", "cpp", "php", "python"})
 		}
+		probe := instrumentationrules.CustomProbe{
+			Language:           language,
+			ClassName:          stringArg(req, "class_name", ""),
+			MethodName:         stringArg(req, "method_name", ""),
+			PackageName:        stringArg(req, "package_name", ""),
+			FunctionName:       stringArg(req, "function_name", ""),
+			ReceiverName:       stringArg(req, "receiver_name", ""),
+			ReceiverMethodName: stringArg(req, "receiver_method_name", ""),
+			Signature:          stringArg(req, "signature", ""),
+			Module:             stringArg(req, "module", ""),
+			Qualname:           stringArg(req, "qualname", ""),
+			Captures:           captures,
+		}
+		ci, err := probe.CustomInstrumentations(instrumentationrules.CustomProbeMetadata{})
+		if errors.Is(err, instrumentationrules.ErrUnknownCustomProbeLanguage) {
+			return errorWithOptions(fmt.Sprintf("unknown language %q", language), []string{
+				instrumentationrules.CustomProbeLanguageJava,
+				instrumentationrules.CustomProbeLanguageGo,
+				instrumentationrules.CustomProbeLanguageCpp,
+				instrumentationrules.CustomProbeLanguagePhp,
+				instrumentationrules.CustomProbeLanguagePython,
+			})
+		}
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid %s probe: %v", language, err)), nil
+		}
+		probeSummary := probe.Target()
 
 		scope, err := parseOptionalWorkloadScope(req)
 		if err != nil {

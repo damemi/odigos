@@ -109,19 +109,8 @@ func (r Recommendation) validate() error {
 	if strings.TrimSpace(r.Why) == "" {
 		return fmt.Errorf("why is required")
 	}
-	ci, err := r.ToCustomInstrumentations()
-	if err != nil {
-		return err
-	}
-	if err := ci.Verify(); err != nil {
-		return err
-	}
-	if r.Language == LangCpp {
-		if err := ci.Cpp[0].Verify(); err != nil {
-			return err
-		}
-	}
-	return nil
+	_, err := r.ToCustomInstrumentations()
+	return err
 }
 
 // ToCustomInstrumentations maps one recommendation onto the rule probe types.
@@ -133,44 +122,22 @@ func (r Recommendation) ToCustomInstrumentations() (*instrumentationrules.Custom
 // ToCustomInstrumentationsAt is ToCustomInstrumentations with a fixed AddedAt,
 // so rebuilding a rule from stored recommendations yields the same spec.
 func (r Recommendation) ToCustomInstrumentationsAt(addedAt time.Time) (*instrumentationrules.CustomInstrumentationsWithMetadata, error) {
-	meta := r.probeMetadata(addedAt)
-	ci := &instrumentationrules.CustomInstrumentationsWithMetadata{}
-	switch r.Language {
-	case LangJava:
-		ci.Java = []instrumentationrules.JavaCustomProbeWithMetadata{{
-			JavaCustomProbe: instrumentationrules.JavaCustomProbe{
-				ClassName:  r.Probe.ClassName,
-				MethodName: r.Probe.MethodName,
-			},
-			CustomProbeMetadata: meta,
-		}}
-	case LangGo:
-		ci.Golang = []instrumentationrules.GolangCustomProbeWithMetadata{{
-			GolangCustomProbe: instrumentationrules.GolangCustomProbe{
-				PackageName:        r.Probe.PackageName,
-				FunctionName:       r.Probe.FunctionName,
-				ReceiverName:       r.Probe.ReceiverName,
-				ReceiverMethodName: r.Probe.ReceiverMethodName,
-			},
-			CustomProbeMetadata: meta,
-		}}
-	case LangPHP:
-		ci.Php = []instrumentationrules.PhpCustomProbeWithMetadata{{
-			PhpCustomProbe: instrumentationrules.PhpCustomProbe{
-				ClassName:    r.Probe.ClassName,
-				FunctionName: r.Probe.FunctionName,
-			},
-			CustomProbeMetadata: meta,
-		}}
-	case LangCpp:
-		ci.Cpp = []instrumentationrules.CppCustomProbeWithMetadata{{
-			CppCustomProbe:      instrumentationrules.CppCustomProbe{Signature: r.Probe.Signature},
-			CustomProbeMetadata: meta,
-		}}
-	default:
-		return nil, fmt.Errorf("unknown language %q", r.Language)
+	return r.CustomProbe().CustomInstrumentations(r.probeMetadata(addedAt))
+}
+
+// CustomProbe is the recommendation's probe in the flat form it shares with
+// the add_custom_instrumentation MCP tool.
+func (r Recommendation) CustomProbe() instrumentationrules.CustomProbe {
+	return instrumentationrules.CustomProbe{
+		Language:           r.Language,
+		ClassName:          r.Probe.ClassName,
+		MethodName:         r.Probe.MethodName,
+		PackageName:        r.Probe.PackageName,
+		FunctionName:       r.Probe.FunctionName,
+		ReceiverName:       r.Probe.ReceiverName,
+		ReceiverMethodName: r.Probe.ReceiverMethodName,
+		Signature:          r.Probe.Signature,
 	}
-	return ci, nil
 }
 
 func (r Recommendation) probeMetadata(addedAt time.Time) instrumentationrules.CustomProbeMetadata {

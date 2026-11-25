@@ -105,22 +105,8 @@ func skipExistingProbes(recs []schema.Recommendation, existing []customProbe) []
 }
 
 func probeTarget(rec schema.Recommendation) string {
-	switch rec.Language {
-	case schema.LangJava:
-		return rec.Probe.ClassName + "." + rec.Probe.MethodName
-	case schema.LangGo:
-		if rec.Probe.FunctionName != "" {
-			return rec.Probe.PackageName + "." + rec.Probe.FunctionName
-		}
-		return rec.Probe.PackageName + ".(*" + rec.Probe.ReceiverName + ")." + rec.Probe.ReceiverMethodName
-	case schema.LangPHP:
-		if rec.Probe.ClassName == "" {
-			return rec.Probe.FunctionName
-		}
-		return rec.Probe.ClassName + "::" + rec.Probe.FunctionName
-	case schema.LangCpp:
-		return rec.Probe.Signature
-	default:
-		return rec.Function
+	if target := rec.CustomProbe().Target(); target != "" {
+		return target
 	}
+	return rec.Function
 }
