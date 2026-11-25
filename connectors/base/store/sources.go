@@ -204,6 +204,22 @@ func (s *Store) DeleteSourceByKey(ctx context.Context, kind, externalResourceID 
 	return err
 }
 
+// sqlFillSourceServiceName sets the reported service name of a live source only while it has none, so a human's
+// edit landing between orphan adoption's read and this write is never overwritten. updated_at is left alone: it
+// clocks how long a source has been awaiting or disabled (see SourceRecord.UpdatedAt), and neither changes here.
+const sqlFillSourceServiceName = `UPDATE %s.sources SET service_name = $4 WHERE connector_name = $1 AND kind = $2 AND external_resource_id = $3 AND deleted_at IS NULL AND COALESCE(service_name, '') = ''`
+
+// FillSourceServiceName records serviceName on the source with this identity if it has no reported service
+// name yet, and reports whether it did.
+func (s *Store) FillSourceServiceName(ctx context.Context, kind, externalResourceID, serviceName string) (bool, error) {
+	tag, err := s.pool.Exec(ctx, fmt.Sprintf(sqlFillSourceServiceName, s.schema), s.connectorName, kind, externalResourceID, serviceName)
+	if err != nil {
+		sourcesLog.Error("fill source service name failed", "connector", s.connectorName, "kind", kind, "external_id", externalResourceID, "error", err)
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
 // SourceIdentityKey is the composite form of a source's true identity (kind + external_resource_id), for
 // callers that need to test membership in a set of identities (see DeletedSourceKeys) rather than query
 // per-identity. Exported so a caller outside this package builds the exact same key, never its own format.

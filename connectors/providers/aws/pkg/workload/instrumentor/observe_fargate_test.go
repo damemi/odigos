@@ -606,3 +606,39 @@ func TestShouldObserveService(t *testing.T) {
 		})
 	}
 }
+
+// A source holds one reported name, so only a name every marked container agrees on is recorded; anything else is
+// left to the source's fallback rather than guessed.
+func TestLiveECSServiceName(t *testing.T) {
+	td, _ := instrumentedTaskDef(t)
+	if got := liveECSServiceName(td); got != "svc-checkout" {
+		t.Fatalf("one marked container: got %q, want svc-checkout", got)
+	}
+
+	second := td.ContainerDefinitions[0]
+	second.Name = aws.String("worker")
+	second.Environment = append([]ecstypes.KeyValuePair(nil), second.Environment...)
+	// Instrumentation also added the agent sidecar, so the copy's index is taken rather than assumed.
+	worker := len(td.ContainerDefinitions)
+	td.ContainerDefinitions = append(td.ContainerDefinitions, second)
+	if got := liveECSServiceName(td); got != "svc-checkout" {
+		t.Errorf("marked containers that agree: got %q, want svc-checkout", got)
+	}
+
+	plain := sampleTaskDef().ContainerDefinitions[0]
+	plain.Name = aws.String("sidecar")
+	setContainerEnv(&plain, EnvServiceName, "unrelated")
+	td.ContainerDefinitions = append(td.ContainerDefinitions, plain)
+	if got := liveECSServiceName(td); got != "svc-checkout" {
+		t.Errorf("an unmarked container's name must not count: got %q, want svc-checkout", got)
+	}
+
+	setContainerEnv(&td.ContainerDefinitions[worker], EnvServiceName, "other")
+	if got := liveECSServiceName(td); got != "" {
+		t.Errorf("marked containers that disagree: got %q, want empty", got)
+	}
+
+	if got := liveECSServiceName(sampleTaskDef()); got != "" {
+		t.Errorf("no marked container: got %q, want empty", got)
+	}
+}

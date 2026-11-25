@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	domaindest "github.com/odigos-io/odigos/connectors/base/domain/destination"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
 func TestLambdaConfigUsesReadableV2Fields(t *testing.T) {
@@ -72,5 +73,30 @@ func TestCompactLambdaEnvironmentDoesNotStoreCollectorConfig(t *testing.T) {
 	}
 	if _, found := env[EnvLambdaConfig]; !found {
 		t.Fatalf("stored Lambda environment is missing %s", EnvLambdaConfig)
+	}
+}
+
+// LambdaServiceName feeds orphan adoption, which records it on a manual-mode source, so it must read the name the
+// function actually reports in every layout the CDK and the connector write.
+func TestLambdaServiceName(t *testing.T) {
+	compact := `{"version":2,"service":"my-svc","endpoint":"collector:4317","signals":["traces"]}`
+	iac := `{"v":1,"source":"cdk"}`
+	cases := []struct {
+		name string
+		env  map[string]string
+		want string
+	}{
+		{"no Odigos marker", map[string]string{EnvServiceName: "my-svc"}, ""},
+		{"plain OTEL_SERVICE_NAME (CDK 0.0.17 and earlier)", map[string]string{store.EnvOdigosIaC: iac, EnvServiceName: "my-svc"}, "my-svc"},
+		{"compact ODIGOS_LAMBDA_CONFIG (CDK 0.0.18 and later)", map[string]string{store.EnvOdigosIaC: iac, EnvLambdaConfig: compact}, "my-svc"},
+		{"configuration embedded in the marker", map[string]string{store.EnvOdigosIaC: `{"v":1,"c":` + compact + `}`}, "my-svc"},
+		{"unreadable configuration", map[string]string{store.EnvOdigosIaC: iac, EnvLambdaConfig: `{`}, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := LambdaServiceName(tc.env); got != tc.want {
+				t.Errorf("LambdaServiceName = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

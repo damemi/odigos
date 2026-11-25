@@ -17,6 +17,7 @@ import (
 	baseapi "github.com/odigos-io/odigos/connectors/base/api"
 	connlog "github.com/odigos-io/odigos/connectors/base/log"
 	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/awsclient"
+	"github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/instrumentor"
 	store "github.com/odigos-io/odigos/connectors/providers/aws/pkg/workload/store"
 )
 
@@ -126,6 +127,7 @@ func discoverLambda(ctx context.Context, cfg aws.Config, region string, tags map
 				TracingMode:           tracingMode(fn.TracingConfig),
 				Instrumented:          store.OdigosInstrumented(env),
 				InstrumentationOrigin: lambdaAttributionOrigin(env, listedTags.Tags),
+				LiveServiceName:       instrumentor.LambdaServiceName(env),
 				// ListFunctions already returns the attached layers and the function's lifecycle state, and
 				// all three were being discarded. They are what separate the three situations a marker alone
 				// cannot tell apart: instrumented, half-instrumented (marker kept, layer detached), and

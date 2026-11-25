@@ -174,6 +174,7 @@ func (o *ECSFargateObserver) refreshOwnership(ctx context.Context, client *ecs.C
 	// discarded along with the rest of the definition. nil targets — there is no destination here to resolve
 	// them against — so this reads the task definition alone, which costs no AWS or registry call.
 	o.recordObservedRuntime(ctx, td, svc, nil)
+	o.recordLiveServiceName(ctx, td, svc)
 	// Either marker: this flag is "does the service carry Odigos instrumentation", and in manual mode the
 	// only marker on it is the one the customer's own deployment definition applied.
 	owned := len(instrumentedContainerIndexes(td)) > 0
@@ -224,6 +225,7 @@ func (o *ECSFargateObserver) observeService(ctx context.Context, client *ecs.Cli
 	o.recordContainers(ctx, td, src, svc, targets, excluded)
 	// And the flat workload-level runtime the container layer aggregates to, for the same reason.
 	o.recordObservedRuntime(ctx, td, svc, targets)
+	o.recordLiveServiceName(ctx, td, svc)
 
 	ev := evaluateECSObservation(td, targets, selectErr, src, svc, o.image, o.debug())
 	if ev.owned != svc.Instrumented {
@@ -256,6 +258,33 @@ func (o *ECSFargateObserver) recordObservedRuntime(ctx context.Context, td *ecst
 	if lang, ver, ok := observedRuntime(ctx, td, targets, svc); ok {
 		o.recordRuntime(ctx, svc, lang, ver)
 	}
+}
+
+// recordLiveServiceName persists the service name the live task definition reports, which orphan adoption
+// records on a manual-mode source, when it changed.
+func (o *ECSFargateObserver) recordLiveServiceName(ctx context.Context, td *ecstypes.TaskDefinition, svc store.ECSService) {
+	name := liveECSServiceName(td)
+	if name == svc.LiveServiceName {
+		return
+	}
+	if err := o.store.SetECSServiceLiveServiceName(ctx, svc.ClusterARN, svc.ServiceName, name); err != nil {
+		observeLog.Warn("set fargate live service name failed", "service", svc.ServiceName, "error", err)
+	}
+}
+
+// liveECSServiceName is the OTEL_SERVICE_NAME every Odigos-marked container of td reports, or "" when none is
+// marked, one has no name, or they disagree: a source holds a single reported name, so an ambiguous one is not
+// recorded.
+func liveECSServiceName(td *ecstypes.TaskDefinition) string {
+	name := ""
+	for _, i := range instrumentedContainerIndexes(td) {
+		v, _ := containerEnvValue(&td.ContainerDefinitions[i], EnvServiceName)
+		if v == "" || (name != "" && v != name) {
+			return ""
+		}
+		name = v
+	}
+	return name
 }
 
 // observedRuntime is the whole decision above, kept pure (no store, no AWS client) so both branches are
