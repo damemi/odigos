@@ -68,6 +68,9 @@ type ECSService struct {
 	// Observation is the read-only conformance verdict, written by the observer rather than by discovery or
 	// the instrumentor. Zero until a pass has run.
 	Observation ECSObservation
+	// LiveServiceName is the OTel service name the service's Odigos-marked containers report, written by the
+	// observer from the live task definition. See api.DiscoveredWorkload.LiveServiceName.
+	LiveServiceName string
 	// OwnershipCheckedRevision is the taskDefinition ARN the observer last read to decide Instrumented, for a
 	// service with no enabled source (see ECSFargateObserver.Observe and api.FingerprintChanged). It is what
 	// lets the observer skip a service on most passes — nothing to check has changed — while still catching
@@ -282,6 +285,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 			COALESCE(metadata->>'`+metaRoutingVia+`',''), metadata->'`+metaRoutingNote+`',
 			metadata->'`+metaCutoverFailure+`',
 			COALESCE(metadata->>'`+metaOwnershipCheckedRevision+`',''),
+			COALESCE(metadata->>'`+metaLiveServiceName+`',''),
 			metadata->'`+metaSubnetIDs+`', metadata->'`+metaSecurityGroupIDs+`',
 			`+ecsObservationCols+`
 		FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL
@@ -301,6 +305,7 @@ func (s *Store) ListECSServices(ctx context.Context) ([]ECSService, error) {
 			&svc.InstrumentationError, &svc.InstrumentationPhase, &svc.RoutingVia, &routingNoteJSON,
 			&cutoverJSON,
 			&svc.OwnershipCheckedRevision,
+			&svc.LiveServiceName,
 			&subnetsJSON, &groupsJSON,
 			&conformanceTarget{&svc.Observation.Conformance}, &missingJSON, &since,
 			&svc.Observation.Error, &svc.Observation.Settling); err != nil {
@@ -422,6 +427,11 @@ func (s *Store) SetECSServiceInstrumented(ctx context.Context, clusterARN, servi
 // api.FingerprintChanged stops asking for it again until the service moves to a different one.
 func (s *Store) SetECSServiceOwnershipChecked(ctx context.Context, clusterARN, serviceName, revision string) error {
 	return s.mergeECSServiceMetadata(ctx, clusterARN, serviceName, map[string]any{metaOwnershipCheckedRevision: revision})
+}
+
+// SetECSServiceLiveServiceName records the OTel service name the service's live instrumentation reports.
+func (s *Store) SetECSServiceLiveServiceName(ctx context.Context, clusterARN, serviceName, liveServiceName string) error {
+	return s.mergeECSServiceMetadata(ctx, clusterARN, serviceName, map[string]any{metaLiveServiceName: liveServiceName})
 }
 
 // SetECSServiceRuntime records the detected/overridden runtime language (and major.minor version, when known).

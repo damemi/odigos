@@ -229,6 +229,24 @@ func expandedLambdaEnvironment(env map[string]string, runtime, distro string) (m
 	return virtual, nil
 }
 
+// LambdaServiceName is the OTel service name a function's Odigos instrumentation reports: the service in its
+// compact configuration, which the layer exports as OTEL_SERVICE_NAME, or OTEL_SERVICE_NAME itself where no
+// compact configuration is set (CDK 0.0.17 and earlier). Empty without an Odigos marker or for an unreadable
+// configuration.
+func LambdaServiceName(env map[string]string) string {
+	if !store.OdigosInstrumented(env) {
+		return ""
+	}
+	if raw := lambdaConfigFromEnvironment(env); raw != "" {
+		c, err := parseLambdaConfig(raw)
+		if err != nil {
+			return ""
+		}
+		return c.Service
+	}
+	return env[EnvServiceName]
+}
+
 func lambdaConfigFromEnvironment(env map[string]string) string {
 	if raw := env[EnvLambdaConfig]; raw != "" {
 		return raw

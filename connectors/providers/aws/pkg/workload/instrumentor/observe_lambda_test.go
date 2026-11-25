@@ -2,6 +2,7 @@ package instrumentor
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -638,4 +639,34 @@ func sameSet(got, want []string) bool {
 		}
 	}
 	return true
+}
+
+// A serviceName report tells the customer to change a name; collectorExport sends them to the export settings. A
+// compact-configuration function reported a service mismatch as collectorExport, which is how a CDK 0.0.18+
+// function with a CloudFormation-generated name showed up as an export problem.
+func TestCompactConfigurationServiceMismatchIsServiceName(t *testing.T) {
+	const runtime = "python3.12"
+	var distro string
+	for _, r := range lambdaRecipes() {
+		if r.Language == "python" {
+			distro = r.Name
+			break
+		}
+	}
+	cfg := observeCollectorCfg()
+	env := map[string]string{}
+	m := buildManifest(env, "sdk")
+	applyHandlerEnv(env, runtime, distro, "my-svc", observeDest, false, cfg)
+	if err := compactLambdaEnvironment(env, m, false, runtime, distro, "my-svc", observeDest, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	env[store.EnvOdigosManaged], _ = marshalManifest(m)
+	fn := store.LambdaFunction{FunctionName: "stack-Fn-AbC123", Runtime: runtime, Architecture: "x86_64"}
+	if diff := instrumentationDiff(false, fn, env, nil, "", observeDest, false, "my-svc", cfg, distro); len(diff) != 0 {
+		t.Fatalf("test setup: a source reporting the configured name must be conformant, got %v", diff)
+	}
+	// A source with no name falls back to the function name, which the configuration does not carry.
+	if diff := instrumentationDiff(false, fn, env, nil, "", observeDest, false, "", cfg, distro); !slices.Equal(diff, []string{componentServiceName}) {
+		t.Fatalf("diff = %v, want [%s]", diff, componentServiceName)
+	}
 }

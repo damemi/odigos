@@ -387,3 +387,63 @@ func TestAdoptedSourceEnabled(t *testing.T) {
 		})
 	}
 }
+
+// An IaC tool cannot always write the source's own name into the workload (a CloudFormation-generated function
+// name cannot be referenced from the function's own configuration), so a manual-mode source records the name the
+// workload actually reports instead of falling back to one that can never match.
+func TestAdoptedServiceName(t *testing.T) {
+	tests := []struct {
+		name string
+		w    api.DiscoveredWorkload
+		want string
+	}{
+		{name: "manual: the name the customer's IaC set",
+			w:    api.DiscoveredWorkload{ServiceName: "stack-Fn-AbC123", LiveServiceName: "my-svc", ManagementMode: spec.ModeManual},
+			want: "my-svc"},
+		{name: "manual: the source's own name is already the fallback",
+			w:    api.DiscoveredWorkload{ServiceName: "checkout", LiveServiceName: "checkout", ManagementMode: spec.ModeManual},
+			want: ""},
+		{name: "manual: no readable live name",
+			w:    api.DiscoveredWorkload{ServiceName: "stack-Fn-AbC123", ManagementMode: spec.ModeManual},
+			want: ""},
+		{name: "automatic: Odigos applies the name, it does not read it back",
+			w:    api.DiscoveredWorkload{ServiceName: "stack-Fn-AbC123", LiveServiceName: "my-svc", ManagementMode: spec.ModeAutomatic},
+			want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := adoptedServiceName(tt.w); got != tt.want {
+				t.Errorf("adoptedServiceName = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// Sources adopted before adoption recorded the live name keep reporting drift unless the name is backfilled, but a
+// name a human set in Central must never be replaced by the live one.
+func TestBackfilledServiceName(t *testing.T) {
+	adopted := api.DiscoveredWorkload{
+		ServiceName: "stack-Fn-AbC123", LiveServiceName: "my-svc", ManagementMode: spec.ModeManual,
+		Instrumented: true, SourceMatched: true,
+	}
+	tests := []struct {
+		name   string
+		mutate func(w *api.DiscoveredWorkload)
+		want   string
+	}{
+		{name: "matched manual source with no name", mutate: func(*api.DiscoveredWorkload) {}, want: "my-svc"},
+		{name: "a name set in Central wins", mutate: func(w *api.DiscoveredWorkload) { w.Overrides.ServiceName = "edited" }, want: ""},
+		{name: "no source yet: adoption creates it with the name", mutate: func(w *api.DiscoveredWorkload) { w.SourceMatched = false }, want: ""},
+		{name: "no longer instrumented", mutate: func(w *api.DiscoveredWorkload) { w.Instrumented = false }, want: ""},
+		{name: "automatic mode", mutate: func(w *api.DiscoveredWorkload) { w.ManagementMode = spec.ModeAutomatic }, want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := adopted
+			tt.mutate(&w)
+			if got := backfilledServiceName(w); got != tt.want {
+				t.Errorf("backfilledServiceName = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

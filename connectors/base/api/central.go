@@ -136,6 +136,9 @@ type DiscoveredWorkload struct {
 	RuntimeVersion string
 	// Instrumented reports whether Odigos instrumentation is currently applied to the workload.
 	Instrumented bool
+	// LiveServiceName is the OTel service name the workload's live Odigos instrumentation reports, when the
+	// provider can read it unambiguously; empty otherwise. Adoption records it on manual-mode sources.
+	LiveServiceName string
 	// InstrumentationOrigin identifies who applied the live instrumentation when the provider can prove
 	// it. "external" means a customer deployment definition applied it; "connector" means the connector
 	// owns it and can normally roll it back. Empty means the provider has no attribution evidence.

@@ -414,10 +414,11 @@ reference to the function itself, and a function referring to its own generated 
 configuration is a circular dependency that CloudFormation refuses to deploy.
 
 <Warning>
-  Odigos compares this against the source's service name, which is the function's real AWS name unless you
-  override it in Odigos. **If your function's name is auto-generated, set `serviceName` explicitly** —
-  otherwise Odigos reports it as drifted. Note that `serviceName` applies to *every* function in a single
-  construct, so use one construct per function when you need different names.
+  Odigos compares this against the source's service name. When the connector adopts a function this construct
+  instrumented, it records the name the function reports on the new source, so a function whose name is
+  auto-generated is not reported as drifted. If you set a service name on the source in Odigos yourself, it must
+  match this value. Note that `serviceName` applies to *every* function in a single construct, so use one
+  construct per function when you need different names.
 </Warning>
 
 ## Debugging

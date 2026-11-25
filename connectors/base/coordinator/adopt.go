@@ -68,7 +68,8 @@ func (c *Coordinator) adoptLoop(ctx context.Context) {
 // runAdopt scans the current workload reports for live instrumentation with no matching source and creates
 // one for each, enabled or not per adoptedSourceEnabled. Creation goes through CreateSource so an adopted
 // row gets the exact same kind/region validation and external-id resolution a human's source-create request
-// would.
+// would. The same pass records the live service name on existing manual-mode sources that have none (see
+// backfilledServiceName).
 func (c *Coordinator) runAdopt(ctx context.Context) {
 	// A drain disables every source and rolls automatic-mode instrumentation back; adopting a new source
 	// while sources are being torn down would recreate exactly what the drain is removing.
@@ -100,8 +101,20 @@ func (c *Coordinator) runAdopt(ctx context.Context) {
 	// this loop each interval (see adoptLoop), and with only a "triggered" line to go on, a pass that
 	// examined everything and correctly adopted nothing was indistinguishable from one doing real work —
 	// which reads, entirely reasonably, as the connector repeating itself for no reason.
-	var orphaned, adopted, tombstoned int
+	var orphaned, adopted, tombstoned, named int
 	for _, w := range enriched {
+		if name := backfilledServiceName(w); name != "" {
+			filled, err := c.store.FillSourceServiceName(ctx, w.Kind, w.ExternalID, name)
+			if err != nil {
+				coordLog.Warn("orphan adoption: record live service name failed",
+					"name", w.ServiceName, "kind", w.Kind, "region", w.Region, "error", err)
+			} else if filled {
+				named++
+				coordLog.Info("recorded live service name on source",
+					"name", w.ServiceName, "kind", w.Kind, "region", w.Region, "serviceName", name)
+			}
+			continue
+		}
 		// orphanedInstrumentedWorkload is used only to SPLIT the counter; shouldAdopt below stays the gate, so
 		// the decision has exactly one implementation and cannot drift from the one its test pins.
 		if !orphanedInstrumentedWorkload(w) {
@@ -117,10 +130,11 @@ func (c *Coordinator) runAdopt(ctx context.Context) {
 		}
 		enabled := adoptedSourceEnabled(w)
 		src := domainsrc.Source{
-			Name:    w.ServiceName,
-			Kind:    w.Kind,
-			Region:  w.Region,
-			Enabled: enabled,
+			Name:        w.ServiceName,
+			Kind:        w.Kind,
+			ServiceName: adoptedServiceName(w),
+			Region:      w.Region,
+			Enabled:     enabled,
 		}
 		if err := c.CreateSource(ctx, src); err != nil {
 			coordLog.Warn("orphan adoption: create source failed",
@@ -132,7 +146,8 @@ func (c *Coordinator) runAdopt(ctx context.Context) {
 			"name", w.ServiceName, "kind", w.Kind, "region", w.Region, "enabled", enabled)
 	}
 	coordLog.Debug("orphan adoption pass complete",
-		"workloads", len(enriched), "orphaned", orphaned, "adopted", adopted, "deliberatelyUntracked", tombstoned)
+		"workloads", len(enriched), "orphaned", orphaned, "adopted", adopted, "deliberatelyUntracked", tombstoned,
+		"serviceNamesRecorded", named)
 }
 
 // shouldAdopt is the whole adoption decision for one workload, kept pure (no store, no provider) so every
@@ -165,6 +180,30 @@ func orphanedInstrumentedWorkload(w api.DiscoveredWorkload) bool {
 //     behalf without them asking; adopting it disabled surfaces the gap instead of guessing the answer.
 func adoptedSourceEnabled(w api.DiscoveredWorkload) bool {
 	return w.ManagementMode == spec.ModeManual
+}
+
+// adoptedServiceName is the reported service name a manual-mode source records from the workload's live
+// instrumentation. The customer's own deployment definition set that name, so like the ODIGOS_IAC marker it is
+// intent the workload already proves. Without it the source falls back to its own name, which an IaC tool cannot
+// always write (a CloudFormation-generated function name cannot be referenced from the function's own
+// configuration), and every such workload is reported as serviceName drift. Automatic mode records nothing: there
+// the name is what Odigos applies, not something it reads back. A name equal to the source's own is already what
+// the source falls back to, so it is not recorded either.
+func adoptedServiceName(w api.DiscoveredWorkload) string {
+	if w.ManagementMode != spec.ModeManual || w.LiveServiceName == w.ServiceName {
+		return ""
+	}
+	return w.LiveServiceName
+}
+
+// backfilledServiceName is the name to record on an existing manual-mode source with no reported service name, so
+// a source adopted before adoption recorded the live name stops reporting it as drift. A source with an explicit
+// name is never touched: a human's edit in Central outranks the live value.
+func backfilledServiceName(w api.DiscoveredWorkload) string {
+	if !w.SourceMatched || !w.Instrumented || w.Overrides.ServiceName != "" {
+		return ""
+	}
+	return adoptedServiceName(w)
 }
 
 // triggerAdopt requests an out-of-band adoption pass, coalescing with any already queued.

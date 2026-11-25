@@ -168,6 +168,9 @@ type LambdaFunction struct {
 	Instrumented bool
 	// InstrumentationOrigin is "external" for ODIGOS_IAC and "connector" for connector-owned markers.
 	InstrumentationOrigin string
+	// LiveServiceName is the OTel service name the function's Odigos instrumentation reports, read from its
+	// environment at discovery time; empty without a marker. See api.DiscoveredWorkload.LiveServiceName.
+	LiveServiceName string
 	// Layers is the function's attached layer-version ARN set, as ListFunctions returns it. Persisted in the
 	// (until now unused) layers column: it is what makes "the marker is there but the layer was detached"
 	// observable, and it fills the LayerArn a Lambda workload report has always declared and never carried.
@@ -285,12 +288,16 @@ func metaJSON(m map[string]any) (string, error) {
 // discovery owns keeps a new key by any other writer preserved by default, which is the safe direction to be
 // wrong in.
 var lambdaDiscoveryMetadataKeys = []string{
-	"instrumented", "instrumentation_origin", "odigos_tags", "handler", "memorySize", "timeout", "version", "state", "last_update_status",
+	"instrumented", "instrumentation_origin", metaLiveServiceName, "odigos_tags", "handler", "memorySize", "timeout", "version", "state", "last_update_status",
 	// The VpcConfig keys have to be in this list, not merely written: detaching a function from its VPC
 	// removes VpcConfig entirely, and a stale vpc_id left behind by an overlay would keep grouping the
 	// function onto a network it no longer runs on — pointing it at a Collector it can no longer reach.
 	metaLambdaVPCID, metaLambdaSubnetIDs, metaLambdaSecurityGroupIDs,
 }
+
+// metaLiveServiceName holds api.DiscoveredWorkload.LiveServiceName: written by discovery for Lambda and by the
+// Fargate observer for ECS services, the two places that read the workload's live environment.
+const metaLiveServiceName = "live_service_name"
 
 // The function's VpcConfig, written by discovery on every scan — see LambdaFunction.VPCID.
 const (
@@ -307,6 +314,7 @@ func (s *Store) UpsertLambda(ctx context.Context, fn LambdaFunction) error {
 	}
 	fn.Metadata["instrumented"] = fn.Instrumented
 	fn.Metadata["instrumentation_origin"] = fn.InstrumentationOrigin
+	fn.Metadata[metaLiveServiceName] = fn.LiveServiceName
 	fn.Metadata["state"] = fn.State
 	fn.Metadata["last_update_status"] = fn.LastUpdateStatus
 	fn.Metadata[metaLambdaVPCID] = fn.VPCID
@@ -825,7 +833,8 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'conformance', ''), metadata->'conformance_missing', metadata->>'conformance_since',
 			COALESCE(metadata->>'observation_error', ''),
 			COALESCE(metadata->>'state','') = '` + lambdaStatePending + `' OR COALESCE(metadata->>'last_update_status','') = '` + lambdaUpdateInProgress + `',
-			layers, metadata->'` + metaRoutingNote + `', COALESCE(metadata->>'instrumentation_origin', ''), ''
+			layers, metadata->'` + metaRoutingNote + `', COALESCE(metadata->>'instrumentation_origin', ''),
+			COALESCE(metadata->>'` + metaLiveServiceName + `', ''), ''
 			FROM connector_aws.lambda_functions WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// Fargate SERVICES: one workload per (cluster, service) from the ecs_services inventory. The
 		// external id — a source's stable identity — is cluster_arn || '/' || service_name (NOT a task ARN,
@@ -838,7 +847,8 @@ func workloadQueries() []workloadQuery {
 			COALESCE(metadata->>'instrumentation_phase', ''),
 			COALESCE(launch_type, ''), COALESCE(task_definition, ''), COALESCE(deployment_controller, ''),
 			metadata->'containers',
-			` + ecsObservationCols + `, NULL, metadata->'` + metaRoutingNote + `', '', ''
+			` + ecsObservationCols + `, NULL, metadata->'` + metaRoutingNote + `', '',
+			COALESCE(metadata->>'` + metaLiveServiceName + `', ''), ''
 			FROM connector_aws.ecs_services WHERE connector_name = $1 AND deleted_at IS NULL`},
 		// STANDALONE Fargate tasks (no ECS service — RunTask/EventBridge): inherently ephemeral, so the task
 		// ARN is the identity. They stay discoverable/selectable, but instrumentation reports a terminal
@@ -847,7 +857,7 @@ func workloadQueries() []workloadQuery {
 			'', '', last_seen_at, false,
 			COALESCE(metadata->>'instrumentation_error', ''), '',
 			'', '', '', NULL,
-			` + noObservationCols + `, NULL, '', ''
+			` + noObservationCols + `, NULL, '', '', ''
 			FROM connector_aws.ecs_tasks
 			WHERE connector_name = $1 AND deleted_at IS NULL AND COALESCE(service_name, '') = ''`},
 		{KindAgentCore, false, `SELECT runtime_name, region, runtime_arn, COALESCE(inventory->>'language',''),
@@ -857,7 +867,7 @@ func workloadQueries() []workloadQuery {
 			'', CASE WHEN inventory->>'status'='READY' THEN COALESCE(inventory->>'version','') ELSE '' END, '', NULL,
 			COALESCE(metadata->>'conformance',''), metadata->'conformance_missing', metadata->>'conformance_since',
 			COALESCE(metadata->>'observation_error',''), (inventory->>'status' IN ('CREATING','UPDATING') OR COALESCE(metadata->>'settling','false')='true'),
-			NULL, metadata->'routing_note', COALESCE(inventory->>'origin',''), COALESCE(metadata->>'waiting_for','')
+			NULL, metadata->'routing_note', COALESCE(inventory->>'origin',''), '', COALESCE(metadata->>'waiting_for','')
 			FROM connector_aws.agentcore_runtimes WHERE connector_name=$1 AND deleted_at IS NULL`},
 	}
 }
@@ -868,7 +878,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 	defer rows.Close()
 	{
 		for rows.Next() {
-			var name, region, externalID, language, version, instrErr, instrPhase, instrOrigin, waitingFor string
+			var name, region, externalID, language, version, instrErr, instrPhase, instrOrigin, waitingFor, liveServiceName string
 			// The next four columns carry the kind-specific facts each query supplies and the others
 			// pad out: architecture/launch type, task definition, deployment controller, and the ECS
 			// container inventory. They feed DiscoveredWorkload.Details, which the report narrows to
@@ -888,7 +898,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 			if err := rows.Scan(&name, &region, &externalID, &language, &version, &lastSeen, &instrumented, &instrErr, &instrPhase,
 				&archOrLaunchType, &taskDefinition, &deploymentController, &containersJSON,
 				&conformanceTarget{&conformance}, &missingJSON, &conformanceSince, &observationErr, &settling, &layersJSON,
-				&routingNoteJSON, &instrOrigin, &waitingFor); err != nil {
+				&routingNoteJSON, &instrOrigin, &liveServiceName, &waitingFor); err != nil {
 				return err
 			}
 			runtime := language
@@ -903,6 +913,7 @@ func scanWorkloadRows(rows pgx.Rows, q workloadQuery, out *[]api.DiscoveredWorkl
 				RuntimeLanguage:       language,
 				RuntimeVersion:        version,
 				Instrumented:          instrumented,
+				LiveServiceName:       liveServiceName,
 				InstrumentationOrigin: instrOrigin,
 				InstrumentationType:   q.kind,
 				InstrumentationError:  instrErr,

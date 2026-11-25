@@ -848,12 +848,10 @@ func instrumentationDiff(webServer bool, fn store.LambdaFunction, env map[string
 
 	if raw := lambdaConfigFromEnvironment(env); raw != "" {
 		c, err := parseLambdaConfig(raw)
-		expectedService := reportedServiceName
-		if expectedService == "" {
-			expectedService = fn.FunctionName
-		}
 		recipe := recipeFor(LanguageFromRuntime(fn.Runtime), distro)
-		if err != nil || c.Service != expectedService || c.Signals != signalMask(dest) || c.Debug != (debug && !webServer) || c.ApplicationSignals != recipe.ApplicationSignals || c.NoCollector != recipe.NoCollector || c.FunctionLogs != lambdaFunctionLogsEnabled(dest, webServer, fn.Runtime, distro) || (c.WebWrapper != nil) != webServer {
+		// The service is not compared here: the expanded environment below carries it as OTEL_SERVICE_NAME, so
+		// a mismatch is reported as serviceName rather than as a collector export problem.
+		if err != nil || c.Signals != signalMask(dest) || c.Debug != (debug && !webServer) || c.ApplicationSignals != recipe.ApplicationSignals || c.NoCollector != recipe.NoCollector || c.FunctionLogs != lambdaFunctionLogsEnabled(dest, webServer, fn.Runtime, distro) || (c.WebWrapper != nil) != webServer {
 			return []string{componentCollectorExport}
 		}
 		cfg, err := renderCollectorConfig(c.target(), c.Headers)
