@@ -499,6 +499,7 @@ type ComplexityRoot struct {
 		AllowConcurrentAgents            func(childComplexity int) int
 		AllowedTestConnectionHosts       func(childComplexity int) int
 		AutoRollback                     func(childComplexity int) int
+		Autopilot                        func(childComplexity int) int
 		CardinalityControl               func(childComplexity int) int
 		CentralBackendURL                func(childComplexity int) int
 		CentralProxy                     func(childComplexity int) int
@@ -517,7 +518,6 @@ type ComplexityRoot struct {
 		ImagePrefix                      func(childComplexity int) int
 		ImagePullSecrets                 func(childComplexity int) int
 		Instrumentor                     func(childComplexity int) int
-		Interrogation                    func(childComplexity int) int
 		Karpenter                        func(childComplexity int) int
 		ManifestYaml                     func(childComplexity int) int
 		MetricsSources                   func(childComplexity int) int
@@ -2316,6 +2316,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		ActionTypes                       func(childComplexity int) int
+		AutopilotSources                  func(childComplexity int) int
 		CollectorPod                      func(childComplexity int, namespace string, name string) int
 		ComputePlatform                   func(childComplexity int) int
 		Config                            func(childComplexity int) int
@@ -2334,7 +2335,6 @@ type ComplexityRoot struct {
 		InstrumentationAgents             func(childComplexity int) int
 		InstrumentationInstanceComponents func(childComplexity int, namespace string, kind string, name string) int
 		InstrumentationRuleTypes          func(childComplexity int) int
-		InterrogationSources              func(childComplexity int) int
 		K8sManifest                       func(childComplexity int, namespace string, kind model.K8sResourceKind, name string) int
 		Namespaces                        func(childComplexity int) int
 		OdigletDaemonSetInfo              func(childComplexity int) int
@@ -2824,7 +2824,7 @@ type QueryResolver interface {
 	Workloads(ctx context.Context, filter *model.WorkloadFilter) ([]*model.K8sWorkload, error)
 	WorkloadsByIds(ctx context.Context, ids []*model.K8sWorkloadIDInput) ([]*model.K8sWorkload, error)
 	Namespaces(ctx context.Context) ([]*model.K8sNamespace, error)
-	InterrogationSources(ctx context.Context) ([]*model.AutopilotSource, error)
+	AutopilotSources(ctx context.Context) ([]*model.AutopilotSource, error)
 }
 type SamplingResolver interface {
 	Rules(ctx context.Context, obj *model.Sampling) ([]*model.SamplingRules, error)
@@ -4858,6 +4858,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.EffectiveConfig.AutoRollback(childComplexity), true
 
+	case "EffectiveConfig.autopilot":
+		if e.complexity.EffectiveConfig.Autopilot == nil {
+			break
+		}
+
+		return e.complexity.EffectiveConfig.Autopilot(childComplexity), true
+
 	case "EffectiveConfig.cardinalityControl":
 		if e.complexity.EffectiveConfig.CardinalityControl == nil {
 			break
@@ -4983,13 +4990,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.EffectiveConfig.Instrumentor(childComplexity), true
-
-	case "EffectiveConfig.interrogation":
-		if e.complexity.EffectiveConfig.Interrogation == nil {
-			break
-		}
-
-		return e.complexity.EffectiveConfig.Interrogation(childComplexity), true
 
 	case "EffectiveConfig.karpenter":
 		if e.complexity.EffectiveConfig.Karpenter == nil {
@@ -13653,6 +13653,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.ActionTypes(childComplexity), true
 
+	case "Query.autopilotSources":
+		if e.complexity.Query.AutopilotSources == nil {
+			break
+		}
+
+		return e.complexity.Query.AutopilotSources(childComplexity), true
+
 	case "Query.collectorPod":
 		if e.complexity.Query.CollectorPod == nil {
 			break
@@ -13798,13 +13805,6 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Query.InstrumentationRuleTypes(childComplexity), true
-
-	case "Query.interrogationSources":
-		if e.complexity.Query.InterrogationSources == nil {
-			break
-		}
-
-		return e.complexity.Query.InterrogationSources(childComplexity), true
 
 	case "Query.k8sManifest":
 		if e.complexity.Query.K8sManifest == nil {
@@ -35039,8 +35039,8 @@ func (ec *executionContext) fieldContext_EffectiveConfig_cardinalityControl(_ co
 	return fc, nil
 }
 
-func (ec *executionContext) _EffectiveConfig_interrogation(ctx context.Context, field graphql.CollectedField, obj *model.EffectiveConfig) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_EffectiveConfig_interrogation(ctx, field)
+func (ec *executionContext) _EffectiveConfig_autopilot(ctx context.Context, field graphql.CollectedField, obj *model.EffectiveConfig) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_EffectiveConfig_autopilot(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -35053,7 +35053,7 @@ func (ec *executionContext) _EffectiveConfig_interrogation(ctx context.Context, 
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Interrogation, nil
+		return obj.Autopilot, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -35067,7 +35067,7 @@ func (ec *executionContext) _EffectiveConfig_interrogation(ctx context.Context, 
 	return ec.marshalOAutopilotConfig2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐAutopilotConfig(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_EffectiveConfig_interrogation(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_EffectiveConfig_autopilot(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "EffectiveConfig",
 		Field:      field,
@@ -89937,8 +89937,8 @@ func (ec *executionContext) fieldContext_Query_effectiveConfig(_ context.Context
 				return ec.fieldContext_EffectiveConfig_profiling(ctx, field)
 			case "cardinalityControl":
 				return ec.fieldContext_EffectiveConfig_cardinalityControl(ctx, field)
-			case "interrogation":
-				return ec.fieldContext_EffectiveConfig_interrogation(ctx, field)
+			case "autopilot":
+				return ec.fieldContext_EffectiveConfig_autopilot(ctx, field)
 			case "provenance":
 				return ec.fieldContext_EffectiveConfig_provenance(ctx, field)
 			case "manifestYAML":
@@ -91336,8 +91336,8 @@ func (ec *executionContext) fieldContext_Query_namespaces(_ context.Context, fie
 	return fc, nil
 }
 
-func (ec *executionContext) _Query_interrogationSources(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_Query_interrogationSources(ctx, field)
+func (ec *executionContext) _Query_autopilotSources(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_autopilotSources(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -91350,7 +91350,7 @@ func (ec *executionContext) _Query_interrogationSources(ctx context.Context, fie
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().InterrogationSources(rctx)
+		return ec.resolvers.Query().AutopilotSources(rctx)
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -91367,7 +91367,7 @@ func (ec *executionContext) _Query_interrogationSources(ctx context.Context, fie
 	return ec.marshalNAutopilotSource2ᚕᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐAutopilotSourceᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_interrogationSources(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_autopilotSources(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -103222,7 +103222,7 @@ func (ec *executionContext) unmarshalInputLocalUiConfigInput(ctx context.Context
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"telemetryEnabled", "ignoredNamespaces", "ignoredContainers", "ignoreOdigosNamespace", "clusterName", "instrumentor", "allowConcurrentAgents", "rollout", "autoRollback", "goAutoOffsetsCron", "goAutoOffsetsMode", "sampling", "componentLogLevels", "cardinalityControl", "interrogation", "collectorGateway"}
+	fieldsInOrder := [...]string{"telemetryEnabled", "ignoredNamespaces", "ignoredContainers", "ignoreOdigosNamespace", "clusterName", "instrumentor", "allowConcurrentAgents", "rollout", "autoRollback", "goAutoOffsetsCron", "goAutoOffsetsMode", "sampling", "componentLogLevels", "cardinalityControl", "autopilot", "collectorGateway"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -103327,13 +103327,13 @@ func (ec *executionContext) unmarshalInputLocalUiConfigInput(ctx context.Context
 				return it, err
 			}
 			it.CardinalityControl = data
-		case "interrogation":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("interrogation"))
+		case "autopilot":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("autopilot"))
 			data, err := ec.unmarshalOLocalUiConfigAutopilotInput2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐLocalUIConfigAutopilotInput(ctx, v)
 			if err != nil {
 				return it, err
 			}
-			it.Interrogation = data
+			it.Autopilot = data
 		case "collectorGateway":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("collectorGateway"))
 			data, err := ec.unmarshalOLocalUiConfigCollectorGatewayInput2ᚖgithubᚗcomᚋodigosᚑioᚋodigosᚋfrontendᚋgraphᚋmodelᚐLocalUIConfigCollectorGatewayInput(ctx, v)
@@ -107924,8 +107924,8 @@ func (ec *executionContext) _EffectiveConfig(ctx context.Context, sel ast.Select
 			out.Values[i] = ec._EffectiveConfig_profiling(ctx, field, obj)
 		case "cardinalityControl":
 			out.Values[i] = ec._EffectiveConfig_cardinalityControl(ctx, field, obj)
-		case "interrogation":
-			out.Values[i] = ec._EffectiveConfig_interrogation(ctx, field, obj)
+		case "autopilot":
+			out.Values[i] = ec._EffectiveConfig_autopilot(ctx, field, obj)
 		case "provenance":
 			out.Values[i] = ec._EffectiveConfig_provenance(ctx, field, obj)
 		case "manifestYAML":
@@ -122225,7 +122225,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
-		case "interrogationSources":
+		case "autopilotSources":
 			field := field
 
 			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
@@ -122234,7 +122234,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 						ec.Error(ctx, ec.Recover(ctx, r))
 					}
 				}()
-				res = ec._Query_interrogationSources(ctx, field)
+				res = ec._Query_autopilotSources(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&fs.Invalids, 1)
 				}

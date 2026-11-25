@@ -4,8 +4,7 @@ import React, { useEffect } from 'react';
 import { ROUTES } from '@/utils';
 import { useConfig } from '@/hooks';
 import { useRouter } from 'next/navigation';
-// ui-kit still exports the page as Interrogations.
-import { Interrogations as Autopilot } from '@odigos/ui-kit/containers';
+import { Autopilot } from '@odigos/ui-kit/containers';
 import { CenterThis, Loader } from '@odigos/ui-kit/components';
 
 // The nav entry is already hidden when autopilot is disabled, so this guard
@@ -15,10 +14,10 @@ export default function Page() {
   const { config } = useConfig();
 
   useEffect(() => {
-    if (config && !config.interrogationEnabled) router.replace(ROUTES.OVERVIEW);
+    if (config && !config.autopilotEnabled) router.replace(ROUTES.OVERVIEW);
   }, [config, router]);
 
-  if (!config?.interrogationEnabled) {
+  if (!config?.autopilotEnabled) {
     return (
       <CenterThis style={{ height: '100%' }}>
         <Loader withSpinnerOld scaleSpinnerOld={2} />

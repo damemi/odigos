@@ -36,7 +36,7 @@ function InnerLayout({ children }: PropsWithChildren) {
       <ViewportColumn $gap={0}>
         <OverviewHeader />
         <ContentRow $gap={0}>
-          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, config?.tier === Tier.Onprem, config?.interrogationEnabled)} />
+          <NavbarNext height='calc(100vh - 60px)' icons={getNavbarIcons(router, pathname, config?.tier === Tier.Onprem, config?.autopilotEnabled)} />
           {children}
         </ContentRow>
       </ViewportColumn>

@@ -328,7 +328,7 @@ type EffectiveConfig {
   sampling: SamplingConfig
   profiling: ProfilingConfig
   cardinalityControl: CardinalityControlConfig
-  interrogation: AutopilotConfig
+  autopilot: AutopilotConfig
   provenance: [ProvenanceEntry!]
   manifestYAML: String
 }
@@ -441,7 +441,7 @@ input LocalUiConfigAutopilotInput {
   # enabled is Helm-only (deploys odigos-litellm and the gateway exporters).
   mode: AutopilotMode
   # Clears a UI override so the Helm value applies again. Paths match helmValuePath
-  # (for example "interrogation.mode").
+  # (for example "autopilot.mode").
   resetPaths: [String!]
 }
 
@@ -460,7 +460,7 @@ input LocalUiConfigInput {
   sampling: LocalUiConfigSamplingInput
   componentLogLevels: LocalUiConfigComponentLogLevelsInput
   cardinalityControl: LocalUiConfigCardinalityControlInput
-  interrogation: LocalUiConfigAutopilotInput
+  autopilot: LocalUiConfigAutopilotInput
   collectorGateway: LocalUiConfigCollectorGatewayInput
 }
 

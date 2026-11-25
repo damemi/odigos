@@ -1078,9 +1078,9 @@ func (r *queryResolver) Namespaces(ctx context.Context) ([]*model.K8sNamespace, 
 	return gqlNss, nil
 }
 
-// InterrogationSources is the resolver for the interrogationSources field.
-func (r *queryResolver) InterrogationSources(ctx context.Context) ([]*model.AutopilotSource, error) {
-	panic(fmt.Errorf("not implemented: InterrogationSources - interrogationSources"))
+// AutopilotSources is the resolver for the autopilotSources field.
+func (r *queryResolver) AutopilotSources(ctx context.Context) ([]*model.AutopilotSource, error) {
+	panic(fmt.Errorf("not implemented: AutopilotSources - autopilotSources"))
 }
 
 // K8sNamespace returns K8sNamespaceResolver implementation.

@@ -613,7 +613,7 @@ type EffectiveConfig struct {
 	Sampling                         *SamplingConfig                     `json:"sampling,omitempty"`
 	Profiling                        *ProfilingConfig                    `json:"profiling,omitempty"`
 	CardinalityControl               *CardinalityControlConfig           `json:"cardinalityControl,omitempty"`
-	Interrogation                    *AutopilotConfig                    `json:"interrogation,omitempty"`
+	Autopilot                        *AutopilotConfig                    `json:"autopilot,omitempty"`
 	Provenance                       []*ProvenanceEntry                  `json:"provenance,omitempty"`
 	ManifestYaml                     *string                             `json:"manifestYAML,omitempty"`
 }
@@ -2712,7 +2712,7 @@ type LocalUIConfigInput struct {
 	Sampling              *LocalUIConfigSamplingInput              `json:"sampling,omitempty"`
 	ComponentLogLevels    *LocalUIConfigComponentLogLevelsInput    `json:"componentLogLevels,omitempty"`
 	CardinalityControl    *LocalUIConfigCardinalityControlInput    `json:"cardinalityControl,omitempty"`
-	Interrogation         *LocalUIConfigAutopilotInput             `json:"interrogation,omitempty"`
+	Autopilot             *LocalUIConfigAutopilotInput             `json:"autopilot,omitempty"`
 	CollectorGateway      *LocalUIConfigCollectorGatewayInput      `json:"collectorGateway,omitempty"`
 }
 

@@ -195,7 +195,7 @@ func recordOverlayProvenance(config *common.OdigosConfiguration, provenance map[
 	}
 
 	if config.Autopilot != nil && config.Autopilot.Mode != "" {
-		provenance["interrogation.mode"] = sourceName
+		provenance["autopilot.mode"] = sourceName
 	}
 }
 

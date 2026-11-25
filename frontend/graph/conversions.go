@@ -517,30 +517,30 @@ func setEffectiveConfigNestedStructs(result *model.EffectiveConfig, config *comm
 	}
 
 	if config.Autopilot != nil {
-		result.Interrogation = &model.AutopilotConfig{
+		result.Autopilot = &model.AutopilotConfig{
 			Enabled: config.Autopilot.Enabled,
 		}
 		if config.Autopilot.Enabled != nil {
-			pc.record("interrogation.enabled")
+			pc.record("autopilot.enabled")
 		}
 		if mode := model.AutopilotMode(config.Autopilot.Mode); mode.IsValid() {
-			result.Interrogation.Mode = &mode
-			pc.record("interrogation.mode")
+			result.Autopilot.Mode = &mode
+			pc.record("autopilot.mode")
 		}
 		if config.Autopilot.Model != nil {
 			m := config.Autopilot.Model
-			result.Interrogation.Model = &model.AutopilotModelConfig{}
+			result.Autopilot.Model = &model.AutopilotModelConfig{}
 			if m.Provider != "" {
-				result.Interrogation.Model.Provider = ptrStr(m.Provider)
-				pc.record("interrogation.model.provider")
+				result.Autopilot.Model.Provider = ptrStr(m.Provider)
+				pc.record("autopilot.model.provider")
 			}
 			if m.Name != "" {
-				result.Interrogation.Model.Name = ptrStr(m.Name)
-				pc.record("interrogation.model.name")
+				result.Autopilot.Model.Name = ptrStr(m.Name)
+				pc.record("autopilot.model.name")
 			}
 			if m.ApiBase != "" {
-				result.Interrogation.Model.APIBase = ptrStr(m.ApiBase)
-				pc.record("interrogation.model.apiBase")
+				result.Autopilot.Model.APIBase = ptrStr(m.ApiBase)
+				pc.record("autopilot.model.apiBase")
 			}
 		}
 	}

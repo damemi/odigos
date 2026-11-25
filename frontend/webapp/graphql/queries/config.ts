@@ -212,7 +212,7 @@ export const GET_EFFECTIVE_CONFIG = gql`
           }
         }
       }
-      interrogation {
+      autopilot {
         enabled
         mode
         model {

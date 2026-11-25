@@ -185,8 +185,8 @@ func applyLocalUiConfigInput(cfg *common.OdigosConfiguration, input model.LocalU
 	if input.CardinalityControl != nil {
 		applyCardinalityControlInput(cfg, input.CardinalityControl)
 	}
-	if input.Interrogation != nil {
-		applyAutopilotInput(cfg, input.Interrogation)
+	if input.Autopilot != nil {
+		applyAutopilotInput(cfg, input.Autopilot)
 	}
 	if input.CollectorGateway != nil {
 		ApplyGatewayProxy(cfg, input.CollectorGateway.HTTPSProxyAddress, input.CollectorGateway.NoProxy)
@@ -257,7 +257,7 @@ func applyAutopilotInput(cfg *common.OdigosConfiguration, input *model.LocalUICo
 	}
 	// enabled is Helm-only. resetPaths drops a UI override so the Helm value applies again.
 	for _, path := range input.ResetPaths {
-		if path == "interrogation.mode" && cfg.Autopilot != nil {
+		if path == "autopilot.mode" && cfg.Autopilot != nil {
 			cfg.Autopilot.Mode = ""
 		}
 	}

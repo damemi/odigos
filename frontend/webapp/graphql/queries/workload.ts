@@ -443,9 +443,9 @@ export const GET_AUTOPILOT_TRANSACTIONS = gql`
 `;
 
 // Workload containers that have autopilot transactions, so the page can skip sources without any.
-export const GET_INTERROGATION_SOURCES = gql`
-  query GetInterrogationSources {
-    interrogationSources {
+export const GET_AUTOPILOT_SOURCES = gql`
+  query GetAutopilotSources {
+    autopilotSources {
       id {
         namespace
         kind

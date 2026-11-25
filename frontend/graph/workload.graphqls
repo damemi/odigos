@@ -780,5 +780,5 @@ extend type Query {
   Workload containers with stored autopilot transactions, read with a single
   query. Empty when autopilot is disabled.
   """
-  interrogationSources: [AutopilotSource!]!
+  autopilotSources: [AutopilotSource!]!
 }

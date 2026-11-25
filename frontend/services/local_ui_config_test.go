@@ -21,7 +21,7 @@ func TestApplyAutopilotInput_ModeAndReset(t *testing.T) {
 		t.Fatal("enabled was cleared")
 	}
 
-	applyAutopilotInput(cfg, &model.LocalUIConfigAutopilotInput{ResetPaths: []string{"interrogation.mode"}})
+	applyAutopilotInput(cfg, &model.LocalUIConfigAutopilotInput{ResetPaths: []string{"autopilot.mode"}})
 	if cfg.Autopilot.Mode != "" {
 		t.Fatalf("mode = %q, want empty after reset", cfg.Autopilot.Mode)
 	}
